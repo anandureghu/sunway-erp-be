@@ -9,7 +9,7 @@ app:
     access-token-minutes: 60
     refresh-token-days: 7
   cors:
-    allowed-origins: "http://localhost:5173,http://localhost:3001,http://localhost:3000,http://sunway-erp.vercel.app"
+    allowed-origins: "http://localhost:5173,http://localhost:3001,http://localhost:3000,https://sunway-erp.vercel.app"
 
 server:
   port: 8080
