@@ -8,8 +8,11 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/controller/PayrollController.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/controller/UserController.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/controller/finance/InvoiceController.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/controller/hr/CompanyController.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/controller/hr/DepartmentController.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/controller/inventory/CustomerController.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/controller/inventory/OrderController.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/controller/inventory/VendorController.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/CurrentJob.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/Employee.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/Leave.java
@@ -25,6 +28,8 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Settlements.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Transactions.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Transfers.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/domain/hr/Company.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/domain/hr/Department.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/inventory/Customer.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/inventory/Orders.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/inventory/Sales.java
@@ -43,6 +48,8 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/employee/EmployeeResponse.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/InvoiceRequest.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/InvoiceResponse.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/hr/CreateDepartmentDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/inventory/OrderRequest.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/leave/LeaveRequest.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/leave/LeaveResponse.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/loan/LoanRequest.java
@@ -57,12 +64,16 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/repo/PayrollRepository.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/repo/UserRepository.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/repo/finance/InvoiceRepository.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/repo/hr/CompanyRepository.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/repo/hr/DepartmentRepository.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/repo/inventory/CustomerRepository.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/repo/inventory/OrderRepository.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/repo/inventory/VendorRepository.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/security/CustomUserDetailsService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/security/JwtAuthenticationFilter.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/security/JwtService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/security/RestAuthenticationEntryPoint.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/security/context/AuthContext.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/AuthService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/CurrentJobService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/EmployeeService.java
@@ -70,6 +81,9 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/LoanService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/PayrollService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/finance/InvoiceService.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/service/hr/CompanyService.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/service/hr/DepartmentService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/inventory/CustomerService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/inventory/OrderService.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/service/inventory/VendorService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/startup/AdminSeeder.java

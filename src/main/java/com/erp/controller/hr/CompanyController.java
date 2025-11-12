@@ -36,12 +36,12 @@ public class CompanyController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Company> updateCompany(@PathVariable Long id, @RequestBody Company company) {
-        return ResponseEntity.ok(companyService.updateCompany(id, company));
+    public Company updateCompany(@PathVariable("id") Long id, @RequestBody Company updated) {
+        return companyService.updateCompany(id, updated);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteCompany(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteCompany(@PathVariable("id") Long id) {
         companyService.deleteCompany(id);
         return ResponseEntity.noContent().build();
     }

@@ -4,13 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.hrmodule</groupId>
-    <artifactId>spring-jwt-backend-mysql</artifactId>
+    <groupId>com.erp</groupId>
+    <artifactId>sunway</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <properties>
-        <java.version>23</java.version>
+        <java.version>21</java.version>
         <spring-boot.version>3.3.4</spring-boot.version>
     </properties>
 
