@@ -83,7 +83,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         List<String> origins = Arrays.stream(allowedOriginsCsv.split(",")).map(String::trim).toList();
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(origins);
+        cfg.setAllowedOriginPatterns(origins);
         cfg.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setAllowCredentials(true);
