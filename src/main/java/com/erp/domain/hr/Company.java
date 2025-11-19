@@ -49,4 +49,13 @@ public class Company {
 
     @Column(name = "created_by", length = 50)
     private String createdBy;
+
+    @Column(name = "is_hr_enabled")
+    private boolean hrEnabled;
+
+    @Column(name = "is_finance_enabled")
+    private boolean financeEnabled;
+
+    @Column(name = "is_inventory_enabled")
+    private boolean inventoryEnabled;
 }

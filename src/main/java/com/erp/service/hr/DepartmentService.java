@@ -1,8 +1,11 @@
 package com.erp.service.hr;
 
+import com.erp.domain.Employee;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.Department;
 import com.erp.dto.hr.CreateDepartmentDTO;
+import com.erp.dto.hr.DepartmentResponseDTO;
+import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
@@ -16,52 +19,79 @@ public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
     private final CompanyRepository companyRepository;
+    private final EmployeeRepository employeeRepository;
     private final AuthContext authContext;
 
     public DepartmentService(DepartmentRepository departmentRepository,
                              CompanyRepository companyRepository,
+                             EmployeeRepository employeeRepository,
                              AuthContext authContext) {
         this.departmentRepository = departmentRepository;
         this.companyRepository = companyRepository;
+        this.employeeRepository = employeeRepository;
         this.authContext = authContext;
     }
 
-    public List<Department> getDepartmentsForCurrentUser() {
-        Long userId = authContext.getCurrentUserId();
-        return departmentRepository.findAllByCompanyCreatedBy(String.valueOf(userId));
+    // ⭐ Convert Entity → DTO
+    private DepartmentResponseDTO toDTO(Department d) {
+        return DepartmentResponseDTO.builder()
+                .id(d.getId())
+                .departmentCode(d.getDepartmentCode())
+                .departmentName(d.getDepartmentName())
+
+                .managerId(d.getManager() != null ? d.getManager().getId() : null)
+                .managerFirstName(d.getManager() != null ? d.getManager().getFirstName() : null)
+                .managerLastName(d.getManager() != null ? d.getManager().getLastName() : null)
+
+                .companyId(d.getCompany().getId())
+                .companyName(d.getCompany().getCompanyName())
+                .build();
     }
 
-    public Department getDepartmentById(Long id) {
+    public List<DepartmentResponseDTO> getDepartmentsForCurrentUser() {
+        Long userId = authContext.getCurrentUserId();
+        return departmentRepository.findAllByCompanyCreatedBy(String.valueOf(userId))
+                .stream().map(this::toDTO).toList();
+    }
+
+    public DepartmentResponseDTO getDepartmentById(Long id) {
         return departmentRepository.findById(id)
+                .map(this::toDTO)
                 .orElseThrow(() -> new RuntimeException("Department not found"));
     }
 
-    public Department createDepartment(CreateDepartmentDTO dto) {
+    public DepartmentResponseDTO createDepartment(CreateDepartmentDTO dto) {
         Company company = companyRepository.findById(dto.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        // ✅ Optional ownership check
         Long userId = authContext.getCurrentUserId();
         if (!company.getCreatedBy().equals(String.valueOf(userId))) {
             throw new RuntimeException("You do not have permission to add departments to this company");
         }
 
+        Employee manager = null;
+        if (dto.getManagerId() != null) {
+            manager = employeeRepository.findById(dto.getManagerId())
+                    .orElseThrow(() -> new RuntimeException("Manager not found"));
+        }
+
         Department department = Department.builder()
                 .departmentCode(dto.getDepartmentCode())
                 .departmentName(dto.getDepartmentName())
-                .managerId(dto.getManagerId())
+                .manager(manager)
                 .company(company)
                 .createdAt(Instant.now())
                 .build();
 
-        return departmentRepository.save(department);
+        return toDTO(departmentRepository.save(department));
+    }
+
+    public List<DepartmentResponseDTO> getDepartmentsByCompanyId(Long companyId) {
+        return departmentRepository.findAllByCompanyId(companyId)
+                .stream().map(this::toDTO).toList();
     }
 
     public void deleteDepartment(Long id) {
         departmentRepository.deleteById(id);
-    }
-
-    public List<Department> getDepartmentsByCompanyId(Long companyId) {
-        return departmentRepository.findAllByCompanyId(companyId);
     }
 }

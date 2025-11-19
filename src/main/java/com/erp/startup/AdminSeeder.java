@@ -18,7 +18,7 @@ public class AdminSeeder {
                 admin.setEmail("admin@hr.local");
                 admin.setUsername("admin");
                 admin.setPassword(encoder.encode("admin123"));
-                admin.setRole(Role.ADMIN);
+                admin.setRole(Role.SUPER_ADMIN);
                 repo.save(admin);
             }
         };

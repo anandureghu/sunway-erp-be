@@ -53,6 +53,9 @@ public class CompanyService {
         existing.setState(updated.getState());
         existing.setCountry(updated.getCountry());
         existing.setPhoneNo(updated.getPhoneNo());
+        existing.setHrEnabled(updated.isHrEnabled());
+        existing.setFinanceEnabled(updated.isFinanceEnabled());
+        existing.setInventoryEnabled(updated.isInventoryEnabled());
         // ✅ Preserve createdBy & createdAt
         return companyRepository.save(existing);
     }

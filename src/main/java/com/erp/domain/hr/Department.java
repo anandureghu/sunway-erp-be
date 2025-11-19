@@ -1,5 +1,6 @@
 package com.erp.domain.hr;
 
+import com.erp.domain.Employee;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
@@ -23,8 +24,10 @@ public class Department {
     @Column(name = "department_name", nullable = false)
     private String departmentName;
 
-    @Column(name = "manager_id")
-    private Long managerId;
+    // 🔥 Manager now mapped to Employee
+    @ManyToOne
+    @JoinColumn(name = "manager_id", referencedColumnName = "id")
+    private Employee manager;
 
     @ManyToOne
     @JoinColumn(name = "company_id", nullable = false)
