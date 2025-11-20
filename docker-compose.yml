@@ -1,4 +1,5 @@
 version: "3.9"
+
 services:
   mysql:
     image: mysql:8.0
@@ -14,6 +15,24 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     command: ["--default-authentication-plugin=mysql_native_password"]
+#
+#  erp_app:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    container_name: erp_backend
+#    depends_on:
+#      - mysql
+#    environment:
+#      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/hrdb
+#      SPRING_DATASOURCE_USERNAME: hruser
+#      SPRING_DATASOURCE_PASSWORD: hrpass
+#      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+#      SPRING_JPA_SHOW_SQL: "true"
+#      SPRING_PROFILES_ACTIVE: docker
+#    ports:
+#      - "8080:8080"
+#    restart: unless-stopped
 
 volumes:
   mysql_data:
