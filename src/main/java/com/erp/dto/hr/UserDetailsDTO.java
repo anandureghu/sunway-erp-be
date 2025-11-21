@@ -4,11 +4,20 @@ import com.erp.domain.Role;
 import lombok.*;
 
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
-public class EmployeeResponseDTO {
-    private Long id;
+@AllArgsConstructor
+@NoArgsConstructor
+public class UserDetailsDTO {
+
+    // User info
+    private Long userId;
+    private String fullName;
+    private String email;
+    private String username;
+    private Role role;
+
+    // Employee info (optional)
+    private Long employeeId;
     private Long employeeNo;
     private String firstName;
     private String lastName;
@@ -19,9 +28,4 @@ public class EmployeeResponseDTO {
 
     private Long departmentId;
     private String departmentName;
-
-    private Long userId;
-    private String username;
-    private String email;
-    private Role role;
 }
