@@ -11,7 +11,13 @@ import java.util.Optional;
 @Repository
 public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     List<Employee> findByCompanyId(Long companyId);
+
+    // find by nested user.role
+    Optional<Employee> findByCompanyIdAndUserRole(Long companyId, Role role);
+
+    boolean existsByCompanyIdAndUserRole(Long companyId, Role role);
+
     List<Employee> findByDepartmentId(Long departmentId);
-    boolean existsByCompanyIdAndRole(Long companyId, Role role);
-    Optional<Employee> findByCompany_IdAndRole(Long companyId, Role role);
+
+    Optional<Employee> findByUserId(Long userId);
 }

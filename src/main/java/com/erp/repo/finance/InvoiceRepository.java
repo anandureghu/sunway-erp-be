@@ -1,14 +1,17 @@
 package com.erp.repo.finance;
 
-import com.erp.domain.finance.Invoices;
-import com.erp.domain.inventory.Customer;
+import com.erp.domain.finance.Invoice;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 import java.util.List;
+import java.util.Optional;
 
-@Repository
-public interface InvoiceRepository extends JpaRepository<Invoices, Long> {
-    List<Invoices> findByCustomer(Customer customer);
-    List<Invoices> findByStatus(String status);
-    Invoices findByInvoiceId(String invoiceId);
+public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
+
+    Optional<Invoice> findByInvoiceId(String invoiceId);
+
+    List<Invoice> findByCompanyId(Long companyId);
+
+    List<Invoice> findByCompanyIdAndStatus(Long companyId, String status);
+
+    List<Invoice> findByToParty(String toParty); // customer name/id
 }

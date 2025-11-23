@@ -75,4 +75,8 @@ public class AuthService {
         String access = jwt.generateAccessToken(u.getUsername(), newClaims);
         return Map.of("accessToken", access, "refreshToken", refreshToken);
     }
+
+    public String hash(String raw) {
+        return encoder.encode(raw);
+    }
 }

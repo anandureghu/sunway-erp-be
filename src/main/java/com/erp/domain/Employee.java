@@ -14,49 +14,37 @@ import java.time.Instant;
 @Entity
 @Table(name = "employees")
 public class Employee {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "employee_no", unique = true)
     private Long employeeNo;
 
-    @Column(name = "first_name", length = 50)
+    @Column(name = "first_name", length = 50, nullable = false)
     private String firstName;
 
-    @Column(name = "last_name", length = 50)
+    @Column(name = "last_name", length = 50, nullable = false)
     private String lastName;
 
     @Column(name = "phone_no", length = 50)
     private String phoneNo;
 
-    // 🔗 Employee belongs to a Company
     @ManyToOne
     @JoinColumn(name = "company_id")
     private Company company;
 
-    // 🔗 Employee belongs to a Department
     @ManyToOne
     @JoinColumn(name = "department_id")
     private Department department;
 
+    // Link to login user account (one-to-one)
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "user_id", unique = true)
+    private User user;
+
     @Column(name = "created_at")
-    private Instant createdAt = Instant.now();
+    private Instant createdAt;
 
     @Column(name = "updated_at")
-    private Instant updatedAt = Instant.now();
-
-    @Column(name = "deleted_at")
-    private Instant deletedAt;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Role role;
-
-
-    @PreUpdate
-    public void onUpdate() {
-        updatedAt = Instant.now();
-    }
+    private Instant updatedAt;
 }

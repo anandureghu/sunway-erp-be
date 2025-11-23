@@ -1,6 +1,8 @@
 package com.erp.domain;
 
 import jakarta.persistence.*;
+import lombok.ToString;
+
 import java.time.Instant;
 
 @Entity
@@ -8,6 +10,7 @@ import java.time.Instant;
         @UniqueConstraint(name = "uk_users_email", columnNames = "email"),
         @UniqueConstraint(name = "uk_users_username", columnNames = "username")
 })
+@ToString()
 public class User {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

@@ -1,5 +1,6 @@
 package com.erp.dto.hr;
 
+import com.erp.domain.Role;
 import lombok.*;
 
 @Data
@@ -18,4 +19,9 @@ public class EmployeeResponseDTO {
 
     private Long departmentId;
     private String departmentName;
+
+    private Long userId;
+    private String username;
+    private String email;
+    private Role role;
 }

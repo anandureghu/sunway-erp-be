@@ -31,19 +31,19 @@ public class DepartmentController {
 
     // Get single department
     @GetMapping("/{id}")
-    public DepartmentResponseDTO getDepartmentById(@PathVariable Long id) {
+    public DepartmentResponseDTO getDepartmentById(@PathVariable("id") Long id) {
         return departmentService.getDepartmentById(id);
     }
 
     // Delete department
     @DeleteMapping("/{id}")
-    public void deleteDepartment(@PathVariable Long id) {
+    public void deleteDepartment(@PathVariable("id") Long id) {
         departmentService.deleteDepartment(id);
     }
 
     // Get departments by company
     @GetMapping("/company/{companyId}")
-    public List<DepartmentResponseDTO> getDepartmentsByCompany(@PathVariable Long companyId) {
+    public List<DepartmentResponseDTO> getDepartmentsByCompany(@PathVariable("companyId") Long companyId) {
         return departmentService.getDepartmentsByCompanyId(companyId);
     }
 }
