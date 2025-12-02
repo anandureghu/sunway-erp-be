@@ -18,14 +18,15 @@ public class CurrentJob {
     private Employee employee;
 
     // scalar fields
-    @Column(length = 100) private String jobCode;
+    @Column(length = 100,nullable = false) private String jobCode;
     @Column(length = 200) private String jobTitle;
-    @Column(length = 50)  private String jobLevel;
+    @Column(length = 50,nullable = false)  private String jobLevel;
     @Column(length = 50)  private String grade;
-    @Column(length = 50)  private String departmentCode;
+    @Column(length = 50,nullable = false)  private String departmentCode;
     @Column(length = 200) private String departmentName;
-
-    private LocalDate effectiveFrom;
+     @Column(nullable = false)
+     private LocalDate effectiveFrom;
+     @Column(nullable = false)
     private LocalDate startDate;
     private LocalDate expectedEndDate;
 
