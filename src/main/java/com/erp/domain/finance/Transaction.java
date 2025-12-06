@@ -27,26 +27,23 @@ public class Transaction {
     @JoinColumn(name = "company_id")
     private Company company;
 
-    @Column(name = "fiscal_type", length = 64)
-    private String fiscalType;
-
     @Column(name = "transaction_date")
     private LocalDate transactionDate;
 
-    @Column(name = "posted_date")
-    private Instant postedDate;
+//    @Column(name = "posted_date")
+//    private Instant postedDate;
 
     @Column(name = "amount", precision = 18, scale = 2)
     private BigDecimal amount;
 
-    @Column(name = "debit_account", length = 64)
-    private String debitAccount;
+//    @Column(name = "debit_account", length = 64)
+//    private String debitAccount;
 
     @Column(name = "credit_account", length = 64)
     private String creditAccount;
-
-    @Column(name = "item_code", length = 64)
-    private String itemCode;
+//
+//    @Column(name = "item_code", length = 64)
+//    private String itemCode;
 
     @Column(name = "invoice_id", length = 64)
     private String invoiceId;
@@ -54,8 +51,8 @@ public class Transaction {
     @Column(name = "payment_id", length = 64)
     private String paymentId;
 
-    @Column(name = "is_posted")
-    private Boolean posted = Boolean.FALSE;
+//    @Column(name = "is_posted")
+//    private Boolean posted = Boolean.FALSE;
 
     @Column(name = "transaction_description", length = 500)
     private String transactionDescription;
