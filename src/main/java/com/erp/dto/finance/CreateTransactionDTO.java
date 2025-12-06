@@ -9,12 +9,12 @@ import java.time.LocalDate;
 public class CreateTransactionDTO {
     private Long companyId;
     private String transactionType;
-    private String fiscalType;
+//    private String fiscalType;
     private LocalDate transactionDate;
     private BigDecimal amount;
-    private String debitAccount;
+//    private String debitAccount;
     private String creditAccount;
-    private String itemCode;
+//    private String itemCode;
     private String invoiceId;
     private String paymentId;
     private String transactionDescription;

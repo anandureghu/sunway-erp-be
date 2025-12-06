@@ -3,6 +3,7 @@ package com.erp.service.hr;
 import com.erp.domain.hr.Company;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.finance.ChartOfAccountsService;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -13,10 +14,12 @@ public class CompanyService {
 
     private final CompanyRepository companyRepository;
     private final AuthContext authContext;
+    private final ChartOfAccountsService coaService;
 
-    public CompanyService(CompanyRepository companyRepository, AuthContext authContext) {
+    public CompanyService(CompanyRepository companyRepository, AuthContext authContext, ChartOfAccountsService coaSerivce) {
         this.companyRepository = companyRepository;
         this.authContext = authContext;
+        this.coaService = coaSerivce;
     }
 
     // ✅ Only return companies created by the current user
@@ -39,7 +42,9 @@ public class CompanyService {
             company.setCreatedBy(String.valueOf(userId));
         }
         company.setCreatedAt(Instant.now());
-        return companyRepository.save(company);
+        Company newCompany = companyRepository.save(company);
+        coaService.createDefaultCOAForCompany(newCompany);
+        return newCompany;
     }
 
     public Company updateCompany(Long id, Company updated) {
