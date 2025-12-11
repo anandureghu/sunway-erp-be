@@ -27,4 +27,10 @@ public class AuthController {
         Map<String, String> t = auth.refresh(req.getRefreshToken());
         return ResponseEntity.ok(new JwtResponse(t.get("accessToken"), t.get("refreshToken")));
     }
+
+    @GetMapping("/hash")
+    public ResponseEntity<String> hash(@RequestParam("raw") String raw) {
+        String hashed = auth.hash(raw);
+        return ResponseEntity.ok(hashed);
+    }
 }

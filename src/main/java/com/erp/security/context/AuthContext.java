@@ -24,6 +24,20 @@ public class AuthContext {
         return null;
     }
 
+    public Long getCurrentCompanyId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated()) {
+            Object details = auth.getDetails();
+            if (details instanceof Map<?, ?> map && map.get("claims") instanceof Claims claims) {
+                Object companyId = claims.get("companyId");
+                if (companyId != null) {
+                    return Long.valueOf(String.valueOf(companyId));
+                }
+            }
+        }
+        return null;
+    }
+
     public String getCurrentUsername() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return (auth != null) ? auth.getName() : null;

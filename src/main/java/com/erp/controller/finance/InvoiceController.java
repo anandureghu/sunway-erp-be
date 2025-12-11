@@ -33,13 +33,13 @@ public class InvoiceController {
     }
 
     @GetMapping("/customer/{customerId}")
-    public ResponseEntity<List<InvoiceResponse>> getInvoicesByCustomer(@PathVariable Long customerId) {
+    public ResponseEntity<List<InvoiceResponse>> getInvoicesByCustomer(@PathVariable String customerId) {
         return ResponseEntity.ok(invoiceService.getInvoicesByCustomer(customerId));
     }
 
-    @GetMapping("/status/{status}")
-    public ResponseEntity<List<InvoiceResponse>> getInvoicesByStatus(@PathVariable String status) {
-        return ResponseEntity.ok(invoiceService.getInvoicesByStatus(status));
+    @GetMapping("/status/{status}/{companyId}")
+    public ResponseEntity<List<InvoiceResponse>> getInvoicesByStatus(@PathVariable String status, @PathVariable Long companyId) {
+        return ResponseEntity.ok(invoiceService.getInvoicesByStatus(companyId, status));
     }
 
     @PutMapping("/{id}")

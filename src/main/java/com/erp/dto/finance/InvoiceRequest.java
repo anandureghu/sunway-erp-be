@@ -1,26 +1,19 @@
 package com.erp.dto.finance;
 
+import lombok.Data;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Data
 public class InvoiceRequest {
-    private String invoiceId;
-    private Long customerId;
-    private Long orderId;
-    private String status;
+    private Long companyId;
+    private String toParty;
+    private Instant invoiceDate;
     private Instant dueDate;
     private BigDecimal amount;
-    private BigDecimal openAmount;
-    private BigDecimal outstanding;
-    private BigDecimal interestRate;
+    private String itemDescription;
     private String notesRemarks;
+    private Integer gracePeriod;
+    private BigDecimal interestRate;
+    private String partyClassification;
 }
