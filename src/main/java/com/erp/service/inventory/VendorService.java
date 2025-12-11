@@ -4,6 +4,7 @@ import com.erp.domain.inventory.Vendor;
 import com.erp.repo.inventory.VendorRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -38,6 +39,7 @@ public class VendorService {
         existing.setCity(updated.getCity());
         existing.setCountry(updated.getCountry());
         existing.setPhoneNo(updated.getPhoneNo());
+        existing.setEmail(updated.getEmail());
         return vendorRepo.save(existing);
     }
 

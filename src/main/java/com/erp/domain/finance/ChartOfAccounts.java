@@ -3,6 +3,7 @@ package com.erp.domain.finance;
 import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 
@@ -12,14 +13,17 @@ import java.time.Instant;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "chart_of_accounts")
+@Table(name = "chart_of_accounts",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"company_id", "account_code"})
+        })
 public class ChartOfAccounts {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "account_code", nullable = false, unique = true, length = 64)
+    @Column(name = "account_code", nullable = false, length = 64)
     private String accountCode;
 
     @Column(name = "account_name", nullable = false, length = 255)
