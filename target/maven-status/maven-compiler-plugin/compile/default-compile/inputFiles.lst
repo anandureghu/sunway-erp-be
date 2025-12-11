@@ -67,7 +67,13 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/hr/DepartmentResponseDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/hr/EmployeeResponseDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/hr/UserDetailsDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/inventory/CustomerCreateDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/inventory/CustomerResponseDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/inventory/CustomerUpdateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/inventory/OrderRequest.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/inventory/VendorCreateDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/inventory/VendorResponseDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/inventory/VendorUpdateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/leave/LeaveRequest.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/leave/LeaveResponse.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/loan/LoanRequest.java

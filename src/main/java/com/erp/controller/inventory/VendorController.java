@@ -1,6 +1,8 @@
 package com.erp.controller.inventory;
 
-import com.erp.domain.inventory.Vendor;
+import com.erp.dto.inventory.VendorCreateDTO;
+import com.erp.dto.inventory.VendorResponseDTO;
+import com.erp.dto.inventory.VendorUpdateDTO;
 import com.erp.service.inventory.VendorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,26 +19,34 @@ public class VendorController {
         this.vendorService = vendorService;
     }
 
+    // ---------------- GET ALL ----------------
     @GetMapping
-    public List<Vendor> getAllVendors() {
+    public List<VendorResponseDTO> getAllVendors() {
         return vendorService.getAllVendors();
     }
 
+    // ---------------- GET BY ID ----------------
     @GetMapping("/{id}")
-    public ResponseEntity<Vendor> getVendorById(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(vendorService.getVendorById(id));
+    public ResponseEntity<VendorResponseDTO> getVendorById(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(vendorService.getVendorDTO(id));
     }
 
+    // ---------------- CREATE ----------------
     @PostMapping
-    public ResponseEntity<Vendor> createVendor(@RequestBody Vendor vendor) {
-        return ResponseEntity.ok(vendorService.createVendor(vendor));
+    public ResponseEntity<VendorResponseDTO> createVendor(@RequestBody VendorCreateDTO dto) {
+        return ResponseEntity.ok(vendorService.createVendor(dto));
     }
 
+    // ---------------- UPDATE ----------------
     @PutMapping("/{id}")
-    public ResponseEntity<Vendor> updateVendor(@PathVariable("id") Long id, @RequestBody Vendor vendor) {
-        return ResponseEntity.ok(vendorService.updateVendor(id, vendor));
+    public ResponseEntity<VendorResponseDTO> updateVendor(
+            @PathVariable("id") Long id,
+            @RequestBody VendorUpdateDTO dto
+    ) {
+        return ResponseEntity.ok(vendorService.updateVendor(id, dto));
     }
 
+    // ---------------- DELETE ----------------
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteVendor(@PathVariable("id") Long id) {
         vendorService.deleteVendor(id);
