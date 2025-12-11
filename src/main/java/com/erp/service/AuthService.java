@@ -1,9 +1,11 @@
 package com.erp.service;
 
+import com.erp.domain.Employee;
 import com.erp.domain.Role;
 import com.erp.domain.User;
 import com.erp.dto.auth.LoginRequest;
 import com.erp.dto.auth.RegisterRequest;
+import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.security.JwtService;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,11 +17,13 @@ import java.util.Map;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final EmployeeRepository employeeRepository;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder encoder, JwtService jwt) {
+    public AuthService(UserRepository userRepository, EmployeeRepository employeeRepository, PasswordEncoder encoder, JwtService jwt) {
         this.userRepository = userRepository;
+        this.employeeRepository = employeeRepository;
         this.encoder = encoder;
         this.jwt = jwt;
     }
@@ -44,6 +48,10 @@ public class AuthService {
                 .or(() -> userRepository.findByUsername(req.getLoginId()))
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
 
+        Employee emp = employeeRepository
+                .findByUserId(u.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+
         if (!encoder.matches(req.getPassword(), u.getPassword()))
             throw new IllegalArgumentException("Invalid credentials");
 
@@ -51,6 +59,7 @@ public class AuthService {
         Map<String, Object> claims = Map.of(
                 "userId", u.getId(),
                 "username", u.getUsername(),
+                "companyId", emp.getCompany().getId(),
                 "role", u.getRole().name()
         );
 
@@ -66,9 +75,15 @@ public class AuthService {
         User u = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found for refresh"));
 
+
+        Employee emp = employeeRepository
+                .findByUserId(u.getId())
+                .orElseThrow(() -> new IllegalArgumentException("User not found for refresh"));
+
         Map<String, Object> newClaims = Map.of(
                 "userId", u.getId(),
                 "username", u.getUsername(),
+                "companyId", emp.getCompany().getId(),
                 "role", u.getRole().name()
         );
 

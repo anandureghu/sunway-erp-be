@@ -1,6 +1,8 @@
 package com.erp.controller.inventory;
 
-import com.erp.domain.inventory.Customer;
+import com.erp.dto.inventory.CustomerCreateDTO;
+import com.erp.dto.inventory.CustomerResponseDTO;
+import com.erp.dto.inventory.CustomerUpdateDTO;
 import com.erp.service.inventory.CustomerService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,26 +19,34 @@ public class CustomerController {
         this.customerService = customerService;
     }
 
+    // ---------------- GET ALL ----------------
     @GetMapping
-    public List<Customer> getAll() {
+    public List<CustomerResponseDTO> getAll() {
         return customerService.getAllCustomers();
     }
 
+    // ---------------- GET BY ID ----------------
     @GetMapping("/{id}")
-    public ResponseEntity<Customer> getById(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(customerService.getCustomerById(id));
+    public ResponseEntity<CustomerResponseDTO> getById(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(customerService.getCustomerByIdDTO(id));
     }
 
+    // ---------------- CREATE ----------------
     @PostMapping
-    public ResponseEntity<Customer> create(@RequestBody Customer customer) {
-        return ResponseEntity.ok(customerService.createCustomer(customer));
+    public ResponseEntity<CustomerResponseDTO> create(@RequestBody CustomerCreateDTO dto) {
+        return ResponseEntity.ok(customerService.createCustomer(dto));
     }
 
+    // ---------------- UPDATE ----------------
     @PutMapping("/{id}")
-    public ResponseEntity<Customer> update(@PathVariable("id") Long id, @RequestBody Customer customer) {
-        return ResponseEntity.ok(customerService.updateCustomer(id, customer));
+    public ResponseEntity<CustomerResponseDTO> update(
+            @PathVariable("id") Long id,
+            @RequestBody CustomerUpdateDTO dto
+    ) {
+        return ResponseEntity.ok(customerService.updateCustomer(id, dto));
     }
 
+    // ---------------- DELETE ----------------
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
         customerService.deleteCustomer(id);
