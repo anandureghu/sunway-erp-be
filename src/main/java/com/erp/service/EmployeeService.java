@@ -158,7 +158,11 @@ public class EmployeeService {
     // GET COMPANY ADMIN
     // =====================================================================================
     public EmployeeResponseDTO getCompanyAdmin(Long companyId) {
-        Employee admin = employeeRepository.findByCompanyIdAndUserRole(companyId, Role.ADMIN)
+
+        List<Role> allowedRoles = List.of(Role.ADMIN, Role.SUPER_ADMIN);
+
+        Employee admin = employeeRepository
+                .findByCompanyIdAndUserRoleIn(companyId, allowedRoles)
                 .orElseThrow(() -> new RuntimeException("No admin found for this company"));
 
         return toDTO(admin);

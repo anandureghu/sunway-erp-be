@@ -4,6 +4,7 @@ import com.erp.domain.inventory.Customer;
 import com.erp.repo.inventory.CustomerRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
 
 @Service
@@ -34,6 +35,7 @@ public class CustomerService {
         existing.setName(updated.getName());
         existing.setStreet(updated.getStreet());
         existing.setCity(updated.getCity());
+        existing.setEmail(updated.getEmail());
         existing.setCountry(updated.getCountry());
         existing.setPhoneNo(updated.getPhoneNo());
         return customerRepo.save(existing);

@@ -13,7 +13,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     List<Employee> findByCompanyId(Long companyId);
 
     // find by nested user.role
-    Optional<Employee> findByCompanyIdAndUserRole(Long companyId, Role role);
+    Optional<Employee> findByCompanyIdAndUserRoleIn(Long companyId, List<Role> roles);
 
     boolean existsByCompanyIdAndUserRole(Long companyId, Role role);
 

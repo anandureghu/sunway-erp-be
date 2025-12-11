@@ -4,6 +4,7 @@ import com.erp.domain.inventory.Vendor;
 import com.erp.service.inventory.VendorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
@@ -22,7 +23,7 @@ public class VendorController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Vendor> getVendorById(@PathVariable Long id) {
+    public ResponseEntity<Vendor> getVendorById(@PathVariable("id") Long id) {
         return ResponseEntity.ok(vendorService.getVendorById(id));
     }
 
@@ -32,12 +33,12 @@ public class VendorController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Vendor> updateVendor(@PathVariable Long id, @RequestBody Vendor vendor) {
+    public ResponseEntity<Vendor> updateVendor(@PathVariable("id") Long id, @RequestBody Vendor vendor) {
         return ResponseEntity.ok(vendorService.updateVendor(id, vendor));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteVendor(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteVendor(@PathVariable("id") Long id) {
         vendorService.deleteVendor(id);
         return ResponseEntity.noContent().build();
     }

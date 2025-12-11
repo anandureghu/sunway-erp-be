@@ -28,7 +28,7 @@ public class CompanyService {
         if (userId == null) {
             throw new RuntimeException("User not authenticated");
         }
-        return companyRepository.findByCreatedBy(String.valueOf(userId));
+        return companyRepository.findAll();
     }
 
     public Company getCompanyById(Long id) {

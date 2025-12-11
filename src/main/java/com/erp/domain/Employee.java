@@ -4,6 +4,7 @@ import com.erp.domain.hr.Company;
 import com.erp.domain.hr.Department;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.Instant;
 
 @Getter
@@ -14,7 +15,8 @@ import java.time.Instant;
 @Entity
 @Table(name = "employees")
 public class Employee {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "employee_no", unique = true)
@@ -38,7 +40,7 @@ public class Employee {
     private Department department;
 
     // Link to login user account (one-to-one)
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne
     @JoinColumn(name = "user_id", unique = true)
     private User user;
 

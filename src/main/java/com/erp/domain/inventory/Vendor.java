@@ -1,8 +1,9 @@
 package com.erp.domain.inventory;
 
 import jakarta.persistence.*;
-import java.time.Instant;
 import lombok.*;
+
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -23,6 +24,7 @@ public class Vendor {
     private String city;
     private String country;
     private String phoneNo;
+    private String email;
 
     private Instant createdAt;
 }
