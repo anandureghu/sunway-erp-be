@@ -118,4 +118,11 @@ public class EmployeeController {
             @RequestParam("file") MultipartFile file) {
         return employeeService.uploadImage(id, file);
     }
+
+    @PostMapping("/{id}/upload-image")
+    public EmployeeResponseDTO uploadImage(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) {
+        return employeeService.uploadImage(id, file);
+    }
 }
