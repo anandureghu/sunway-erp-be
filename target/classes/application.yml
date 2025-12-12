@@ -9,7 +9,8 @@ app:
     access-token-minutes: 60
     refresh-token-days: 7
   cors:
-    allowed-origins: "http://localhost:5173,http://localhost:3001,http://localhost:3000,https://sunway-erp.vercel.app*"
+    allowed-origins: "http://localhost:5173,http://localhost:3001,http://localhost:3000,https://sunway-erp.vercel.app*,
+      https://api.picominds.com"
 server:
   port: 8080
   error:
@@ -22,7 +23,7 @@ logging:
     org.springframework.web: DEBUG
     org.springframework.data.jpa: DEBUG
     org.hibernate.SQL: INFO
-    
+
 springdoc:
   override-server-url: true
 
