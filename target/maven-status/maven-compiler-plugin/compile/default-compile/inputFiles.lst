@@ -32,12 +32,15 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/ChartOfAccounts.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/GLAccountBalance.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Invoice.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Invoices.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/JournalEntry.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/JournalLine.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Payment.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Payments.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Reconciliations.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Settlements.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Transaction.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Transactions.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/finance/Transfers.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/hr/Company.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/domain/hr/Department.java

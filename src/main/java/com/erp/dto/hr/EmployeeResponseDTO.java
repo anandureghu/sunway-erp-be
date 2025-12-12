@@ -1,7 +1,10 @@
 package com.erp.dto.hr;
 
 import com.erp.domain.Role;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
@@ -23,5 +26,6 @@ public class EmployeeResponseDTO {
     private Long userId;
     private String username;
     private String email;
+    private String imageUrl;
     private Role role;
 }
