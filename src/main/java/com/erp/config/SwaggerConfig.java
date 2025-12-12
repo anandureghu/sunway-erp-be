@@ -23,7 +23,7 @@ public class SwaggerConfig {
                 .description("Local Development Server");
 
         Server prodServer = new Server()
-                .url("http://api.picominds.com")
+                .url("https://api.picominds.com")
                 .description("Production Server");
 
         return new OpenAPI()
