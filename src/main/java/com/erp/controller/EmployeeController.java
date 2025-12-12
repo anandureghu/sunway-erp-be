@@ -4,6 +4,7 @@ import com.erp.dto.hr.CreateEmployeeDTO;
 import com.erp.dto.hr.EmployeeResponseDTO;
 import com.erp.service.hr.EmployeeService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -51,5 +52,12 @@ public class EmployeeController {
     @GetMapping("/admin/{companyId}")
     public EmployeeResponseDTO getCompanyAdmin(@PathVariable("companyId") Long companyId) {
         return employeeService.getCompanyAdmin(companyId);
+    }
+
+    @PostMapping("/{id}/upload-image")
+    public EmployeeResponseDTO uploadImage(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) {
+        return employeeService.uploadImage(id, file);
     }
 }
