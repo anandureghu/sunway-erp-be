@@ -31,6 +31,9 @@ public class Employee {
     @Column(name = "phone_no", length = 50)
     private String phoneNo;
 
+    @Column(name = "image_url")
+    private String imageUrl;
+
     @ManyToOne
     @JoinColumn(name = "company_id")
     private Company company;

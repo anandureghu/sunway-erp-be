@@ -22,3 +22,7 @@ logging:
     org.springframework.web: DEBUG
     org.springframework.data.jpa: DEBUG
     org.hibernate.SQL: INFO
+    
+springdoc:
+  override-server-url: true
+

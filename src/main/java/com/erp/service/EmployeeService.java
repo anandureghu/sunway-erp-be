@@ -14,9 +14,15 @@ import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -189,4 +195,40 @@ public class EmployeeService {
                 .role(e.getUser() != null ? e.getUser().getRole() : null)
                 .build();
     }
+
+    public EmployeeResponseDTO uploadImage(Long employeeId, MultipartFile file) {
+        Employee emp = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        if (file.isEmpty()) {
+            throw new RuntimeException("Empty file");
+        }
+
+        try {
+            // Create directory if not exists
+            String uploadDir = "uploads/employees/";
+            File dir = new File(uploadDir);
+            if (!dir.exists()) dir.mkdirs();
+
+            // Generate file name
+            String ext = Objects.requireNonNull(file.getOriginalFilename())
+                    .substring(file.getOriginalFilename().lastIndexOf("."));
+            String fileName = "employee_" + employeeId + ext;
+
+            Path filePath = Paths.get(uploadDir + fileName);
+
+            // Save file to server
+            Files.write(filePath, file.getBytes());
+
+            // Set URL to entity
+            emp.setImageUrl("/uploads/employees/" + fileName);
+            employeeRepository.save(emp);
+
+            return toDTO(emp);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to save image", e);
+        }
+    }
+
 }
