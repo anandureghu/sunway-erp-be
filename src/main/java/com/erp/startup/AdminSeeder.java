@@ -7,6 +7,7 @@ import com.erp.domain.hr.Company;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.service.finance.ChartOfAccountsService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +19,7 @@ public class AdminSeeder {
     @Bean
     CommandLineRunner seedAdmin(
             UserRepository userRepo,
+            ChartOfAccountsService chartOfAccountsService,
             CompanyRepository companyRepo,
             EmployeeRepository employeeRepo,
             PasswordEncoder encoder
@@ -53,6 +55,8 @@ public class AdminSeeder {
                         .build();
 
                 company = companyRepo.save(company);
+
+                chartOfAccountsService.createDefaultCOAForCompany(company);
 
                 // 3. Create EMPLOYEE record for this admin user
                 Employee adminEmployee = Employee.builder()

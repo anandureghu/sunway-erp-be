@@ -8,6 +8,7 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Getter
@@ -63,7 +64,8 @@ public class JournalEntry {
 
     // Relations
     @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<JournalLine> lines;
+    private List<JournalLine> lines = new ArrayList<>();
+    ;
 
     // NEW: Posting timestamps
     @Column(name = "posted_at")

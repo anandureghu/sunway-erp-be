@@ -6,12 +6,12 @@ import com.erp.domain.finance.JournalEntry;
 import com.erp.domain.finance.JournalLine;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.Department;
-import com.erp.dto.finance.JournalEntryCreateDTO;
-import com.erp.dto.finance.JournalEntryResponseDTO;
-import com.erp.dto.finance.JournalLineDTO;
+import com.erp.dto.finance.*;
+import com.erp.repo.UserRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.JournalEntryRepository;
 import com.erp.repo.finance.JournalLineRepository;
+import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
 import org.springframework.stereotype.Service;
@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -31,19 +32,25 @@ public class JournalEntryService {
     private final DepartmentRepository deptRepo;
     private final AuthContext auth;
     private final JournalLineRepository jlRepo;
+    private final UserRepository userRepo;
+    private final CompanyRepository companyRepo;
 
     public JournalEntryService(
             JournalEntryRepository jeRepo,
             ChartOfAccountsRepository accountRepo,
             DepartmentRepository deptRepo,
             JournalLineRepository jlRepo,
-            AuthContext auth
+            AuthContext auth,
+            UserRepository userRepo,
+            CompanyRepository companyRepo
     ) {
         this.jeRepo = jeRepo;
         this.accountRepo = accountRepo;
         this.deptRepo = deptRepo;
         this.jlRepo = jlRepo;
         this.auth = auth;
+        this.userRepo = userRepo;
+        this.companyRepo = companyRepo;
     }
 
     // --------------------------
@@ -66,6 +73,12 @@ public class JournalEntryService {
             throw new RuntimeException("Journal Entry is not balanced: Debit != Credit");
         }
 
+        Company company = companyRepo.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        User createdBy = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         // Build Journal Entry
         JournalEntry je = JournalEntry.builder()
                 .journalEntryNumber(generateJENumber())
@@ -74,8 +87,8 @@ public class JournalEntryService {
                 .source(dto.getSource())
                 .periodId(dto.getPeriodId())
                 .status("DRAFT")
-                .company(Company.builder().id(companyId).build())
-                .createdByUser(User.builder().id(auth.getCurrentUserId()).build())
+                .company(company)
+                .createdByUser(createdBy)
                 .totalDebitAmount(totalDebit)
                 .totalCreditAmount(totalCredit)
                 .build();
@@ -143,6 +156,12 @@ public class JournalEntryService {
             throw new RuntimeException("Only POSTED entries can be reversed.");
         }
 
+        User createdBy = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        User approvedBy = userRepo.findById(original.getApprovedByUser().getId())
+                .orElseThrow(() -> new RuntimeException("Approved User not found"));
+
         // Create reversal entry
         JournalEntry reversal = JournalEntry.builder()
                 .journalEntryNumber(generateJENumber())
@@ -151,8 +170,8 @@ public class JournalEntryService {
                 .status("POSTED")
                 .source("SYSTEM")
                 .company(original.getCompany())
-                .createdByUser(User.builder().id(auth.getCurrentUserId()).build())
-                .approvedByUser(User.builder().id(auth.getCurrentUserId()).build())
+                .createdByUser(createdBy)
+                .approvedByUser(approvedBy)
                 .postedAt(Instant.now())
                 .build();
 
@@ -198,7 +217,9 @@ public class JournalEntryService {
                 .journalEntryNumber(je.getJournalEntryNumber())
                 .description(je.getDescription())
                 .entryDate(je.getEntryDate())
+                .periodId(je.getPeriodId())
                 .status(je.getStatus())
+                .source(je.getSource())
                 .postedAt(je.getPostedAt())
                 .reversedAt(je.getReversedAt())
                 .reversalEntryId(je.getReversalEntryId())
@@ -206,6 +227,7 @@ public class JournalEntryService {
                 .totalCredit(je.getTotalCreditAmount())
                 .lines(je.getLines().stream().map(l ->
                         JournalLineDTO.builder()
+                                .id(l.getId())
                                 .accountId(l.getAccount().getId())
                                 .debitAmount(l.getDebitAmount())
                                 .creditAmount(l.getCreditAmount())
@@ -237,5 +259,144 @@ public class JournalEntryService {
         return jeRepo.findByCompanyId(companyId).stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    @Transactional
+    public JournalEntryResponseDTO addLine(Long journalEntryId, JournalLineCreateDTO dto) {
+
+        // 1. Load JE (managed entity)
+        JournalEntry je = jeRepo.findById(journalEntryId)
+                .orElseThrow(() -> new RuntimeException("Journal Entry not found"));
+
+        // 2. Ensure JE belongs to the logged-in company
+        if (!je.getCompany().getId().equals(auth.getCurrentCompanyId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        // 3. Initialize lazy list to avoid transient issues
+        List<JournalLine> lines = je.getLines();
+        if (lines == null) {
+            lines = new ArrayList<>();
+            je.setLines(lines);
+        } else {
+            lines.size(); // forces initialization
+        }
+
+        // 4. Load managed Account (required)
+        ChartOfAccounts account = accountRepo.findById(dto.getAccountId())
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        // 5. Load managed Department (optional)
+        Department dept = null;
+        if (dto.getDepartmentId() != null) {
+            dept = deptRepo.findById(dto.getDepartmentId())
+                    .orElseThrow(() -> new RuntimeException("Department not found"));
+        }
+
+        // 6. Create the new JournalLine (transient but fully attached)
+        JournalLine line = JournalLine.builder()
+                .journalEntry(je)
+                .account(account)
+                .department(dept)
+                .debitAmount(dto.getDebitAmount())
+                .creditAmount(dto.getCreditAmount())
+                .projectId(dto.getProjectId())
+                .currencyCode(dto.getCurrencyCode())
+                .exchangeRate(dto.getExchangeRate())
+                .description(dto.getDescription())
+                .build();
+
+        // 7. Attach line to JE (cascade handles persist!)
+        lines.add(line);
+
+        // 8. Persist JE immediately so Hibernate manages both JE + all lines
+        je = jeRepo.saveAndFlush(je);
+
+        // 9. Now safely recalc totals AFTER flush (avoids transient exceptions)
+        recalcTotals(je);
+
+        // 10. Save again after totals updated
+        je = jeRepo.save(je);
+
+        return toDTO(je);
+    }
+
+
+    @Transactional
+    public JournalEntryResponseDTO updateLine(Long jeId, Long lineId, JournalLineUpdateDTO dto) {
+        JournalEntry je = getJEEntity(jeId);
+
+        JournalLine line = jlRepo.findById(lineId)
+                .orElseThrow(() -> new RuntimeException("Line not found"));
+
+        ChartOfAccounts account = accountRepo.findById(dto.getAccountId())
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        Department dept = null;
+        if (dto.getDepartmentId() != null) {
+            dept = deptRepo.findById(dto.getDepartmentId())
+                    .orElseThrow(() -> new RuntimeException("Department not found"));
+        }
+
+        if (!line.getJournalEntry().getId().equals(jeId))
+            throw new RuntimeException("Line does not belong to this journal");
+
+        line.setAccount(account);
+        line.setDebitAmount(dto.getDebitAmount());
+        line.setCreditAmount(dto.getCreditAmount());
+        line.setDepartment(dto.getDepartmentId() != null ? dept : null);
+        line.setProjectId(dto.getProjectId());
+        line.setCurrencyCode(dto.getCurrencyCode());
+        line.setExchangeRate(dto.getExchangeRate());
+        line.setDescription(dto.getDescription());
+
+        recalcTotals(je);
+
+        jeRepo.save(je);
+        return toDTO(je);
+    }
+
+
+    @Transactional
+    public JournalEntryResponseDTO deleteLine(Long jeId, Long lineId) {
+        JournalEntry je = getJEEntity(jeId);
+
+        JournalLine line = jlRepo.findById(lineId)
+                .orElseThrow(() -> new RuntimeException("Line not found"));
+
+        if (!line.getJournalEntry().getId().equals(jeId))
+            throw new RuntimeException("Line does not belong to this journal");
+
+        je.getLines().remove(line);
+        jlRepo.delete(line);
+
+        recalcTotals(je);
+
+        return toDTO(je);
+    }
+
+    private JournalEntry getJEEntity(Long id) {
+        Long companyId = auth.getCurrentCompanyId();
+
+        return jeRepo.findById(id)
+                .filter(je -> je.getCompany().getId().equals(companyId))
+                .orElseThrow(() -> new RuntimeException("Journal Entry not found or access denied"));
+    }
+
+    private void recalcTotals(JournalEntry je) {
+        BigDecimal totalDebit = BigDecimal.ZERO;
+        BigDecimal totalCredit = BigDecimal.ZERO;
+
+        for (JournalLine line : je.getLines()) {
+            if (line.getDebitAmount() != null) {
+                totalDebit = totalDebit.add(line.getDebitAmount());
+            }
+            if (line.getCreditAmount() != null) {
+                totalCredit = totalCredit.add(line.getCreditAmount());
+            }
+        }
+
+        je.setTotalDebitAmount(totalDebit);
+        je.setTotalCreditAmount(totalCredit);
     }
 }

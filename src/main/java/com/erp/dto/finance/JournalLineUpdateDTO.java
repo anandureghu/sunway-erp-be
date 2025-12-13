@@ -1,16 +1,17 @@
 package com.erp.dto.finance;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
-@Getter
-@Setter
-@Builder
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class JournalLineDTO {
-    private Long id;
+@Builder
+public class JournalLineUpdateDTO {
     private Long accountId;
     private BigDecimal debitAmount;
     private BigDecimal creditAmount;
