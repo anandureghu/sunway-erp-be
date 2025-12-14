@@ -58,7 +58,9 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/employee/EmployeeRequest.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/employee/EmployeeResponse.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/BudgetCreateDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/BudgetLineCreateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/BudgetLineDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/BudgetLineUpdateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/BudgetResponseDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/BudgetUpdateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/ChartOfAccountResponseDTO.java
@@ -71,7 +73,9 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/InvoiceResponse.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/JournalEntryCreateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/JournalEntryResponseDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/JournalLineCreateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/JournalLineDTO.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/JournalLineUpdateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/PaymentResponseDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/TransactionResponseDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/UpdateAccountDTO.java

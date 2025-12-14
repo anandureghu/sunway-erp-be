@@ -16,6 +16,7 @@ public class BudgetResponseDTO {
     private String budgetName;
     private Integer budgetYear;
     private String status;
+    private Long amount;
     private LocalDate startDate;
     private LocalDate endDate;
     private Instant createdAt;
