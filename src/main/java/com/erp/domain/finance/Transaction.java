@@ -3,11 +3,16 @@ package com.erp.domain.finance;
 import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.Instant;
+
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @Entity
 @Table(name = "transactions")
 public class Transaction {
@@ -30,14 +35,8 @@ public class Transaction {
     @Column(name = "transaction_date")
     private LocalDate transactionDate;
 
-//    @Column(name = "posted_date")
-//    private Instant postedDate;
-
     @Column(name = "amount", precision = 18, scale = 2)
     private BigDecimal amount;
-
-//    @Column(name = "debit_account", length = 64)
-//    private String debitAccount;
 
     @Column(name = "credit_account", length = 64)
     private String creditAccount;
@@ -51,9 +50,6 @@ public class Transaction {
     @Column(name = "payment_id", length = 64)
     private String paymentId;
 
-//    @Column(name = "is_posted")
-//    private Boolean posted = Boolean.FALSE;
-
     @Column(name = "transaction_description", length = 500)
     private String transactionDescription;
 
@@ -63,6 +59,4 @@ public class Transaction {
     @Column(name = "created_by")
     private Long createdBy;
 
-    @PrePersist
-    public void prePersist() { if (createdAt == null) createdAt = Instant.now(); }
 }

@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class JournalLineDTO {
+    private Long id;
     private Long accountId;
     private BigDecimal debitAmount;
     private BigDecimal creditAmount;

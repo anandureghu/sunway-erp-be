@@ -16,7 +16,6 @@ public class BudgetLineDTO {
     private Long projectId;
     private Integer period;
     private BigDecimal amount;
-    private String currencyCode;
     private String notes;
 }
 

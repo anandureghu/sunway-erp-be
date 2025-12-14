@@ -15,9 +15,11 @@ import java.util.List;
 public class JournalEntryResponseDTO {
     private Long id;
     private String journalEntryNumber;
+    private Long periodId;
     private String description;
     private LocalDate entryDate;
     private String status;
+    private String source; // Manual, AP, AR, System
     private BigDecimal totalDebit;
     private BigDecimal totalCredit;
     private Instant postedAt;

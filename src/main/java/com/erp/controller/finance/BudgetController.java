@@ -1,8 +1,6 @@
 package com.erp.controller.finance;
 
-import com.erp.dto.finance.BudgetCreateDTO;
-import com.erp.dto.finance.BudgetResponseDTO;
-import com.erp.dto.finance.BudgetUpdateDTO;
+import com.erp.dto.finance.*;
 import com.erp.service.finance.BudgetService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -47,6 +45,32 @@ public class BudgetController {
     @PostMapping("/{id}/close")
     public ResponseEntity<BudgetResponseDTO> close(@PathVariable("id") Long id) {
         return ResponseEntity.ok(service.close(id));
+    }
+
+
+    @PostMapping("/{id}/lines")
+    public ResponseEntity<BudgetResponseDTO> addLine(
+            @PathVariable("id") Long id,
+            @RequestBody BudgetLineCreateDTO dto
+    ) {
+        return ResponseEntity.ok(service.addLine(id, dto));
+    }
+
+    @PutMapping("/{id}/lines/{lineId}")
+    public ResponseEntity<BudgetResponseDTO> updateLine(
+            @PathVariable("id") Long id,
+            @PathVariable("lineId") Long lineId,
+            @RequestBody BudgetLineUpdateDTO dto
+    ) {
+        return ResponseEntity.ok(service.updateLine(id, lineId, dto));
+    }
+
+    @DeleteMapping("/{id}/lines/{lineId}")
+    public ResponseEntity<BudgetResponseDTO> deleteLine(
+            @PathVariable("id") Long id,
+            @PathVariable("lineId") Long lineId
+    ) {
+        return ResponseEntity.ok(service.deleteLine(id, lineId));
     }
 }
 
