@@ -28,6 +28,8 @@ public class BudgetHeader {
     @Column(nullable = false)
     private Integer budgetYear;
 
+    private Long amount;
+
     private LocalDate startDate;
     private LocalDate endDate;
 

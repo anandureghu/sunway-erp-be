@@ -49,9 +49,6 @@ public class BudgetLine {
     @Column(nullable = false)
     private BigDecimal amount;
 
-    @Column(length = 3)
-    private String currencyCode;
-
     @Column(length = 250)
     private String notes;
 }
