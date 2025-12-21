@@ -96,8 +96,12 @@ public class Item {
     void onUpdate() {
         updatedAt = Instant.now();
     }
-    
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")
     private Company company;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "warehouse_id")
+    private Warehouse warehouse;
 }

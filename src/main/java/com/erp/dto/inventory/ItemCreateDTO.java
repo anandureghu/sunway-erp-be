@@ -30,4 +30,5 @@ public class ItemCreateDTO {
     private String status;
     private String imageUrl;
     private String description;
+    private Long warehouse;
 }
