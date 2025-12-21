@@ -23,4 +23,6 @@ public class ItemUpdateDTO {
     private String status;
     private String imageUrl;
     private String description;
+
+    private Long warehouse;
 }

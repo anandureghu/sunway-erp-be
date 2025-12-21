@@ -28,4 +28,7 @@ public class ItemResponseDTO {
 
     private Instant createdAt;
     private Instant updatedAt;
+    private Long warehouse_id;
+    private String warehouse_location;
+    private String warehouse_name;
 }
