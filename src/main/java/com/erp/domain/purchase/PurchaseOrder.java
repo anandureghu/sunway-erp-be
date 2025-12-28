@@ -64,4 +64,8 @@ public class PurchaseOrder {
     void onCreate() {
         createdAt = Instant.now();
     }
+
+    @ManyToOne
+    @JoinColumn(name = "source_requisition_id")
+    private PurchaseRequisition sourceRequisition;
 }
