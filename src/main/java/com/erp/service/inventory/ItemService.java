@@ -3,12 +3,14 @@ package com.erp.service.inventory;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
+import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.ItemRepository;
+import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.security.context.AuthContext;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -21,21 +23,25 @@ import java.util.List;
 @Transactional
 public class ItemService {
 
+
     private final ItemRepository itemRepo;
     private final UserRepository userRepo;
     private final CompanyRepository companyRepo;
+    private final WarehouseRepository warehouseRepo;
     private final AuthContext auth;
 
     public ItemService(
             ItemRepository itemRepo,
             UserRepository userRepo,
             CompanyRepository companyRepo,
-            AuthContext auth
+            AuthContext auth,
+            WarehouseRepository warehouseRepo
     ) {
         this.itemRepo = itemRepo;
         this.userRepo = userRepo;
         this.companyRepo = companyRepo;
         this.auth = auth;
+        this.warehouseRepo = warehouseRepo;
     }
 
     // --------------------------
@@ -52,6 +58,9 @@ public class ItemService {
 
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        Warehouse warehouse = warehouseRepo.findById(dto.getWarehouse())
+                .orElseThrow(() -> new RuntimeException("Warehouse not found"));
 
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -79,6 +88,7 @@ public class ItemService {
                 .imageUrl(dto.getImageUrl())
                 .description(dto.getDescription())
                 .company(company)
+                .warehouse(warehouse)
                 .createdBy(user)
                 .updatedBy(user)
                 .createdAt(Instant.now())
@@ -97,6 +107,9 @@ public class ItemService {
         User user = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        Warehouse warehouse = warehouseRepo.findById(dto.getWarehouse())
+                .orElseThrow(() -> new RuntimeException("Warehouse not found"));
+
         item.setName(dto.getName());
         item.setCategory(dto.getCategory());
         item.setSubCategory(dto.getSubCategory());
@@ -111,6 +124,7 @@ public class ItemService {
         item.setImageUrl(dto.getImageUrl());
         item.setDescription(dto.getDescription());
         item.setUpdatedBy(user);
+        item.setWarehouse(warehouse);
         item.setUpdatedAt(Instant.now());
 
         return toDTO(itemRepo.save(item));
@@ -147,6 +161,7 @@ public class ItemService {
     }
 
     private ItemResponseDTO toDTO(Item item) {
+
         return ItemResponseDTO.builder()
                 .id(item.getId())
                 .sku(item.getSku())
@@ -162,6 +177,9 @@ public class ItemService {
                 .status(item.getStatus())
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
+                .warehouse_id(item.getWarehouse().getId())
+                .warehouse_name(item.getWarehouse().getName())
+                .warehouse_location(item.getWarehouse().getLocation())
                 .build();
     }
 

@@ -15,4 +15,6 @@ public class BudgetUpdateDTO {
     private LocalDate startDate;
     private LocalDate endDate;
     private Long amount;
+    private Long department;
+    private Long projectId;
 }
