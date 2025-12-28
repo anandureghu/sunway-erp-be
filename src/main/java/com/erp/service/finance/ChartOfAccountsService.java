@@ -2,16 +2,16 @@ package com.erp.service.finance;
 
 import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.hr.Company;
+import com.erp.dto.finance.ChartOfAccountResponseDTO;
 import com.erp.dto.finance.CreateAccountDTO;
 import com.erp.dto.finance.UpdateAccountDTO;
-import com.erp.dto.finance.ChartOfAccountResponseDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.security.context.AuthContext;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -123,22 +123,19 @@ public class ChartOfAccountsService {
     // =============================================================
 
     // Get company bank account (Asset)
-    public String getCompanyBankAccountCode(Long companyId) {
-        Optional<ChartOfAccounts> acc =
-                repo.findTopByCompanyIdAndType(companyId, "asset");
+    public Long getCompanyBankAccountCode(Long companyId) {
+        ChartOfAccounts acc =
+                repo.findTopByCompanyIdAndType(companyId, "asset").orElseThrow(() -> new RuntimeException("Account not found"));
 
-        return acc.map(ChartOfAccounts::getAccountCode)
-                .orElse("BANK-DEFAULT");
+        return acc.getId();
     }
 
     // Get Accounts Receivable (AR) account
-    public String getCustomerARAccountCode(Long companyId) {
-        Optional<ChartOfAccounts> acc =
-                repo.findTopByCompanyIdAndType(companyId, "asset")
-                        .filter(a -> a.getGlAccountType().equalsIgnoreCase("AR"));
+    public Long getCustomerARAccountCode(Long companyId) {
+        ChartOfAccounts acc =
+                repo.findTopByCompanyIdAndType(companyId, "asset").orElseThrow(() -> new RuntimeException("Account not found"));
 
-        return acc.map(ChartOfAccounts::getAccountCode)
-                .orElse("AR-DEFAULT");
+        return acc.getId();
     }
 
     // Get Accounts Payable (AP)
@@ -228,5 +225,10 @@ public class ChartOfAccountsService {
                 .glAccountClassTypeKey(acc.getGlAccountClassTypeKey())
                 .balance(acc.getBalance())
                 .build();
+    }
+
+    public void updateBalance(ChartOfAccounts acc, BigDecimal amount) {
+        acc.setBalance(acc.getBalance().add(amount));
+        repo.save(acc);
     }
 }

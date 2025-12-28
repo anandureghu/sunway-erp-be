@@ -1,13 +1,14 @@
 package com.erp.service.finance;
 
-import com.erp.domain.finance.Transaction;
+import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.GLAccountBalance;
+import com.erp.domain.finance.Transaction;
 import com.erp.domain.hr.Company;
 import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.TransactionResponseDTO;
-import com.erp.repo.finance.TransactionRepository;
-import com.erp.repo.finance.GLAccountBalanceRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
+import com.erp.repo.finance.GLAccountBalanceRepository;
+import com.erp.repo.finance.TransactionRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.security.context.AuthContext;
 import jakarta.transaction.Transactional;
@@ -27,6 +28,7 @@ public class TransactionService {
     private final CompanyRepository companyRepo;
     private final AuthContext auth;
     private final ChartOfAccountsRepository coaRepo;
+    private final ChartOfAccountsService coaService;
     private final GLAccountBalanceRepository glRepo;
 
     public TransactionService(
@@ -34,30 +36,36 @@ public class TransactionService {
             CompanyRepository companyRepo,
             AuthContext auth,
             ChartOfAccountsRepository coaRepo,
-            GLAccountBalanceRepository glRepo
+            GLAccountBalanceRepository glRepo,
+            ChartOfAccountsService coaService
     ) {
         this.repo = repo;
         this.companyRepo = companyRepo;
         this.auth = auth;
         this.coaRepo = coaRepo;
         this.glRepo = glRepo;
+        this.coaService = coaService;
     }
 
+    @Transactional
     public TransactionResponseDTO create(CreateTransactionDTO dto) {
 
         Company company = companyRepo.findById(dto.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-//        if (!company.getCreatedBy().equals(String.valueOf(auth.getCurrentUserId()))) {
-//            throw new RuntimeException("You cannot create transactions for another company");
-//        }
-
-        // Validate accounts exist
-//        coaRepo.findByAccountCode(dto.getDebitAccount())
-//                .orElseThrow(() -> new RuntimeException("Invalid debit account"));
-
-        coaRepo.findByAccountCode(dto.getCreditAccount())
+        ChartOfAccounts creditAccount = coaRepo.findById(dto.getCreditAccount())
                 .orElseThrow(() -> new RuntimeException("Invalid credit account"));
+
+        ChartOfAccounts debitAccount = coaRepo.findById(dto.getDebitAccount())
+                .orElseThrow(() -> new RuntimeException("Invalid debit account"));
+
+        if (creditAccount != null) {
+            coaService.updateBalance(creditAccount, dto.getAmount());
+        }
+
+        if (debitAccount != null) {
+            coaService.updateBalance(debitAccount, dto.getAmount().negate());
+        }
 
         Transaction tx = Transaction.builder()
                 .transactionCode("TX-" + System.currentTimeMillis())
@@ -67,7 +75,8 @@ public class TransactionService {
                 .amount(dto.getAmount())
                 .transactionDate(dto.getTransactionDate())
 //                .debitAccount(dto.getDebitAccount())
-                .creditAccount(dto.getCreditAccount())
+                .creditAccount(creditAccount)
+                .debitAccount(debitAccount)
 //                .itemCode(dto.getItemCode())
                 .invoiceId(dto.getInvoiceId())
                 .paymentId(dto.getPaymentId())
@@ -103,7 +112,7 @@ public class TransactionService {
 
         // Update GL Balances
 //        updateBalance(tx.getDebitAccount(), fiscalYear, tx.getAmount(), true);
-        updateBalance(tx.getCreditAccount(), fiscalYear, tx.getAmount(), false);
+        updateBalance(tx.getCreditAccount().getId(), fiscalYear, tx.getAmount(), false);
 
 //        tx.setPosted(true);
 //        tx.setPostedDate(Instant.now());
@@ -111,10 +120,7 @@ public class TransactionService {
         return toDTO(repo.save(tx));
     }
 
-    private void updateBalance(String accountCode, String year, java.math.BigDecimal amount, boolean isDebit) {
-        Long accountId = coaRepo.findByAccountCode(accountCode)
-                .orElseThrow(() -> new RuntimeException("Account not found"))
-                .getId();
+    private void updateBalance(Long accountId, String year, java.math.BigDecimal amount, boolean isDebit) {
 
         GLAccountBalance bal = glRepo.findByAccountIdAndFiscalYear(accountId, year)
                 .orElse(GLAccountBalance.builder()
@@ -148,7 +154,10 @@ public class TransactionService {
 //                .posted(tx.getPosted())
                 .amount(tx.getAmount())
 //                .debitAccount(tx.getDebitAccount())
-                .creditAccount(tx.getCreditAccount())
+                .creditAccountId(tx.getCreditAccount().getId())
+                .creditAccountName(tx.getCreditAccount().getAccountName())
+                .debitAccountId(tx.getDebitAccount().getId())
+                .debitAccountName(tx.getDebitAccount().getAccountName())
                 .companyId(tx.getCompany().getId())
                 .companyName(tx.getCompany().getCompanyName())
 //                .itemCode(tx.getItemCode())
@@ -162,19 +171,26 @@ public class TransactionService {
     public Transaction createTransactionForPayment(Long paymentId,
                                                    Long companyId,
                                                    BigDecimal amount,
-                                                   String debitAccountCode,
-                                                   String creditAccountCode,
+                                                   Long debitAccountId,
+                                                   Long creditAccountId,
                                                    LocalDate txDate,
                                                    String txType) {
+        ChartOfAccounts creditAccount = coaRepo.findById(creditAccountId)
+                .orElseThrow(() -> new RuntimeException("Invalid credit account"));
+
+
+        ChartOfAccounts debitAccount = coaRepo.findById(debitAccountId)
+                .orElseThrow(() -> new RuntimeException("Invalid debit account"));
+
         Transaction tx = Transaction.builder()
-                .transactionCode("TX-" + UUID.randomUUID().toString().substring(0,8).toUpperCase())
+                .transactionCode("TX-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                 .transactionType(txType)
                 .company(null) // optional attach company later via repo lookup if needed
 //                .fiscalType("DEFAULT")
                 .transactionDate(txDate == null ? LocalDate.now() : txDate)
                 .amount(amount)
-//                .debitAccount(debitAccountCode)
-                .creditAccount(creditAccountCode)
+                .creditAccount(creditAccount)
+                .debitAccount(debitAccount)
 //                .itemCode("PAYMENT#" + paymentId)
 //                .posted(true) // mark posted immediately for payments
                 .createdAt(Instant.now())
@@ -190,19 +206,18 @@ public class TransactionService {
     }
 
     private void updateGlAndCoaForPostedTransaction(Transaction tx) {
-        // Determine account ids using coaRepo.findByAccountCode(...)
-//        var debitCoa = coaRepo.findByAccountCode(tx.getDebitAccount())
-//                .orElseThrow(() -> new RuntimeException("Debit COA not found: " + tx.getDebitAccount()));
-        var creditCoa = coaRepo.findByAccountCode(tx.getCreditAccount())
-                .orElseThrow(() -> new RuntimeException("Credit COA not found: " + tx.getCreditAccount()));
+        var creditCoa = coaRepo.findById(tx.getCreditAccount().getId())
+                .orElseThrow(() -> new RuntimeException("Credit COA not found: " + tx.getCreditAccount().getAccountCode()));
+        var debitCoa = coaRepo.findById(tx.getDebitAccount().getId())
+                .orElseThrow(() -> new RuntimeException("Debit COA not found: " + tx.getDebitAccount().getAccountCode()));
 
         // update ChartOfAccounts running balances (rule depends on type)
-//        coaAdjust(debitCoa, tx.getAmount(), true);
+        coaAdjust(debitCoa, tx.getAmount(), true);
         coaAdjust(creditCoa, tx.getAmount(), false);
 
         // update GL account balances (fiscal year handling - use current year string)
         String fiscalYear = String.valueOf(java.time.Year.now().getValue());
-//        updateGLBalance(debitCoa.getId(), fiscalYear, tx.getAmount(), true);
+        updateGLBalance(debitCoa.getId(), fiscalYear, tx.getAmount(), true);
         updateGLBalance(creditCoa.getId(), fiscalYear, tx.getAmount(), false);
     }
 

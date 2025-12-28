@@ -1,5 +1,6 @@
 package com.erp.dto.finance;
 
+import com.erp.domain.finance.BudgetStatus;
 import lombok.*;
 
 import java.time.Instant;
@@ -15,8 +16,9 @@ public class BudgetResponseDTO {
     private Long id;
     private String budgetName;
     private Integer budgetYear;
-    private String status;
+    private BudgetStatus status;
     private Long amount;
+    private Long balance;
     private LocalDate startDate;
     private LocalDate endDate;
     private Instant createdAt;

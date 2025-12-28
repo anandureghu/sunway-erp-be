@@ -4,7 +4,7 @@ import com.erp.domain.hr.Department;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -42,12 +42,14 @@ public class BudgetLine {
 
     private Long projectId;
 
-    // Usually 1–12 for months
     @Column(nullable = false)
-    private Integer period;
+    private LocalDate startDate;
 
     @Column(nullable = false)
-    private BigDecimal amount;
+    private LocalDate endDate;
+
+    @Column(nullable = false)
+    private Long amount;
 
     @Column(length = 250)
     private String notes;
