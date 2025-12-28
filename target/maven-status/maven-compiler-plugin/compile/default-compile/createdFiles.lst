@@ -1,6 +1,7 @@
 com/erp/dto/sales/ShipmentResponseDTO.class
 com/erp/dto/hr/CreateEmployeeDTO$CreateEmployeeDTOBuilder.class
 com/erp/web/LoanController.class
+com/erp/domain/purchase/GoodsReceiptItem$GoodsReceiptItemBuilder.class
 com/erp/domain/finance/BudgetStatus.class
 com/erp/dto/sales/SalesOrderItemResponseDTO$SalesOrderItemResponseDTOBuilder.class
 com/erp/service/CurrentJobService.class
@@ -13,7 +14,6 @@ com/erp/domain/finance/Reconciliations$ReconciliationsBuilder.class
 com/erp/repo/hr/CompanyRepository.class
 com/erp/domain/finance/Payment.class
 com/erp/domain/inventory/Customer.class
-com/erp/domain/Leave.class
 com/erp/controller/finance/InvoiceController.class
 com/erp/domain/CurrentJob$PreviousExperience.class
 com/erp/repo/finance/BudgetLineRepository.class
@@ -21,6 +21,7 @@ com/erp/controller/finance/PaymentController.class
 com/erp/dto/finance/ChartOfAccountResponseDTO.class
 com/erp/domain/finance/Settlements.class
 com/erp/service/purchase/PurchaseOrderService.class
+com/erp/domain/purchase/GoodsReceiptItem.class
 com/erp/dto/inventory/CategoryUpdateDTO.class
 com/erp/controller/finance/BudgetController.class
 com/erp/domain/inventory/Variances$VariancesBuilder.class
@@ -47,6 +48,7 @@ com/erp/domain/finance/Settlements$SettlementsBuilder.class
 com/erp/web/LeaveController.class
 com/erp/domain/finance/Transfers.class
 com/erp/dto/inventory/CategoryCreateDTO.class
+com/erp/dto/purchase/GoodsReceiptItemDTO$GoodsReceiptItemDTOBuilder.class
 com/erp/domain/Loan.class
 com/erp/dto/inventory/WarehouseResponseDTO.class
 com/erp/domain/inventory/Category$CategoryBuilder.class
@@ -57,14 +59,16 @@ com/erp/domain/sales/Picklist.class
 com/erp/repo/inventory/WarehouseRepository.class
 com/erp/dto/sales/ShipmentItemDTO$ShipmentItemDTOBuilder.class
 com/erp/service/finance/InvoiceService.class
-com/erp/domain/Employee.class
 com/erp/service/hr/CompanyService.class
 com/erp/controller/inventory/ItemController.class
+com/erp/dto/purchase/GoodsReceiptCreateDTO.class
 com/erp/dto/finance/CreateGLBalanceDTO.class
 com/erp/domain/finance/BudgetHeader.class
+com/erp/domain/purchase/GoodsReceipt$GoodsReceiptBuilder.class
 com/erp/domain/hr/Department.class
 com/erp/dto/finance/JournalEntryResponseDTO.class
 com/erp/domain/finance/JournalEntry$JournalEntryBuilder.class
+com/erp/domain/purchase/GoodsReceipt.class
 com/erp/repo/finance/JournalLineRepository.class
 com/erp/repo/finance/InvoiceRepository.class
 com/erp/dto/finance/BudgetLineCreateDTO$BudgetLineCreateDTOBuilder.class
@@ -74,6 +78,7 @@ com/erp/dto/payroll/PayrollResponse.class
 com/erp/domain/sales/SalesOrderItem$SalesOrderItemBuilder.class
 com/erp/dto/finance/CreateTransactionDTO.class
 com/erp/service/storage/FileStorageService.class
+com/erp/dto/purchase/RequisitionToPurchaseOrderDTO$ItemDTO.class
 com/erp/dto/currentjob/CurrentJobRequest$PreviousExperienceDTO.class
 com/erp/service/hr/DepartmentService.class
 com/erp/service/finance/ChartOfAccountsService.class
@@ -83,8 +88,10 @@ com/erp/service/finance/TransactionService.class
 com/erp/dto/finance/BudgetResponseDTO.class
 com/erp/controller/inventory/CustomerController.class
 com/erp/domain/finance/Payment$PaymentBuilder.class
+com/erp/domain/purchase/PurchaseRequisitionItem.class
 com/erp/service/PayrollService.class
 com/erp/service/inventory/CategoryService.class
+com/erp/domain/purchase/PurchaseRequisition.class
 com/erp/service/sales/PicklistService.class
 com/erp/domain/inventory/Item$ItemBuilder.class
 com/erp/dto/purchase/PurchaseOrderCreateDTO.class
@@ -97,12 +104,16 @@ com/erp/domain/Role.class
 com/erp/domain/sales/Picklist$PicklistBuilder.class
 com/erp/domain/User.class
 com/erp/dto/inventory/VendorResponseDTO$VendorResponseDTOBuilder.class
+com/erp/controller/purchase/PurchaseRequisitionController.class
+com/erp/repo/purchase/PurchaseRequisitionRepository.class
 com/erp/controller/sales/PicklistController.class
 com/erp/dto/sales/PicklistItemDTO.class
 com/erp/dto/inventory/CustomerCreateDTO.class
+com/erp/domain/purchase/PurchaseRequisition$PurchaseRequisitionBuilder.class
 com/erp/service/sales/SalesOrderService.class
 com/erp/domain/inventory/Orders$OrdersBuilder.class
 com/erp/dto/finance/JournalEntryResponseDTO$JournalEntryResponseDTOBuilder.class
+com/erp/dto/purchase/PurchaseRequisitionItemDTO$PurchaseRequisitionItemDTOBuilder.class
 com/erp/dto/finance/JournalEntryCreateDTO$JournalEntryCreateDTOBuilder.class
 com/erp/domain/finance/ChartOfAccounts$ChartOfAccountsBuilder.class
 com/erp/repo/UserRepository.class
@@ -132,6 +143,7 @@ com/erp/dto/finance/JournalLineDTO$JournalLineDTOBuilder.class
 com/erp/dto/finance/BudgetResponseDTO$BudgetResponseDTOBuilder.class
 com/erp/dto/hr/EmployeeResponseDTO$EmployeeResponseDTOBuilder.class
 com/erp/dto/finance/BudgetLineDTO$BudgetLineDTOBuilder.class
+com/erp/dto/purchase/PurchaseRequisitionResponseDTO.class
 com/erp/dto/inventory/ItemResponseDTO.class
 com/erp/domain/finance/Invoice.class
 com/erp/config/SwaggerConfig.class
@@ -151,7 +163,7 @@ com/erp/repo/finance/GLAccountBalanceRepository.class
 com/erp/controller/inventory/CategoryController.class
 com/erp/service/inventory/VendorService.class
 com/erp/domain/inventory/Warehouse$WarehouseBuilder.class
-com/erp/domain/hr/Company$CompanyBuilder.class
+com/erp/dto/purchase/GoodsReceiptItemDTO.class
 com/erp/dto/inventory/VendorCreateDTO.class
 com/erp/repo/finance/TransactionRepository.class
 com/erp/dto/finance/CreatePaymentDTO.class
@@ -159,8 +171,10 @@ com/erp/domain/inventory/Customer$CustomerBuilder.class
 com/erp/dto/finance/UpdateAccountDTO.class
 com/erp/dto/finance/JournalLineDTO.class
 com/erp/domain/Payroll.class
+com/erp/dto/purchase/GoodsReceiptResponseDTO$GoodsReceiptResponseDTOBuilder.class
 com/erp/dto/sales/ShipmentItemDTO.class
 com/erp/dto/auth/RefreshTokenRequest.class
+com/erp/dto/purchase/RequisitionToPurchaseOrderDTO.class
 com/erp/domain/finance/GLAccountBalance.class
 com/erp/controller/finance/TransactionController.class
 com/erp/dto/loan/LoanResponse.class
@@ -168,15 +182,15 @@ com/erp/dto/currentjob/CurrentJobRequest$EducationDTO.class
 com/erp/security/JwtAuthenticationFilter.class
 com/erp/dto/employee/EmployeeResponse.class
 com/erp/service/LoanService.class
-com/erp/domain/hr/Company.class
 com/erp/domain/finance/BudgetLine.class
 com/erp/dto/inventory/OrderRequest.class
 com/erp/service/finance/PaymentService.class
 com/erp/repo/sales/PicklistRepository.class
+com/erp/dto/purchase/PurchaseRequisitionCreateDTO.class
+com/erp/domain/purchase/PurchaseRequisitionItem$PurchaseRequisitionItemBuilder.class
 com/erp/controller/CurrentJobController.class
 com/erp/dto/currentjob/EducationDTO.class
 com/erp/domain/sales/ShipmentItem$ShipmentItemBuilder.class
-com/erp/domain/Employee$EmployeeBuilder.class
 com/erp/domain/finance/Transaction$TransactionBuilder.class
 com/erp/controller/finance/ChartOfAccountsController.class
 com/erp/domain/inventory/Variances.class
@@ -206,8 +220,10 @@ com/erp/dto/finance/BudgetLineUpdateDTO.class
 com/erp/service/inventory/ItemService.class
 com/erp/dto/inventory/ItemUpdateDTO.class
 com/erp/domain/hr/Department$DepartmentBuilder.class
+com/erp/dto/purchase/PurchaseRequisitionItemDTO.class
 com/erp/domain/sales/PicklistItem$PicklistItemBuilder.class
 com/erp/dto/finance/InvoiceResponse.class
+com/erp/service/purchase/GoodsReceiptService.class
 com/erp/dto/leave/LeaveResponse.class
 com/erp/dto/finance/BudgetUpdateDTO$BudgetUpdateDTOBuilder.class
 com/erp/dto/finance/PaymentResponseDTO$PaymentResponseDTOBuilder.class
@@ -215,7 +231,7 @@ com/erp/dto/finance/JournalLineCreateDTO.class
 com/erp/controller/purchase/PurchaseOrderController.class
 com/erp/repo/sales/ShipmentRepository.class
 com/erp/dto/inventory/VendorResponseDTO.class
-com/erp/repo/LeaveRepository.class
+com/erp/service/purchase/PurchaseRequisitionService.class
 com/erp/repo/hr/DepartmentRepository.class
 com/erp/domain/sales/Shipment.class
 com/erp/domain/sales/Shipment$ShipmentBuilder.class
@@ -227,6 +243,7 @@ com/erp/domain/finance/JournalLine.class
 com/erp/dto/finance/GLBalanceResponseDTO$GLBalanceResponseDTOBuilder.class
 com/erp/dto/finance/CreateAccountDTO.class
 com/erp/dto/payroll/PayrollRequest.class
+com/erp/repo/purchase/GoodsReceiptRepository.class
 com/erp/domain/CurrentJob.class
 com/erp/controller/UserController.class
 com/erp/dto/inventory/CustomerResponseDTO.class
@@ -242,6 +259,7 @@ com/erp/exception/GlobalExceptionHandler.class
 com/erp/dto/inventory/VendorUpdateDTO.class
 com/erp/controller/inventory/WarehouseController.class
 com/erp/dto/inventory/VendorCreateDTO$VendorCreateDTOBuilder.class
+com/erp/domain/purchase/PurchaseRequisitionStatus.class
 com/erp/dto/sales/ShipmentResponseDTO$ShipmentResponseDTOBuilder.class
 com/erp/dto/finance/PaymentResponseDTO.class
 com/erp/service/hr/EmployeeService.class
@@ -249,6 +267,7 @@ com/erp/domain/sales/PicklistItem.class
 com/erp/domain/finance/Invoice$InvoiceBuilder.class
 com/erp/dto/finance/InvoiceRequest.class
 com/erp/dto/finance/CreatePaymentDTO$CreatePaymentDTOBuilder.class
+com/erp/dto/purchase/PurchaseRequisitionResponseDTO$PurchaseRequisitionResponseDTOBuilder.class
 com/erp/controller/PayrollController.class
 com/erp/dto/finance/CreateGLBalanceDTO$CreateGLBalanceDTOBuilder.class
 com/erp/domain/purchase/PurchaseOrderItem$PurchaseOrderItemBuilder.class
@@ -259,6 +278,7 @@ com/erp/domain/finance/JournalLine$JournalLineBuilder.class
 com/erp/repo/LoanRepository.class
 com/erp/dto/sales/PicklistResponseDTO$PicklistResponseDTOBuilder.class
 com/erp/domain/finance/Transfers$TransfersBuilder.class
+com/erp/controller/purchase/GoodsReceiptController.class
 com/erp/dto/finance/BudgetLineUpdateDTO$BudgetLineUpdateDTOBuilder.class
 com/erp/Application.class
 com/erp/domain/finance/BudgetLine$BudgetLineBuilder.class
@@ -275,6 +295,7 @@ com/erp/domain/inventory/Sales$SalesBuilder.class
 com/erp/config/SecurityConfig.class
 com/erp/domain/finance/JournalEntry.class
 com/erp/dto/currentjob/PreviousExperienceDTO.class
+com/erp/dto/purchase/GoodsReceiptResponseDTO.class
 com/erp/repo/sales/SalesOrderRepository.class
 com/erp/dto/auth/JwtResponse.class
 com/erp/domain/sales/SalesOrder.class
