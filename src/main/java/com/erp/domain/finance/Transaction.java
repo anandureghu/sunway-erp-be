@@ -38,9 +38,16 @@ public class Transaction {
     @Column(name = "amount", precision = 18, scale = 2)
     private BigDecimal amount;
 
-    @Column(name = "credit_account", length = 64)
-    private String creditAccount;
-//
+    // GL Account
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "credit_account")
+    private ChartOfAccounts creditAccount;
+
+    // GL Account
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "debit_account")
+    private ChartOfAccounts debitAccount;
+
 //    @Column(name = "item_code", length = 64)
 //    private String itemCode;
 

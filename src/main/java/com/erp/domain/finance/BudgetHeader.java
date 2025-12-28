@@ -2,6 +2,7 @@ package com.erp.domain.finance;
 
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
+import com.erp.domain.hr.Department;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -34,8 +35,15 @@ public class BudgetHeader {
     private LocalDate endDate;
 
     @Column(nullable = false, length = 20)
-    private String status;
+    private BudgetStatus status;
     // Draft, Active, Closed
+
+    // Optional Department
+    @ManyToOne
+    @JoinColumn(name = "department_id")
+    private Department department;
+
+    private Long projectId;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")
