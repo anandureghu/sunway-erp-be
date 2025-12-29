@@ -54,12 +54,21 @@ public class WarehouseService {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        User manager = userRepo.findById(dto.getManager())
+                .orElseThrow(() -> new RuntimeException("User for manager not found"));
+
         Warehouse wh = Warehouse.builder()
                 .code(dto.getCode())
                 .name(dto.getName())
-                .location(dto.getLocation())
                 .status(dto.getStatus())
                 .company(company)
+                .street(dto.getStreet())
+                .city(dto.getCity())
+                .country(dto.getCountry())
+                .pin(dto.getPin())
+                .phone(dto.getPhone())
+                .manager(manager)
+                .contactPersonName(dto.getContactPersonName())
                 .createdByUser(user)
                 .updatedByUser(user)
                 .build();
@@ -77,10 +86,19 @@ public class WarehouseService {
         User user = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        User manager = userRepo.findById(dto.getManager())
+                .orElseThrow(() -> new RuntimeException("User for manager not found"));
+
         wh.setName(dto.getName());
-        wh.setLocation(dto.getLocation());
         wh.setStatus(dto.getStatus());
         wh.setUpdatedByUser(user);
+        wh.setCity(dto.getCity());
+        wh.setStreet(dto.getStreet());
+        wh.setPin(dto.getPin());
+        wh.setPhone(dto.getPhone());
+        wh.setCountry(dto.getCountry());
+        wh.setContactPersonName(dto.getContactPersonName());
+        wh.setManager(manager);
 
         return toDTO(repo.save(wh));
     }
@@ -126,8 +144,15 @@ public class WarehouseService {
                 .id(wh.getId())
                 .code(wh.getCode())
                 .name(wh.getName())
-                .location(wh.getLocation())
                 .status(wh.getStatus())
+                .street(wh.getStreet())
+                .city(wh.getCity())
+                .country(wh.getCountry())
+                .pin(wh.getPin())
+                .phone(wh.getPhone())
+                .managerId(wh.getManager().getId())
+                .managerName(wh.getManager().getFullName())
+                .contactPersonName(wh.getContactPersonName())
                 .build();
     }
 }

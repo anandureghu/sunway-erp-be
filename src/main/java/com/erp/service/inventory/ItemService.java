@@ -179,8 +179,14 @@ public class ItemService {
                 .updatedAt(item.getUpdatedAt())
                 .warehouse_id(item.getWarehouse().getId())
                 .warehouse_name(item.getWarehouse().getName())
-                .warehouse_location(item.getWarehouse().getLocation())
-                .build();
+                .warehouse_location(
+                        String.format(
+                                "%s, %s, %s",
+                                item.getWarehouse().getStreet(),
+                                item.getWarehouse().getCity(),
+                                item.getWarehouse().getCountry()
+                        )
+                ).build();
     }
 
 }
