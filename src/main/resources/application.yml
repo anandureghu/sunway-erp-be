@@ -1,6 +1,10 @@
 spring:
   profiles:
     active: mysql
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
 
 app:
   jwt:
@@ -25,4 +29,10 @@ logging:
 
 springdoc:
   override-server-url: true
+
+azure:
+  storage:
+    connection-string: ${AZURE_STORAGE_CONNECTION_STRING}
+    public-container: erp-public
+    private-container: erp-private
 
