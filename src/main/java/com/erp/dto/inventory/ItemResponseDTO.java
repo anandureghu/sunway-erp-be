@@ -23,6 +23,7 @@ public class ItemResponseDTO {
 
     private BigDecimal costPrice;
     private BigDecimal sellingPrice;
+    private String imageUrl;
 
     private String status;
 

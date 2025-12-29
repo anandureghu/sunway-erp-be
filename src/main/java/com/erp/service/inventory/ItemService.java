@@ -4,6 +4,8 @@ import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.Warehouse;
+import com.erp.dto.file.FileCategory;
+import com.erp.dto.file.FileUploadResult;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
@@ -12,9 +14,11 @@ import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.file.FileStorageService;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.List;
@@ -29,32 +33,32 @@ public class ItemService {
     private final CompanyRepository companyRepo;
     private final WarehouseRepository warehouseRepo;
     private final AuthContext auth;
+    private final FileStorageService fileStorageService;
+
 
     public ItemService(
             ItemRepository itemRepo,
             UserRepository userRepo,
             CompanyRepository companyRepo,
             AuthContext auth,
-            WarehouseRepository warehouseRepo
+            WarehouseRepository warehouseRepo, FileStorageService fileStorageService
     ) {
         this.itemRepo = itemRepo;
         this.userRepo = userRepo;
         this.companyRepo = companyRepo;
         this.auth = auth;
         this.warehouseRepo = warehouseRepo;
+        this.fileStorageService = fileStorageService;
     }
 
     // --------------------------
     // Create Item
     // --------------------------
-    public ItemResponseDTO create(ItemCreateDTO dto) {
+    @Transactional
+    public ItemResponseDTO create(ItemCreateDTO dto, MultipartFile image) {
 
         Long companyId = auth.getCurrentCompanyId();
         Long userId = auth.getCurrentUserId();
-
-        if (itemRepo.existsBySkuAndCompanyId(dto.getSku(), companyId)) {
-            throw new RuntimeException("SKU already exists for this company");
-        }
 
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
@@ -65,6 +69,7 @@ public class ItemService {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        // 1️⃣ Save item FIRST (no image)
         Item item = Item.builder()
                 .sku(dto.getSku())
                 .name(dto.getName())
@@ -85,7 +90,6 @@ public class ItemService {
                 .unitMeasure(dto.getUnitMeasure())
                 .reorderLevel(dto.getReorderLevel())
                 .status(dto.getStatus())
-                .imageUrl(dto.getImageUrl())
                 .description(dto.getDescription())
                 .company(company)
                 .warehouse(warehouse)
@@ -94,7 +98,24 @@ public class ItemService {
                 .createdAt(Instant.now())
                 .build();
 
-        return toDTO(itemRepo.save(item));
+        Item saved = itemRepo.save(item);
+
+        // 2️⃣ Upload image AFTER item exists
+        if (image != null && !image.isEmpty()) {
+
+            FileUploadResult upload = fileStorageService.upload(
+                    image,
+                    FileCategory.INVENTORY_IMAGE,
+                    saved.getId().toString(),
+                    true
+            );
+
+            saved.setImageUrl(upload.getBlobPath());
+
+            itemRepo.save(saved);
+        }
+
+        return toDTO(saved);
     }
 
     // --------------------------
@@ -161,6 +182,7 @@ public class ItemService {
     }
 
     private ItemResponseDTO toDTO(Item item) {
+        String imageUrl = fileStorageService.getPublicUrl(item.getImageUrl());
 
         return ItemResponseDTO.builder()
                 .id(item.getId())
@@ -175,12 +197,19 @@ public class ItemService {
                 .costPrice(item.getCostPrice())
                 .sellingPrice(item.getSellingPrice())
                 .status(item.getStatus())
+                .imageUrl(imageUrl)
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
                 .warehouse_id(item.getWarehouse().getId())
                 .warehouse_name(item.getWarehouse().getName())
-                .warehouse_location(item.getWarehouse().getLocation())
-                .build();
+                .warehouse_location(
+                        String.format(
+                                "%s, %s, %s",
+                                item.getWarehouse().getStreet(),
+                                item.getWarehouse().getCity(),
+                                item.getWarehouse().getCountry()
+                        )
+                ).build();
     }
 
 }

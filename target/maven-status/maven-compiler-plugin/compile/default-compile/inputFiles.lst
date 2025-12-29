@@ -1,4 +1,5 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/Application.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/config/DotenvConfig.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/config/SecurityConfig.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/config/SwaggerConfig.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/controller/AuthController.java
@@ -87,6 +88,8 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/currentjob/PreviousExperienceDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/employee/EmployeeRequest.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/employee/EmployeeResponse.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/file/FileCategory.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/dto/file/FileUploadResult.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/BudgetCreateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/BudgetLineCreateDTO.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/dto/finance/BudgetLineDTO.java
@@ -199,6 +202,7 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/LoanService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/PayrollService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/UserService.java
+/Users/anandureghu/erp/backend/src/main/java/com/erp/service/file/FileStorageService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/finance/BudgetService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/finance/ChartOfAccountsService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/finance/GLAccountBalanceService.java
@@ -221,5 +225,4 @@
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/sales/PicklistService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/sales/SalesOrderService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/service/sales/ShipmentService.java
-/Users/anandureghu/erp/backend/src/main/java/com/erp/service/storage/FileStorageService.java
 /Users/anandureghu/erp/backend/src/main/java/com/erp/startup/AdminSeeder.java

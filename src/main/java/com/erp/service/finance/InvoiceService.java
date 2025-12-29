@@ -7,8 +7,6 @@ import com.erp.dto.finance.InvoiceResponse;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.service.pdf.InvoicePDFService;
-import com.erp.service.storage.FileStorageService;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +14,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +22,6 @@ public class InvoiceService {
     private final InvoiceRepository repo;
     private final CompanyRepository companyRepo;
     private final InvoicePDFService pdfService;
-    private final FileStorageService storage;
 
     // ============================================================
     // CREATE MANUAL INVOICE
@@ -65,8 +61,8 @@ public class InvoiceService {
                     req.getAmount().toString()
             );
 
-            String pdfUrl = storage.savePdf(invoiceCode, pdfBytes);
-            saved.setPdfUrl(pdfUrl);
+//            String pdfUrl = storage.savePdf(invoiceCode, pdfBytes);
+//            saved.setPdfUrl(pdfUrl);
             saved = repo.save(saved);
 
         } catch (Exception e) {
@@ -102,11 +98,12 @@ public class InvoiceService {
                     invoiceCode, company.getCompanyName(), notes, amount.toString()
             );
 
-            String pdfUrl = storage.savePdf(invoiceCode, pdf);
-            saved.setPdfUrl(pdfUrl);
+//            String pdfUrl = storage.savePdf(invoiceCode, pdf);
+//            saved.setPdfUrl(pdfUrl);
             saved = repo.save(saved);
 
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         return saved;
     }

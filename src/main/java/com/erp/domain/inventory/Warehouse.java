@@ -26,7 +26,16 @@ public class Warehouse {
     @Column(nullable = false)
     private String name;
 
-    private String location;
+    private String city;
+    private String street;
+    private String country;
+    private String pin;
+    private String phone;
+    private String contactPersonName;
+
+    @ManyToOne
+    @JoinColumn(name = "manager")
+    private User manager;
 
     private String status; // ACTIVE / INACTIVE
 
