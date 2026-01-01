@@ -10,8 +10,6 @@ import java.time.LocalDate;
 @Builder
 public class DependentRequestDTO {
 
-    private Long employeeId;
-
     private String firstName;
     private String middleName;
     private String lastName;

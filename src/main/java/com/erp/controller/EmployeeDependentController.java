@@ -8,40 +8,59 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-
 @RestController
-@RequestMapping("/api/employees/dependents")
+@RequestMapping("/api/employees")
 @RequiredArgsConstructor
 public class EmployeeDependentController {
 
     private final EmployeeDependentService dependentService;
 
-    @PostMapping
-    public ResponseEntity<DependentResponseDTO> create(@RequestBody DependentRequestDTO dto) {
-        return ResponseEntity.ok(dependentService.createDependent(dto));
+    @PostMapping("/{employeeId}/dependents")
+    public ResponseEntity<DependentResponseDTO> createDependent(
+            @PathVariable("employeeId") Long employeeId,
+            @RequestBody DependentRequestDTO dto
+    ) {
+        return ResponseEntity.ok(
+                dependentService.createDependent(employeeId, dto)
+        );
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<DependentResponseDTO> update(
-            @PathVariable Long id,
-            @RequestBody DependentRequestDTO dto) {
-
-        return ResponseEntity.ok(dependentService.updateDependent(id, dto));
+    @PutMapping("/{employeeId}/dependents/{dependentId}")
+    public ResponseEntity<DependentResponseDTO> updateDependent(
+            @PathVariable("employeeId") Long employeeId,
+            @PathVariable("dependentId") Long dependentId,
+            @RequestBody DependentRequestDTO dto
+    ) {
+        return ResponseEntity.ok(
+                dependentService.updateDependent(dependentId, dto)
+        );
     }
 
-    @GetMapping("/employee/{employeeId}")
-    public ResponseEntity<List<DependentResponseDTO>> listByEmployee(@PathVariable Long employeeId) {
-        return ResponseEntity.ok(dependentService.getDependentsByEmployee(employeeId));
+    @GetMapping("/{employeeId}/dependents")
+    public ResponseEntity<List<DependentResponseDTO>> getDependents(
+            @PathVariable("employeeId") Long employeeId
+    ) {
+        return ResponseEntity.ok(
+                dependentService.getDependentsByEmployee(employeeId)
+        );
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<DependentResponseDTO> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(dependentService.getDependentById(id));
+    @GetMapping("/{employeeId}/dependents/{dependentId}")
+    public ResponseEntity<DependentResponseDTO> getDependentById(
+            @PathVariable("employeeId") Long employeeId,
+            @PathVariable("dependentId") Long dependentId
+    ) {
+        return ResponseEntity.ok(
+                dependentService.getDependentById(dependentId)
+        );
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(@PathVariable Long id) {
-        dependentService.deleteDependent(id);
-        return ResponseEntity.ok("Dependent deleted successfully");
+    @DeleteMapping("/{employeeId}/dependents/{dependentId}")
+    public ResponseEntity<Void> deleteDependent(
+            @PathVariable("employeeId") Long employeeId,
+            @PathVariable("dependentId") Long dependentId
+    ) {
+        dependentService.deleteDependent(dependentId);
+        return ResponseEntity.noContent().build();
     }
 }

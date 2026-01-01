@@ -19,15 +19,15 @@ public class EmployeeDependentService {
     private final EmployeeDependentRepository dependentRepository;
     private final EmployeeRepository employeeRepository;
 
-    // -------------------------
-    // Create Dependent
-    // -------------------------
-    public DependentResponseDTO createDependent(DependentRequestDTO dto) {
+    // =========================
+    // CREATE DEPENDENT
+    // =========================
+    public DependentResponseDTO createDependent(Long employeeId, DependentRequestDTO dto) {
 
-        Employee employee = employeeRepository.findById(dto.getEmployeeId())
+        Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        EmployeeDependent dep = EmployeeDependent.builder()
+        EmployeeDependent dependent = EmployeeDependent.builder()
                 .employee(employee)
                 .firstName(dto.getFirstName())
                 .middleName(dto.getMiddleName())
@@ -40,35 +40,35 @@ public class EmployeeDependentService {
                 .relationship(dto.getRelationship())
                 .build();
 
-        dependentRepository.save(dep);
-        return toDTO(dep);
+        dependentRepository.save(dependent);
+        return toDTO(dependent);
     }
 
-    // -------------------------
-    // Update Dependent
-    // -------------------------
-    public DependentResponseDTO updateDependent(Long id, DependentRequestDTO dto) {
+    // =========================
+    // UPDATE DEPENDENT
+    // =========================
+    public DependentResponseDTO updateDependent(Long dependentId, DependentRequestDTO dto) {
 
-        EmployeeDependent dep = dependentRepository.findById(id)
+        EmployeeDependent dependent = dependentRepository.findById(dependentId)
                 .orElseThrow(() -> new RuntimeException("Dependent not found"));
 
-        dep.setFirstName(dto.getFirstName());
-        dep.setMiddleName(dto.getMiddleName());
-        dep.setLastName(dto.getLastName());
-        dep.setDateOfBirth(dto.getDateOfBirth());
-        dep.setGender(dto.getGender());
-        dep.setNationalId(dto.getNationalId());
-        dep.setNationality(dto.getNationality());
-        dep.setMaritalStatus(dto.getMaritalStatus());
-        dep.setRelationship(dto.getRelationship());
+        dependent.setFirstName(dto.getFirstName());
+        dependent.setMiddleName(dto.getMiddleName());
+        dependent.setLastName(dto.getLastName());
+        dependent.setDateOfBirth(dto.getDateOfBirth());
+        dependent.setGender(dto.getGender());
+        dependent.setNationalId(dto.getNationalId());
+        dependent.setNationality(dto.getNationality());
+        dependent.setMaritalStatus(dto.getMaritalStatus());
+        dependent.setRelationship(dto.getRelationship());
 
-        dependentRepository.save(dep);
-        return toDTO(dep);
+        dependentRepository.save(dependent);
+        return toDTO(dependent);
     }
 
-    // -------------------------
-    // Get all dependents for an employee
-    // -------------------------
+    // =========================
+    // GET ALL DEPENDENTS BY EMPLOYEE
+    // =========================
     public List<DependentResponseDTO> getDependentsByEmployee(Long employeeId) {
         return dependentRepository.findByEmployeeId(employeeId)
                 .stream()
@@ -76,25 +76,25 @@ public class EmployeeDependentService {
                 .collect(Collectors.toList());
     }
 
-    // -------------------------
-    // Get one dependent
-    // -------------------------
-    public DependentResponseDTO getDependentById(Long id) {
-        return dependentRepository.findById(id)
+    // =========================
+    // GET SINGLE DEPENDENT
+    // =========================
+    public DependentResponseDTO getDependentById(Long dependentId) {
+        return dependentRepository.findById(dependentId)
                 .map(this::toDTO)
                 .orElseThrow(() -> new RuntimeException("Dependent not found"));
     }
 
-    // -------------------------
-    // Delete dependent
-    // -------------------------
-    public void deleteDependent(Long id) {
-        dependentRepository.deleteById(id);
+    // =========================
+    // DELETE DEPENDENT
+    // =========================
+    public void deleteDependent(Long dependentId) {
+        dependentRepository.deleteById(dependentId);
     }
 
-    // -------------------------
-    // Convert Entity → DTO
-    // -------------------------
+    // =========================
+    // ENTITY → DTO
+    // =========================
     private DependentResponseDTO toDTO(EmployeeDependent dep) {
         return DependentResponseDTO.builder()
                 .id(dep.getId())
