@@ -55,6 +55,9 @@ public class BudgetService {
             dept = deptRepo.findById(dto.getDepartment())
                     .orElseThrow(() -> new RuntimeException("Department not found"));
         }
+        User user = User.builder()
+                .id(auth.getCurrentUserId()).build();
+
         BudgetHeader header = BudgetHeader.builder()
                 .budgetName(dto.getBudgetName())
                 .budgetYear(dto.getBudgetYear())
@@ -66,7 +69,7 @@ public class BudgetService {
                 .department(dept)
                 .projectId(dto.getProjectId())
                 .company(Company.builder().id(companyId).build())
-                .createdByUser(new User(auth.getCurrentUserId()))
+                .createdByUser(user)
                 .build();
 
         BudgetHeader saved = headerRepo.save(header);
@@ -136,8 +139,11 @@ public class BudgetService {
         BudgetHeader header = headerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Budget not found"));
 
+        User user = User.builder()
+                .id(auth.getCurrentUserId()).build();
+
         header.setStatus(BudgetStatus.APPROVED);
-        header.setApprovedByUser(new User(auth.getCurrentUserId()));
+        header.setApprovedByUser(user);
 
         return toDTO(headerRepo.save(header));
     }

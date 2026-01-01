@@ -274,17 +274,6 @@ public class EmployeeService {
     }
 
     // ======================================================
-    // GET COMPANY ADMIN
-    // ======================================================
-    public EmployeeResponseDTO getCompanyAdmin(Long companyId) {
-        return employeeRepository
-                .findByCompanyIdAndUserRole(companyId, Role.ADMIN)
-                .map(this::toDTO)
-                .orElse(null); // FE expects null
-    }
-
-
-    // ======================================================
     // DELETE
     // ======================================================
     public void deleteEmployee(Long id) {
