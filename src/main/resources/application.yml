@@ -1,6 +1,10 @@
 spring:
   profiles:
     active: mysql
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
 
 app:
   jwt:
@@ -9,7 +13,7 @@ app:
     access-token-minutes: 60
     refresh-token-days: 7
   cors:
-    allowed-origins: "http://localhost:5173,http://localhost:3001,http://localhost:3000,https://sunway-erp.vercel.app*"
+    allowed-origins: "http://localhost:5173,http://localhost:3001,http://localhost:3000,https://api.picominds.com,https://sunway-erp.vercel.app"
 server:
   port: 8080
   error:
@@ -22,3 +26,13 @@ logging:
     org.springframework.web: DEBUG
     org.springframework.data.jpa: DEBUG
     org.hibernate.SQL: INFO
+
+springdoc:
+  override-server-url: true
+
+azure:
+  storage:
+    connection-string: ${AZURE_STORAGE_CONNECTION_STRING}
+    public-container: erp-public
+    private-container: erp-private
+

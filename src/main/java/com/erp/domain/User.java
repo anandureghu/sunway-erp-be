@@ -2,7 +2,7 @@ package com.erp.domain;
 
 import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
-import lombok.ToString;
+import lombok.*;
 
 import java.time.Instant;
 
@@ -11,6 +11,11 @@ import java.time.Instant;
         @UniqueConstraint(name = "uk_users_email", columnNames = "email"),
         @UniqueConstraint(name = "uk_users_username", columnNames = "username")
 })
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @ToString(exclude = "company")
 public class User {
 
@@ -35,41 +40,11 @@ public class User {
     private Role role = Role.USER;
 
     @Column(nullable = false, updatable = false)
+   
     private Instant createdAt = Instant.now();
 
     // 🔥 THIS IS THE MISSING PIECE
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id")
     private Company company;
-
-    // ============================
-    // Getters / Setters
-    // ============================
-    public Long getId() { return id; }
-
-    public String getFullName() { return fullName; }
-    public void setFullName(String fullName) { this.fullName = fullName; }
-
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
-
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
-
-    public Role getRole() { return role; }
-    public void setRole(Role role) { this.role = role; }
-
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
-
-    public Company getCompany() {
-        return company;
-    }
-
-    public void setCompany(Company company) {
-        this.company = company;
-    }
 }

@@ -1,0 +1,196 @@
+package com.erp.service.purchase;
+
+import com.erp.domain.User;
+import com.erp.domain.hr.Company;
+import com.erp.domain.inventory.Item;
+import com.erp.domain.inventory.Vendor;
+import com.erp.domain.purchase.PurchaseOrder;
+import com.erp.domain.purchase.PurchaseOrderItem;
+import com.erp.domain.purchase.PurchaseOrderStatus;
+import com.erp.dto.purchase.PurchaseOrderCreateDTO;
+import com.erp.dto.purchase.PurchaseOrderItemDTO;
+import com.erp.dto.purchase.PurchaseOrderResponseDTO;
+import com.erp.dto.purchase.PurchaseOrderUpdateDTO;
+import com.erp.repo.UserRepository;
+import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.inventory.ItemRepository;
+import com.erp.repo.inventory.VendorRepository;
+import com.erp.repo.purchase.PurchaseOrderRepository;
+import com.erp.security.context.AuthContext;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+@Service
+@Transactional
+public class PurchaseOrderService {
+
+    private final PurchaseOrderRepository repo;
+    private final VendorRepository vendorRepo;
+    private final ItemRepository itemRepo;
+    private final CompanyRepository companyRepo;
+    private final UserRepository userRepo;
+    private final AuthContext auth;
+
+    public PurchaseOrderService(
+            PurchaseOrderRepository repo,
+            VendorRepository vendorRepo,
+            ItemRepository itemRepo,
+            CompanyRepository companyRepo,
+            UserRepository userRepo,
+            AuthContext auth
+    ) {
+        this.repo = repo;
+        this.vendorRepo = vendorRepo;
+        this.itemRepo = itemRepo;
+        this.companyRepo = companyRepo;
+        this.userRepo = userRepo;
+        this.auth = auth;
+    }
+
+    public PurchaseOrderResponseDTO create(PurchaseOrderCreateDTO dto) {
+
+        Long companyId = auth.getCurrentCompanyId();
+
+        Vendor supplier = vendorRepo.findById(dto.getSupplierId())
+                .orElseThrow(() -> new RuntimeException("Supplier not found"));
+
+        Company company = companyRepo.findById(companyId).orElseThrow();
+        User user = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
+
+        BigDecimal total = BigDecimal.ZERO;
+
+        List<PurchaseOrderItem> items = dto.getItems().stream().map(i -> {
+            Item item = itemRepo.findById(i.getItemId())
+                    .orElseThrow(() -> new RuntimeException("Item not found"));
+
+            BigDecimal lineTotal = i.getUnitCost()
+                    .multiply(BigDecimal.valueOf(i.getQuantity()));
+
+            return PurchaseOrderItem.builder()
+                    .item(item)
+                    .quantity(i.getQuantity())
+                    .unitCost(i.getUnitCost())
+                    .lineTotal(lineTotal)
+                    .build();
+        }).toList();
+
+        for (PurchaseOrderItem li : items) {
+            total = total.add(li.getLineTotal());
+        }
+
+        PurchaseOrder po = PurchaseOrder.builder()
+                .orderNumber(generatePONumber())
+                .supplier(supplier)
+                .orderDate(dto.getOrderDate())
+                .status(PurchaseOrderStatus.DRAFT)
+                .totalAmount(total)
+                .company(company)
+                .createdBy(user)
+                .items(items)
+                .build();
+
+        return toDTO(repo.save(po));
+    }
+
+    public PurchaseOrderResponseDTO confirm(Long id) {
+        PurchaseOrder po = getEntity(id);
+
+        if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
+            throw new RuntimeException("Only DRAFT purchase orders can be confirmed");
+        }
+
+        po.setStatus(PurchaseOrderStatus.CONFIRMED);
+        return toDTO(repo.save(po));
+    }
+
+    public PurchaseOrderResponseDTO get(Long id) {
+        return toDTO(getEntity(id));
+    }
+
+    public List<PurchaseOrderResponseDTO> list() {
+        return repo.findByCompanyId(auth.getCurrentCompanyId())
+                .stream().map(this::toDTO).toList();
+    }
+
+    public PurchaseOrderResponseDTO update(Long id, PurchaseOrderUpdateDTO dto) {
+
+        PurchaseOrder po = getEntity(id);
+
+        if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
+            throw new RuntimeException("Only DRAFT purchase orders can be updated");
+        }
+
+        po.getItems().clear();
+
+        BigDecimal total = BigDecimal.ZERO;
+
+        List<PurchaseOrderItem> items = dto.getItems().stream().map(i -> {
+            Item item = itemRepo.findById(i.getItemId())
+                    .orElseThrow();
+
+            BigDecimal lineTotal = i.getUnitCost()
+                    .multiply(BigDecimal.valueOf(i.getQuantity()));
+
+            return PurchaseOrderItem.builder()
+                    .item(item)
+                    .quantity(i.getQuantity())
+                    .unitCost(i.getUnitCost())
+                    .lineTotal(lineTotal)
+                    .build();
+        }).toList();
+
+        for (PurchaseOrderItem li : items) {
+            total = total.add(li.getLineTotal());
+        }
+
+        po.setOrderDate(dto.getOrderDate());
+        po.setItems(items);
+        po.setTotalAmount(total);
+
+        return toDTO(repo.save(po));
+    }
+
+    public PurchaseOrderResponseDTO cancel(Long id) {
+        PurchaseOrder po = getEntity(id);
+        po.setStatus(PurchaseOrderStatus.CANCELLED);
+        return toDTO(repo.save(po));
+    }
+
+    private PurchaseOrder getEntity(Long id) {
+        return repo.findById(id)
+                .filter(po -> po.getCompany().getId().equals(auth.getCurrentCompanyId()))
+                .orElseThrow(() -> new RuntimeException("Purchase order not found"));
+    }
+
+    private String generatePONumber() {
+        return "PO-" + System.currentTimeMillis();
+    }
+
+    private PurchaseOrderResponseDTO toDTO(PurchaseOrder po) {
+        return PurchaseOrderResponseDTO.builder()
+                .id(po.getId())
+                .orderNumber(po.getOrderNumber())
+                .supplierId(po.getSupplier().getId())
+                .supplierName(po.getSupplier().getVendorName())
+                .orderDate(po.getOrderDate())
+                .status(po.getStatus().name())
+                .createdAt(po.getCreatedAt().toString())
+                .createdById(po.getCreatedBy().getId())
+                .createdByName(po.getCreatedBy().getFullName())
+                .totalAmount(po.getTotalAmount())
+                .items(
+                        po.getItems().stream().map(i ->
+                                PurchaseOrderItemDTO.builder()
+                                        .itemId(i.getItem().getId())
+                                        .quantity(i.getQuantity())
+                                        .unitCost(i.getUnitCost())
+                                        .lineTotal(i.getLineTotal())
+                                        .build()
+                        ).toList()
+                )
+                .build();
+    }
+}

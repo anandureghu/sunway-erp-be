@@ -14,11 +14,11 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-    command: ["--default-authentication-plugin=mysql_native_password"]
+    command: [ "--default-authentication-plugin=mysql_native_password" ]
 #
 #  erp_app:
 #    build:
-#      context: .
+#      context: .7
 #      dockerfile: Dockerfile
 #    container_name: erp_backend
 #    depends_on:

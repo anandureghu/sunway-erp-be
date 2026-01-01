@@ -5,6 +5,7 @@ import com.erp.domain.hr.Department;
 import jakarta.persistence.*;
 import lombok.*;
 
+
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -52,6 +53,9 @@ public class Employee {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @Column(name = "image_url")
+    private String imageUrl;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "company_id", nullable = false)

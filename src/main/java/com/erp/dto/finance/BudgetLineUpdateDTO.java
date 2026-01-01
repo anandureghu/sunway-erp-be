@@ -1,0 +1,21 @@
+package com.erp.dto.finance;
+
+import lombok.*;
+
+import java.time.LocalDate;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class BudgetLineUpdateDTO {
+    private Long accountId;
+    private Long departmentId;
+    private Long projectId;
+    private LocalDate startDate;
+    private LocalDate endDate;
+    private Long amount;
+    private String notes;
+}
+

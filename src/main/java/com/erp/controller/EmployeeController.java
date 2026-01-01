@@ -7,6 +7,7 @@ import com.erp.dto.hr.UpdateEmployeeDTO;
 import com.erp.service.EmployeeService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -109,5 +110,12 @@ public class EmployeeController {
 
         employeeService.deleteEmployee(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/upload-image")
+    public EmployeeResponseDTO uploadImage(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) {
+        return employeeService.uploadImage(id, file);
     }
 }

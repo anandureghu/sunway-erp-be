@@ -15,7 +15,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     Page<Employee> findByCompanyId(Long companyId, Pageable pageable);
 
-    Optional<Employee> findByCompanyIdAndUserRole(Long companyId, Role role);
+    Optional<Employee> findByCompanyIdAndUserRoleIn(Long companyId, List<Role> roles);
 
     boolean existsByCompanyIdAndUserRole(Long companyId, Role role);
 

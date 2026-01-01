@@ -1,0 +1,29 @@
+package com.erp.controller.purchase;
+
+import com.erp.dto.purchase.GoodsReceiptCreateDTO;
+import com.erp.dto.purchase.GoodsReceiptResponseDTO;
+import com.erp.service.purchase.GoodsReceiptService;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/purchase/receipts")
+public class GoodsReceiptController {
+
+    private final GoodsReceiptService service;
+
+    public GoodsReceiptController(GoodsReceiptService service) {
+        this.service = service;
+    }
+
+    @PostMapping
+    public GoodsReceiptResponseDTO receive(@RequestBody GoodsReceiptCreateDTO dto) {
+        return service.receive(dto);
+    }
+
+    @GetMapping("/purchase-order/{poId}")
+    public List<GoodsReceiptResponseDTO> list(@PathVariable("poId") Long poId) {
+        return service.listByPO(poId);
+    }
+}

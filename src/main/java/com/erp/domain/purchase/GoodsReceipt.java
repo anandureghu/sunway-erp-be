@@ -1,0 +1,46 @@
+package com.erp.domain.purchase;
+
+import com.erp.domain.User;
+import com.erp.domain.hr.Company;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.Instant;
+import java.util.List;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@Entity
+@Table(name = "goods_receipts")
+public class GoodsReceipt {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "purchase_order_id")
+    private PurchaseOrder purchaseOrder;
+
+    private Instant receivedAt;
+
+    @ManyToOne
+    @JoinColumn(name = "received_by")
+    private User receivedBy;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "company_id")
+    private Company company;
+
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "goods_receipt_id")
+    private List<GoodsReceiptItem> items;
+
+    @PrePersist
+    void onCreate() {
+        receivedAt = Instant.now();
+    }
+}
