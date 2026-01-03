@@ -1,1 +1,5 @@
 *.env
+/target/
+*.class
+!/target/sunway-1.0.0.jar
+!/target/sunway-1.0.0.jar.original

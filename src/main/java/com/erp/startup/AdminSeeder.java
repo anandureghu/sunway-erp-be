@@ -1,11 +1,13 @@
 package com.erp.startup;
 
 import com.erp.domain.Employee;
+import com.erp.domain.EmployeeContactInfo;
 import com.erp.domain.Role;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
+import com.erp.repo.contact.EmployeeContactInfoRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.service.finance.ChartOfAccountsService;
 import org.springframework.boot.CommandLineRunner;
@@ -22,7 +24,8 @@ public class AdminSeeder {
             ChartOfAccountsService chartOfAccountsService,
             CompanyRepository companyRepo,
             EmployeeRepository employeeRepo,
-            PasswordEncoder encoder
+            PasswordEncoder encoder,
+            EmployeeContactInfoRepository contactRepo
     ) {
         return args -> {
 
@@ -35,7 +38,6 @@ public class AdminSeeder {
                 admin.setUsername("admin");
                 admin.setPassword(encoder.encode("admin123"));
                 admin.setRole(Role.SUPER_ADMIN);
-                admin = userRepo.save(admin);
 
                 // 2. Create default company
                 Company company = Company.builder()
@@ -55,20 +57,31 @@ public class AdminSeeder {
                         .build();
 
                 company = companyRepo.save(company);
+                admin.setCompany(company);
+                admin = userRepo.save(admin);
 
                 chartOfAccountsService.createDefaultCOAForCompany(company);
 
+
                 // 3. Create EMPLOYEE record for this admin user
                 Employee adminEmployee = Employee.builder()
-                        .employeeNo(1L)   // first employee for first company
+                        .employeeNo("ADMIN")   // first employee for first company
                         .firstName("Admin")
                         .lastName("User")
-                        .phoneNo("+97412345678")
                         .company(company)    // attach company
                         .user(admin)         // link login user
                         .build();
 
                 employeeRepo.save(adminEmployee);
+
+                EmployeeContactInfo contactInfo = EmployeeContactInfo.builder()
+                        .phone("+9876543210")
+                        .email("admin@hr.local")
+                        .employee(adminEmployee)
+                        .build();
+
+                contactRepo.save(contactInfo);
+
             }
         };
     }

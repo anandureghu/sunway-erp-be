@@ -11,10 +11,14 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class JournalLineDTO {
     private Long id;
-    private Long accountId;
+    private Long debitAccountId;
+    private Long creditAccountId;
+    private String debitAccountName;
+    private String creditAccountName;
     private BigDecimal debitAmount;
     private BigDecimal creditAmount;
     private Long departmentId;
+    private Long departmentName;
     private Long projectId;
     private String currencyCode;
     private BigDecimal exchangeRate;

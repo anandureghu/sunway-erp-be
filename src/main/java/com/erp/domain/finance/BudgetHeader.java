@@ -43,7 +43,7 @@ public class BudgetHeader {
     @JoinColumn(name = "department_id")
     private Department department;
 
-    private Long projectId;
+    private String projectId;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")

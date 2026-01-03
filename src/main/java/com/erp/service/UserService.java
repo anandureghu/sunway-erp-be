@@ -33,7 +33,7 @@ public class UserService {
                 .role(user.getRole())
 
                 .employeeId(emp != null ? emp.getId() : null)
-                .employeeNo(emp != null ? emp.getEmployeeNo() : null)
+                .employeeNo(String.valueOf(emp != null ? emp.getEmployeeNo() : null))
                 .firstName(emp != null ? emp.getFirstName() : null)
                 .lastName(emp != null ? emp.getLastName() : null)
                 .phoneNo(emp != null ? emp.getPhoneNo() : null)

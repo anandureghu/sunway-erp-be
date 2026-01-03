@@ -1,5 +1,6 @@
 package com.erp.domain;
 
+import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -15,7 +16,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString
+@ToString(exclude = "company")
 public class User {
 
     @Id
@@ -38,11 +39,12 @@ public class User {
     @Column(nullable = false)
     private Role role = Role.USER;
 
-    @Column(nullable = false)
+    @Column(nullable = false, updatable = false)
+   
     private Instant createdAt = Instant.now();
 
-    // Important: allow ID-only construction without touching other fields
-    public User(Long id) {
-        this.id = id;
-    }
+    // 🔥 THIS IS THE MISSING PIECE
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id")
+    private Company company;
 }

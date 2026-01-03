@@ -18,7 +18,7 @@ public class UserDetailsDTO {
 
     // Employee info (optional)
     private Long employeeId;
-    private Long employeeNo;
+    private String employeeNo;
     private String firstName;
     private String lastName;
     private String phoneNo;

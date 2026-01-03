@@ -26,8 +26,12 @@ public class JournalLine {
 
     // GL Account
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "account_id", nullable = false)
-    private ChartOfAccounts account;
+    @JoinColumn(name = "debit_account", nullable = false)
+    private ChartOfAccounts debitAccount;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "credit_account", nullable = false)
+    private ChartOfAccounts creditAccount;
 
     @Column(name = "debit_amount", precision = 18, scale = 2)
     private BigDecimal debitAmount = BigDecimal.ZERO;

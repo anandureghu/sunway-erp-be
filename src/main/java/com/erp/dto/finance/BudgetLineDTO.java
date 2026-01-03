@@ -14,7 +14,7 @@ public class BudgetLineDTO {
     private Long accountId;
     private String accountName;
     private Long departmentId;
-    private Long projectId;
+    private String projectId;
     private LocalDate startDate;
     private LocalDate endDate;
     private Long amount;

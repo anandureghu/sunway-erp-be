@@ -15,10 +15,10 @@ import java.util.List;
 public class BudgetResponseDTO {
     private Long id;
     private String budgetName;
+    private String projectId;
     private Integer budgetYear;
     private BudgetStatus status;
     private Long amount;
-    private Long balance;
     private LocalDate startDate;
     private LocalDate endDate;
     private Instant createdAt;

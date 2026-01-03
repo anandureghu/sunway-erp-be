@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -55,18 +56,21 @@ public class BudgetService {
             dept = deptRepo.findById(dto.getDepartment())
                     .orElseThrow(() -> new RuntimeException("Department not found"));
         }
+        User user = User.builder()
+                .id(auth.getCurrentUserId()).build();
+
         BudgetHeader header = BudgetHeader.builder()
                 .budgetName(dto.getBudgetName())
                 .budgetYear(dto.getBudgetYear())
                 .startDate(dto.getStartDate())
                 .endDate(dto.getEndDate())
-                .amount(dto.getAmount())
+                .amount(0L)
                 .status(BudgetStatus.IMPLEMENTED)
                 .lines(new ArrayList<>())
                 .department(dept)
                 .projectId(dto.getProjectId())
                 .company(Company.builder().id(companyId).build())
-                .createdByUser(new User(auth.getCurrentUserId()))
+                .createdByUser(user)
                 .build();
 
         BudgetHeader saved = headerRepo.save(header);
@@ -136,8 +140,11 @@ public class BudgetService {
         BudgetHeader header = headerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Budget not found"));
 
+        User user = User.builder()
+                .id(auth.getCurrentUserId()).build();
+
         header.setStatus(BudgetStatus.APPROVED);
-        header.setApprovedByUser(new User(auth.getCurrentUserId()));
+        header.setApprovedByUser(user);
 
         return toDTO(headerRepo.save(header));
     }
@@ -155,16 +162,13 @@ public class BudgetService {
     // DTO MAPPER
     // --------------------------------------
     private BudgetResponseDTO toDTO(BudgetHeader h) {
-        long totalLinesAmount = h.getLines().stream()
-                .mapToLong(BudgetLine::getAmount)
-                .sum();
+
         return BudgetResponseDTO.builder()
                 .id(h.getId())
                 .budgetName(h.getBudgetName())
                 .budgetYear(h.getBudgetYear())
                 .status(h.getStatus())
                 .amount(h.getAmount())
-                .balance(h.getAmount() - totalLinesAmount)
                 .startDate(h.getStartDate())
                 .endDate(h.getEndDate())
                 .createdAt(h.getCreatedAt())
@@ -222,32 +226,36 @@ public class BudgetService {
                     .orElseThrow(() -> new RuntimeException("Department not found"));
         }
 
-        isDistributionExceedsBudget(lines, bh);
+        Optional<BudgetLine> existing =
+                lineRepo.findByBudgetHeaderAndAccountAndDepartmentAndProjectId(
+                        bh,
+                        account,
+                        dept,
+                        dto.getProjectId()
+                );
 
-        // 6. Create the new JournalLine (transient but fully attached)
-        BudgetLine line = BudgetLine.builder()
-                .budgetHeader(bh)
-                .account(account)
-                .department(dept)
-                .projectId(dto.getProjectId())
-                .notes(dto.getNotes())
-                .amount(dto.getAmount())
-                .startDate(dto.getStartDate())
-                .endDate(dto.getEndDate())
-                .build();
+        if ((dto.getDepartmentId() != null || dto.getProjectId() != null) && existing.isPresent()) {
+            BudgetLine bl = existing.get();
+            bh.setAmount(bh.getAmount() - bl.getAmount() + dto.getAmount());
+            bl.setAmount(dto.getAmount());
+            bl.setNotes(dto.getNotes());
+        } else {
+            BudgetLine line = BudgetLine.builder()
+                    .budgetHeader(bh)
+                    .account(account)
+                    .department(dept)
+                    .projectId(dto.getProjectId())
+                    .notes(dto.getNotes())
+                    .amount(dto.getAmount())
+                    .startDate(dto.getStartDate())
+                    .endDate(dto.getEndDate())
+                    .build();
 
-        // 7. Attach line to JE (cascade handles persist!)
-        lines.add(line);
+            bh.getLines().add(line);
+            bh.setAmount(bh.getAmount() + line.getAmount());
+        }
 
-        // 8. Persist JE immediately so Hibernate manages both JE + all lines
-        bh = headerRepo.saveAndFlush(bh);
-
-        // 9. Now safely recalc totals AFTER flush (avoids transient exceptions)
-//        recalcTotals(je);
-
-        // 10. Save again after totals updated
-        bh = headerRepo.save(bh);
-
+        headerRepo.save(bh);
         return toDTO(bh);
     }
 
@@ -271,19 +279,36 @@ public class BudgetService {
         if (!line.getBudgetHeader().getId().equals(bhId))
             throw new RuntimeException("Line does not belong to this budget");
 
-        line.setAccount(account);
-        line.setDepartment(dto.getDepartmentId() != null ? dept : null);
-        line.setProjectId(dto.getProjectId());
-        line.setNotes(dto.getNotes());
-        line.setAmount(dto.getAmount());
-        line.setStartDate(dto.getStartDate());
-        line.setEndDate(dto.getEndDate());
+        Long prevAmount = line.getAmount();
 
-//        recalcTotals(je);
 
-        isDistributionExceedsBudget(bh.getLines(), bh);
+        Optional<BudgetLine> existing =
+                lineRepo.findByBudgetHeaderAndAccountAndDepartmentAndProjectId(
+                        bh,
+                        account,
+                        dept,
+                        dto.getProjectId()
+                );
 
-        headerRepo.save(bh);
+        if ((dto.getDepartmentId() != null || dto.getProjectId() != null) && existing.isPresent()) {
+            BudgetLine bl = existing.get();
+            bh.setAmount(bh.getAmount() - (prevAmount + bl.getAmount()) + line.getAmount());
+            bl.setAmount(dto.getAmount());
+            bl.setNotes(dto.getNotes());
+            lineRepo.delete(line);
+            lineRepo.save(bl);
+        } else {
+            line.setAccount(account);
+            line.setDepartment(dto.getDepartmentId() != null ? dept : null);
+            line.setProjectId(dto.getProjectId());
+            line.setNotes(dto.getNotes());
+            line.setAmount(dto.getAmount());
+            line.setStartDate(dto.getStartDate());
+            line.setEndDate(dto.getEndDate());
+            bh.setAmount(bh.getAmount() - prevAmount + line.getAmount());
+            lineRepo.save(line);
+        }
+        headerRepo.updateAmountOnly(bh.getId(), bh.getAmount());
         return toDTO(bh);
     }
 
@@ -299,6 +324,7 @@ public class BudgetService {
             throw new RuntimeException("Line does not belong to this budget");
 
         bh.getLines().remove(line);
+        bh.setAmount(bh.getAmount() - line.getAmount());
         lineRepo.delete(line);
 
 //        recalcTotals(je);
@@ -314,13 +340,13 @@ public class BudgetService {
                 .orElseThrow(() -> new RuntimeException("Budget Header not found or access denied"));
     }
 
-    public void isDistributionExceedsBudget(List<BudgetLine> lines, BudgetHeader bh) {
-        long totalLinesAmount = lines.stream()
-                .mapToLong(BudgetLine::getAmount)
-                .sum();
-
-        if (totalLinesAmount > bh.getAmount()) {
-            throw new RuntimeException("Total Budget distribution is greater than Total Budget");
-        }
-    }
+//    public void isDistributionExceedsBudget(List<BudgetLine> lines, BudgetHeader bh) {
+//        long totalLinesAmount = lines.stream()
+//                .mapToLong(BudgetLine::getAmount)
+//                .sum();
+//
+//        if (totalLinesAmount > bh.getAmount()) {
+//            throw new RuntimeException("Total Budget distribution is greater than Total Budget");
+//        }
+//    }
 }
