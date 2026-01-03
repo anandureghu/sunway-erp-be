@@ -12,7 +12,8 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 public class JournalLineCreateDTO {
-    private Long accountId;
+    private Long debitAccount;
+    private Long creditAccount;
     private BigDecimal debitAmount;
     private BigDecimal creditAmount;
     private Long departmentId;

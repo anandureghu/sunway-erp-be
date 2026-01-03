@@ -13,8 +13,7 @@ public class BudgetCreateDTO {
     private String budgetName;
     private Integer budgetYear;
     private LocalDate startDate;
-    private Long amount;
     private LocalDate endDate;
     private Long department;
-    private Long projectId;
+    private String projectId;
 }

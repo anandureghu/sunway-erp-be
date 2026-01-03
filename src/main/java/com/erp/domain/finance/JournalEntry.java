@@ -65,7 +65,6 @@ public class JournalEntry {
     // Relations
     @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<JournalLine> lines = new ArrayList<>();
-    ;
 
     // NEW: Posting timestamps
     @Column(name = "posted_at")

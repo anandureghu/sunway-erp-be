@@ -38,7 +38,6 @@ public class AdminSeeder {
                 admin.setUsername("admin");
                 admin.setPassword(encoder.encode("admin123"));
                 admin.setRole(Role.SUPER_ADMIN);
-                admin = userRepo.save(admin);
 
                 // 2. Create default company
                 Company company = Company.builder()
@@ -58,6 +57,8 @@ public class AdminSeeder {
                         .build();
 
                 company = companyRepo.save(company);
+                admin.setCompany(company);
+                admin = userRepo.save(admin);
 
                 chartOfAccountsService.createDefaultCOAForCompany(company);
 

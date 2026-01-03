@@ -95,8 +95,10 @@ public class JournalEntryService {
 
         // Convert Line DTOs to Entities
         List<JournalLine> lines = dto.getLines().stream().map(line -> {
-            ChartOfAccounts acct = accountRepo.findById(line.getAccountId())
-                    .orElseThrow(() -> new RuntimeException("Account not found"));
+            ChartOfAccounts debitAccount = accountRepo.findById(line.getDebitAccountId())
+                    .orElseThrow(() -> new RuntimeException("Debit Account not found"));
+            ChartOfAccounts creditAccount = accountRepo.findById(line.getCreditAccountId())
+                    .orElseThrow(() -> new RuntimeException("Credit Account not found"));
 
             Department dept = null;
             if (line.getDepartmentId() != null) {
@@ -106,7 +108,8 @@ public class JournalEntryService {
 
             return JournalLine.builder()
                     .journalEntry(je)
-                    .account(acct)
+                    .debitAccount(debitAccount)
+                    .creditAccount(creditAccount)
                     .debitAmount(line.getDebitAmount())
                     .creditAmount(line.getCreditAmount())
                     .department(dept)
@@ -175,10 +178,12 @@ public class JournalEntryService {
                 .postedAt(Instant.now())
                 .build();
 
+
         List<JournalLine> reversedLines = original.getLines().stream().map(line ->
                 JournalLine.builder()
                         .journalEntry(reversal)
-                        .account(line.getAccount())
+                        .creditAccount(line.getCreditAccount())
+                        .debitAccount(line.getDebitAccount())
                         .debitAmount(line.getCreditAmount())   // Swap
                         .creditAmount(line.getDebitAmount())   // Swap
                         .department(line.getDepartment())
@@ -228,7 +233,10 @@ public class JournalEntryService {
                 .lines(je.getLines().stream().map(l ->
                         JournalLineDTO.builder()
                                 .id(l.getId())
-                                .accountId(l.getAccount().getId())
+                                .debitAccountId(l.getDebitAccount().getId())
+                                .debitAccountName(l.getDebitAccount().getAccountName())
+                                .creditAccountId(l.getCreditAccount().getId())
+                                .creditAccountName(l.getCreditAccount().getAccountName())
                                 .debitAmount(l.getDebitAmount())
                                 .creditAmount(l.getCreditAmount())
                                 .departmentId(l.getDepartment() != null ? l.getDepartment().getId() : null)
@@ -283,8 +291,10 @@ public class JournalEntryService {
         }
 
         // 4. Load managed Account (required)
-        ChartOfAccounts account = accountRepo.findById(dto.getAccountId())
-                .orElseThrow(() -> new RuntimeException("Account not found"));
+        ChartOfAccounts debitAccount = accountRepo.findById(dto.getDebitAccount())
+                .orElseThrow(() -> new RuntimeException("Debit Account not found"));
+        ChartOfAccounts creditAccount = accountRepo.findById(dto.getCreditAccount())
+                .orElseThrow(() -> new RuntimeException("Credit Account not found"));
 
         // 5. Load managed Department (optional)
         Department dept = null;
@@ -296,7 +306,8 @@ public class JournalEntryService {
         // 6. Create the new JournalLine (transient but fully attached)
         JournalLine line = JournalLine.builder()
                 .journalEntry(je)
-                .account(account)
+                .debitAccount(debitAccount)
+                .creditAccount(creditAccount)
                 .department(dept)
                 .debitAmount(dto.getDebitAmount())
                 .creditAmount(dto.getCreditAmount())
@@ -329,8 +340,10 @@ public class JournalEntryService {
         JournalLine line = jlRepo.findById(lineId)
                 .orElseThrow(() -> new RuntimeException("Line not found"));
 
-        ChartOfAccounts account = accountRepo.findById(dto.getAccountId())
-                .orElseThrow(() -> new RuntimeException("Account not found"));
+        ChartOfAccounts debitAccount = accountRepo.findById(dto.getDebitAccount())
+                .orElseThrow(() -> new RuntimeException("Debit Account not found"));
+        ChartOfAccounts creditAccount = accountRepo.findById(dto.getCreditAccount())
+                .orElseThrow(() -> new RuntimeException("Credit Account not found"));
 
         Department dept = null;
         if (dto.getDepartmentId() != null) {
@@ -341,7 +354,8 @@ public class JournalEntryService {
         if (!line.getJournalEntry().getId().equals(jeId))
             throw new RuntimeException("Line does not belong to this journal");
 
-        line.setAccount(account);
+        line.setDebitAccount(debitAccount);
+        line.setCreditAccount(creditAccount);
         line.setDebitAmount(dto.getDebitAmount());
         line.setCreditAmount(dto.getCreditAmount());
         line.setDepartment(dto.getDepartmentId() != null ? dept : null);

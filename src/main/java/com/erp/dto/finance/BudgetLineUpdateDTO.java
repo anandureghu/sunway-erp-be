@@ -12,7 +12,7 @@ import java.time.LocalDate;
 public class BudgetLineUpdateDTO {
     private Long accountId;
     private Long departmentId;
-    private Long projectId;
+    private String projectId;
     private LocalDate startDate;
     private LocalDate endDate;
     private Long amount;

@@ -40,7 +40,7 @@ public class BudgetLine {
     @JoinColumn(name = "department_id")
     private Department department;
 
-    private Long projectId;
+    private String projectId;
 
     @Column(nullable = false)
     private LocalDate startDate;
