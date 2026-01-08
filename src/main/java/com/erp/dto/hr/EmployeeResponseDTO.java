@@ -1,10 +1,7 @@
 package com.erp.dto.hr;
 
 import com.erp.domain.Role;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDate;
 
@@ -23,11 +20,11 @@ public class EmployeeResponseDTO {
     private String lastName;
 
     // =========================
-    // Profile info (FIXED)
+    // Profile info
     // =========================
     private String gender;
     private String prefix;
-    private String status;
+    private String status;          // ACTIVE | INACTIVE | ON_LEAVE
     private String maritalStatus;
     private LocalDate dateOfBirth;
     private LocalDate joinDate;
@@ -55,4 +52,10 @@ public class EmployeeResponseDTO {
     private Long userId;
     private String username;
     private Role role;
+
+    // =========================
+    // UI / UX helpers
+    // =========================
+    private Boolean forcePasswordReset;
+    private String imageUrl;
 }

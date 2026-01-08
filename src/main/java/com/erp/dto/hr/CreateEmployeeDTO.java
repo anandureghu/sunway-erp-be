@@ -12,10 +12,11 @@ import java.time.LocalDate;
 @Builder
 public class CreateEmployeeDTO {
 
-    private String employeeNo;
+    // =======================
+    // BASIC EMPLOYEE DETAILS
+    // =======================
     private String firstName;
     private String lastName;
-    private String phoneNo;
     private String gender;
     private String prefix;
     private String maritalStatus;
@@ -29,17 +30,21 @@ public class CreateEmployeeDTO {
     private EmployeeStatus status;
 
     private String notes;
+
+    // =======================
+    // CONTACT DETAILS
+    // =======================
+    private String phoneNo;
     private String altPhone;
 
-    // user/login info
-    private String email;
-    private String username;
-    private String password;
-
-    // relations
-    private Long companyId;
+    // =======================
+    // RELATIONS
+    // =======================
+    private Long companyId;      // required only for SUPER_ADMIN
     private Long departmentId;
 
-    // role
-    private Role role;
+    // =======================
+    // ROLE
+    // =======================
+    private Role role;           // defaults to USER if null
 }

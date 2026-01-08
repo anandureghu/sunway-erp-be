@@ -40,6 +40,4 @@ public class EmployeeBankDetails {
     @Column(length = 500)
     private String remarks;
 
-
-
 }

@@ -1,19 +1,24 @@
 package com.erp.dto.loan;
 
-import lombok.Getter;
-import lombok.Setter;
+import com.erp.domain.LoanType;
+import jakarta.persistence.Column;
+import lombok.Data;
 
 import java.time.LocalDate;
 
-@Getter @Setter
+@Data
 public class LoanResponseDTO {
-
     private Long id;
     private String loanCode;
+    private LoanType loanType;
     private Double loanAmount;
     private Integer loanPeriod;
     private Double monthlyDeduction;
     private Double balance;
     private String status;
     private LocalDate startDate;
+    private LocalDate endDate;
+    private Long employeeId;
+    private String employeeName;
+    private String notes;
 }

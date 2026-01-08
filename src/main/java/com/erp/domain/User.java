@@ -43,7 +43,12 @@ public class User {
    
     private Instant createdAt = Instant.now();
 
-    // 🔥 THIS IS THE MISSING PIECE
+
+    @Column(name = "force_password_reset", nullable = false)
+    private Boolean forcePasswordReset = true;
+
+
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id")
     private Company company;

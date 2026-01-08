@@ -4,8 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
+
 @Entity
 @Table(name = "employee_loans")
 @Getter
@@ -17,10 +17,15 @@ public class EmployeeLoan {
     private Long id;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
     private Employee employee;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String loanCode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private LoanType loanType;
 
     @Column(nullable = false)
     private Double loanAmount;
@@ -37,6 +42,11 @@ public class EmployeeLoan {
     @Column(nullable = false)
     private String status; // ACTIVE, CLOSED
 
+    @Column(length = 1000)
+    private String notes;
+
     @Column(nullable = false)
     private LocalDate startDate;
+
+    private LocalDate endDate;
 }

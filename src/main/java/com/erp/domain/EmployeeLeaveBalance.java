@@ -24,8 +24,9 @@ public class EmployeeLeaveBalance {
     @Column(name = "leave_type", nullable = false)
     private String leaveType;
 
+    @Column(name = "total_leaves", nullable = false)
+    private Integer totalLeaves;
+
     @Column(name = "remaining_leaves", nullable = false)
     private Integer remainingLeaves;
-
-
 }
