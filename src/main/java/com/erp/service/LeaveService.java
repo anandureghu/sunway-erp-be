@@ -85,7 +85,7 @@ public class LeaveService {
     /* ================= APPLY (AUTO APPROVE) ================= */
 
     @Transactional
-    public void applyLeave(Long employeeId, LeaveRequestDTO dto) {
+    public LeaveHistoryDTO applyLeave(Long employeeId, LeaveRequestDTO dto) {
 
         if (dto.getLeaveType() == null
                 || dto.getStartDate() == null
@@ -141,6 +141,7 @@ public class LeaveService {
         leave.setLeaveStatus("APPROVED");
 
         leaveRepo.save(leave);
+        return null;
     }
 
     /* ================= HISTORY ================= */

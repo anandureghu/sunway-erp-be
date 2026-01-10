@@ -30,7 +30,9 @@ public class LeaveYearEndJob {
                             b.getLeaveType()).orElse(null);
 
             if (policy != null && policy.isPaid()) {
-                b.setRemainingLeaves(policy.getLeavesPerYear());
+                b.setTotalLeaves(policy.getDefaultDays());
+                b.setRemainingLeaves(policy.getDefaultDays());
+                balanceRepo.save(b);
             }
         }
     }

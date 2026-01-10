@@ -1,10 +1,15 @@
 package com.erp.controller;
 
+import com.erp.domain.User;
 import com.erp.dto.common.PageResponse;
 import com.erp.dto.hr.CreateEmployeeDTO;
 import com.erp.dto.hr.EmployeeResponseDTO;
 import com.erp.dto.hr.UpdateEmployeeDTO;
+import com.erp.repo.UserRepository;
+import com.erp.security.context.AuthContext;
 import com.erp.service.EmployeeService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,9 +21,16 @@ import java.util.List;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+    private final AuthContext authContext;
+    private final UserRepository userRepository;
 
-    public EmployeeController(EmployeeService employeeService) {
+    public EmployeeController(
+            EmployeeService employeeService,
+            AuthContext authContext,
+            UserRepository userRepository) {
         this.employeeService = employeeService;
+        this.authContext = authContext;
+        this.userRepository = userRepository;
     }
 
     // ======================================================
@@ -26,9 +38,10 @@ public class EmployeeController {
     // ======================================================
     @PostMapping
     public ResponseEntity<EmployeeResponseDTO> createEmployee(
-            @RequestBody CreateEmployeeDTO dto) {
+            @Valid @RequestBody CreateEmployeeDTO dto) {
 
-        return ResponseEntity.ok(employeeService.createEmployee(dto));
+        EmployeeResponseDTO response = employeeService.createEmployee(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     // ======================================================
@@ -45,29 +58,39 @@ public class EmployeeController {
     // GET EMPLOYEES (PAGINATED)
     // ======================================================
     @GetMapping("/page")
-    public PageResponse<EmployeeResponseDTO> getEmployees(
+    public ResponseEntity<PageResponse<EmployeeResponseDTO>> getEmployees(
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "10") int size
-    ) {
-        return employeeService.getEmployees(page, size);
+            @RequestParam(name = "size", defaultValue = "10") int size) {
+
+        return ResponseEntity.ok(employeeService.getEmployees(page, size));
+    }
+
+    // ======================================================
+    // SYNC ALL LEAVE BALANCES
+    // ======================================================
+    @PostMapping("/sync-all-leave-balances")
+    public ResponseEntity<Void> syncAllLeaveBalances() {
+        User authUser = getAuthUser();
+        employeeService.syncAllEmployeeLeaveBalances(authUser.getCompany().getId());
+        return ResponseEntity.ok().build();
     }
 
     // ======================================================
     // GET EMPLOYEES (CURRENT COMPANY)
     // ======================================================
     @GetMapping
-    public List<EmployeeResponseDTO> getEmployees() {
-        return employeeService.getEmployees();
+    public ResponseEntity<List<EmployeeResponseDTO>> getEmployees() {
+        return ResponseEntity.ok(employeeService.getEmployees());
     }
 
     // ======================================================
     // GET EMPLOYEE BY ID
     // ======================================================
     @GetMapping("/{id}")
-    public EmployeeResponseDTO getEmployeeById(
+    public ResponseEntity<EmployeeResponseDTO> getEmployeeById(
             @PathVariable("id") Long id) {
 
-        return employeeService.getEmployeeById(id);
+        return ResponseEntity.ok(employeeService.getEmployeeById(id));
     }
 
     // ======================================================
@@ -76,8 +99,8 @@ public class EmployeeController {
     @PutMapping("/{id}")
     public ResponseEntity<EmployeeResponseDTO> updateEmployee(
             @PathVariable("id") Long id,
-            @RequestBody UpdateEmployeeDTO dto
-    ) {
+            @RequestBody UpdateEmployeeDTO dto) {
+
         return ResponseEntity.ok(employeeService.updateEmployee(id, dto));
     }
 
@@ -85,20 +108,20 @@ public class EmployeeController {
     // GET EMPLOYEES BY COMPANY
     // ======================================================
     @GetMapping("/company/{companyId}")
-    public List<EmployeeResponseDTO> getEmployeesByCompany(
+    public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByCompany(
             @PathVariable("companyId") Long companyId) {
 
-        return employeeService.getEmployeesByCompany(companyId);
+        return ResponseEntity.ok(employeeService.getEmployeesByCompany(companyId));
     }
 
     // ======================================================
     // GET EMPLOYEES BY DEPARTMENT
     // ======================================================
     @GetMapping("/department/{departmentId}")
-    public List<EmployeeResponseDTO> getEmployeesByDepartment(
+    public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByDepartment(
             @PathVariable("departmentId") Long departmentId) {
 
-        return employeeService.getEmployeesByDepartment(departmentId);
+        return ResponseEntity.ok(employeeService.getEmployeesByDepartment(departmentId));
     }
 
     // ======================================================
@@ -112,10 +135,24 @@ public class EmployeeController {
         return ResponseEntity.noContent().build();
     }
 
+    // ======================================================
+    // UPLOAD PROFILE IMAGE
+    // ======================================================
     @PostMapping("/{id}/upload-image")
-    public EmployeeResponseDTO uploadImage(
-            @PathVariable Long id,
+    public ResponseEntity<EmployeeResponseDTO> uploadImage(
+            @PathVariable("id") Long id,
             @RequestParam("file") MultipartFile file) {
-        return employeeService.uploadImage(id, file);
+
+        return ResponseEntity.ok(employeeService.uploadImage(id, file));
+    }
+
+    // ======================================================
+    // HELPER METHOD
+    // ======================================================
+    private User getAuthUser() {
+        Long userId = authContext.getCurrentUserId();
+        if (userId == null) throw new RuntimeException("Unauthorized");
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
     }
 }

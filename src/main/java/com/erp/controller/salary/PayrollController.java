@@ -16,14 +16,28 @@ public class PayrollController {
 
     private final PayrollService payrollService;
 
+    /* ========= GET PAYROLL INFO (for the page load) ========= */
+    @PostMapping
+    public ResponseEntity<List<PayrollHistoryDTO>> getPayroll(
+            @PathVariable("employeeId") Long employeeId) {
+
+        return ResponseEntity.ok(
+                payrollService.getPayrollHistory(employeeId)
+        );
+    }
+
     /* ========= GENERATE PAYROLL ========= */
     @PostMapping("/generate")
-    public ResponseEntity<Void> generatePayroll(
+    public ResponseEntity<List<PayrollHistoryDTO>> generatePayroll(
             @PathVariable("employeeId") Long employeeId,
             @RequestBody PayrollGenerateRequestDTO dto) {
 
         payrollService.generatePayroll(employeeId, dto);
-        return ResponseEntity.ok().build();
+
+        // Return updated payroll history after generation
+        return ResponseEntity.ok(
+                payrollService.getPayrollHistory(employeeId)
+        );
     }
 
     /* ========= PAYROLL HISTORY ========= */

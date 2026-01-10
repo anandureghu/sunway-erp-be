@@ -14,4 +14,6 @@ public interface CompanyLeavePolicyRepository
 
     Optional<CompanyLeavePolicy> findByCompanyAndLeaveType(
             Company company, String leaveType);
+
+    List<CompanyLeavePolicy> findByCompanyAndPaid(Company company, boolean paid);
 }

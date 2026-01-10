@@ -1,18 +1,16 @@
 package com.erp.service;
 
-import com.erp.domain.Employee;
 import com.erp.domain.CompanyProperty;
-import com.erp.domain.PropertyStatus;
+import com.erp.domain.Employee;
 import com.erp.dto.property.CompanyPropertyRequestDTO;
 import com.erp.dto.property.CompanyPropertyResponseDTO;
-import com.erp.repo.EmployeeRepository;
 import com.erp.repo.CompanyPropertyRepository;
+import com.erp.repo.EmployeeRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-
 @Service
 @RequiredArgsConstructor
 public class CompanyPropertyService {
@@ -22,24 +20,33 @@ public class CompanyPropertyService {
 
     /* ================= CREATE ================= */
     @Transactional
-    public void createProperty(Long employeeId, CompanyPropertyRequestDTO dto) {
+    public CompanyPropertyResponseDTO createProperty(
+            Long employeeId,
+            CompanyPropertyRequestDTO dto) {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        // 🔒 Prevent duplicate asset for same employee
+        if (propertyRepo.existsByEmployeeIdAndItemCode(employeeId, dto.getItemCode())) {
+            throw new RuntimeException("Property already assigned to this employee");
+        }
 
         CompanyProperty p = new CompanyProperty();
         p.setEmployee(employee);
 
         mapAndValidate(p, dto);
 
-        propertyRepo.save(p);
+        CompanyProperty saved = propertyRepo.save(p);
+        return toDTO(saved);
     }
 
     /* ================= UPDATE ================= */
     @Transactional
-    public void updateProperty(Long employeeId,
-                               Long propertyId,
-                               CompanyPropertyRequestDTO dto) {
+    public CompanyPropertyResponseDTO updateProperty(
+            Long employeeId,
+            Long propertyId,
+            CompanyPropertyRequestDTO dto) {
 
         CompanyProperty p = propertyRepo.findById(propertyId)
                 .orElseThrow(() -> new RuntimeException("Property not found"));
@@ -49,24 +56,46 @@ public class CompanyPropertyService {
         }
 
         mapAndValidate(p, dto);
-        propertyRepo.save(p);
+
+        CompanyProperty saved = propertyRepo.save(p);
+        return toDTO(saved);
+    }
+
+    /* ================= DELETE ================= */
+    @Transactional
+    public void deleteProperty(Long employeeId, Long propertyId) {
+
+        CompanyProperty p = propertyRepo.findById(propertyId)
+                .orElseThrow(() -> new RuntimeException("Property not found"));
+
+        if (!p.getEmployee().getId().equals(employeeId)) {
+            throw new RuntimeException("Property does not belong to this employee");
+        }
+
+        propertyRepo.delete(p);
     }
 
     /* ================= GET ================= */
     public List<CompanyPropertyResponseDTO> getProperties(Long employeeId) {
 
-        Employee employee = employeeRepo.findById(employeeId)
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
-
-        return propertyRepo.findByEmployee(employee)
+        return propertyRepo.findByEmployeeId(employeeId)
                 .stream()
                 .map(this::toDTO)
                 .toList();
     }
 
     /* ================= VALIDATION + MAPPING ================= */
-    private void mapAndValidate(CompanyProperty p,
-                                CompanyPropertyRequestDTO dto) {
+    private void mapAndValidate(
+            CompanyProperty p,
+            CompanyPropertyRequestDTO dto) {
+
+        if (dto.getItemCode() == null || dto.getItemCode().isBlank()) {
+            throw new RuntimeException("Item Code is required");
+        }
+
+        if (dto.getItemName() == null || dto.getItemName().isBlank()) {
+            throw new RuntimeException("Item Name is required");
+        }
 
         if (dto.getDateGiven() == null) {
             throw new RuntimeException("Date Given is required");
@@ -76,34 +105,44 @@ public class CompanyPropertyService {
             throw new RuntimeException("Item Status is required");
         }
 
-        // 🔒 STATUS-BASED DATE RULES
-        if (dto.getItemStatus() == PropertyStatus.ISSUED) {
+        // ================= STATUS RULES =================
+        switch (dto.getItemStatus()) {
 
-            if (dto.getReturnDate() != null) {
-                throw new RuntimeException(
-                        "Return Date must be empty when status is ISSUED"
-                );
+            case ASSIGNED -> {
+                if (dto.getReturnDate() != null) {
+                    throw new RuntimeException(
+                            "Return Date must be empty when status is ASSIGNED"
+                    );
+                }
             }
 
-        } else if (dto.getItemStatus() == PropertyStatus.RETURNED) {
-
-            if (dto.getReturnDate() == null) {
-                throw new RuntimeException(
-                        "Return Date is required when status is RETURNED"
-                );
+            case RETURNED, LOST -> {
+                if (dto.getReturnDate() == null) {
+                    throw new RuntimeException(
+                            "Return Date is required for status " + dto.getItemStatus()
+                    );
+                }
+                if (dto.getReturnDate().isBefore(dto.getDateGiven())) {
+                    throw new RuntimeException(
+                            "Return Date cannot be before Date Given"
+                    );
+                }
             }
 
-            if (dto.getReturnDate().isBefore(dto.getDateGiven())) {
-                throw new RuntimeException(
-                        "Return Date cannot be before Date Given"
-                );
+            case DAMAGED -> {
+                if (dto.getReturnDate() != null &&
+                        dto.getReturnDate().isBefore(dto.getDateGiven())) {
+                    throw new RuntimeException(
+                            "Return Date cannot be before Date Given"
+                    );
+                }
             }
         }
 
-        // ✅ SAFE MAPPING
+        // ================= SAFE MAPPING =================
         p.setItemCode(dto.getItemCode());
         p.setItemName(dto.getItemName());
-        p.setItemStatus(dto.getItemStatus()); // ENUM
+        p.setItemStatus(dto.getItemStatus());
         p.setDescription(dto.getDescription());
         p.setDateGiven(dto.getDateGiven());
         p.setReturnDate(dto.getReturnDate());
@@ -116,7 +155,7 @@ public class CompanyPropertyService {
         dto.setId(p.getId());
         dto.setItemCode(p.getItemCode());
         dto.setItemName(p.getItemName());
-        dto.setItemStatus(p.getItemStatus().name());
+        dto.setItemStatus(p.getItemStatus());
         dto.setDescription(p.getDescription());
         dto.setDateGiven(p.getDateGiven());
         dto.setReturnDate(p.getReturnDate());

@@ -7,7 +7,6 @@ import lombok.Setter;
 
 @Setter
 @Getter
-
 @Entity
 @Table(
         name = "company_leave_policies",
@@ -26,11 +25,9 @@ public class CompanyLeavePolicy {
     @Column(name = "leave_type", nullable = false)
     private String leaveType; // ANNUAL, SICK, EMERGENCY, UNPAID
 
-    @Column(name = "leaves_per_year", nullable = false)
-    private Integer leavesPerYear;
+    @Column(name = "default_days", nullable = false)
+    private Integer defaultDays;
 
     @Column(name = "paid", nullable = false)
     private boolean paid;
-
-
 }

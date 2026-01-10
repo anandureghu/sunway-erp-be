@@ -2,21 +2,19 @@ package com.erp.controller;
 
 import com.erp.dto.contact.EmployeeAddressRequestDTO;
 import com.erp.dto.contact.EmployeeAddressResponseDTO;
-import com.erp.dto.contact.EmployeeContactInfoRequestDTO;
-import com.erp.dto.contact.EmployeeContactInfoResponseDTO;
 import com.erp.service.EmployeeAddressService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-
 @RestController
 @RequiredArgsConstructor
 public class EmployeeAddressController {
 
     private final EmployeeAddressService service;
 
+    // ================= GET ADDRESSES =================
     @GetMapping("/api/employees/{employeeId}/addresses")
     public ResponseEntity<List<EmployeeAddressResponseDTO>> getAll(
             @PathVariable("employeeId") Long employeeId) {
@@ -24,6 +22,7 @@ public class EmployeeAddressController {
         return ResponseEntity.ok(service.getAddresses(employeeId));
     }
 
+    // ================= ADD ADDRESS =================
     @PostMapping("/api/employees/{employeeId}/addresses")
     public ResponseEntity<EmployeeAddressResponseDTO> add(
             @PathVariable("employeeId") Long employeeId,
@@ -32,18 +31,20 @@ public class EmployeeAddressController {
         return ResponseEntity.ok(service.addAddress(employeeId, dto));
     }
 
-    @PutMapping
-    public ResponseEntity<EmployeeContactInfoResponseDTO> save(
-            @PathVariable("employeeId") Long employeeId,
-            @RequestBody EmployeeContactInfoRequestDTO dto) {
+    // ================= UPDATE ADDRESS =================
+    @PutMapping("/api/addresses/{addressId}")
+    public ResponseEntity<EmployeeAddressResponseDTO> update(
+            @PathVariable("addressId") Long addressId,
+            @RequestBody EmployeeAddressRequestDTO dto) {
 
-        return ResponseEntity.ok(service.saveOrUpdateContactInfo(employeeId, dto));
+        return ResponseEntity.ok(service.updateAddress(addressId, dto));
     }
 
-
+    // ================= DELETE ADDRESS =================
     @DeleteMapping("/api/addresses/{addressId}")
     public ResponseEntity<Void> delete(
-            @PathVariable Long addressId) {
+            @PathVariable("addressId") Long addressId) {
+
         service.deleteAddress(addressId);
         return ResponseEntity.noContent().build();
     }

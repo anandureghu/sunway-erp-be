@@ -1,5 +1,6 @@
 package com.erp.domain;
 
+import com.erp.domain.enums.PropertyStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,24 +17,28 @@ public class CompanyProperty {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(optional = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "employee_id", nullable = false)
     private Employee employee;
 
-    @Column(nullable = false)
+    // ================= PROPERTY DETAILS =================
+
+    @Column(name = "item_code", nullable = false, length = 50)
     private String itemCode;
 
-    @Column(nullable = false)
+    @Column(name = "item_name", nullable = false, length = 100)
     private String itemName;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(name = "item_status", nullable = false, length = 20)
     private PropertyStatus itemStatus;
 
-    @Column(nullable = false)
+    @Column(name = "date_given", nullable = false)
     private LocalDate dateGiven;
 
+    @Column(name = "return_date")
     private LocalDate returnDate;
 
-    @Column(nullable = false, length = 500)
+    @Column(length = 500)
     private String description;
 }

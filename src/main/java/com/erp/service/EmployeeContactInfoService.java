@@ -32,6 +32,7 @@ public class EmployeeContactInfoService {
                     .email(null)
                     .phone(null)
                     .altPhone(null)
+                    .notes(null)
                     .build();
         }
 
@@ -63,6 +64,7 @@ public class EmployeeContactInfoService {
         contactInfo.setEmail(dto.getEmail());
         contactInfo.setPhone(dto.getPhone());
         contactInfo.setAltPhone(dto.getAltPhone());
+        contactInfo.setNotes(dto.getNotes());
 
         contactInfo = contactInfoRepo.save(contactInfo);
 
@@ -79,6 +81,7 @@ public class EmployeeContactInfoService {
                 .email(contactInfo.getEmail())
                 .phone(contactInfo.getPhone())
                 .altPhone(contactInfo.getAltPhone())
+                .notes(contactInfo.getNotes())
                 .build();
     }
 }

@@ -2,17 +2,17 @@ package com.erp.controller;
 
 import com.erp.dto.contact.EmployeeContactInfoRequestDTO;
 import com.erp.dto.contact.EmployeeContactInfoResponseDTO;
-import com.erp.service.EmployeeAddressService;
 import com.erp.service.EmployeeContactInfoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 @RestController
-@RequestMapping("/api/employees/{employeeId}/contact-info")
 @RequiredArgsConstructor
+@RequestMapping("/api/employees/{employeeId}/contact-info")
 public class EmployeeContactInfoController {
 
-    private final EmployeeAddressService service;
+    private final EmployeeContactInfoService service;
 
     @GetMapping
     public ResponseEntity<EmployeeContactInfoResponseDTO> get(

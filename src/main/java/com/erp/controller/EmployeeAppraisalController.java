@@ -6,48 +6,60 @@ import com.erp.service.EmployeeAppraisalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
 @RestController
-@RequestMapping("/api/employees")
+@RequestMapping("/api/employees/{employeeId}/appraisals")
 @RequiredArgsConstructor
 public class EmployeeAppraisalController {
 
     private final EmployeeAppraisalService appraisalService;
 
-    // ---------- GET ----------
-    @GetMapping("/{employeeId}/appraisal")
-    public ResponseEntity<EmployeeAppraisalResponseDTO> get(
-            @PathVariable Long employeeId,
-            @RequestParam String month,
-            @RequestParam Integer year
-    ) {
-        return ResponseEntity.ok(
-                appraisalService.get(employeeId, month.toLowerCase(), year)
-        );
+    /* =====================
+       LIST
+    ====================== */
+    @GetMapping
+    public List<EmployeeAppraisalResponseDTO> list(
+            @PathVariable("employeeId") Long employeeId) {
+
+        return appraisalService.list(employeeId);
     }
 
-    // ---------- CREATE ----------
-    @PostMapping("/{employeeId}/appraisal")
-    public ResponseEntity<EmployeeAppraisalResponseDTO> create(
-            @PathVariable Long employeeId,
-            @RequestParam String month,
-            @RequestParam Integer year,
-            @RequestBody EmployeeAppraisalRequestDTO dto
-    ) {
-        return ResponseEntity.ok(
-                appraisalService.create(employeeId, month.toLowerCase(), year, dto)
-        );
+    /* =====================
+       CREATE
+    ====================== */
+    @PostMapping
+    public ResponseEntity<Void> create(
+            @PathVariable("employeeId") Long employeeId,
+            @RequestBody EmployeeAppraisalRequestDTO dto) {
+
+        appraisalService.create(employeeId, dto);
+        return ResponseEntity.ok().build();
     }
 
-    // ---------- UPDATE ----------
-    @PutMapping("/{employeeId}/appraisal")
-    public ResponseEntity<EmployeeAppraisalResponseDTO> update(
-            @PathVariable Long employeeId,
-            @RequestParam String month,
-            @RequestParam Integer year,
-            @RequestBody EmployeeAppraisalRequestDTO dto
-    ) {
-        return ResponseEntity.ok(
-                appraisalService.update(employeeId, month.toLowerCase(), year, dto)
-        );
+    /* =====================
+       UPDATE
+    ====================== */
+    @PutMapping("/{appraisalId}")
+    public ResponseEntity<Void> update(
+            @PathVariable("employeeId") Long employeeId,
+            @PathVariable("appraisalId") Long appraisalId,
+            @RequestBody EmployeeAppraisalRequestDTO dto) {
+
+        appraisalService.update(employeeId, appraisalId, dto);
+        return ResponseEntity.ok().build();
+    }
+
+    /* =====================
+       DELETE
+    ====================== */
+    @DeleteMapping("/{appraisalId}")
+    public ResponseEntity<Void> delete(
+            @PathVariable("employeeId") Long employeeId,
+            @PathVariable("appraisalId") Long appraisalId) {
+
+        appraisalService.delete(employeeId, appraisalId);
+        return ResponseEntity.noContent().build();
     }
 }

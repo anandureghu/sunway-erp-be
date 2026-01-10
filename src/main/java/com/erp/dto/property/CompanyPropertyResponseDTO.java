@@ -1,18 +1,22 @@
 package com.erp.dto.property;
 
-import lombok.Getter;
-import lombok.Setter;
+import com.erp.domain.enums.PropertyStatus;
+import lombok.Data;
 
 import java.time.LocalDate;
 
-@Getter @Setter
+@Data
 public class CompanyPropertyResponseDTO {
 
     private Long id;
+
     private String itemCode;
     private String itemName;
-    private String itemStatus;
-    private String description;
+
+    private PropertyStatus itemStatus;
+
     private LocalDate dateGiven;
     private LocalDate returnDate;
+
+    private String description;
 }

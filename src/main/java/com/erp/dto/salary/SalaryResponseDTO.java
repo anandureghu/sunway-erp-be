@@ -1,5 +1,6 @@
 package com.erp.dto.salary;
 
+import com.erp.domain.enums.BenefitType;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -9,22 +10,27 @@ import java.time.LocalDate;
 @Setter
 public class SalaryResponseDTO {
 
+    /* ================= BASIC ================= */
     private Double basicSalary;
 
-    private Boolean transportation;
-    private Double transportationAllowance;
-
-    private Boolean travel;
-    private Double travelAllowance;
-
-    private Boolean housing;
+    /* ================= HOUSING ================= */
+    private BenefitType housingType;
     private Double housingAllowance;
 
+    /* ================= TRANSPORTATION ================= */
+    private BenefitType transportationType;
+    private Double transportationAllowance;
+
+    /* ================= TRAVEL ================= */
+    private BenefitType travelType;
+    private Double travelAllowance;
+
+    /* ================= OTHER ================= */
     private Double otherAllowance;
     private Double totalCompensation;
 
+    /* ================= STATUS ================= */
     private String status; // ACTIVE / INACTIVE
-
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;
 }

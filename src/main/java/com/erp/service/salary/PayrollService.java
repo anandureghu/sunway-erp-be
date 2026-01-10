@@ -2,6 +2,7 @@ package com.erp.service.salary;
 
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLoan;
+import com.erp.domain.enums.BenefitType;
 import com.erp.domain.salary.Payroll;
 import com.erp.domain.salary.EmployeeBankDetails;
 import com.erp.domain.salary.EmployeeCompensation;
@@ -36,13 +37,13 @@ public class PayrollService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        // 1️⃣ Active Salary
+        /* ================= SALARY ================= */
         EmployeeCompensation salary =
                 compensationRepo.findActiveByEmployee(employee)
                         .orElseThrow(() ->
-                                new RuntimeException("No active salary"));
+                                new RuntimeException("No active salary found"));
 
-        // 2️⃣ Active Loans
+        /* ================= LOANS ================= */
         List<EmployeeLoan> activeLoans =
                 loanRepo.findByEmployeeAndStatus(employee, "ACTIVE");
 
@@ -50,17 +51,36 @@ public class PayrollService {
                 .mapToDouble(EmployeeLoan::getMonthlyDeduction)
                 .sum();
 
-        // 3️⃣ Bank Details
+        /* ================= BANK ================= */
         EmployeeBankDetails bank =
                 bankRepo.findByEmployee(employee)
                         .orElseThrow(() ->
                                 new RuntimeException("Bank details missing"));
 
-        // 4️⃣ Calculate payroll
-        double grossPay = salary.getTotalCompensation();
-        double netPay = grossPay - totalLoanDeduction;
+        /* ================= GROSS PAY ================= */
+        double grossPay = salary.getBasicSalary();
 
-        // 5️⃣ Save payroll
+        if (salary.getHousingType() == BenefitType.ALLOWANCE) {
+            grossPay += salary.getHousingAllowance();
+        }
+
+        if (salary.getTransportationType() == BenefitType.ALLOWANCE) {
+            grossPay += salary.getTransportationAllowance();
+        }
+
+        if (salary.getTravelType() == BenefitType.ALLOWANCE) {
+            grossPay += salary.getTravelAllowance();
+        }
+
+        grossPay += salary.getOtherAllowance();
+
+        /* ================= NET PAY ================= */
+        double netPay = grossPay - totalLoanDeduction;
+        if (netPay < 0) {
+            throw new RuntimeException("Net pay cannot be negative");
+        }
+
+        /* ================= SAVE PAYROLL ================= */
         Payroll payroll = new Payroll();
         payroll.setEmployee(employee);
         payroll.setPayrollCode("PR-" + System.currentTimeMillis());
@@ -74,27 +94,29 @@ public class PayrollService {
         payroll.setBankName(bank.getBankName());
         payroll.setBankAccount(bank.getAccountNo());
 
-        Payroll saved = payrollRepo.save(payroll);
+        Payroll savedPayroll = payrollRepo.save(payroll);
 
-        // 6️⃣ Reduce loan balances
+        /* ================= UPDATE LOANS ================= */
         for (EmployeeLoan loan : activeLoans) {
-            loan.setBalance(
-                    loan.getBalance() - loan.getMonthlyDeduction()
-            );
+            double newBalance = loan.getBalance() - loan.getMonthlyDeduction();
 
-            if (loan.getBalance() <= 0) {
+            loan.setBalance(Math.max(newBalance, 0));
+
+            if (loan.getBalance() == 0) {
                 loan.setStatus("CLOSED");
-                loan.setBalance(0.0);
             }
+
+            loanRepo.save(loan);
         }
 
-        return saved;
+        return savedPayroll;
     }
 
     public List<PayrollHistoryDTO> getPayrollHistory(Long employeeId) {
 
         Employee employee =
-                employeeRepo.findById(employeeId).orElseThrow();
+                employeeRepo.findById(employeeId)
+                        .orElseThrow(() -> new RuntimeException("Employee not found"));
 
         return payrollRepo.findByEmployeeOrderByPayDateDesc(employee)
                 .stream()
@@ -106,8 +128,10 @@ public class PayrollService {
                     dto.setPayDate(p.getPayDate());
                     dto.setGrossPay(p.getGrossPay());
                     dto.setNetPayable(p.getNetPayable());
+                    dto.setLoanDeduction(p.getLoanDeduction());
+                    dto.setTotalDeductions(p.getDeductions());
                     return dto;
                 })
-                .toList();
+                .collect(Collectors.toList());
     }
 }

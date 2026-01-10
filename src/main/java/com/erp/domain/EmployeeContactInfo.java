@@ -25,4 +25,8 @@ public class EmployeeContactInfo {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", nullable = false, unique = true)
     private Employee employee;
+
+    @Column(length = 1000)
+    private String notes;
+
 }

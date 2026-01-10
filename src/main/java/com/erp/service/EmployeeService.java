@@ -7,17 +7,21 @@ import com.erp.dto.common.PageResponse;
 import com.erp.dto.hr.CreateEmployeeDTO;
 import com.erp.dto.hr.EmployeeResponseDTO;
 import com.erp.dto.hr.UpdateEmployeeDTO;
+import com.erp.repo.CompanyLeavePolicyRepository;
+import com.erp.repo.EmployeeLeaveBalanceRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.repo.contact.EmployeeContactInfoRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.util.EmployeeUserUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
@@ -37,6 +41,8 @@ public class EmployeeService {
     private final CompanyRepository companyRepository;
     private final DepartmentRepository departmentRepository;
     private final EmployeeContactInfoRepository contactInfoRepository;
+    private final CompanyLeavePolicyRepository policyRepo;
+    private final EmployeeLeaveBalanceRepository balanceRepo;
     private final AuthContext authContext;
     private final PasswordEncoder passwordEncoder;
 
@@ -46,6 +52,8 @@ public class EmployeeService {
             CompanyRepository companyRepository,
             DepartmentRepository departmentRepository,
             EmployeeContactInfoRepository contactInfoRepository,
+            CompanyLeavePolicyRepository policyRepo,
+            EmployeeLeaveBalanceRepository balanceRepo,
             AuthContext authContext,
             PasswordEncoder passwordEncoder
     ) {
@@ -54,6 +62,8 @@ public class EmployeeService {
         this.companyRepository = companyRepository;
         this.departmentRepository = departmentRepository;
         this.contactInfoRepository = contactInfoRepository;
+        this.policyRepo = policyRepo;
+        this.balanceRepo = balanceRepo;
         this.authContext = authContext;
         this.passwordEncoder = passwordEncoder;
     }
@@ -61,6 +71,7 @@ public class EmployeeService {
     // ======================================================
     // CREATE EMPLOYEE
     // ======================================================
+    @Transactional
     public EmployeeResponseDTO createEmployee(CreateEmployeeDTO dto) {
 
         User authUser = getAuthUser();
@@ -81,6 +92,9 @@ public class EmployeeService {
             throw new RuntimeException("This company already has an admin");
         }
 
+        // -----------------------------
+        // Department validation
+        // -----------------------------
         Department department = null;
         if (dto.getDepartmentId() != null) {
             department = departmentRepository.findById(dto.getDepartmentId())
@@ -91,31 +105,57 @@ public class EmployeeService {
             }
         }
 
-        if (userRepository.existsByUsername(dto.getUsername())) {
-            throw new RuntimeException("Username already exists");
-        }
-        if (userRepository.existsByEmail(dto.getEmail())) {
-            throw new RuntimeException("Email already exists");
+        // -----------------------------
+        // Employee No (MySQL sequence table)
+        // -----------------------------
+        employeeRepository.incrementEmployeeNo();
+        Long empNo = employeeRepository.getCurrentEmployeeNo();
+        String employeeNo = String.valueOf(empNo);
+
+        // -----------------------------
+        // Username / Email / Password
+        // -----------------------------
+        String username = EmployeeUserUtil.generateUsername(
+                dto.getFirstName(),
+                dto.getLastName()
+        );
+
+        if (userRepository.existsByUsername(username)) {
+            throw new RuntimeException("Generated username already exists");
         }
 
+        String email = EmployeeUserUtil.generateEmail(username, company);
+
+        if (userRepository.existsByEmail(email)) {
+            throw new RuntimeException("Generated email already exists");
+        }
+
+        String rawPassword = EmployeeUserUtil.generateDefaultPassword(username);
+
+        // -----------------------------
+        // Create User
+        // -----------------------------
         User user = new User();
         user.setFullName(dto.getFirstName() + " " + dto.getLastName());
-        user.setUsername(dto.getUsername());
-        user.setEmail(dto.getEmail());
-        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        user.setUsername(username);
+        user.setEmail(email);
+        user.setPassword(passwordEncoder.encode(rawPassword));
         user.setRole(role);
         user.setCompany(company);
+        user.setForcePasswordReset(true);
+
         userRepository.save(user);
 
+        // -----------------------------
+        // Create Employee
+        // -----------------------------
         Employee employee = Employee.builder()
-                .employeeNo(dto.getEmployeeNo())
+                .employeeNo(employeeNo)
                 .firstName(dto.getFirstName())
                 .lastName(dto.getLastName())
                 .gender(dto.getGender())
                 .prefix(dto.getPrefix())
-
                 .status(dto.getStatus() != null ? dto.getStatus() : EmployeeStatus.ACTIVE)
-
                 .maritalStatus(dto.getMaritalStatus())
                 .dateOfBirth(dto.getDateOfBirth())
                 .joinDate(dto.getJoinDate())
@@ -129,16 +169,59 @@ public class EmployeeService {
 
         employee = employeeRepository.save(employee);
 
+        // -----------------------------
+        // Contact Info
+        // -----------------------------
         EmployeeContactInfo contactInfo = EmployeeContactInfo.builder()
                 .employee(employee)
-                .email(dto.getEmail())
+                .email(email)
                 .phone(dto.getPhoneNo())
                 .altPhone(dto.getAltPhone())
                 .build();
 
         contactInfoRepository.save(contactInfo);
 
+        // -----------------------------
+        // Initialize Leave Balances
+        // -----------------------------
+        initializeEmployeeLeaveBalances(employee);
+
         return toDTO(employee);
+    }
+
+    // ======================================================
+    // INITIALIZE EMPLOYEE LEAVE BALANCES
+    // ======================================================
+    @Transactional
+    public void initializeEmployeeLeaveBalances(Employee employee) {
+        Company company = employee.getCompany();
+
+        // Get all PAID leave policies for the company
+        List<CompanyLeavePolicy> paidPolicies = policyRepo
+                .findByCompanyAndPaid(company, true);
+
+        // Create leave balance for each paid leave type
+        for (CompanyLeavePolicy policy : paidPolicies) {
+            // Check if balance already exists
+            if (balanceRepo.findByEmployeeAndLeaveType(employee, policy.getLeaveType()).isEmpty()) {
+                EmployeeLeaveBalance balance = new EmployeeLeaveBalance();
+                balance.setEmployee(employee);
+                balance.setLeaveType(policy.getLeaveType());
+                balance.setTotalLeaves(policy.getDefaultDays());
+                balance.setRemainingLeaves(policy.getDefaultDays());
+
+                balanceRepo.save(balance);
+            }
+        }
+    }
+
+    @Transactional
+    public void syncAllEmployeeLeaveBalances(Long companyId) {
+        List<Employee> employees = employeeRepository.findByCompanyId(companyId);
+
+        for (Employee employee : employees) {
+            initializeEmployeeLeaveBalances(employee);
+        }
     }
 
     // ======================================================
@@ -155,7 +238,6 @@ public class EmployeeService {
             throw new RuntimeException("Access denied");
         }
 
-        if (dto.getEmployeeNo() != null) employee.setEmployeeNo(dto.getEmployeeNo());
         if (dto.getFirstName() != null) employee.setFirstName(dto.getFirstName());
         if (dto.getLastName() != null) employee.setLastName(dto.getLastName());
         if (dto.getGender() != null) employee.setGender(dto.getGender());
@@ -185,18 +267,8 @@ public class EmployeeService {
 
         if (dto.getPhoneNo() != null) contactInfo.setPhone(dto.getPhoneNo());
         if (dto.getAltPhone() != null) contactInfo.setAltPhone(dto.getAltPhone());
-        if (dto.getEmail() != null) contactInfo.setEmail(dto.getEmail());
 
         contactInfoRepository.save(contactInfo);
-
-        if (dto.getEmail() != null && employee.getUser() != null) {
-            if (!dto.getEmail().equals(employee.getUser().getEmail()) &&
-                    userRepository.existsByEmail(dto.getEmail())) {
-                throw new RuntimeException("Email already exists");
-            }
-            employee.getUser().setEmail(dto.getEmail());
-            userRepository.save(employee.getUser());
-        }
 
         employee.setUpdatedAt(Instant.now());
         employeeRepository.save(employee);
@@ -290,9 +362,17 @@ public class EmployeeService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
-    // =====================================================================================
+    private User getAuthUserWithCompany() {
+        User user = getAuthUser();
+        if (user.getCompany() == null) {
+            throw new RuntimeException("User is not linked to any company");
+        }
+        return user;
+    }
+
+    // ======================================================
     // GET COMPANY ADMIN
-    // =====================================================================================
+    // ======================================================
     public EmployeeResponseDTO getCompanyAdmin(Long companyId) {
 
         List<Role> allowedRoles = List.of(Role.ADMIN, Role.SUPER_ADMIN);
@@ -302,14 +382,6 @@ public class EmployeeService {
                 .orElseThrow(() -> new RuntimeException("No admin found for this company"));
 
         return toDTO(admin);
-    }
-
-    private User getAuthUserWithCompany() {
-        User user = getAuthUser();
-        if (user.getCompany() == null) {
-            throw new RuntimeException("User is not linked to any company");
-        }
-        return user;
     }
 
     // ======================================================
@@ -342,10 +414,16 @@ public class EmployeeService {
                 .userId(e.getUser() != null ? e.getUser().getId() : null)
                 .username(e.getUser() != null ? e.getUser().getUsername() : null)
                 .role(e.getUser() != null ? e.getUser().getRole() : null)
+                .forcePasswordReset(e.getUser() != null ? e.getUser().getForcePasswordReset() : null)
+                .imageUrl(e.getImageUrl())
                 .build();
     }
 
+    // ======================================================
+    // IMAGE UPLOAD
+    // ======================================================
     public EmployeeResponseDTO uploadImage(Long employeeId, MultipartFile file) {
+
         Employee emp = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
@@ -354,22 +432,17 @@ public class EmployeeService {
         }
 
         try {
-            // Create directory if not exists
             String uploadDir = "uploads/employees/";
             File dir = new File(uploadDir);
             if (!dir.exists()) dir.mkdirs();
 
-            // Generate file name
             String ext = Objects.requireNonNull(file.getOriginalFilename())
                     .substring(file.getOriginalFilename().lastIndexOf("."));
             String fileName = "employee_" + employeeId + ext;
 
             Path filePath = Paths.get(uploadDir + fileName);
-
-            // Save file to server
             Files.write(filePath, file.getBytes());
 
-            // Set URL to entity
             emp.setImageUrl("/uploads/employees/" + fileName);
             employeeRepository.save(emp);
 
@@ -379,5 +452,4 @@ public class EmployeeService {
             throw new RuntimeException("Failed to save image", e);
         }
     }
-
 }
