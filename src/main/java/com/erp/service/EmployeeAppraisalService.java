@@ -16,16 +16,14 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Transactional // REQUIRED for UPDATE & DELETE
+@Transactional 
 public class EmployeeAppraisalService {
 
     private final EmployeeRepository employeeRepository;
     private final EmployeeAppraisalRepository appraisalRepository;
     private final EntityManager entityManager;
 
-    /* =====================
-       LIST
-    ====================== */
+
     @Transactional(readOnly = true)
     public List<EmployeeAppraisalResponseDTO> list(Long employeeId) {
 
@@ -102,7 +100,7 @@ public class EmployeeAppraisalService {
         appraisal.setRating(dto.getRating());
         appraisal.setAnnualIncrement(dto.getAnnualIncrement());
 
-        // 🔥 CRITICAL FIX
+     
         appraisalRepository.saveAndFlush(appraisal);
         entityManager.refresh(appraisal);
     }
