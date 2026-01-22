@@ -6,6 +6,7 @@ import com.erp.dto.appraisal.EmployeeAppraisalRequestDTO;
 import com.erp.dto.appraisal.EmployeeAppraisalResponseDTO;
 import com.erp.repo.EmployeeAppraisalRepository;
 import com.erp.repo.EmployeeRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -15,14 +16,15 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Transactional // 🔴 REQUIRED for UPDATE & DELETE
+@Transactional // REQUIRED for UPDATE & DELETE
 public class EmployeeAppraisalService {
 
     private final EmployeeRepository employeeRepository;
     private final EmployeeAppraisalRepository appraisalRepository;
+    private final EntityManager entityManager;
 
     /* =====================
-       LIST (Loans-style)
+       LIST
     ====================== */
     @Transactional(readOnly = true)
     public List<EmployeeAppraisalResponseDTO> list(Long employeeId) {
@@ -83,7 +85,7 @@ public class EmployeeAppraisalService {
                 .findByIdAndEmployeeId(appraisalId, employeeId)
                 .orElseThrow(() -> new IllegalArgumentException("Appraisal not found"));
 
-        // ⛔ Month & Year are IMMUTABLE
+        // Month & Year are IMMUTABLE
         appraisal.setJobCode(dto.getJobCode());
         appraisal.setKpi1(dto.getKpi1());
         appraisal.setReview1(dto.getReview1());
@@ -100,7 +102,9 @@ public class EmployeeAppraisalService {
         appraisal.setRating(dto.getRating());
         appraisal.setAnnualIncrement(dto.getAnnualIncrement());
 
-        appraisalRepository.save(appraisal);
+        // 🔥 CRITICAL FIX
+        appraisalRepository.saveAndFlush(appraisal);
+        entityManager.refresh(appraisal);
     }
 
     /* =====================
@@ -137,7 +141,7 @@ public class EmployeeAppraisalService {
     }
 
     /* =====================
-       MAPPER
+       MAPPER (🔥 FIXED)
     ====================== */
     private EmployeeAppraisalResponseDTO mapToResponse(EmployeeAppraisal a) {
         return EmployeeAppraisalResponseDTO.builder()
@@ -146,9 +150,25 @@ public class EmployeeAppraisalService {
                 .month(a.getMonth())
                 .year(a.getYear())
                 .jobCode(a.getJobCode())
+
+                .employeeComments(a.getEmployeeComments())
+                .managerComments(a.getManagerComments())
+
+                .kpi1(a.getKpi1())
+                .review1(a.getReview1())
+                .kpi2(a.getKpi2())
+                .review2(a.getReview2())
+                .kpi3(a.getKpi3())
+                .review3(a.getReview3())
+                .kpi4(a.getKpi4())
+                .review4(a.getReview4())
+                .kpi5(a.getKpi5())
+                .review5(a.getReview5())
+
                 .rating(a.getRating())
                 .annualIncrement(a.getAnnualIncrement())
                 .createdDate(a.getCreatedDate())
+                .updatedDate(a.getUpdatedDate())
                 .build();
     }
 }
