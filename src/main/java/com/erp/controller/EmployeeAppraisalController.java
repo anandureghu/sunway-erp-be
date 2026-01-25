@@ -20,10 +20,10 @@ public class EmployeeAppraisalController {
        LIST
     ====================== */
     @GetMapping
-    public List<EmployeeAppraisalResponseDTO> list(
+    public ResponseEntity<List<EmployeeAppraisalResponseDTO>> list(
             @PathVariable("employeeId") Long employeeId) {
 
-        return appraisalService.list(employeeId);
+        return ResponseEntity.ok(appraisalService.list(employeeId));
     }
 
     /* =====================

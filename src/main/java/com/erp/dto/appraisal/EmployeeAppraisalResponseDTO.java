@@ -34,4 +34,5 @@ public class EmployeeAppraisalResponseDTO {
     private Integer rating;
     private Integer annualIncrement;
     private LocalDateTime createdDate;
+    private LocalDateTime updatedDate;
 }
