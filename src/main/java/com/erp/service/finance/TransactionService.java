@@ -53,17 +53,17 @@ public class TransactionService {
         Company company = companyRepo.findById(dto.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        ChartOfAccounts creditAccount = coaRepo.findById(dto.getCreditAccount())
-                .orElseThrow(() -> new RuntimeException("Invalid credit account"));
+        ChartOfAccounts creditAccount = dto.getCreditAccount() != null ? coaRepo.findById(dto.getCreditAccount())
+                .orElseThrow(() -> new RuntimeException("Invalid credit account")) : null;
 
-        ChartOfAccounts debitAccount = coaRepo.findById(dto.getDebitAccount())
-                .orElseThrow(() -> new RuntimeException("Invalid debit account"));
+        ChartOfAccounts debitAccount = dto.getDebitAccount() != null ? coaRepo.findById(dto.getDebitAccount())
+                .orElseThrow(() -> new RuntimeException("Invalid debit account")) : null;
 
-        if (creditAccount != null) {
+        if (creditAccount != null && dto.getRelatedId() == null) {
             coaService.updateBalance(creditAccount, dto.getAmount());
         }
 
-        if (debitAccount != null) {
+        if (debitAccount != null && dto.getRelatedId() == null) {
             coaService.updateBalance(debitAccount, dto.getAmount().negate());
         }
 
@@ -82,6 +82,8 @@ public class TransactionService {
                 .paymentId(dto.getPaymentId())
                 .transactionDescription(dto.getTransactionDescription())
                 .createdBy(auth.getCurrentUserId())
+                .relatedId(dto.getRelatedId())
+                .relatedSubId(dto.getRelatedSubId())
 //                .posted(false)
                 .build();
 

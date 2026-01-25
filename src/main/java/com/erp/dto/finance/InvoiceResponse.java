@@ -2,8 +2,10 @@ package com.erp.dto.finance;
 
 import lombok.Builder;
 import lombok.Data;
+
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Data
 @Builder
@@ -18,9 +20,9 @@ public class InvoiceResponse {
     private String toParty;
     private String status;
 
-    private Instant invoiceDate;
-    private Instant dueDate;
-    private Instant paidDate;
+    private LocalDate invoiceDate;
+    private LocalDate dueDate;
+    private LocalDate paidDate;
 
     private BigDecimal amount;
     private BigDecimal openAmount;
@@ -34,6 +36,15 @@ public class InvoiceResponse {
 
     private String partyClassification;
     private String pdfUrl;
+
+    private String type;
+    private Long orderId;
+
+    private Long creditAccountId;
+    private Long debitAccountId;
+
+    private String creditAccountName;
+    private String debitAccountName;
 
     private Instant createdAt;
 }

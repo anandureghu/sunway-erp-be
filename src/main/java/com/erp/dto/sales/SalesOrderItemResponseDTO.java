@@ -13,7 +13,10 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class SalesOrderItemResponseDTO {
     private Long itemId;
+    private String itemName;
     private Integer quantity;
     private BigDecimal unitPrice;
     private BigDecimal lineTotal;
+    private Long warehouseId;
+    private String warehouseName;
 }

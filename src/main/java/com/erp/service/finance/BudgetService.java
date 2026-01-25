@@ -13,9 +13,12 @@ import com.erp.repo.finance.BudgetLineRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -29,19 +32,22 @@ public class BudgetService {
     private final ChartOfAccountsRepository accountRepo;
     private final DepartmentRepository deptRepo;
     private final AuthContext auth;
+    private final TransactionService transactionService;
 
     public BudgetService(
             BudgetHeaderRepository headerRepo,
             BudgetLineRepository lineRepo,
             ChartOfAccountsRepository accountRepo,
             DepartmentRepository deptRepo,
-            AuthContext auth
+            AuthContext auth,
+            TransactionService transactionService
     ) {
         this.headerRepo = headerRepo;
         this.lineRepo = lineRepo;
         this.accountRepo = accountRepo;
         this.deptRepo = deptRepo;
         this.auth = auth;
+        this.transactionService = transactionService;
     }
 
     // --------------------------------------
@@ -234,11 +240,15 @@ public class BudgetService {
                         dto.getProjectId()
                 );
 
+        BudgetLine affectedLine;
+
         if ((dto.getDepartmentId() != null || dto.getProjectId() != null) && existing.isPresent()) {
             BudgetLine bl = existing.get();
             bh.setAmount(bh.getAmount() - bl.getAmount() + dto.getAmount());
             bl.setAmount(dto.getAmount());
             bl.setNotes(dto.getNotes());
+
+            affectedLine = bl;
         } else {
             BudgetLine line = BudgetLine.builder()
                     .budgetHeader(bh)
@@ -253,9 +263,29 @@ public class BudgetService {
 
             bh.getLines().add(line);
             bh.setAmount(bh.getAmount() + line.getAmount());
+
+            affectedLine = line;
         }
 
         headerRepo.save(bh);
+
+        transactionService.create(CreateTransactionDTO.builder()
+                .companyId(auth.getCurrentCompanyId())
+                .transactionType("BUDGET")
+                .transactionDate(LocalDate.now())
+                .amount(BigDecimal.valueOf(dto.getAmount()))
+                .relatedId(bh.getId())
+                .relatedSubId(affectedLine.getId())
+                .debitAccount(account.getId())
+                .creditAccount(account.getId())
+                .transactionDescription(
+                        StringUtils.defaultIfBlank(
+                                dto.getNotes(),
+                                "Budget allocation"
+                        )
+                ).build());
+
+
         return toDTO(bh);
     }
 

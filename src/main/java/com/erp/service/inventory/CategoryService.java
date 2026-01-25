@@ -13,6 +13,7 @@ import com.erp.security.context.AuthContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -97,14 +98,21 @@ public class CategoryService {
     // Get single
     // --------------------------
     public CategoryResponseDTO get(Long id) {
-        return toDTO(getEntity(id));
+        Category category = repo
+                .findCategoryWithSubCategories(id, auth.getCurrentCompanyId())
+                .orElseThrow(() -> new RuntimeException("Category not found"));
+
+        CategoryResponseDTO responseDTO = toDTO(category);
+        responseDTO.setSubCategories(category.getSubCategories().stream().map(this::toDTO).toList());
+
+        return responseDTO;
     }
 
     // --------------------------
     // List top-level categories
     // --------------------------
     public List<CategoryResponseDTO> listCategories() {
-        return repo.findByCompanyIdAndParentIsNull(auth.getCurrentCompanyId())
+        return repo.findByCompanyIdAndParentIdIsNull(auth.getCurrentCompanyId())
                 .stream()
                 .map(this::toDTO)
                 .toList();
@@ -163,6 +171,7 @@ public class CategoryService {
                 .name(c.getName())
                 .status(c.getStatus())
                 .parentId(c.getParent() != null ? c.getParent().getId() : null)
+                .subCategories(c.getSubCategories() != null ? c.getSubCategories().stream().map(this::toDTO).toList() : new ArrayList<>())
                 .build();
     }
 }

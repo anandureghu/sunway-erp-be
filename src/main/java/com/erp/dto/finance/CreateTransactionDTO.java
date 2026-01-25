@@ -1,11 +1,13 @@
 package com.erp.dto.finance;
 
+import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
+@Builder
 public class CreateTransactionDTO {
     private Long companyId;
     private String transactionType;
@@ -18,5 +20,7 @@ public class CreateTransactionDTO {
     //    private String itemCode;
     private String invoiceId;
     private String paymentId;
+    private Long relatedId;
+    private Long relatedSubId;
     private String transactionDescription;
 }

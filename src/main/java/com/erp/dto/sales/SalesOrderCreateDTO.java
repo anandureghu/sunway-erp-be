@@ -13,7 +13,6 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class SalesOrderCreateDTO {
-
     private Long customerId;
     private LocalDate orderDate;
     private List<SalesOrderItemDTO> items;

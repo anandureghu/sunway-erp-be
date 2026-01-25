@@ -2,6 +2,7 @@ package com.erp.service.sales;
 
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
+import com.erp.domain.inventory.Item;
 import com.erp.domain.sales.Picklist;
 import com.erp.domain.sales.Shipment;
 import com.erp.domain.sales.ShipmentItem;
@@ -98,6 +99,11 @@ public class ShipmentService {
 
         s.setStatus("DISPATCHED");
         s.setDispatchedAt(Instant.now());
+        s.getItems().forEach(i -> {
+            Item item = i.getItem();
+            item.setReserved(0);
+            item.setQuantity(item.getAvailable());
+        });
 
         // 🔥 Stock OUT will be added here later
 
