@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 public class PicklistItemDTO {
     private Long itemId;
     private Integer quantity;
+    private String itemName;
 }

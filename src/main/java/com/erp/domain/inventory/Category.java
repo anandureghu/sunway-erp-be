@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.List;
 
 @Getter
 @Setter
@@ -52,6 +53,9 @@ public class Category {
 
     private Instant createdAt;
     private Instant updatedAt;
+
+    @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
+    private List<Category> subCategories;
 
     @PrePersist
     void onCreate() {

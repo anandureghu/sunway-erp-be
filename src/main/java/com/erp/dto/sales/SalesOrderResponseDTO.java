@@ -18,6 +18,9 @@ public class SalesOrderResponseDTO {
     private Long id;
     private String orderNumber;
     private Long customerId;
+    private String customerName;
+    private String customerEmail;
+    private String customerPhone;
     private LocalDate orderDate;
     private String status;
     private BigDecimal totalAmount;

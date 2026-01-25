@@ -62,14 +62,11 @@ public class AdminSeeder {
 
                 chartOfAccountsService.createDefaultCOAForCompany(company);
 
-
-                chartOfAccountsService.createDefaultCOAForCompany(company);
-
                 // 3. Create EMPLOYEE record for this admin user
                 Employee adminEmployee = Employee.builder()
                         .employeeNo("ADMIN")   // first employee for first company
-                        .firstName("Admin")
-                        .lastName("User")
+                        .firstName("Super")
+                        .lastName("Admin")
                         .company(company)    // attach company
                         .user(admin)         // link login user
                         .build();

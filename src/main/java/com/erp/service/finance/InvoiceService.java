@@ -1,17 +1,21 @@
 package com.erp.service.finance;
 
+import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.hr.Company;
 import com.erp.dto.finance.InvoiceRequest;
 import com.erp.dto.finance.InvoiceResponse;
+import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.security.context.AuthContext;
 import com.erp.service.pdf.InvoicePDFService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,15 +25,23 @@ public class InvoiceService {
 
     private final InvoiceRepository repo;
     private final CompanyRepository companyRepo;
+    private final ChartOfAccountsRepository coaRepo;
     private final InvoicePDFService pdfService;
+    private final AuthContext auth;
 
     // ============================================================
     // CREATE MANUAL INVOICE
     // ============================================================
     public InvoiceResponse createInvoice(InvoiceRequest req) {
 
-        Company company = companyRepo.findById(req.getCompanyId())
+        Company company = companyRepo.findById(auth.getCurrentCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        ChartOfAccounts debitAccount = coaRepo.findById(req.getDebitAccount())
+                .orElseThrow(() -> new RuntimeException("Debit Account not found"));
+
+        ChartOfAccounts creditAccount = coaRepo.findById(req.getCreditAccount())
+                .orElseThrow(() -> new RuntimeException("Credit Account not found"));
 
         String invoiceCode = "INV-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -37,7 +49,7 @@ public class InvoiceService {
                 .invoiceId(invoiceCode)
                 .company(company)
                 .toParty(req.getToParty())
-                .invoiceDate(req.getInvoiceDate() == null ? Instant.now() : req.getInvoiceDate())
+                .invoiceDate(req.getInvoiceDate() == null ? LocalDate.now() : req.getInvoiceDate())
                 .dueDate(req.getDueDate())
                 .status("UNPAID")
                 .amount(req.getAmount())
@@ -49,17 +61,21 @@ public class InvoiceService {
                 .interestRate(req.getInterestRate())
                 .partyClassification(req.getPartyClassification())
                 .createdAt(Instant.now())
+                .type(req.getType())
+                .orderId(req.getOrderId())
+                .debitAccount(debitAccount)
+                .creditAccount(creditAccount)
                 .build();
 
         Invoice saved = repo.save(invoice);
 
         try {
-            byte[] pdfBytes = pdfService.generateInvoicePdf(
-                    invoiceCode,
-                    company.getCompanyName(),
-                    req.getItemDescription(),
-                    req.getAmount().toString()
-            );
+//            byte[] pdfBytes = pdfService.generateInvoicePdf(
+//                    invoiceCode,
+//                    company.getCompanyName(),
+//                    req.getItemDescription(),
+//                    req.getAmount().toString()
+//            );
 
 //            String pdfUrl = storage.savePdf(invoiceCode, pdfBytes);
 //            saved.setPdfUrl(pdfUrl);
@@ -83,7 +99,7 @@ public class InvoiceService {
                 .invoiceId(invoiceCode)
                 .company(company)
                 .status("UNPAID")
-                .invoiceDate(Instant.now())
+                .invoiceDate(LocalDate.now())
                 .amount(amount)
                 .openAmount(amount)
                 .outstanding(amount)
@@ -121,7 +137,7 @@ public class InvoiceService {
             inv.setOutstanding(BigDecimal.ZERO);
             inv.setOpenAmount(BigDecimal.ZERO);
             inv.setStatus("PAID");
-            inv.setPaidDate(Instant.now());
+            inv.setPaidDate(LocalDate.now());
         } else {
             inv.setOutstanding(newOutstanding);
             inv.setOpenAmount(newOutstanding);
@@ -210,6 +226,12 @@ public class InvoiceService {
                 .partyClassification(i.getPartyClassification())
                 .pdfUrl(i.getPdfUrl())
                 .createdAt(i.getCreatedAt())
+                .orderId(i.getOrderId())
+                .type(i.getType())
+                .debitAccountId(i.getDebitAccount().getId())
+                .debitAccountName(i.getDebitAccount().getAccountName())
+                .creditAccountId(i.getCreditAccount().getId())
+                .creditAccountName(i.getCreditAccount().getAccountName())
                 .build();
     }
 }
