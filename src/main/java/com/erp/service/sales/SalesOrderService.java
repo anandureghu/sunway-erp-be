@@ -115,6 +115,7 @@ public class SalesOrderService {
             item.setReserved(i.getQuantity());
             item.setAvailable(item.getAvailable() - i.getQuantity());
         });
+        
         return toDTO(repo.save(order));
     }
 
