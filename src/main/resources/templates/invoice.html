@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Invoice</title>
+
+    <style type="text/css">
+
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        body {
+            background-color: #FFFFF;
+            font-family: Helvetica, Arial, sans-serif;
+            color: #1F2937;
+        }
+
+        .container {
+            width: 100%;
+            margin: 0 auto;
+            background-color: #FFFFFF;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* ===== HEADER ===== */
+
+        .header {
+            background-color: #1a1a1a;
+            color: #FFFFFF;
+            padding: 30px;
+        }
+
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .company-name {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .company-sub {
+            font-size: 12px;
+            color: #D1D5DB;
+            line-height: 16px;
+        }
+
+        .badge {
+            background-color: #E67E22;
+            padding: 10px 16px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .badge-title {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .badge-id {
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        /* ===== BODY ===== */
+
+        .body {
+            padding: 30px;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+        }
+
+        .items-table th {
+            background-color: #F9FAFB;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #6B7280;
+            padding: 10px;
+            border-bottom: 2px solid #E5E7EB;
+            text-align: left;
+        }
+
+        .items-table td {
+            padding: 14px 10px;
+            border-bottom: 1px solid #E5E7EB;
+            font-size: 13px;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        /* ===== TOTAL ===== */
+
+        .total-box {
+            width: 100%;
+            margin-left: auto;
+            margin-top: 30px;
+            background-color: #F9FAFB;
+            padding: 20px;
+            border-radius: 6px;
+        }
+
+        .total-row {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .total-label {
+            font-size: 13px;
+            color: #6B7280;
+        }
+
+        .total-value {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        /* ===== FOOTER ===== */
+
+
+        .notes{
+            margin-top: 30px;
+            padding: 15px;
+            border-radius: 15px;
+            background: #F9FAFB;
+        }
+
+        .notes h4{
+            color: #6C7280;
+            text-transform: uppercase;
+            font-size: 14px;
+        }
+
+        .terms {
+    margin-top: 24px;
+    padding: 20px;
+    border: 2px solid #E5E7EB;
+    border-radius: 16px;
+    background: #FFFFFF;
+}
+
+.terms h4 {
+    font-size: 14px;
+    text-transform: uppercase;
+    color: #6B7280;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.terms ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.terms li {
+    margin-bottom: 14px;
+    line-height: 1.6;
+    font-size: 13px;
+    color: #1F2937;
+}
+
+.terms li::marker {
+    color: #E67E22;
+    font-weight: bold;
+}
+
+        .footer-table {
+    width: 100%;
+    border-top: 2px solid #E5E7EB;
+    padding: 20px;
+    font-size: 12px;
+    color: #6B7280;
+    background: #F9FAFB;
+}
+
+.footer-left {
+    width: 70%;
+    vertical-align: top;
+}
+
+.footer-right {
+    width: 30%;
+    text-align: center;
+    vertical-align: top;
+}
+
+.footer-company {
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 6px;
+}
+
+.footer-muted {
+    color: #9CA3AF;
+    margin-top: 6px;
+}
+
+.qr-box {
+    width: 120px;
+    height: 120px;
+    border: 2px solid #E5E7EB;
+    border-radius: 12px;
+    margin: 0 auto 8px;
+}
+
+.qr-label {
+    font-size: 11px;
+    color: #6B7280;
+}
+
+
+    </style>
+</head>
+
+<body>
+<div class="container">
+
+    <!-- HEADER -->
+    <div class="header">
+        <table class="header-table">
+            <tr>
+                <td>
+                    <div class="company-name" th:text="${company.companyName}">MyWeb Systems QFZ LLC</div>
+                    <!--                    <div class="company-sub">-->
+                    <!--                        Digital Solutions &amp; Technology Services<br/>-->
+                    <!--                        Doha, Qatar-->
+                    <!--                    </div>-->
+                </td>
+                <td style="text-align:right;">
+                    <div class="badge">
+                        <div class="badge-title">INVOICE</div>
+                        <div class="badge-id"
+                             th:text="${invoice.invoiceId}">
+                            INV-0000
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- BODY -->
+    <div class="body">
+
+        <!-- EMPTY ITEMS TABLE (DESIGN ONLY) -->
+        <table class="items-table">
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>Description</th>
+                <th class="text-right">Qty</th>
+                <th class="text-right">Unit</th>
+                <th class="text-right">Discount</th>
+                <th class="text-right">Amount</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="item, iterStat : ${items}">
+                <!-- # -->
+                <td th:text="${iterStat.count}">1</td>
+
+                <!-- DESCRIPTION -->
+                <td>
+                    <div class="item-title"
+                         th:text="${item.item.name}">
+                        Website Design & Development
+                    </div>
+                    <div class="item-desc"
+                         th:text="${item.item.description}">
+                        Complete redesign of corporate website
+                    </div>
+                </td>
+
+                <!-- QTY -->
+                <td class="text-right"
+                    th:text="${item.quantity}">
+                    1
+                </td>
+
+                <!-- UNIT PRICE -->
+                <td class="text-right">
+                <span th:text="${#numbers.formatDecimal(item.unitPrice, 1, 'COMMA', 2, 'POINT')}">
+                    45,000.00
+                </span>
+                </td>
+
+                <!-- TAX -->
+                <td class="text-right">
+                    0%
+                </td>
+
+                <!-- AMOUNT -->
+                <td class="text-right">
+                    <strong
+                            th:text="${#numbers.formatDecimal(item.lineTotal, 1, 'COMMA', 2, 'POINT')}">
+                        45,000.00
+                    </strong>
+                </td>
+            </tr>
+
+            <!-- EMPTY STATE -->
+            <tr th:if="${items == null or #lists.isEmpty(items)}">
+                <td colspan="6" class="empty-row">
+                    —
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- TOTAL -->
+        <div class="total-box">
+            <table class="total-row">
+                <tr>
+                    <td class="total-label">Total Amount</td>
+                    <td class="total-value"
+                        th:text="${invoice.amount}">
+                        0
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="notes">
+            <h4>Notes</h4>
+            <p th:text="|Thank you for choosing ${company.companyName} for your digital transformation needs.
+            This invoice covers the complete website redesign project as per our agreement dated December 15, 2024.
+            All services have been delivered as specified, and the website is now live at your production domain.
+            Please ensure payment is made by the due date to maintain uninterrupted hosting services.
+            For any questions or clarifications regarding this invoice, please contact our accounts department at
+            email@example.com or call 9876543210|">
+            </p>
+        </div>
+
+        <div class="terms">
+            <h4>⚖ Terms &amp; Conditions</h4>
+
+            <ol>
+                <li>
+                    Payment is due within 30 days of the invoice date. Late payments may incur a 2% monthly
+                    interest charge on the outstanding balance.
+                </li>
+
+                <li>
+                    All payments must be made in Qatari Riyals (QAR) to the bank account specified above.
+                    International wire transfer fees are the responsibility of the client.
+                </li>
+
+                <li>
+                    Services, licenses, hosting, and support are provided on a subscription basis.
+                    Non-payment will result in automatic suspension of services after 14 days past the due date.
+                </li>
+
+                <li>
+                    Any disputes regarding this invoice must be raised in writing within 7 business days of receipt.
+                    Silence will be deemed as acceptance of all charges.
+                </li>
+
+                <li>
+                    This invoice is subject to Qatar's taxation laws. While currently at 0% VAT,
+                    any future tax changes will be applied as per government regulations.
+                </li>
+
+                <li>
+                    Hosting and support services include a 99.9% uptime guarantee.
+                    Credits for downtime exceeding this threshold must be claimed within 30 days.
+                </li>
+
+                <li>
+                    All intellectual property rights for custom development work transfer to the client
+                    upon full payment of this invoice.
+                </li>
+
+                <li th:text="|${company.companyName} reserves the right to update these terms with prior written notice to the client.|">
+                    Company reserves the right to update these terms.
+                </li>
+            </ol>
+        </div>
+
+    </div>
+
+    <!--    &lt;!&ndash; FOOTER &ndash;&gt;-->
+    <!--    <div class="footer">-->
+    <!--        This is a system-generated document. No signature required.-->
+    <!--    </div>-->
+
+    <table class="footer-table">
+        <tr>
+            <td class="footer-left">
+                <p class="footer-company">
+                    <span th:text="${company.companyName}">MyWeb Systems QFZ LLC</span>
+                    |
+                    Commercial Registration:
+                    <span>123456789</span>
+                </p>
+
+                <p>
+                    Qatar Free Zone Company |
+                    Tax ID:
+                    <span>QA-123456789</span>
+                </p>
+
+                <p class="footer-muted">
+                    This is a computer-generated document and does not require a physical signature.
+                </p>
+
+                <p class="footer-muted">
+                    For support:
+                    <span>support@myweb.qa</span>
+                    |
+                    For billing:
+                    <span>accounts@myweb.qa</span>
+                </p>
+            </td>
+
+            <td class="footer-right">
+                <div class="qr-box"></div>
+                <div class="qr-label">Scan to View Online</div>
+            </td>
+        </tr>
+    </table>
+
+</div>
+</body>
+</html>

@@ -1,5 +1,6 @@
 package com.erp.domain.finance;
 
+import com.erp.domain.InvoiceType;
 import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
@@ -28,7 +29,7 @@ public class Invoice {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
-    private String type;
+    private InvoiceType type;
     private Long orderId;
 
     private String toParty;

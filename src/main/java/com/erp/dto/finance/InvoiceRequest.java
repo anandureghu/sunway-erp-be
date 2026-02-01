@@ -1,5 +1,6 @@
 package com.erp.dto.finance;
 
+import com.erp.domain.InvoiceType;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -16,7 +17,7 @@ public class InvoiceRequest {
     private Integer gracePeriod;
     private BigDecimal interestRate;
     private String partyClassification;
-    private String type;
+    private InvoiceType type;
     private Long orderId;
     private Long creditAccount;
     private Long debitAccount;

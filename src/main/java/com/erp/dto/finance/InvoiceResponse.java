@@ -1,5 +1,8 @@
 package com.erp.dto.finance;
 
+import com.erp.domain.InvoiceType;
+import com.erp.dto.purchase.PurchaseOrderResponseDTO;
+import com.erp.dto.sales.SalesOrderResponseDTO;
 import lombok.Builder;
 import lombok.Data;
 
@@ -37,7 +40,7 @@ public class InvoiceResponse {
     private String partyClassification;
     private String pdfUrl;
 
-    private String type;
+    private InvoiceType type;
     private Long orderId;
 
     private Long creditAccountId;
@@ -47,4 +50,7 @@ public class InvoiceResponse {
     private String debitAccountName;
 
     private Instant createdAt;
+
+    private SalesOrderResponseDTO salesOrder;
+    private PurchaseOrderResponseDTO purchaseOrder;
 }
