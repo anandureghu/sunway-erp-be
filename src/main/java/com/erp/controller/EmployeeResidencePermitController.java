@@ -3,7 +3,6 @@ package com.erp.controller;
 import com.erp.dto.immigration.ResidencePermitRequestDTO;
 import com.erp.dto.immigration.ResidencePermitResponseDTO;
 import com.erp.service.ResidencePermitService;
-import jakarta.annotation.Nonnull;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,35 +15,45 @@ public class EmployeeResidencePermitController {
 
     private final ResidencePermitService permitService;
 
-    // ---------------- GET ----------------
+    /* ================= GET ================= */
+
     @GetMapping("/{employeeId}/residence-permit")
     public ResponseEntity<ResidencePermitResponseDTO> get(
             @PathVariable("employeeId") Long employeeId
     ) {
-        return ResponseEntity.ok(permitService.getByEmployee(employeeId));
+        return ResponseEntity.ok(
+                permitService.getByEmployee(employeeId)
+        );
     }
 
-    // ---------------- CREATE ----------------
+    /* ================= CREATE ================= */
+
     @PostMapping("/{employeeId}/residence-permit")
     public ResponseEntity<ResidencePermitResponseDTO> create(
             @PathVariable("employeeId") Long employeeId,
-            @Nonnull @Valid @RequestBody ResidencePermitRequestDTO dto
+            @Valid @RequestBody ResidencePermitRequestDTO dto
     ) {
         dto.setEmployeeId(employeeId);
-        return ResponseEntity.ok(permitService.create(dto));
+        return ResponseEntity.ok(
+                permitService.create(dto)
+        );
     }
 
-    // ---------------- UPDATE ----------------
+    /* ================= UPDATE ================= */
+
     @PutMapping("/{employeeId}/residence-permit")
     public ResponseEntity<ResidencePermitResponseDTO> update(
             @PathVariable("employeeId") Long employeeId,
             @Valid @RequestBody ResidencePermitRequestDTO dto
     ) {
         dto.setEmployeeId(employeeId);
-        return ResponseEntity.ok(permitService.update(dto));
+        return ResponseEntity.ok(
+                permitService.update(dto)
+        );
     }
 
-    // ---------------- DELETE ----------------
+    /* ================= DELETE ================= */
+
     @DeleteMapping("/{employeeId}/residence-permit")
     public ResponseEntity<Void> delete(
             @PathVariable("employeeId") Long employeeId

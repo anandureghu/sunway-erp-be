@@ -18,14 +18,16 @@ public class ResidencePermitService {
     private final ResidencePermitRepository permitRepo;
     private final EmployeeRepository employeeRepo;
 
-    // ---------------- GET ----------------
+    /* ================= GET ================= */
+
     public ResidencePermitResponseDTO getByEmployee(Long employeeId) {
         ResidencePermit permit = permitRepo.findByEmployeeId(employeeId)
                 .orElseThrow(() -> new RuntimeException("Residence permit not found"));
         return toDTO(permit);
     }
 
-    // ---------------- CREATE ----------------
+    /* ================= CREATE ================= */
+
     public ResidencePermitResponseDTO create(ResidencePermitRequestDTO dto) {
 
         validatePermitDates(dto);
@@ -39,6 +41,7 @@ public class ResidencePermitService {
 
         ResidencePermit permit = ResidencePermit.builder()
                 .employee(employee)
+                .permitIdNumber(dto.getPermitIdNumber())   // ✅ ONLY CHANGE
                 .visaType(dto.getVisaType())
                 .durationType(dto.getDurationType())
                 .visaDuration(dto.getVisaDuration())
@@ -55,7 +58,8 @@ public class ResidencePermitService {
         return toDTO(permit);
     }
 
-    // ---------------- UPDATE ----------------
+    /* ================= UPDATE ================= */
+
     public ResidencePermitResponseDTO update(ResidencePermitRequestDTO dto) {
 
         validatePermitDates(dto);
@@ -63,6 +67,7 @@ public class ResidencePermitService {
         ResidencePermit permit = permitRepo.findByEmployeeId(dto.getEmployeeId())
                 .orElseThrow(() -> new RuntimeException("Residence permit not found"));
 
+        permit.setPermitIdNumber(dto.getPermitIdNumber()); // ✅ ONLY CHANGE
         permit.setVisaType(dto.getVisaType());
         permit.setDurationType(dto.getDurationType());
         permit.setVisaDuration(dto.getVisaDuration());
@@ -78,7 +83,8 @@ public class ResidencePermitService {
         return toDTO(permit);
     }
 
-    // ---------------- DELETE ----------------
+    /* ================= DELETE ================= */
+
     public void deleteByEmployee(Long employeeId) {
 
         ResidencePermit permit = permitRepo.findByEmployeeId(employeeId)
@@ -87,7 +93,8 @@ public class ResidencePermitService {
         permitRepo.delete(permit);
     }
 
-    // ---------------- DATE VALIDATION ----------------
+    /* ================= DATE VALIDATION ================= */
+
     private void validatePermitDates(ResidencePermitRequestDTO dto) {
 
         if (dto.getStartDate() == null || dto.getEndDate() == null) {
@@ -95,17 +102,17 @@ public class ResidencePermitService {
         }
 
         if (dto.getStartDate().isAfter(dto.getEndDate())) {
-            throw new IllegalArgumentException(
-                    "Start date must be before end date"
-            );
+            throw new IllegalArgumentException("Start date must be before end date");
         }
     }
 
-    // ---------------- MAPPER ----------------
+    /* ================= MAPPER ================= */
+
     private ResidencePermitResponseDTO toDTO(ResidencePermit p) {
         return ResidencePermitResponseDTO.builder()
                 .id(p.getId())
                 .employeeId(p.getEmployee().getId())
+                .permitIdNumber(p.getPermitIdNumber())
                 .visaType(p.getVisaType())
                 .durationType(p.getDurationType())
                 .visaDuration(p.getVisaDuration())

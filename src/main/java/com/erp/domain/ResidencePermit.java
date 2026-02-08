@@ -6,7 +6,13 @@ import lombok.*;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "employee_residence_permits")
+@Table(
+        name = "employee_residence_permits",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = "employee_id"),
+                @UniqueConstraint(columnNames = "permit_id_number")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,20 +24,25 @@ public class ResidencePermit {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "employee_id", nullable = false, unique = true)
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "employee_id", nullable = false)
     private Employee employee;
 
+    @Column(name = "permit_id_number", nullable = false, length = 50)
+    private String permitIdNumber;
+    @Column(nullable = false)
     private String visaType;
+    @Column(nullable = false)
     private String durationType;
+    @Column(nullable = false)
     private String visaDuration;
-
+    @Column(nullable = false)
     private String nationality;
+    @Column(nullable = false)
     private String occupation;
     private String issuePlace;
     private String issueAuthority;
     private String visaStatus;
-
     private LocalDate startDate;
     private LocalDate endDate;
 }

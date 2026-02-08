@@ -12,6 +12,8 @@ import java.time.LocalDate;
 public class ResidencePermitRequestDTO {
 
     private Long employeeId;
+    @NotBlank(message = "Permit ID number is required")
+    private String permitIdNumber;
 
     @NotBlank(message = "Visa type is required")
     private String visaType;
