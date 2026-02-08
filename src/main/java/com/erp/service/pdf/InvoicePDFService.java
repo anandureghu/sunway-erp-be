@@ -46,6 +46,8 @@ public class InvoicePDFService {
             Context context = new Context();
             context.setVariable("invoice", invoice);
             context.setVariable("company", company);
+            context.setVariable("salesOrder", salesOrder);
+            context.setVariable("purchaseOrder", purchaseOrder);
             context.setVariable("type", invoice.getType());
             context.setVariable("items",
                     invoice.getType().name().equals("SALES")
