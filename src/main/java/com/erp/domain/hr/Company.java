@@ -2,6 +2,7 @@ package com.erp.domain.hr;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.Instant;
 
 @Getter
@@ -22,6 +23,10 @@ public class Company {
 
     @Column(name = "no_of_employees", length = 20)
     private String noOfEmployees;
+
+    @ManyToOne
+    @JoinColumn(name = "currency")
+    private Currency currency;
 
     @Column(name = "cr_no")
     private Long crNo;

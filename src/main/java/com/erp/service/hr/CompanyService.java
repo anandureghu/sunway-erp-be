@@ -1,7 +1,10 @@
 package com.erp.service.hr;
 
 import com.erp.domain.hr.Company;
+import com.erp.domain.hr.Currency;
+import com.erp.dto.hr.CompanyDTO;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.LeavePolicyService;
 import com.erp.service.finance.ChartOfAccountsService;
@@ -18,16 +21,19 @@ public class CompanyService {
     private final AuthContext authContext;
     private final ChartOfAccountsService coaService;
     private final LeavePolicyService leavePolicyService;
+    private final CurrencyRepository currencyRepository;
 
     public CompanyService(
             CompanyRepository companyRepository,
             AuthContext authContext,
             ChartOfAccountsService coaService,
-            LeavePolicyService leavePolicyService) {
+            LeavePolicyService leavePolicyService,
+            CurrencyRepository currencyRepository) {
         this.companyRepository = companyRepository;
         this.authContext = authContext;
         this.coaService = coaService;
         this.leavePolicyService = leavePolicyService;
+        this.currencyRepository = currencyRepository;
     }
 
     // ✅ Only return companies created by the current user
@@ -45,7 +51,24 @@ public class CompanyService {
     }
 
     @Transactional
-    public Company createCompany(Company company) {
+    public Company createCompany(CompanyDTO dto) {
+        Currency currency = currencyRepository.findById(dto.getCurrencyId()).orElseThrow(() -> new RuntimeException("Currency not found"));
+        Company company = Company.builder()
+                .companyName(dto.getCompanyName())
+                .noOfEmployees(dto.getNoOfEmployees())
+                .currency(currency)
+                .crNo(dto.getCrNo())
+                .computerCard(dto.getComputerCard())
+                .street(dto.getStreet())
+                .city(dto.getCity())
+                .state(dto.getState())
+                .country(dto.getCountry())
+                .phoneNo(dto.getPhoneNo())
+                .hrEnabled(dto.isHrEnabled())
+                .financeEnabled(dto.isFinanceEnabled())
+                .inventoryEnabled(dto.isInventoryEnabled())
+                .build();
+
         Long userId = authContext.getCurrentUserId();
         if (userId != null) {
             company.setCreatedBy(String.valueOf(userId));
@@ -72,7 +95,10 @@ public class CompanyService {
         return newCompany;
     }
 
-    public Company updateCompany(Long id, Company updated) {
+    public Company updateCompany(Long id, CompanyDTO updated) {
+
+        Currency currency = currencyRepository.findById(updated.getCurrencyId()).orElseThrow(() -> new RuntimeException("Currency not found"));
+
         Company existing = getCompanyById(id);
         existing.setCompanyName(updated.getCompanyName());
         existing.setNoOfEmployees(updated.getNoOfEmployees());
@@ -83,6 +109,7 @@ public class CompanyService {
         existing.setState(updated.getState());
         existing.setCountry(updated.getCountry());
         existing.setPhoneNo(updated.getPhoneNo());
+        existing.setCurrency(currency);
 
         // If HR is being enabled for the first time, initialize leave policies
         boolean wasHrDisabled = !existing.isHrEnabled();

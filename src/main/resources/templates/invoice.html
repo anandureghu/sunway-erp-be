@@ -12,6 +12,50 @@
             margin: 0;
         }
 
+        /* ===== INVOICE META ===== */
+
+.invoice-meta {
+    display: table;
+    width: 100%;
+    border-bottom: 2px solid #E5E7EB;
+    padding-bottom: 24px;
+    margin-bottom: 30px;
+}
+
+.invoice-meta-col {
+    display: table-cell;
+    width: 33.33%;
+    vertical-align: top;
+    padding-right: 20px;
+}
+
+.meta-title {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #6B7280;
+    margin-bottom: 8px;
+}
+
+.meta-strong {
+    font-weight: 600;
+    color: #111827;
+}
+
+.meta-muted {
+    color: #6B7280;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.meta-status {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #DC2626;
+}
+
+
         body {
             background-color: #FFFFF;
             font-family: Helvetica, Arial, sans-serif;
@@ -251,6 +295,85 @@
                 </td>
             </tr>
         </table>
+    </div>
+
+    <!-- ===== INVOICE META SECTION ===== -->
+    <div class="invoice-meta">
+
+        <!-- BILL TO / SUPPLIER -->
+        <div class="invoice-meta-col">
+            <div class="meta-title"
+                 th:text="${type.name() == 'SALES' ? 'Bill To' : 'Supplier'}">
+                Bill To
+            </div>
+
+            <div th:if="${type.name() == 'SALES'}">
+                <div class="meta-strong"
+                     th:text="${invoice.salesOrder.customerName}">
+                    Customer Name
+                </div>
+                <div class="meta-muted"
+                     th:text="${invoice.salesOrder.customerEmail}">
+                    email@example.com
+                </div>
+                <div class="meta-muted"
+                     th:text="${invoice.salesOrder.customerPhone}">
+                    +1 000 000 0000
+                </div>
+            </div>
+
+            <div class="meta-status">
+                Status:
+                <span th:text="${invoice.status}">UNPAID</span>
+            </div>
+        </div>
+
+        <!-- INVOICE DETAILS -->
+        <div class="invoice-meta-col">
+            <div class="meta-title">Invoice Details</div>
+
+            <div class="meta-muted">
+                Invoice Date:
+                <span th:text="${#temporals.format(invoice.invoiceDate, 'dd/MM/yyyy')}">
+                02/01/2026
+            </span>
+            </div>
+
+            <div class="meta-muted">
+                Due Date:
+                <span th:text="${#temporals.format(invoice.dueDate, 'dd/MM/yyyy')}">
+                27/04/1999
+            </span>
+            </div>
+
+            <div class="meta-muted">
+                Paid Date:
+                <span th:text="${invoice.paidDate != null
+                ? #temporals.format(invoice.paidDate, 'dd/MM/yyyy')
+                : 'N/A'}">
+                N/A
+            </span>
+            </div>
+        </div>
+
+        <!-- REFERENCE -->
+        <div class="invoice-meta-col">
+            <div class="meta-title">Reference</div>
+
+            <div class="meta-strong">
+            <span th:text="${type.name() == 'SALES' ? 'Sales Order ID:' : 'Purchase Order ID:'}">
+                Sales Order ID:
+            </span>
+            </div>
+
+            <div class="meta-muted"
+                 th:text="${type.name() == 'SALES'
+                ? salesOrder.orderNumber
+                : purchaseOrder.orderNumber}">
+                SO-1769921463248
+            </div>
+        </div>
+
     </div>
 
     <!-- BODY -->
