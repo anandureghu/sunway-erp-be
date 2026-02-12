@@ -29,17 +29,24 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     // STANDARD QUERIES
     // ======================================================
 
+    // Get all employees by company
     List<Employee> findByCompanyId(Long companyId);
 
+    // Get paginated employees by company
     Page<Employee> findByCompanyId(Long companyId, Pageable pageable);
 
+    // Find company admin (ADMIN or SUPER_ADMIN)
     Optional<Employee> findByCompanyIdAndUserRoleIn(Long companyId, List<Role> roles);
 
+    // Check if company already has admin
     boolean existsByCompanyIdAndUserRole(Long companyId, Role role);
 
+    // Find employees by department
     List<Employee> findByDepartmentId(Long departmentId);
 
+    // Find employee by linked user
     Optional<Employee> findByUserId(Long userId);
 
+    // Find employees by company entity
     List<Employee> findByCompany(Company company);
 }

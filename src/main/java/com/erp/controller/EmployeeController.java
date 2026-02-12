@@ -136,14 +136,16 @@ public class EmployeeController {
     }
 
     // ======================================================
-    // UPLOAD PROFILE IMAGE
+    // UPLOAD PROFILE IMAGE (AZURE FIXED)
     // ======================================================
     @PostMapping("/{id}/upload-image")
     public ResponseEntity<EmployeeResponseDTO> uploadImage(
             @PathVariable("id") Long id,
             @RequestParam("file") MultipartFile file) {
 
-        return ResponseEntity.ok(employeeService.uploadImage(id, file));
+        return ResponseEntity.ok(
+                employeeService.uploadProfileImage(id, file)
+        );
     }
 
     // ======================================================
