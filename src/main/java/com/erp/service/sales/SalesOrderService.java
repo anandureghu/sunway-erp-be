@@ -110,6 +110,12 @@ public class SalesOrderService {
         }
 
         order.setStatus("CONFIRMED");
+        order.getItems().forEach(i -> {
+            Item item = i.getItem();
+            item.setReserved(i.getQuantity());
+            item.setAvailable(item.getAvailable() - i.getQuantity());
+        });
+        
         return toDTO(repo.save(order));
     }
 
@@ -204,6 +210,9 @@ public class SalesOrderService {
                 .id(so.getId())
                 .orderNumber(so.getOrderNumber())
                 .customerId(so.getCustomer().getId())
+                .customerName(so.getCustomer().getCustomerName())
+                .customerEmail(so.getCustomer().getEmail())
+                .customerPhone(so.getCustomer().getPhoneNo())
                 .orderDate(so.getOrderDate())
                 .status(so.getStatus())
                 .totalAmount(so.getTotalAmount())
@@ -211,9 +220,12 @@ public class SalesOrderService {
                         so.getItems().stream().map(i ->
                                 SalesOrderItemResponseDTO.builder()
                                         .itemId(i.getItem().getId())
+                                        .itemName(i.getItem().getName())
                                         .quantity(i.getQuantity())
                                         .unitPrice(i.getUnitPrice())
                                         .lineTotal(i.getLineTotal())
+                                        .warehouseId(i.getItem().getWarehouse().getId())
+                                        .warehouseName(i.getItem().getWarehouse().getName())
                                         .build()
                         ).toList()
                 )

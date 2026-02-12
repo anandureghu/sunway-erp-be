@@ -66,4 +66,10 @@ public class Transaction {
     @Column(name = "created_by")
     private Long createdBy;
 
+    @Column(name = "related_id")
+    private Long relatedId;
+
+    @Column(name = "related_sub_id")
+    private Long relatedSubId;
+
 }

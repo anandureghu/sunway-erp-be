@@ -1,10 +1,13 @@
 package com.erp.domain.finance;
 
+import com.erp.domain.InvoiceType;
 import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -26,12 +29,15 @@ public class Invoice {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
+    private InvoiceType type;
+    private Long orderId;
+
     private String toParty;
     private String status;
 
-    private Instant invoiceDate;
-    private Instant dueDate;
-    private Instant paidDate;
+    private LocalDate invoiceDate;
+    private LocalDate dueDate;
+    private LocalDate paidDate;
 
     private BigDecimal amount;
     private BigDecimal openAmount;
@@ -53,6 +59,16 @@ public class Invoice {
 
     @Column(name = "created_at")
     private Instant createdAt;
+
+    // GL Account
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "credit_account")
+    private ChartOfAccounts creditAccount;
+
+    // GL Account
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "debit_account")
+    private ChartOfAccounts debitAccount;
 
     @PrePersist
     public void onCreate() {

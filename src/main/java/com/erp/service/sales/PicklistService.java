@@ -146,6 +146,7 @@ public class PicklistService {
                         p.getItems().stream()
                                 .map(i -> PicklistItemDTO.builder()
                                         .itemId(i.getItem().getId())
+                                        .itemName(i.getItem().getName())
                                         .quantity(i.getQuantity())
                                         .build())
                                 .toList()

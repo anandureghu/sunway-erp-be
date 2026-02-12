@@ -32,4 +32,7 @@ public class TransactionResponseDTO {
     private String paymentId;
 
     private String transactionDescription;
+
+    private Long relatedId;
+    private Long relatedSubId;
 }

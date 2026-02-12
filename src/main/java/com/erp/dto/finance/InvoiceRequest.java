@@ -1,19 +1,24 @@
 package com.erp.dto.finance;
 
+import com.erp.domain.InvoiceType;
 import lombok.Data;
+
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.LocalDate;
 
 @Data
 public class InvoiceRequest {
-    private Long companyId;
     private String toParty;
-    private Instant invoiceDate;
-    private Instant dueDate;
+    private LocalDate invoiceDate;
+    private LocalDate dueDate;
     private BigDecimal amount;
     private String itemDescription;
     private String notesRemarks;
     private Integer gracePeriod;
     private BigDecimal interestRate;
     private String partyClassification;
+    private InvoiceType type;
+    private Long orderId;
+    private Long creditAccount;
+    private Long debitAccount;
 }

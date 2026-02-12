@@ -1,6 +1,7 @@
 package com.erp.controller.hr;
 
 import com.erp.domain.hr.Company;
+import com.erp.dto.hr.CompanyDTO;
 import com.erp.service.hr.CompanyService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,14 +30,14 @@ public class CompanyController {
 
     @PostMapping
     public ResponseEntity<Company> createCompany(
-            @RequestBody Company company) {
+            @RequestBody CompanyDTO company) {
 
         Company saved = companyService.createCompany(company);
         return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/{id}")
-    public Company updateCompany(@PathVariable("id") Long id, @RequestBody Company updated) {
+    public Company updateCompany(@PathVariable("id") Long id, @RequestBody CompanyDTO updated) {
         return companyService.updateCompany(id, updated);
     }
 

@@ -1,7 +1,6 @@
 package com.erp.service.finance;
 
 import com.erp.domain.finance.Payment;
-import com.erp.domain.finance.Invoice;
 import com.erp.domain.hr.Company;
 import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
@@ -11,7 +10,6 @@ import com.erp.security.context.AuthContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -21,23 +19,14 @@ public class PaymentService {
     private final PaymentRepository paymentRepo;
     private final CompanyRepository companyRepo;
     private final AuthContext auth;
-    private final InvoiceService invoiceService;
-    private final TransactionService transactionService;
-    private final ChartOfAccountsService coaService;
 
     public PaymentService(PaymentRepository paymentRepo,
                           CompanyRepository companyRepo,
-                          AuthContext auth,
-                          InvoiceService invoiceService,
-                          TransactionService transactionService,
-                          ChartOfAccountsService coaService) {
+                          AuthContext auth) {
 
         this.paymentRepo = paymentRepo;
         this.companyRepo = companyRepo;
         this.auth = auth;
-        this.invoiceService = invoiceService;
-        this.transactionService = transactionService;
-        this.coaService = coaService;
     }
 
     @Transactional
@@ -52,13 +41,13 @@ public class PaymentService {
 //            throw new RuntimeException("Not allowed");
 //        }
 
-        // 2️⃣ Invoice → create or update
-        Invoice invoice;
-        if (dto.getInvoiceId() == null || dto.getInvoiceId().isBlank()) {
-            invoice = invoiceService.autoGenerateInvoice(company, dto.getAmount(), dto.getNotes());
-        } else {
-            invoice = invoiceService.applyPayment(dto.getInvoiceId(), dto.getAmount());
-        }
+//        // 2️⃣ Invoice → create or update
+//        Invoice invoice;
+//        if (dto.getInvoiceId() == null || dto.getInvoiceId().isBlank()) {
+//            invoice = invoiceService.autoGenerateInvoice(company, dto.getAmount(), dto.getNotes());
+//        } else {
+//            invoice = invoiceService.applyPayment(dto.getInvoiceId(), dto.getAmount());
+//        }
 
         // 3️⃣ Payment record
         Payment payment = Payment.builder()
@@ -68,7 +57,7 @@ public class PaymentService {
                 .paymentMethod(dto.getPaymentMethod())
                 .effectiveDate(dto.getEffectiveDate() == null ? LocalDate.now() : dto.getEffectiveDate())
                 .notes(dto.getNotes())
-                .invoiceId(invoice.getInvoiceId())
+                .invoiceId(dto.getInvoiceId())
                 .createdBy(userId)
                 .build();
 
@@ -76,21 +65,21 @@ public class PaymentService {
 
         Payment saved = paymentRepo.save(payment);
 
-        // 4️⃣ Create transaction
-        transactionService.createTransactionForPayment(
-                saved.getId(),
-                company.getId(),
-                dto.getAmount(),
-                coaService.getCompanyBankAccountCode(company.getId()),
-                coaService.getCustomerARAccountCode(company.getId()),
-                saved.getEffectiveDate(),
-                "PAYMENT"
-        );
+//        // 4️⃣TODO: Create transaction
+//        transactionService.createTransactionForPayment(
+//                saved.getId(),
+//                company.getId(),
+//                dto.getAmount(),
+//                coaService.getCompanyBankAccountCode(company.getId()),
+//                coaService.getCustomerARAccountCode(company.getId()),
+//                saved.getEffectiveDate(),
+//                "PAYMENT"
+//        );
 
-        return toDTO(saved, invoice);
+        return toDTO(saved);
     }
 
-    private PaymentResponseDTO toDTO(Payment p, Invoice inv) {
+    private PaymentResponseDTO toDTO(Payment p) {
         return PaymentResponseDTO.builder()
                 .id(p.getId())
                 .paymentCode(p.getPaymentCode())
@@ -98,7 +87,7 @@ public class PaymentService {
                 .amount(p.getAmount())
                 .paymentMethod(p.getPaymentMethod())
                 .effectiveDate(p.getEffectiveDate())
-                .invoiceId(inv.getInvoiceId())
+                .invoiceId(p.getInvoiceId())
                 .pdfUrl(p.getPdfUrl())
                 .createdAt(p.getCreatedAt())
                 .build();
@@ -108,19 +97,18 @@ public class PaymentService {
         Payment p = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
 
-        Invoice inv = invoiceService.getByInvoiceId(p.getInvoiceId());
-        return toDTO(p, inv);
+        return toDTO(p);
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsForCompany(Long companyId) {
         return paymentRepo.findByCompanyId(companyId).stream()
-                .map(p -> toDTO(p, invoiceService.getByInvoiceId(p.getInvoiceId())))
+                .map(this::toDTO)
                 .toList();
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsByInvoice(String invoiceId) {
         return paymentRepo.findByInvoiceId(invoiceId).stream()
-                .map(p -> toDTO(p, invoiceService.getByInvoiceId(invoiceId)))
+                .map(this::toDTO)
                 .toList();
     }
 
