@@ -309,15 +309,15 @@
 
             <div th:if="${type.name() == 'SALES'}">
                 <div class="meta-strong"
-                     th:text="${invoice.salesOrder.customerName}">
+                     th:text="${salesOrder.customerName}">
                     Customer Name
                 </div>
                 <div class="meta-muted"
-                     th:text="${invoice.salesOrder.customerEmail}">
+                     th:text="${salesOrder.customerEmail}">
                     email@example.com
                 </div>
                 <div class="meta-muted"
-                     th:text="${invoice.salesOrder.customerPhone}">
+                     th:text="${salesOrder.customerPhone}">
                     +1 000 000 0000
                 </div>
             </div>
@@ -399,11 +399,11 @@
                 <!-- DESCRIPTION -->
                 <td>
                     <div class="item-title"
-                         th:text="${item.item.name}">
+                         th:text="${item.itemName}">
                         Website Design & Development
                     </div>
                     <div class="item-desc"
-                         th:text="${item.item.description}">
+                         th:text="${item.itemDescription}">
                         Complete redesign of corporate website
                     </div>
                 </td>

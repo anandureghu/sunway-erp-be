@@ -2,12 +2,12 @@ package com.erp.service.pdf;
 
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.hr.Company;
-import com.erp.domain.purchase.PurchaseOrder;
-import com.erp.domain.sales.SalesOrder;
+import com.erp.dto.purchase.PurchaseOrderResponseDTO;
+import com.erp.dto.sales.SalesOrderResponseDTO;
 import com.erp.repo.hr.CompanyRepository;
-import com.erp.repo.purchase.PurchaseOrderRepository;
-import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.purchase.PurchaseOrderService;
+import com.erp.service.sales.SalesOrderService;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,8 +22,8 @@ import java.util.Objects;
 public class InvoicePDFService {
 
     private final TemplateEngine templateEngine;
-    private final SalesOrderRepository salesRepo;
-    private final PurchaseOrderRepository purchaseRepo;
+    private final SalesOrderService salesOrderService;
+    private final PurchaseOrderService purchaseOrderService;
     private final CompanyRepository companyRepository;
     private final AuthContext auth;
 
@@ -32,15 +32,15 @@ public class InvoicePDFService {
 
         try {
 
-            SalesOrder salesOrder = null;
-            PurchaseOrder purchaseOrder = null;
+            SalesOrderResponseDTO salesOrder = null;
+            PurchaseOrderResponseDTO purchaseOrder = null;
 
             Company company = companyRepository.getReferenceById(auth.getCurrentCompanyId());
 
             if (invoice.getType().name().equals("SALES")) {
-                salesOrder = salesRepo.findById(invoice.getOrderId()).orElseThrow(() -> new RuntimeException("no sales order exists"));
+                salesOrder = salesOrderService.get(invoice.getOrderId());
             } else {
-                purchaseOrder = purchaseRepo.findById(invoice.getOrderId()).orElseThrow(() -> new RuntimeException("no purchase order exists"));
+                purchaseOrder = purchaseOrderService.get(invoice.getOrderId());
             }
 
             Context context = new Context();

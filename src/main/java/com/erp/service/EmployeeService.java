@@ -76,10 +76,7 @@ public class EmployeeService {
 
         User authUser = getAuthUser();
 
-        Company company = authUser.getRole() == Role.SUPER_ADMIN
-                ? companyRepository.findById(dto.getCompanyId())
-                .orElseThrow(() -> new RuntimeException("Company not found"))
-                : authUser.getCompany();
+        Company company = authUser.getCompany();
 
         if (company == null) {
             throw new RuntimeException("Company is required");
@@ -144,7 +141,7 @@ public class EmployeeService {
         user.setCompany(company);
         user.setForcePasswordReset(true);
 
-        userRepository.save(user);
+        user = userRepository.save(user);
 
         // -----------------------------
         // Create Employee
