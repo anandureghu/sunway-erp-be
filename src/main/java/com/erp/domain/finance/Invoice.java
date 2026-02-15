@@ -8,6 +8,8 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -75,4 +77,8 @@ public class Invoice {
         if (createdAt == null)
             createdAt = Instant.now();
     }
+
+    @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL)
+    private List<CreditNote> creditNotes = new ArrayList<>();
+
 }
