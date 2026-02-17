@@ -55,7 +55,7 @@ public class EmployeeService {
             EmployeeContactInfoRepository contactInfoRepository,
             CompanyLeavePolicyRepository policyRepo,
             EmployeeLeaveBalanceRepository balanceRepo,
-            LeavePolicyService leavePolicyService, // ✅ Added
+            LeavePolicyService leavePolicyService, 
             AuthContext authContext,
             PasswordEncoder passwordEncoder,
             FileStorageService fileStorageService
@@ -67,7 +67,7 @@ public class EmployeeService {
         this.contactInfoRepository = contactInfoRepository;
         this.policyRepo = policyRepo;
         this.balanceRepo = balanceRepo;
-        this.leavePolicyService = leavePolicyService; // ✅ Added
+        this.leavePolicyService = leavePolicyService; 
         this.authContext = authContext;
         this.passwordEncoder = passwordEncoder;
         this.fileStorageService = fileStorageService;
@@ -81,10 +81,7 @@ public class EmployeeService {
 
         User authUser = getAuthUser();
 
-        Company company = authUser.getRole() == Role.SUPER_ADMIN
-                ? companyRepository.findById(dto.getCompanyId())
-                .orElseThrow(() -> new RuntimeException("Company not found"))
-                : authUser.getCompany();
+        Company company = authUser.getCompany();
 
         Role role = dto.getRole() == null ? Role.USER : dto.getRole();
 
@@ -113,7 +110,8 @@ public class EmployeeService {
         user.setRole(role);
         user.setCompany(company);
         user.setForcePasswordReset(true);
-        userRepository.save(user);
+
+        user = userRepository.save(user);
 
         Employee employee = Employee.builder()
                 .employeeNo(employeeNo)
