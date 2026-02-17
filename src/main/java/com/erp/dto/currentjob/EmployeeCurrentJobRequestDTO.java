@@ -14,6 +14,9 @@ public class EmployeeCurrentJobRequestDTO {
     private String grade;
     private String departmentCode;
     private String departmentName;
+    private String workLocation;
+    private String workCity;
+    private String workCountry;
     private LocalDate effectiveFrom;
     private LocalDate startDate;
     private LocalDate expectedEndDate;

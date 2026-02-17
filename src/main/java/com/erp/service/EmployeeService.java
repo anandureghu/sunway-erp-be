@@ -42,6 +42,7 @@ public class EmployeeService {
     private final EmployeeContactInfoRepository contactInfoRepository;
     private final CompanyLeavePolicyRepository policyRepo;
     private final EmployeeLeaveBalanceRepository balanceRepo;
+    private final LeavePolicyService leavePolicyService; // ✅ Added
     private final AuthContext authContext;
     private final PasswordEncoder passwordEncoder;
     private final FileStorageService fileStorageService;
@@ -54,6 +55,7 @@ public class EmployeeService {
             EmployeeContactInfoRepository contactInfoRepository,
             CompanyLeavePolicyRepository policyRepo,
             EmployeeLeaveBalanceRepository balanceRepo,
+            LeavePolicyService leavePolicyService, // ✅ Added
             AuthContext authContext,
             PasswordEncoder passwordEncoder,
             FileStorageService fileStorageService
@@ -65,6 +67,7 @@ public class EmployeeService {
         this.contactInfoRepository = contactInfoRepository;
         this.policyRepo = policyRepo;
         this.balanceRepo = balanceRepo;
+        this.leavePolicyService = leavePolicyService; // ✅ Added
         this.authContext = authContext;
         this.passwordEncoder = passwordEncoder;
         this.fileStorageService = fileStorageService;
@@ -132,6 +135,9 @@ public class EmployeeService {
 
         employeeRepository.save(employee);
 
+        // ✅ Auto initialize leave balances
+        leavePolicyService.initializeLeaveBalancesForEmployee(employee);
+
         return toDTO(employee);
     }
 
@@ -156,7 +162,7 @@ public class EmployeeService {
     }
 
     // ======================================================
-    // UPLOAD PROFILE IMAGE (AZURE)
+    // UPLOAD PROFILE IMAGE
     // ======================================================
     @Transactional
     public EmployeeResponseDTO uploadProfileImage(Long id, MultipartFile image) {
@@ -183,6 +189,7 @@ public class EmployeeService {
     // ======================================================
     // GET METHODS
     // ======================================================
+
     public EmployeeResponseDTO getEmployeeById(Long id) {
         return toDTO(employeeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found")));
@@ -222,18 +229,14 @@ public class EmployeeService {
         return toDTO(admin);
     }
 
-
     public void syncAllEmployeeLeaveBalances(Long companyId) {
-        // Keep your existing logic if needed
+        // Keep existing logic if needed
     }
 
     public void deleteEmployee(Long id) {
         employeeRepository.deleteById(id);
     }
 
-    // ======================================================
-// GET ALL EMPLOYEES (CURRENT COMPANY)
-// ======================================================
     public List<EmployeeResponseDTO> getEmployees() {
 
         User authUser = getAuthUser();
@@ -248,7 +251,6 @@ public class EmployeeService {
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
-
 
     // ======================================================
     // DTO MAPPER
@@ -288,7 +290,6 @@ public class EmployeeService {
                 .imageUrl(imageUrl)
                 .build();
     }
-
 
     // ======================================================
     // AUTH HELPER

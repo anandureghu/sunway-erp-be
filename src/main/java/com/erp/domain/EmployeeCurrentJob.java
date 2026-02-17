@@ -32,6 +32,10 @@ public class EmployeeCurrentJob {
     private LocalDate effectiveFrom;
     @Setter
     private LocalDate expectedEndDate;
-
-
+    @Setter
+    private String workLocation;
+    @Setter
+    private String workCity;
+    @Setter
+    private String workCountry;
 }

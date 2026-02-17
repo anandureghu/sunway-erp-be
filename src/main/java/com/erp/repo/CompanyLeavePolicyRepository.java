@@ -10,10 +10,27 @@ import java.util.Optional;
 public interface CompanyLeavePolicyRepository
         extends JpaRepository<CompanyLeavePolicy, Long> {
 
+    /* ================= BASIC ================= */
+
     List<CompanyLeavePolicy> findByCompany(Company company);
 
-    Optional<CompanyLeavePolicy> findByCompanyAndLeaveType(
-            Company company, String leaveType);
+    /* ================= ROLE BASED ================= */
 
-    List<CompanyLeavePolicy> findByCompanyAndPaid(Company company, boolean paid);
+    List<CompanyLeavePolicy> findByCompanyAndRole(
+            Company company,
+            String role
+    );
+
+    Optional<CompanyLeavePolicy> findByCompanyAndRoleAndLeaveType(
+            Company company,
+            String role,
+            String leaveType
+    );
+
+    /* ================= OPTIONAL FILTERS ================= */
+
+    List<CompanyLeavePolicy> findByCompanyAndPaid(
+            Company company,
+            boolean paid
+    );
 }

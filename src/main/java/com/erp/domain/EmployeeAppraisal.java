@@ -9,7 +9,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-
 @Entity
 @Table(
         name = "employee_appraisals",
@@ -33,16 +32,12 @@ import java.time.LocalDateTime;
 @Builder
 public class EmployeeAppraisal {
 
-    /* =====================
-       PRIMARY KEY
-    ====================== */
+    /* ================= PRIMARY KEY ================= */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /* =====================
-       RELATIONSHIP
-    ====================== */
+    /* ================= RELATIONSHIP ================= */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
             name = "employee_id",
@@ -51,87 +46,79 @@ public class EmployeeAppraisal {
     )
     private Employee employee;
 
-    /* =====================
-       PERIOD (UI)
-    ====================== */
-    @NotNull
-    @Column(name = "month", nullable = false, length = 20)
-    private String month; // stored lowercase (january, february…)
+    /* ================= PERIOD ================= */
+    @Column(nullable = false, length = 20)
+    private String month;
 
-    @NotNull
-    @Min(1900)
-    @Max(2100)
-    @Column(name = "year", nullable = false)
+    @Column(nullable = false)
     private Integer year;
 
-    /* =====================
-       JOB INFO
-    ====================== */
-    @Column(name = "job_code", length = 50)
+    /* ================= JOB INFO ================= */
     private String jobCode;
 
-    /* =====================
-       KPIs
-    ====================== */
-    @Column(name = "kpi1")
+    /* ================= KPI 1 ================= */
     private String kpi1;
 
-    @Column(name = "review1", columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String review1;
 
-    @Column(name = "kpi2")
+    @Min(1) @Max(5)
+    private Integer rating1;
+
+    /* ================= KPI 2 ================= */
     private String kpi2;
 
-    @Column(name = "review2", columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String review2;
 
-    @Column(name = "kpi3")
+    @Min(1) @Max(5)
+    private Integer rating2;
+
+    /* ================= KPI 3 ================= */
     private String kpi3;
 
-    @Column(name = "review3", columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String review3;
 
-    @Column(name = "kpi4")
+    @Min(1) @Max(5)
+    private Integer rating3;
+
+    /* ================= KPI 4 ================= */
     private String kpi4;
 
-    @Column(name = "review4", columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String review4;
 
-    @Column(name = "kpi5")
+    @Min(1) @Max(5)
+    private Integer rating4;
+
+    /* ================= KPI 5 ================= */
     private String kpi5;
 
-    @Column(name = "review5", columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String review5;
 
-    /* =====================
-       COMMENTS
-    ====================== */
-    @Column(name = "employee_comments", columnDefinition = "TEXT")
+    @Min(1) @Max(5)
+    private Integer rating5;
+
+    /* ================= CALCULATED ================= */
+    private Double overallPerformance;   // average of rating1–rating5
+
+    /* ================= COMMENTS ================= */
+    @Column(columnDefinition = "TEXT")
     private String employeeComments;
 
-    @Column(name = "manager_comments", columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String managerComments;
 
-    /* =====================
-       RATING / INCREMENT
-    ====================== */
-    @Min(1)
-    @Max(5)
-    @Column(name = "rating")
-    private Integer rating;
-
-    @Min(0)
-    @Column(name = "annual_increment")
+    /* ================= INCREMENT ================= */
     private Integer annualIncrement;
 
-    /* =====================
-       AUDIT
-    ====================== */
+    /* ================= AUDIT ================= */
     @CreationTimestamp
-    @Column(name = "created_date", updatable = false)
+    @Column(updatable = false)
     private LocalDateTime createdDate;
 
     @UpdateTimestamp
-    @Column(name = "updated_date")
     private LocalDateTime updatedDate;
 }

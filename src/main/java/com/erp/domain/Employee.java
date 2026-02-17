@@ -5,7 +5,6 @@ import com.erp.domain.hr.Department;
 import jakarta.persistence.*;
 import lombok.*;
 
-
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -34,6 +33,9 @@ public class Employee {
     @Column(length = 20)
     private String prefix;
 
+    /**
+     * MALE | FEMALE | OTHER
+     */
     @Column(length = 20)
     private String gender;
 
@@ -57,6 +59,8 @@ public class Employee {
     @Column(name = "image_url")
     private String imageUrl;
 
+    /* ================= RELATIONS ================= */
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
@@ -65,6 +69,9 @@ public class Employee {
     @JoinColumn(name = "department_id")
     private Department department;
 
+    /**
+     * Role comes from User entity
+     */
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", unique = true)
     private User user;
@@ -77,6 +84,8 @@ public class Employee {
     )
     private EmployeeContactInfo contactInfo;
 
+    /* ================= AUDIT ================= */
+
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
@@ -87,6 +96,7 @@ public class Employee {
     void onCreate() {
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
+
         if (this.status == null) {
             this.status = EmployeeStatus.ACTIVE;
         }
@@ -97,7 +107,8 @@ public class Employee {
         this.updatedAt = Instant.now();
     }
 
-    // helpers
+    /* ================= HELPER METHODS ================= */
+
     public String getPhoneNo() {
         return contactInfo != null ? contactInfo.getPhone() : null;
     }
@@ -109,4 +120,14 @@ public class Employee {
     public String getEmail() {
         return user != null ? user.getEmail() : null;
     }
+
+    /**
+     * Returns role from linked User entity
+     */
+    public String getRole() {
+        return user != null && user.getRole() != null
+                ? user.getRole().name()
+                : null;
+    }
+
 }

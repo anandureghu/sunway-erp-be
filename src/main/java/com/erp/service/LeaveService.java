@@ -28,7 +28,38 @@ public class LeaveService {
     private final EmployeeLeaveBalanceRepository balanceRepo;
     private final EmployeeLeaveRepository leaveRepo;
 
-    /* ================= PREVIEW ================= */
+    /* =====================================================
+       GET AVAILABLE LEAVE TYPES (ROLE + GENDER BASED)
+    ===================================================== */
+
+    public List<String> getAvailableLeaveTypes(Long employeeId) {
+
+        Employee emp = getEmployee(employeeId);
+
+        if (emp.getRole() == null) return List.of();
+
+        return policyRepo.findByCompanyAndRole(
+                        emp.getCompany(),
+                        emp.getRole()
+                ).stream()
+                .filter(policy -> {
+
+                    // Gender restriction check
+                    if (Boolean.TRUE.equals(policy.getGenderRestricted())) {
+                        return emp.getGender() != null &&
+                                emp.getGender()
+                                        .equalsIgnoreCase(policy.getAllowedGender());
+                    }
+
+                    return true;
+                })
+                .map(CompanyLeavePolicy::getLeaveType)
+                .toList();
+    }
+
+    /* =====================================================
+       PREVIEW LEAVE
+    ===================================================== */
 
     public LeavePreviewDTO previewLeave(
             Long employeeId,
@@ -36,27 +67,18 @@ public class LeaveService {
             LocalDate startDate,
             LocalDate endDate) {
 
-        if (leaveType == null || startDate == null || endDate == null) {
-            throw new IllegalArgumentException("Leave type and dates are required");
-        }
+        validateDates(leaveType, startDate, endDate);
 
-        if (endDate.isBefore(startDate)) {
-            throw new IllegalArgumentException("End date cannot be before start date");
-        }
+        Employee emp = getEmployee(employeeId);
 
-        Employee emp = employeeRepo.findById(employeeId)
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        int totalDays = calculateDays(startDate, endDate);
 
-        int totalDays =
-                (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
+        CompanyLeavePolicy policy = getPolicy(emp, leaveType);
 
-        CompanyLeavePolicy policy =
-                policyRepo.findByCompanyAndLeaveType(
-                                emp.getCompany(), leaveType)
-                        .orElseThrow(() -> new RuntimeException("Leave policy not configured"));
+        validateGender(policy, emp);
 
-        // UNPAID / EMERGENCY (no balance deduction)
-        if (!policy.isPaid()) {
+        // UNPAID LEAVE → no balance required
+        if (!Boolean.TRUE.equals(policy.getPaid())) {
             return new LeavePreviewDTO(
                     totalDays,
                     0,
@@ -65,11 +87,10 @@ public class LeaveService {
         }
 
         EmployeeLeaveBalance balance =
-                balanceRepo.findByEmployeeAndLeaveType(emp, leaveType)
-                        .orElseThrow(() ->
-                                new RuntimeException("Leave balance not initialized"));
+                getOrCreateBalance(emp, policy);
 
-        int remainingAfter = balance.getRemainingLeaves() - totalDays;
+        int remainingAfter =
+                balance.getRemainingLeaves() - totalDays;
 
         if (remainingAfter < 0) {
             throw new RuntimeException("Insufficient leave balance");
@@ -82,42 +103,35 @@ public class LeaveService {
         );
     }
 
-    /* ================= APPLY (AUTO APPROVE) ================= */
+    /* =====================================================
+       APPLY LEAVE
+    ===================================================== */
 
     @Transactional
-    public LeaveHistoryDTO applyLeave(Long employeeId, LeaveRequestDTO dto) {
+    public LeaveHistoryDTO applyLeave(Long employeeId,
+                                      LeaveRequestDTO dto) {
 
-        if (dto.getLeaveType() == null
-                || dto.getStartDate() == null
-                || dto.getEndDate() == null) {
-            throw new IllegalArgumentException("Leave type and dates are required");
-        }
+        validateDates(
+                dto.getLeaveType(),
+                dto.getStartDate(),
+                dto.getEndDate());
 
-        if (dto.getEndDate().isBefore(dto.getStartDate())) {
-            throw new IllegalArgumentException("End date cannot be before start date");
-        }
-
-        Employee emp = employeeRepo.findById(employeeId)
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        Employee emp = getEmployee(employeeId);
 
         int totalDays =
-                (int) ChronoUnit.DAYS.between(
-                        dto.getStartDate(), dto.getEndDate()) + 1;
+                calculateDays(dto.getStartDate(),
+                        dto.getEndDate());
 
         CompanyLeavePolicy policy =
-                policyRepo.findByCompanyAndLeaveType(
-                                emp.getCompany(), dto.getLeaveType())
-                        .orElseThrow(() ->
-                                new RuntimeException("Leave policy not configured"));
+                getPolicy(emp, dto.getLeaveType());
 
-        // PAID LEAVES → deduct balance
-        if (policy.isPaid()) {
+        validateGender(policy, emp);
+
+        // Paid Leave → Deduct Balance
+        if (Boolean.TRUE.equals(policy.getPaid())) {
 
             EmployeeLeaveBalance balance =
-                    balanceRepo.findByEmployeeAndLeaveType(
-                                    emp, dto.getLeaveType())
-                            .orElseThrow(() ->
-                                    new RuntimeException("Leave balance not initialized"));
+                    getOrCreateBalance(emp, policy);
 
             if (balance.getRemainingLeaves() < totalDays) {
                 throw new RuntimeException("Insufficient leave balance");
@@ -129,7 +143,7 @@ public class LeaveService {
             balanceRepo.save(balance);
         }
 
-        // SAVE HISTORY (AUTO APPROVED)
+        // Save Leave Record
         EmployeeLeave leave = new EmployeeLeave();
         leave.setEmployee(emp);
         leave.setLeaveCode("L" + System.currentTimeMillis());
@@ -141,30 +155,118 @@ public class LeaveService {
         leave.setLeaveStatus("APPROVED");
 
         leaveRepo.save(leave);
-        return null;
+
+        return mapToHistoryDTO(leave);
     }
 
-    /* ================= HISTORY ================= */
+    /* =====================================================
+       HISTORY
+    ===================================================== */
 
     public List<LeaveHistoryDTO> history(Long employeeId) {
 
-        employeeRepo.findById(employeeId)
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        getEmployee(employeeId);
 
         return leaveRepo
                 .findByEmployeeIdOrderByDateReportedDesc(employeeId)
                 .stream()
-                .map(l -> {
-                    LeaveHistoryDTO dto = new LeaveHistoryDTO();
-                    dto.setLeaveCode(l.getLeaveCode());
-                    dto.setLeaveType(l.getLeaveType());
-                    dto.setStartDate(l.getStartDate());
-                    dto.setEndDate(l.getEndDate());
-                    dto.setDateReported(l.getDateReported());
-                    dto.setTotalDays(l.getTotalDays());
-                    dto.setLeaveStatus(l.getLeaveStatus());
-                    return dto;
-                })
+                .map(this::mapToHistoryDTO)
                 .toList();
+    }
+
+    /* =====================================================
+       PRIVATE HELPERS
+    ===================================================== */
+
+    private Employee getEmployee(Long id) {
+        return employeeRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+    }
+
+    private int calculateDays(LocalDate start, LocalDate end) {
+        return (int) ChronoUnit.DAYS.between(start, end) + 1;
+    }
+
+    private void validateDates(String leaveType,
+                               LocalDate start,
+                               LocalDate end) {
+
+        if (leaveType == null || start == null || end == null) {
+            throw new IllegalArgumentException("Leave type and dates are required");
+        }
+
+        if (end.isBefore(start)) {
+            throw new IllegalArgumentException("End date cannot be before start date");
+        }
+    }
+
+    private CompanyLeavePolicy getPolicy(Employee emp,
+                                         String leaveType) {
+
+        return policyRepo
+                .findByCompanyAndRoleAndLeaveType(
+                        emp.getCompany(),
+                        emp.getRole(),
+                        leaveType)
+                .orElseThrow(() ->
+                        new RuntimeException("Leave policy not configured for your role"));
+    }
+
+    private void validateGender(CompanyLeavePolicy policy,
+                                Employee emp) {
+
+        if (Boolean.TRUE.equals(policy.getGenderRestricted())) {
+
+            if (emp.getGender() == null ||
+                    !emp.getGender()
+                            .equalsIgnoreCase(policy.getAllowedGender())) {
+
+                throw new RuntimeException(
+                        "This leave type is not allowed for your gender");
+            }
+        }
+    }
+
+    /*
+       🔥 AUTO CREATE BALANCE IF MISSING
+    */
+    private EmployeeLeaveBalance getOrCreateBalance(
+            Employee emp,
+            CompanyLeavePolicy policy) {
+
+        return balanceRepo
+                .findByEmployeeAndLeaveType(
+                        emp,
+                        policy.getLeaveType())
+                .orElseGet(() -> {
+
+                    EmployeeLeaveBalance newBalance =
+                            new EmployeeLeaveBalance();
+
+                    newBalance.setEmployee(emp);
+                    newBalance.setLeaveType(policy.getLeaveType());
+                    newBalance.setTotalLeaves(policy.getDefaultDays());
+                    newBalance.setRemainingLeaves(policy.getDefaultDays());
+
+                    return balanceRepo.save(newBalance);
+                });
+    }
+
+    private LeaveHistoryDTO mapToHistoryDTO(Employee leave) {
+        return null;
+    }
+
+    private LeaveHistoryDTO mapToHistoryDTO(EmployeeLeave leave) {
+
+        LeaveHistoryDTO dto = new LeaveHistoryDTO();
+        dto.setLeaveCode(leave.getLeaveCode());
+        dto.setLeaveType(leave.getLeaveType());
+        dto.setStartDate(leave.getStartDate());
+        dto.setEndDate(leave.getEndDate());
+        dto.setDateReported(leave.getDateReported());
+        dto.setTotalDays(leave.getTotalDays());
+        dto.setLeaveStatus(leave.getLeaveStatus());
+
+        return dto;
     }
 }
