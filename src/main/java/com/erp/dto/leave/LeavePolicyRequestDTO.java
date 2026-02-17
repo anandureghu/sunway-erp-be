@@ -4,7 +4,13 @@ import lombok.Data;
 
 @Data
 public class LeavePolicyRequestDTO {
+
+    private String role;
     private String leaveType;
-    private boolean paid;
-    private int defaultDays;
+
+    private Boolean paid;
+    private Integer defaultDays;
+
+    private Boolean genderRestricted;
+    private String allowedGender;
 }

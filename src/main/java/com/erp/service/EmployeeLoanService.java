@@ -68,6 +68,7 @@ public class EmployeeLoanService {
         loan.setEndDate(endDate);
         loan.setStatus("ACTIVE");
         loan.setNotes(dto.getNotes());
+
         loan = loanRepo.save(loan);
         return toDTO(loan);
     }
@@ -97,6 +98,7 @@ public class EmployeeLoanService {
         LocalDate endDate = dto.getStartDate().plusMonths(dto.getLoanPeriod());
         loan.setEndDate(endDate);
         loan.setNotes(dto.getNotes());
+
         loan = loanRepo.save(loan);
         return toDTO(loan);
     }
@@ -174,6 +176,7 @@ public class EmployeeLoanService {
     private LoanResponseDTO toDTO(EmployeeLoan loan) {
 
         LoanResponseDTO dto = new LoanResponseDTO();
+
         dto.setId(loan.getId());
         dto.setLoanCode(loan.getLoanCode());
         dto.setLoanType(loan.getLoanType());
@@ -190,6 +193,17 @@ public class EmployeeLoanService {
         if (employee != null) {
             dto.setEmployeeId(employee.getId());
             dto.setEmployeeName(employee.getFirstName() + " " + employee.getLastName());
+
+            // 🔥 ADD CURRENCY FROM COMPANY
+            if (employee.getCompany() != null &&
+                    employee.getCompany().getCurrency() != null) {
+
+                dto.setCurrencyCode(
+                        employee.getCompany().getCurrency().getCurrencyCode());
+
+                dto.setCurrencySymbol(
+                        employee.getCompany().getCurrency().getCurrencySymbol());
+            }
         }
 
         return dto;

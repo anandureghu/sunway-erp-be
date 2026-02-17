@@ -33,4 +33,8 @@ public class SalaryResponseDTO {
     private String status; // ACTIVE / INACTIVE
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;
+
+    /* ================= CURRENCY (NEW) ================= */
+    private String currencyCode;
+    private String currencySymbol;
 }

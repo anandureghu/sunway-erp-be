@@ -9,6 +9,7 @@ import com.erp.repo.EmployeeRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+
 @Service
 public class EmployeeCompensationService {
 
@@ -42,7 +43,6 @@ public class EmployeeCompensationService {
 
         mapAndCalculate(c, dto);
 
-        // default status
         c.setStatus("ACTIVE");
 
         compensationRepo.save(c);
@@ -78,6 +78,14 @@ public class EmployeeCompensationService {
         if (c == null) return null;
 
         SalaryResponseDTO dto = new SalaryResponseDTO();
+
+        // 🔥 CURRENCY FROM COMPANY
+        dto.setCurrencyCode(
+                employee.getCompany().getCurrency().getCurrencyCode());
+
+        dto.setCurrencySymbol(
+                employee.getCompany().getCurrency().getCurrencySymbol());
+
         dto.setBasicSalary(c.getBasicSalary());
 
         dto.setHousingType(c.getHousingType());
@@ -109,7 +117,7 @@ public class EmployeeCompensationService {
 
         c.setBasicSalary(dto.getBasicSalary());
 
-        // ---------------- HOUSING ----------------
+        // HOUSING
         BenefitType housingType = defaultType(dto.getHousingType());
         c.setHousingType(housingType);
         c.setHousingAllowance(
@@ -118,7 +126,7 @@ public class EmployeeCompensationService {
                         : 0.0
         );
 
-        // ---------------- TRANSPORT ----------------
+        // TRANSPORT
         BenefitType transportType = defaultType(dto.getTransportationType());
         c.setTransportationType(transportType);
         c.setTransportationAllowance(
@@ -127,7 +135,7 @@ public class EmployeeCompensationService {
                         : 0.0
         );
 
-        // ---------------- TRAVEL ----------------
+        // TRAVEL
         BenefitType travelType = defaultType(dto.getTravelType());
         c.setTravelType(travelType);
         c.setTravelAllowance(
@@ -136,10 +144,10 @@ public class EmployeeCompensationService {
                         : 0.0
         );
 
-        // ---------------- OTHER ----------------
+        // OTHER
         c.setOtherAllowance(safe(dto.getOtherAllowance()));
 
-        // ---------------- TOTAL ----------------
+        // TOTAL
         double total =
                 c.getBasicSalary()
                         + c.getHousingAllowance()
@@ -149,7 +157,6 @@ public class EmployeeCompensationService {
 
         c.setTotalCompensation(total);
 
-        // ---------------- META ----------------
         c.setStatus(dto.getStatus() != null ? dto.getStatus() : "ACTIVE");
         c.setEffectiveFrom(dto.getEffectiveFrom());
         c.setEffectiveTo(dto.getEffectiveTo());

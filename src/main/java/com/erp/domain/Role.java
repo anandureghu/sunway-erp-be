@@ -1,2 +1,3 @@
 package com.erp.domain;
-public enum Role { ADMIN, HR, USER, SUPER_ADMIN }
+public enum Role { ADMIN, HR, USER, SUPER_ADMIN, FINANCE_MANAGER, ACCOUNTANT, AP_AR_CLERK
+,CONTROLLER, AUDITOR_EXTERNAL}

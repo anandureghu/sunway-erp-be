@@ -19,39 +19,80 @@ public class EmployeeLeaveController {
 
     private final LeaveService leaveService;
 
-    /* ========= GET LEAVE INFO (for page load) ========= */
+    /* =====================================================
+       GET AVAILABLE LEAVE TYPES (ROLE + GENDER BASED)
+    ===================================================== */
+
+    @GetMapping("/available-types")
+    public ResponseEntity<List<String>> getAvailableLeaveTypes(
+            @PathVariable("employeeId") Long employeeId) {
+
+        return ResponseEntity.ok(
+                leaveService.getAvailableLeaveTypes(employeeId)
+        );
+    }
+
+    /* =====================================================
+       GET ALL LEAVES (PAGE LOAD)
+    ===================================================== */
+
     @GetMapping
     public ResponseEntity<List<LeaveHistoryDTO>> getLeaves(
             @PathVariable("employeeId") Long employeeId) {
-        return ResponseEntity.ok(leaveService.history(employeeId));
+
+        return ResponseEntity.ok(
+                leaveService.history(employeeId)
+        );
     }
+
+    /* =====================================================
+       PREVIEW LEAVE
+    ===================================================== */
 
     @GetMapping("/preview")
     public ResponseEntity<LeavePreviewDTO> preview(
             @PathVariable("employeeId") Long employeeId,
             @RequestParam("leaveType") String leaveType,
-            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+            @RequestParam("startDate")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate startDate,
+            @RequestParam("endDate")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate endDate
     ) {
+
         return ResponseEntity.ok(
                 leaveService.previewLeave(employeeId, leaveType, startDate, endDate)
         );
     }
+
+    /* =====================================================
+       APPLY LEAVE
+    ===================================================== */
 
     @PostMapping
     public ResponseEntity<LeaveHistoryDTO> apply(
             @PathVariable("employeeId") Long employeeId,
             @RequestBody LeaveRequestDTO dto
     ) {
-        LeaveHistoryDTO result = leaveService.applyLeave(employeeId, dto);
+
+        LeaveHistoryDTO result =
+                leaveService.applyLeave(employeeId, dto);
+
         return ResponseEntity.ok(result);
     }
+
+    /* =====================================================
+       LEAVE HISTORY
+    ===================================================== */
 
     @GetMapping("/history")
     public ResponseEntity<List<LeaveHistoryDTO>> history(
             @PathVariable("employeeId") Long employeeId
     ) {
-        return ResponseEntity.ok(leaveService.history(employeeId));
-    }
 
+        return ResponseEntity.ok(
+                leaveService.history(employeeId)
+        );
+    }
 }

@@ -16,43 +16,36 @@ public class LeavePolicyController {
 
     private final LeavePolicyService service;
 
-    /* ========= INITIALIZE DEFAULT POLICIES (One-time setup) ========= */
-    @PostMapping("/initialize")
-    public ResponseEntity<Void> initializeDefaults(
-            @PathVariable("companyId") Long companyId) {
-        service.initializeDefaultPoliciesForCompany(companyId);
-        return ResponseEntity.ok().build();
-    }
-
-    /* ========= GET ALL POLICIES ========= */
+    /* =====================================================
+       GET ALL POLICIES FOR COMPANY
+    ===================================================== */
     @GetMapping
     public ResponseEntity<List<LeavePolicyResponseDTO>> getAll(
             @PathVariable("companyId") Long companyId) {
+
         return ResponseEntity.ok(service.getAllPolicies(companyId));
     }
 
-    /* ========= CREATE NEW POLICY ========= */
-    @PostMapping
-    public ResponseEntity<LeavePolicyResponseDTO> create(
+    /* =====================================================
+       BULK SAVE POLICIES
+    ===================================================== */
+    @PostMapping("/bulk")
+    public ResponseEntity<Void> saveBulkPolicies(
             @PathVariable("companyId") Long companyId,
-            @RequestBody LeavePolicyRequestDTO dto) {
-        return ResponseEntity.ok(service.createPolicy(companyId, dto));
+            @RequestBody List<LeavePolicyRequestDTO> dtos) {
+
+        service.savePolicies(companyId, dtos);
+        return ResponseEntity.ok().build();
     }
 
-    /* ========= UPDATE POLICY ========= */
-    @PutMapping("/{policyId}")
-    public ResponseEntity<LeavePolicyResponseDTO> update(
-            @PathVariable("companyId") Long companyId,
-            @PathVariable("policyId") Long policyId,
-            @RequestBody LeavePolicyRequestDTO dto) {
-        return ResponseEntity.ok(service.updatePolicy(policyId, dto));
-    }
-
-    /* ========= DELETE POLICY ========= */
+    /* =====================================================
+       DELETE POLICY
+    ===================================================== */
     @DeleteMapping("/{policyId}")
     public ResponseEntity<Void> delete(
             @PathVariable("companyId") Long companyId,
             @PathVariable("policyId") Long policyId) {
+
         service.deletePolicy(policyId);
         return ResponseEntity.noContent().build();
     }

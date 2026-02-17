@@ -1,4 +1,5 @@
 package com.erp.service;
+
 import com.erp.domain.CompanyLeavePolicy;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLeaveBalance;
@@ -13,7 +14,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,8 +26,12 @@ public class LeavePolicyService {
     private final EmployeeRepository employeeRepo;
     private final EmployeeLeaveBalanceRepository balanceRepo;
 
-    /* ========= GET ALL POLICIES ========= */
+    /* =====================================================
+       GET ALL POLICIES
+    ===================================================== */
+
     public List<LeavePolicyResponseDTO> getAllPolicies(Long companyId) {
+
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
@@ -35,169 +41,198 @@ public class LeavePolicyService {
                 .toList();
     }
 
-    /* ========= CREATE NEW POLICY ========= */
+    /* =====================================================
+       SAVE / UPDATE POLICIES
+    ===================================================== */
+
     @Transactional
-    public LeavePolicyResponseDTO createPolicy(Long companyId, LeavePolicyRequestDTO dto) {
+    public void savePolicies(Long companyId,
+                             List<LeavePolicyRequestDTO> dtos) {
+
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        // Check if policy already exists
-        if (policyRepo.findByCompanyAndLeaveType(company, dto.getLeaveType()).isPresent()) {
-            throw new RuntimeException("Leave policy already exists for this type");
-        }
+        if (dtos == null || dtos.isEmpty())
+            return;
 
-        CompanyLeavePolicy policy = new CompanyLeavePolicy();
-        policy.setCompany(company);
-        policy.setLeaveType(dto.getLeaveType());
-        policy.setPaid(dto.isPaid());
-        policy.setDefaultDays(dto.getDefaultDays());
+        // Remove duplicates from request
+        Map<String, LeavePolicyRequestDTO> unique =
+                dtos.stream()
+                        .filter(dto -> dto.getRole() != null && dto.getLeaveType() != null)
+                        .collect(Collectors.toMap(
+                                dto -> dto.getRole().trim() + "_" + dto.getLeaveType().trim(),
+                                dto -> dto,
+                                (existing, duplicate) -> duplicate
+                        ));
 
-        policy = policyRepo.save(policy);
+        for (LeavePolicyRequestDTO dto : unique.values()) {
 
-        // If it's a paid leave, initialize balances for all existing employees
-        if (dto.isPaid()) {
-            initializeBalancesForAllEmployees(company, policy);
-        }
+            String role = dto.getRole().trim();
+            String leaveType = dto.getLeaveType().trim();
 
-        return toDTO(policy);
-    }
+            CompanyLeavePolicy policy =
+                    policyRepo.findByCompanyAndRoleAndLeaveType(company, role, leaveType)
+                            .orElseGet(() -> {
+                                CompanyLeavePolicy p = new CompanyLeavePolicy();
+                                p.setCompany(company);
+                                p.setRole(role);
+                                p.setLeaveType(leaveType);
+                                return p;
+                            });
 
-    /* ========= UPDATE EXISTING POLICY ========= */
-    @Transactional
-    public LeavePolicyResponseDTO updatePolicy(Long policyId, LeavePolicyRequestDTO dto) {
-        CompanyLeavePolicy policy = policyRepo.findById(policyId)
-                .orElseThrow(() -> new RuntimeException("Leave policy not found"));
+            policy.setDefaultDays(dto.getDefaultDays() != null ? dto.getDefaultDays() : 0);
+            policy.setPaid(dto.getPaid() != null ? dto.getPaid() : true);
+            policy.setGenderRestricted(dto.getGenderRestricted() != null ? dto.getGenderRestricted() : false);
+            policy.setAllowedGender(dto.getAllowedGender());
 
-        boolean wasUnpaid = !policy.isPaid();
-        boolean nowPaid = dto.isPaid();
+            policyRepo.save(policy);
 
-        int oldDefaultDays = policy.getDefaultDays();
-        int newDefaultDays = dto.getDefaultDays();
-
-        // Update policy
-        policy.setLeaveType(dto.getLeaveType());
-        policy.setPaid(dto.isPaid());
-        policy.setDefaultDays(dto.getDefaultDays());
-        policy = policyRepo.save(policy);
-
-        // Handle balance updates
-        if (wasUnpaid && nowPaid) {
-            // Changed from unpaid to paid - create balances for all employees
-            initializeBalancesForAllEmployees(policy.getCompany(), policy);
-        } else if (!wasUnpaid && !nowPaid) {
-            // Still paid - update existing balances if default days changed
-            if (oldDefaultDays != newDefaultDays) {
-                updateExistingBalances(policy.getCompany(), policy, oldDefaultDays, newDefaultDays);
-            }
-        } else if (!wasUnpaid && nowPaid) {
-            // Changed from paid to unpaid - optionally delete balances
-            deleteBalancesForLeaveType(policy.getCompany(), policy.getLeaveType());
-        }
-
-        return toDTO(policy);
-    }
-
-    /* ========= DELETE POLICY ========= */
-    @Transactional
-    public void deletePolicy(Long policyId) {
-        CompanyLeavePolicy policy = policyRepo.findById(policyId)
-                .orElseThrow(() -> new RuntimeException("Leave policy not found"));
-
-        // Delete all employee balances for this leave type
-        deleteBalancesForLeaveType(policy.getCompany(), policy.getLeaveType());
-
-        // Delete the policy
-        policyRepo.delete(policy);
-    }
-
-    /* ========= INITIALIZE DEFAULT POLICIES ========= */
-    @Transactional
-    public void initializeDefaultPoliciesForCompany(Long companyId) {
-        Company company = companyRepo.findById(companyId)
-                .orElseThrow(() -> new RuntimeException("Company not found"));
-
-        // Check if policies already exist
-        List<CompanyLeavePolicy> existing = policyRepo.findByCompany(company);
-        if (!existing.isEmpty()) {
-            throw new RuntimeException("Leave policies already configured for this company");
-        }
-
-        // Create default policies
-        createDefaultPolicy(company, "Annual Leave", true, 20);
-        createDefaultPolicy(company, "Sick Leave", true, 10);
-        createDefaultPolicy(company, "Casual Leave", true, 5);
-        createDefaultPolicy(company, "Emergency Leave", false, 0);
-        createDefaultPolicy(company, "Unpaid Leave", false, 0);
-    }
-
-    /* ========= HELPER METHODS ========= */
-
-    private void createDefaultPolicy(Company company, String leaveType, boolean isPaid, int defaultDays) {
-        CompanyLeavePolicy policy = new CompanyLeavePolicy();
-        policy.setCompany(company);
-        policy.setLeaveType(leaveType);
-        policy.setPaid(isPaid);
-        policy.setDefaultDays(defaultDays);
-        policy = policyRepo.save(policy);
-
-        if (isPaid) {
-            initializeBalancesForAllEmployees(company, policy);
+            // Sync balances after every update
+            syncBalances(company, policy);
         }
     }
 
-    private void initializeBalancesForAllEmployees(Company company, CompanyLeavePolicy policy) {
+    /* =====================================================
+       SYNC BALANCES
+    ===================================================== */
+
+    private void syncBalances(Company company, CompanyLeavePolicy policy) {
+
+        if (!Boolean.TRUE.equals(policy.getPaid()))
+            return;
+
         List<Employee> employees = employeeRepo.findByCompany(company);
 
         for (Employee employee : employees) {
-            // Check if balance already exists
-            if (balanceRepo.findByEmployeeAndLeaveType(employee, policy.getLeaveType()).isEmpty()) {
+
+            if (employee.getRole() == null ||
+                    !employee.getRole().equals(policy.getRole()))
+                continue;
+
+            // Gender restriction check
+            if (Boolean.TRUE.equals(policy.getGenderRestricted())) {
+                if (employee.getGender() == null ||
+                        !employee.getGender()
+                                .equalsIgnoreCase(policy.getAllowedGender()))
+                    continue;
+            }
+
+            Optional<EmployeeLeaveBalance> optional =
+                    balanceRepo.findByEmployeeAndLeaveType(employee, policy.getLeaveType());
+
+            int newTotal = policy.getDefaultDays();
+
+            if (optional.isPresent()) {
+
+                EmployeeLeaveBalance balance = optional.get();
+
+                int used = balance.getTotalLeaves() - balance.getRemainingLeaves();
+
+                balance.setTotalLeaves(newTotal);
+
+                int recalculatedRemaining = newTotal - used;
+                balance.setRemainingLeaves(Math.max(recalculatedRemaining, 0));
+
+                balanceRepo.save(balance);
+
+            } else {
+
                 EmployeeLeaveBalance balance = new EmployeeLeaveBalance();
                 balance.setEmployee(employee);
                 balance.setLeaveType(policy.getLeaveType());
-                balance.setTotalLeaves(policy.getDefaultDays());
-                balance.setRemainingLeaves(policy.getDefaultDays());
+                balance.setTotalLeaves(newTotal);
+                balance.setRemainingLeaves(newTotal);
+
                 balanceRepo.save(balance);
             }
         }
     }
 
-    private void updateExistingBalances(Company company, CompanyLeavePolicy policy,
-                                        int oldDefaultDays, int newDefaultDays) {
-        List<Employee> employees = employeeRepo.findByCompany(company);
-        int difference = newDefaultDays - oldDefaultDays;
+    /* =====================================================
+       INITIALIZE FOR NEW EMPLOYEE
+    ===================================================== */
 
-        for (Employee employee : employees) {
-            balanceRepo.findByEmployeeAndLeaveType(employee, policy.getLeaveType())
-                    .ifPresent(balance -> {
-                        // Add/subtract the difference to both total and remaining
-                        balance.setTotalLeaves(balance.getTotalLeaves() + difference);
-                        balance.setRemainingLeaves(balance.getRemainingLeaves() + difference);
+    @Transactional
+    public void initializeLeaveBalancesForEmployee(Employee employee) {
 
-                        // Ensure remaining doesn't go negative
-                        if (balance.getRemainingLeaves() < 0) {
-                            balance.setRemainingLeaves(0);
-                        }
+        if (employee.getRole() == null)
+            return;
 
-                        balanceRepo.save(balance);
-                    });
+        Company company = employee.getCompany();
+
+        List<CompanyLeavePolicy> policies =
+                policyRepo.findByCompanyAndRole(company, employee.getRole());
+
+        for (CompanyLeavePolicy policy : policies) {
+
+            if (!Boolean.TRUE.equals(policy.getPaid()))
+                continue;
+
+            if (Boolean.TRUE.equals(policy.getGenderRestricted())) {
+                if (employee.getGender() == null ||
+                        !employee.getGender()
+                                .equalsIgnoreCase(policy.getAllowedGender()))
+                    continue;
+            }
+
+            if (balanceRepo.findByEmployeeAndLeaveType(
+                    employee, policy.getLeaveType()).isEmpty()) {
+
+                EmployeeLeaveBalance balance = new EmployeeLeaveBalance();
+                balance.setEmployee(employee);
+                balance.setLeaveType(policy.getLeaveType());
+                balance.setTotalLeaves(policy.getDefaultDays());
+                balance.setRemainingLeaves(policy.getDefaultDays());
+
+                balanceRepo.save(balance);
+            }
         }
     }
 
-    private void deleteBalancesForLeaveType(Company company, String leaveType) {
-        List<Employee> employees = employeeRepo.findByCompany(company);
+    /* =====================================================
+       DELETE POLICY (SAFE)
+    ===================================================== */
+
+    @Transactional
+    public void deletePolicy(Long policyId) {
+
+        CompanyLeavePolicy policy =
+                policyRepo.findById(policyId)
+                        .orElseThrow(() -> new RuntimeException("Policy not found"));
+
+        List<Employee> employees =
+                employeeRepo.findByCompany(policy.getCompany());
 
         for (Employee employee : employees) {
-            balanceRepo.findByEmployeeAndLeaveType(employee, leaveType)
+
+            if (employee.getRole() == null ||
+                    !employee.getRole().equals(policy.getRole()))
+                continue;
+
+            balanceRepo.findByEmployeeAndLeaveType(
+                            employee, policy.getLeaveType())
                     .ifPresent(balanceRepo::delete);
         }
+
+        policyRepo.delete(policy);
     }
 
+    /* =====================================================
+       DTO MAPPER
+    ===================================================== */
+
     private LeavePolicyResponseDTO toDTO(CompanyLeavePolicy policy) {
+
         LeavePolicyResponseDTO dto = new LeavePolicyResponseDTO();
+
         dto.setId(policy.getId());
+        dto.setRole(policy.getRole());
         dto.setLeaveType(policy.getLeaveType());
-        dto.setPaid(policy.isPaid());
         dto.setDefaultDays(policy.getDefaultDays());
+        dto.setPaid(Boolean.TRUE.equals(policy.getPaid()));
+        dto.setGenderRestricted(Boolean.TRUE.equals(policy.getGenderRestricted()));
+        dto.setAllowedGender(policy.getAllowedGender());
+
         return dto;
     }
 }

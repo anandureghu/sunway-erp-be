@@ -2,6 +2,7 @@ package com.erp.mapper;
 
 import com.erp.domain.EmployeeCurrentJob;
 import com.erp.dto.currentjob.*;
+
 public class EmployeeCurrentJobMapper {
 
     public static EmployeeCurrentJobResponseDTO toDTO(EmployeeCurrentJob e) {
@@ -17,6 +18,10 @@ public class EmployeeCurrentJobMapper {
         d.setEffectiveFrom(e.getEffectiveFrom());
         d.setStartDate(e.getStartDate());
         d.setExpectedEndDate(e.getExpectedEndDate());
+        d.setWorkLocation(e.getWorkLocation());
+        d.setWorkCity(e.getWorkCity());
+        d.setWorkCountry(e.getWorkCountry());
+
         return d;
     }
 
@@ -30,5 +35,8 @@ public class EmployeeCurrentJobMapper {
         e.setEffectiveFrom(d.getEffectiveFrom());
         e.setStartDate(d.getStartDate());
         e.setExpectedEndDate(d.getExpectedEndDate());
+        e.setWorkLocation(d.getWorkLocation());
+        e.setWorkCity(d.getWorkCity());
+        e.setWorkCountry(d.getWorkCountry());
     }
 }

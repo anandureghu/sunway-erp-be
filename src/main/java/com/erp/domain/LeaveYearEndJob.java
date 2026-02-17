@@ -17,22 +17,28 @@ public class LeaveYearEndJob {
     private final CompanyLeavePolicyRepository policyRepo;
 
     @Transactional
-    @Scheduled(cron = "0 0 0 1 1 *")
+    @Scheduled(cron = "0 0 0 1 1 *") // Every Jan 1st at midnight
     public void resetYearlyLeaves() {
 
         List<EmployeeLeaveBalance> balances = balanceRepo.findAll();
 
-        for (EmployeeLeaveBalance b : balances) {
+        for (EmployeeLeaveBalance balance : balances) {
+
+            String role = balance.getEmployee().getRole();
 
             CompanyLeavePolicy policy =
-                    policyRepo.findByCompanyAndLeaveType(
-                            b.getEmployee().getCompany(),
-                            b.getLeaveType()).orElse(null);
+                    policyRepo.findByCompanyAndRoleAndLeaveType(
+                                    balance.getEmployee().getCompany(),
+                                    role,
+                                    balance.getLeaveType())
+                            .orElse(null);
 
             if (policy != null && policy.isPaid()) {
-                b.setTotalLeaves(policy.getDefaultDays());
-                b.setRemainingLeaves(policy.getDefaultDays());
-                balanceRepo.save(b);
+
+                balance.setTotalLeaves(policy.getDefaultDays());
+                balance.setRemainingLeaves(policy.getDefaultDays());
+
+                balanceRepo.save(balance);
             }
         }
     }
