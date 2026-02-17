@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Instant;
+
 @Configuration
 public class AdminSeeder {
 
@@ -38,6 +40,7 @@ public class AdminSeeder {
                 admin.setUsername("admin");
                 admin.setPassword(encoder.encode("admin123"));
                 admin.setRole(Role.SUPER_ADMIN);
+                admin.setCreatedAt(Instant.now());
 
                 // 2. Create default company
                 Company company = Company.builder()
@@ -54,6 +57,7 @@ public class AdminSeeder {
                         .hrEnabled(true)
                         .financeEnabled(true)
                         .inventoryEnabled(true)
+                        .createdAt(Instant.now())
                         .build();
 
                 company = companyRepo.save(company);
@@ -69,6 +73,7 @@ public class AdminSeeder {
                         .lastName("Admin")
                         .company(company)    // attach company
                         .user(admin)         // link login user
+                        .createdAt(Instant.now())
                         .build();
 
                 employeeRepo.save(adminEmployee);
