@@ -20,6 +20,10 @@ public class VendorResponseDTO {
 
     private boolean is1099Vendor;
     private boolean isActive;
+    private boolean approved;
+    private boolean rejected;
+    
+    private String remarks;
 
     private String street;
     private String city;

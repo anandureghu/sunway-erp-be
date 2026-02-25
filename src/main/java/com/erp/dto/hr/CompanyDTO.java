@@ -15,9 +15,12 @@ public class CompanyDTO {
     private Long currencyId;
     private Long crNo;
     private String computerCard;
+    private String companyCode;
     private String street;
     private String city;
     private String state;
+    private Long taxRate;
+    private boolean isTaxActive;
     private String country;
     private String phoneNo;
     private String createdBy;

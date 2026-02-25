@@ -3,6 +3,7 @@ package com.erp.domain.hr;
 import com.erp.domain.Employee;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.Instant;
 
 @Getter
@@ -23,6 +24,9 @@ public class Department {
 
     @Column(name = "department_name", nullable = false)
     private String departmentName;
+
+    @Column(name = "description")
+    private String description;
 
     // 🔥 Manager now mapped to Employee
     @ManyToOne

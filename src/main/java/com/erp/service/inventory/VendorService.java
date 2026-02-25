@@ -3,13 +3,19 @@ package com.erp.service.inventory;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Vendor;
 import com.erp.dto.inventory.VendorCreateDTO;
+import com.erp.dto.inventory.VendorFilterDTO;
 import com.erp.dto.inventory.VendorResponseDTO;
 import com.erp.dto.inventory.VendorUpdateDTO;
 import com.erp.repo.inventory.VendorRepository;
 import com.erp.security.context.AuthContext;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -31,6 +37,28 @@ public class VendorService {
                 .stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    public Boolean approveVendor(Long id, boolean status) {
+        Vendor vendor = vendorRepo.findById(id).orElseThrow(() -> new RuntimeException("vendor not exist"));
+        if (status) {
+            vendor.setApproved(true);
+        } else {
+            vendor.setRejected(true);
+        }
+        vendorRepo.save(vendor);
+        return status;
+    }
+
+    public Page<VendorResponseDTO> getFilteredVendors(
+            VendorFilterDTO filter,
+            Pageable pageable
+    ) {
+
+        Specification<Vendor> spec = buildSpecification(filter);
+
+        return vendorRepo.findAll(spec, pageable)
+                .map(this::toDTO);
     }
 
     // ---------------- GET BY ID ----------------
@@ -70,7 +98,9 @@ public class VendorService {
                 .email(dto.getEmail())
                 .contactPersonName(dto.getContactPersonName())
                 .fax(dto.getFax())
+                .remarks(dto.getRemarks())
                 .websiteUrl(dto.getWebsiteUrl())
+                .approved(false)
                 .company(Company.builder().id(companyId).build())
                 .build();
 
@@ -96,6 +126,8 @@ public class VendorService {
         if (dto.getCountry() != null) v.setCountry(dto.getCountry());
         if (dto.getPhoneNo() != null) v.setPhoneNo(dto.getPhoneNo());
         if (dto.getEmail() != null) v.setEmail(dto.getEmail());
+        if (dto.getEmail() != null) v.setEmail(dto.getEmail());
+        if (dto.getRemarks() != null) v.setRemarks(dto.getRemarks());
 
         if (dto.getContactPersonName() != null) v.setContactPersonName(dto.getContactPersonName());
         if (dto.getFax() != null) v.setFax(dto.getFax());
@@ -129,8 +161,62 @@ public class VendorService {
                 .email(v.getEmail())
                 .contactPersonName(v.getContactPersonName())
                 .fax(v.getFax())
+                .approved(v.isApproved())
+                .rejected(v.isRejected())
+                .remarks(v.getRemarks())
                 .websiteUrl(v.getWebsiteUrl())
                 .companyId(v.getCompany().getId())
                 .build();
+    }
+
+    public Specification<Vendor> buildSpecification(VendorFilterDTO filter) {
+        return (root, query, cb) -> {
+
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (filter.getVendorName() != null) {
+                predicates.add(
+                        cb.like(
+                                cb.lower(root.get("vendorName")),
+                                "%" + filter.getVendorName().toLowerCase() + "%"
+                        )
+                );
+            }
+
+            if (filter.getCity() != null) {
+                predicates.add(
+                        cb.equal(
+                                cb.lower(root.get("city")),
+                                filter.getCity().toLowerCase()
+                        )
+                );
+            }
+
+            if (filter.getApproved() != null) {
+                predicates.add(
+                        cb.equal(root.get("approved"), filter.getApproved())
+                );
+            }
+
+            if (filter.getRejected() != null) {
+                predicates.add(
+                        cb.equal(root.get("rejected"), filter.getRejected())
+                );
+            }
+
+            if (filter.getIsActive() != null) {
+                predicates.add(
+                        cb.equal(root.get("isActive"), filter.getIsActive())
+                );
+            }
+
+            // Always filter by company
+            predicates.add(
+                    cb.equal(root.get("company").get("id"),
+                            authContext.getCurrentCompanyId())
+            );
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 }

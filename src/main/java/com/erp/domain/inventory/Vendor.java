@@ -40,6 +40,9 @@ public class Vendor {
 
     private boolean isActive = true;
 
+    private boolean approved = false;
+    private boolean rejected = false;
+
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -70,6 +73,8 @@ public class Vendor {
 
     @Column(name = "website_url", length = 200)
     private String websiteUrl;
+    
+    private String remarks;
 
     @PrePersist
     void onCreate() {

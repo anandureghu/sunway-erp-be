@@ -1,6 +1,9 @@
 package com.erp.dto.hr;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
@@ -17,4 +20,7 @@ public class DepartmentResponseDTO {
 
     private Long companyId;
     private String companyName;
+    private String companyCode;
+
+    private String description;
 }

@@ -1,13 +1,14 @@
 package com.erp.controller.inventory;
 
 import com.erp.dto.inventory.VendorCreateDTO;
+import com.erp.dto.inventory.VendorFilterDTO;
 import com.erp.dto.inventory.VendorResponseDTO;
 import com.erp.dto.inventory.VendorUpdateDTO;
 import com.erp.service.inventory.VendorService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/vendors")
@@ -21,8 +22,11 @@ public class VendorController {
 
     // ---------------- GET ALL ----------------
     @GetMapping
-    public List<VendorResponseDTO> getAllVendors() {
-        return vendorService.getAllVendors();
+    public Page<VendorResponseDTO> getVendors(
+            VendorFilterDTO filter,
+            Pageable pageable
+    ) {
+        return vendorService.getFilteredVendors(filter, pageable);
     }
 
     // ---------------- GET BY ID ----------------
@@ -35,6 +39,12 @@ public class VendorController {
     @PostMapping
     public ResponseEntity<VendorResponseDTO> createVendor(@RequestBody VendorCreateDTO dto) {
         return ResponseEntity.ok(vendorService.createVendor(dto));
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<Boolean> approveVendor(@PathVariable("id") Long id,
+                                                 @RequestParam(name = "status", required = false) Boolean status) {
+        return ResponseEntity.ok(vendorService.approveVendor(id, status));
     }
 
     // ---------------- UPDATE ----------------

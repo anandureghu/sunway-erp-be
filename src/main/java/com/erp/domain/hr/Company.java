@@ -49,6 +49,16 @@ public class Company {
     @Column(name = "phone_no", length = 20)
     private String phoneNo;
 
+
+    @Column(name = "company_code", length = 3)
+    private String companyCode;
+
+    @Column(name = "tax_rate", length = 3)
+    private String taxRate;
+
+    @Column(name = "is_tax_active", nullable = false)
+    private boolean isTaxActive;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 

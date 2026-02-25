@@ -29,4 +29,6 @@ public class VendorCreateDTO {
     private String contactPersonName;
     private String fax;
     private String websiteUrl;
+    
+    private String remarks;
 }

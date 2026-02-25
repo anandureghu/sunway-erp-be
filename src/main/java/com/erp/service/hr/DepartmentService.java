@@ -38,6 +38,7 @@ public class DepartmentService {
                 .id(d.getId())
                 .departmentCode(d.getDepartmentCode())
                 .departmentName(d.getDepartmentName())
+                .description(d.getDescription())
 
                 .managerId(d.getManager() != null ? d.getManager().getId() : null)
                 .managerFirstName(d.getManager() != null ? d.getManager().getFirstName() : null)
@@ -45,12 +46,14 @@ public class DepartmentService {
 
                 .companyId(d.getCompany().getId())
                 .companyName(d.getCompany().getCompanyName())
+                .companyCode(d.getCompany().getCompanyCode())
                 .build();
     }
 
     public List<DepartmentResponseDTO> getDepartmentsForCurrentUser() {
-        Long userId = authContext.getCurrentUserId();
-        return departmentRepository.findAllByCompanyCreatedBy(String.valueOf(userId))
+        Long companyId = authContext.getCurrentCompanyId();
+
+        return departmentRepository.findAllByCompanyId(companyId)
                 .stream().map(this::toDTO).toList();
     }
 
@@ -64,11 +67,6 @@ public class DepartmentService {
         Company company = companyRepository.findById(dto.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        Long userId = authContext.getCurrentUserId();
-        if (!company.getCreatedBy().equals(String.valueOf(userId))) {
-            throw new RuntimeException("You do not have permission to add departments to this company");
-        }
-
         Employee manager = null;
         if (dto.getManagerId() != null) {
             manager = employeeRepository.findById(dto.getManagerId())
@@ -80,6 +78,7 @@ public class DepartmentService {
                 .departmentName(dto.getDepartmentName())
                 .manager(manager)
                 .company(company)
+                .description(dto.getDescription())
                 .createdAt(Instant.now())
                 .build();
 

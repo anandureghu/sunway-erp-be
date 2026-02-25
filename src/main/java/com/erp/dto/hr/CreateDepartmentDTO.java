@@ -1,6 +1,9 @@
 package com.erp.dto.hr;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
@@ -9,6 +12,7 @@ import lombok.*;
 public class CreateDepartmentDTO {
     private String departmentCode;
     private String departmentName;
+    private String description;
     private Long managerId;
     private Long companyId; // Instead of full company object
 }
