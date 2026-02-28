@@ -2,10 +2,10 @@ package com.erp.domain.finance;
 
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
-import com.erp.domain.hr.Department;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,9 +27,9 @@ public class BudgetHeader {
     private String budgetName;
 
     @Column(nullable = false)
-    private Integer budgetYear;
+    private String fiscalYear;
 
-    private Long amount;
+    private BigDecimal amount;
 
     private LocalDate startDate;
     private LocalDate endDate;
@@ -38,13 +38,6 @@ public class BudgetHeader {
     private BudgetStatus status;
     // Draft, Active, Closed
 
-    // Optional Department
-    @ManyToOne
-    @JoinColumn(name = "department_id")
-    private Department department;
-
-    private String projectId;
-
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")
     private Company company;
@@ -52,6 +45,10 @@ public class BudgetHeader {
     @ManyToOne
     @JoinColumn(name = "created_by_user_id")
     private User createdByUser;
+
+    @ManyToOne
+    @JoinColumn(name = "updated_by_user_id")
+    private User updatedByUser;
 
     @ManyToOne
     @JoinColumn(name = "approved_by_user_id")

@@ -6,7 +6,6 @@ import com.erp.dto.hr.CompanyDTO;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
-import com.erp.service.finance.ChartOfAccountsService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,18 +17,15 @@ public class CompanyService {
 
     private final CompanyRepository companyRepository;
     private final AuthContext authContext;
-    private final ChartOfAccountsService coaService;
     private final CurrencyRepository currencyRepository;
 
     public CompanyService(
             CompanyRepository companyRepository,
             AuthContext authContext,
-            ChartOfAccountsService coaService,
             CurrencyRepository currencyRepository) {
 
         this.companyRepository = companyRepository;
         this.authContext = authContext;
-        this.coaService = coaService;
         this.currencyRepository = currencyRepository;
     }
 
@@ -85,14 +81,7 @@ public class CompanyService {
             company.setCreatedBy(String.valueOf(userId));
         }
 
-        Company newCompany = companyRepository.save(company);
-
-        // Create default Chart of Accounts
-        if (newCompany.isFinanceEnabled()) {
-            coaService.createDefaultCOAForCompany(newCompany);
-        }
-
-        return newCompany;
+        return companyRepository.save(company);
     }
 
     // ======================================================

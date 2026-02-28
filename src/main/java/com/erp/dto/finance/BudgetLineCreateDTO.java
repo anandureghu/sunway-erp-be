@@ -2,6 +2,7 @@ package com.erp.dto.finance;
 
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Getter
@@ -15,7 +16,7 @@ public class BudgetLineCreateDTO {
     private String projectId;
     private LocalDate startDate;
     private LocalDate endDate;
-    private Long amount;
+    private BigDecimal amount;
     private String notes;
 }
 

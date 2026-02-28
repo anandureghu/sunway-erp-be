@@ -214,75 +214,22 @@ public class TransactionService {
                 .orElseThrow(() -> new RuntimeException("Debit COA not found: " + tx.getDebitAccount().getAccountCode()));
 
         // update ChartOfAccounts running balances (rule depends on type)
-        coaAdjust(debitCoa, tx.getAmount(), true);
-        coaAdjust(creditCoa, tx.getAmount(), false);
+        coaAdjust(debitCoa, tx.getAmount().negate());
+        coaAdjust(creditCoa, tx.getAmount());
 
-        // update GL account balances (fiscal year handling - use current year string)
-        String fiscalYear = String.valueOf(java.time.Year.now().getValue());
-        updateGLBalance(debitCoa.getId(), fiscalYear, tx.getAmount(), true);
-        updateGLBalance(creditCoa.getId(), fiscalYear, tx.getAmount(), false);
     }
 
-    private void coaAdjust(com.erp.domain.finance.ChartOfAccounts coa, java.math.BigDecimal amount, boolean isDebit) {
-        String t = coa.getType() == null ? "asset" : coa.getType().toLowerCase();
-        java.math.BigDecimal bal = coa.getBalance() == null ? java.math.BigDecimal.ZERO : coa.getBalance();
-        switch (t) {
-            case "asset":
-            case "expense":
-                // debit increases
-                coa.setBalance(isDebit ? bal.add(amount) : bal.subtract(amount));
-                break;
-            case "liability":
-            case "income":
-            case "equity":
-                // credit increases
-                coa.setBalance(isDebit ? bal.subtract(amount) : bal.add(amount));
-                break;
-            default:
-                coa.setBalance(isDebit ? bal.add(amount) : bal.subtract(amount));
-        }
+    private void coaAdjust(
+            com.erp.domain.finance.ChartOfAccounts coa,
+            java.math.BigDecimal amount // pass positive or negative
+    ) {
+        java.math.BigDecimal currentBalance =
+                coa.getBalance() == null
+                        ? java.math.BigDecimal.ZERO
+                        : coa.getBalance();
+
+        coa.setBalance(currentBalance.add(amount));
         coaRepo.save(coa);
     }
 
-    private void updateGLBalance(Long accountId, String fiscalYear, java.math.BigDecimal amount, boolean isDebit) {
-        GLAccountBalance bal = glRepo.findByAccountIdAndFiscalYear(accountId, fiscalYear)
-                .orElse(GLAccountBalance.builder()
-                        .accountId(accountId)
-                        .fiscalYear(fiscalYear)
-                        .asOfDate(Instant.now())
-                        .totalAssets(java.math.BigDecimal.ZERO)
-                        .totalExpenses(java.math.BigDecimal.ZERO)
-                        .totalLiabilities(java.math.BigDecimal.ZERO)
-                        .totalRevenue(java.math.BigDecimal.ZERO)
-                        .balance(java.math.BigDecimal.ZERO)
-                        .build());
-
-        // Very simplified: treat asset/expense as debit-side; revenue/liability as credit-side
-        var coa = coaRepo.findById(accountId).orElse(null);
-        String type = coa != null && coa.getType() != null ? coa.getType().toLowerCase() : "asset";
-
-        if ("asset".equals(type)) {
-            if (isDebit) bal.setTotalAssets(bal.getTotalAssets().add(amount));
-            else bal.setTotalAssets(bal.getTotalAssets().subtract(amount));
-        } else if ("liability".equals(type)) {
-            if (!isDebit) bal.setTotalLiabilities(bal.getTotalLiabilities().add(amount));
-            else bal.setTotalLiabilities(bal.getTotalLiabilities().subtract(amount));
-        } else if ("income".equals(type) || "revenue".equals(type)) {
-            if (!isDebit) bal.setTotalRevenue(bal.getTotalRevenue().add(amount));
-            else bal.setTotalRevenue(bal.getTotalRevenue().subtract(amount));
-        } else if ("expense".equals(type)) {
-            if (isDebit) bal.setTotalExpenses(bal.getTotalExpenses().add(amount));
-            else bal.setTotalExpenses(bal.getTotalExpenses().subtract(amount));
-        }
-
-        // recompute balance
-        bal.setBalance(
-                bal.getTotalAssets()
-                        .subtract(bal.getTotalLiabilities())
-                        .add(bal.getTotalRevenue())
-                        .subtract(bal.getTotalExpenses())
-        );
-
-        glRepo.save(bal);
-    }
 }

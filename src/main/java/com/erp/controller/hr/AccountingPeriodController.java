@@ -26,12 +26,17 @@ public class AccountingPeriodController {
     }
 
     @PutMapping("/{id}/close")
-    public void close(@PathVariable Long id) {
+    public void close(@PathVariable("id") Long id) {
         periodService.closePeriod(id);
     }
 
     @PutMapping("/{id}/reopen")
-    public void reopen(@PathVariable Long id) {
+    public void reopen(@PathVariable("id") Long id) {
         periodService.reopenPeriod(id);
+    }
+
+    @GetMapping("/open-status")
+    public AccountingPeriodResponseDTO getOpenPeriodStatus() {
+        return periodService.getOpenPeriodStatus();
     }
 }

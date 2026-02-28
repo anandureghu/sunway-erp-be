@@ -11,8 +11,5 @@ public interface ChartOfAccountsRepository extends JpaRepository<ChartOfAccounts
 
     List<ChartOfAccounts> findByCompanyId(Long companyId);
 
-    Optional<ChartOfAccounts> findTopByCompanyIdAndType(Long companyId, String type);
-
-    Optional<ChartOfAccounts> findTopByCompanyIdAndTypeAndGlAccountType(Long companyId, String type, String glAccountType);
 
 }

@@ -25,6 +25,14 @@ public class AccountingPeriodService {
 
     public AccountingPeriodResponseDTO createPeriod(AccountingPeriodRequestDTO request) {
         Long companyId = authContext.getCurrentCompanyId();
+
+        boolean openExists = periodRepository
+                .findByCompanyIdAndStatus(companyId, PeriodStatus.OPEN) != null;
+
+        if (openExists) {
+            throw new RuntimeException("An open accounting period already exists");
+        }
+
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
@@ -73,6 +81,18 @@ public class AccountingPeriodService {
         AccountingPeriod period = periodRepository.findById(periodId)
                 .orElseThrow(() -> new RuntimeException("Period not found"));
 
+        Long companyId = period.getCompany().getId();
+
+        boolean anotherOpenPeriodExists =
+                periodRepository.findByCompanyIdAndStatus(
+                        companyId,
+                        PeriodStatus.OPEN
+                ).getStatus() != null;
+
+        if (anotherOpenPeriodExists) {
+            throw new RuntimeException("Another accounting period is already open");
+        }
+
         period.setStatus(PeriodStatus.OPEN);
         periodRepository.save(period);
     }
@@ -90,6 +110,15 @@ public class AccountingPeriodService {
         if (period.getStatus() == PeriodStatus.CLOSED) {
             throw new RuntimeException("Accounting period is closed");
         }
+    }
+
+    public AccountingPeriodResponseDTO getOpenPeriodStatus() {
+        Long companyId = authContext.getCurrentCompanyId();
+
+        AccountingPeriod acc = periodRepository
+                .findByCompanyIdAndStatus(companyId, PeriodStatus.OPEN);
+
+        return mapToDTO(acc);
     }
 
     private AccountingPeriodResponseDTO mapToDTO(AccountingPeriod period) {

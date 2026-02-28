@@ -9,7 +9,6 @@ import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.repo.contact.EmployeeContactInfoRepository;
 import com.erp.repo.hr.CompanyRepository;
-import com.erp.service.finance.ChartOfAccountsService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,7 +22,6 @@ public class AdminSeeder {
     @Bean
     CommandLineRunner seedAdmin(
             UserRepository userRepo,
-            ChartOfAccountsService chartOfAccountsService,
             CompanyRepository companyRepo,
             EmployeeRepository employeeRepo,
             PasswordEncoder encoder,
@@ -47,6 +45,7 @@ public class AdminSeeder {
                         .companyName("Default Admin Company")
                         .noOfEmployees("10")
                         .crNo(10001L)
+                        .companyCode("100")
                         .computerCard("ADM-001")
                         .street("HQ Street")
                         .city("Doha")
@@ -63,8 +62,6 @@ public class AdminSeeder {
                 company = companyRepo.save(company);
                 admin.setCompany(company);
                 admin = userRepo.save(admin);
-
-                chartOfAccountsService.createDefaultCOAForCompany(company);
 
                 // 3. Create EMPLOYEE record for this admin user
                 Employee adminEmployee = Employee.builder()

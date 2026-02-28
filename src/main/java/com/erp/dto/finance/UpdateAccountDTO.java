@@ -6,7 +6,4 @@ import lombok.Data;
 public class UpdateAccountDTO {
     private String accountName;
     private String description;
-    private String status;
-    private String glAccountClassTypeKey;
-    private String glAccountType;
 }

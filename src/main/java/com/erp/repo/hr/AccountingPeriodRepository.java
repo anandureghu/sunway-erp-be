@@ -2,6 +2,7 @@ package com.erp.repo.hr;
 
 
 import com.erp.domain.hr.AccountingPeriod;
+import com.erp.domain.hr.PeriodStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
@@ -24,4 +25,6 @@ public interface AccountingPeriodRepository extends JpaRepository<AccountingPeri
             LocalDate start,
             LocalDate end
     );
+
+    AccountingPeriod findByCompanyIdAndStatus(Long companyId, PeriodStatus status);
 }

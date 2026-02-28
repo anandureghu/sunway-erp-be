@@ -1,9 +1,12 @@
 package com.erp.domain.finance;
 
+import com.erp.domain.User;
 import com.erp.domain.hr.Department;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Getter
@@ -49,8 +52,38 @@ public class BudgetLine {
     private LocalDate endDate;
 
     @Column(nullable = false)
-    private Long amount;
+    private BigDecimal amount;
 
     @Column(length = 250)
     private String notes;
+
+    @Column(nullable = false, length = 20)
+    private BudgetStatus status;
+    // Draft, Active, Closed
+
+    @ManyToOne
+    @JoinColumn(name = "created_by_user_id")
+    private User createdByUser;
+
+    @ManyToOne
+    @JoinColumn(name = "updated_by_user_id")
+    private User updatedByUser;
+
+    @ManyToOne
+    @JoinColumn(name = "approved_by_user_id")
+    private User approvedByUser;
+
+    private Instant createdAt;
+    private Instant updatedAt;
+
+    @PrePersist
+    void onCreate() {
+        createdAt = Instant.now();
+        updatedAt = createdAt;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = Instant.now();
+    }
 }

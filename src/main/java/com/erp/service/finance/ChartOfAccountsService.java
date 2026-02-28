@@ -1,16 +1,22 @@
 package com.erp.service.finance;
 
+import com.erp.domain.User;
+import com.erp.domain.finance.COAType;
 import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.hr.Company;
+import com.erp.domain.hr.Department;
 import com.erp.dto.finance.ChartOfAccountResponseDTO;
 import com.erp.dto.finance.CreateAccountDTO;
 import com.erp.dto.finance.UpdateAccountDTO;
+import com.erp.repo.UserRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -19,15 +25,21 @@ public class ChartOfAccountsService {
 
     private final ChartOfAccountsRepository repo;
     private final CompanyRepository companyRepo;
+    private final UserRepository userRepository;
+    private final DepartmentRepository departmentRepository;
     private final AuthContext auth;
 
     public ChartOfAccountsService(
             ChartOfAccountsRepository repo,
             CompanyRepository companyRepo,
+            UserRepository userRepository,
+            DepartmentRepository departmentRepository,
             AuthContext auth
     ) {
         this.repo = repo;
         this.companyRepo = companyRepo;
+        this.userRepository = userRepository;
+        this.departmentRepository = departmentRepository;
         this.auth = auth;
     }
 
@@ -36,13 +48,20 @@ public class ChartOfAccountsService {
     // =============================================================
     public ChartOfAccountResponseDTO createAccount(CreateAccountDTO dto) {
 
-        Company company = companyRepo.findById(dto.getCompanyId())
+        Long companyId = auth.getCurrentCompanyId();
+        Long userId = auth.getCurrentUserId();
+
+        Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        // permission check
-//        if (!company.getCreatedBy().equals(String.valueOf(auth.getCurrentUserId()))) {
-//            throw new RuntimeException("Not allowed");
-//        }
+        Department department = null;
+        if (dto.getDepartmentId() != null) {
+            department = departmentRepository.findById(dto.getDepartmentId())
+                    .orElseThrow(() -> new RuntimeException("Department not found"));
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         ChartOfAccounts parent = null;
         if (dto.getParentId() != null) {
@@ -50,18 +69,21 @@ public class ChartOfAccountsService {
                     .orElseThrow(() -> new RuntimeException("Parent account not found"));
         }
 
+//        TODO: check with ali, that multiple account can exist with the same type, or a single type parent account?
         ChartOfAccounts acc = ChartOfAccounts.builder()
                 .company(company)
                 .accountCode(dto.getAccountCode())
                 .accountName(dto.getAccountName())
                 .description(dto.getDescription())
-                .currency(dto.getCurrency())
-                .type(dto.getType())
-                .status(dto.getStatus())
+                .type(COAType.valueOf(dto.getType()))
                 .parent(parent)
-                .glAccountClassTypeKey(dto.getGlAccountClassTypeKey())
-                .glAccountType(dto.getGlAccountType())
                 .balance(dto.getOpeningBalance() == null ? null : dto.getOpeningBalance())
+                .interCompanyNumber(dto.getInterCompanyNumber())
+                .accountNo(dto.getAccountNo())
+                .asOfDate(Instant.now())
+                .projectCode(dto.getProjectCode())
+                .department(department)
+                .createdBy(user)
                 .build();
 
         return toDTO(repo.save(acc));
@@ -72,14 +94,16 @@ public class ChartOfAccountsService {
     // =============================================================
     public ChartOfAccountResponseDTO updateAccount(Long id, UpdateAccountDTO dto) {
 
+        User user = userRepository.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         ChartOfAccounts acc = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Account not found"));
 
         acc.setAccountName(dto.getAccountName());
         acc.setDescription(dto.getDescription());
-        acc.setStatus(dto.getStatus());
-        acc.setGlAccountClassTypeKey(dto.getGlAccountClassTypeKey());
-        acc.setGlAccountType(dto.getGlAccountType());
+
+        acc.setUpdatedBy(user);
 
         return toDTO(repo.save(acc));
     }
@@ -88,7 +112,8 @@ public class ChartOfAccountsService {
     // =============================================================
     // LIST ALL FOR COMPANY
     // =============================================================
-    public List<ChartOfAccountResponseDTO> listAll(Long companyId) {
+    public List<ChartOfAccountResponseDTO> listAll() {
+        Long companyId = auth.getCurrentCompanyId();
         return repo.findByCompanyId(companyId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
@@ -107,105 +132,14 @@ public class ChartOfAccountsService {
     // DELETE ACCOUNT
     // =============================================================
     public void delete(Long id) {
+        ChartOfAccounts account = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+        if (account.getBalance().compareTo(BigDecimal.ZERO) > 0) {
+            throw new RuntimeException("Cannot delete account, balance is greater than 0");
+        }
         repo.deleteById(id);
     }
 
-    // =============================================================
-    // HELPER: Find by Code
-    // =============================================================
-    public ChartOfAccounts getByCodeOrThrow(String code) {
-        return repo.findByAccountCode(code)
-                .orElseThrow(() -> new RuntimeException("Account not found: " + code));
-    }
-
-    // =============================================================
-    // REQUIRED BY TRANSACTION & PAYMENT SERVICES
-    // =============================================================
-
-    // Get company bank account (Asset)
-    public Long getCompanyBankAccountCode(Long companyId) {
-        ChartOfAccounts acc =
-                repo.findTopByCompanyIdAndType(companyId, "asset").orElseThrow(() -> new RuntimeException("Account not found"));
-
-        return acc.getId();
-    }
-
-    // Get Accounts Receivable (AR) account
-    public Long getCustomerARAccountCode(Long companyId) {
-        ChartOfAccounts acc =
-                repo.findTopByCompanyIdAndType(companyId, "asset").orElseThrow(() -> new RuntimeException("Account not found"));
-
-        return acc.getId();
-    }
-
-    // Get Accounts Payable (AP)
-    public String getVendorAPAccountCode(Long companyId) {
-        return repo.findTopByCompanyIdAndType(companyId, "liability")
-                .map(ChartOfAccounts::getAccountCode)
-                .orElse("AP-DEFAULT");
-    }
-
-    // Revenue account for invoices
-    public String getRevenueAccountCode(Long companyId) {
-        return repo.findTopByCompanyIdAndType(companyId, "income")
-                .map(ChartOfAccounts::getAccountCode)
-                .orElse("REV-DEFAULT");
-    }
-
-    // Expenses
-    public String getExpenseAccountCode(Long companyId) {
-        return repo.findTopByCompanyIdAndType(companyId, "expense")
-                .map(ChartOfAccounts::getAccountCode)
-                .orElse("EXP-DEFAULT");
-    }
-
-    // =============================================================
-    // DEFAULT COA BOOTSTRAP (call when company is created)
-    // =============================================================
-    public void createDefaultCOAForCompany(Company c) {
-
-        repo.save(ChartOfAccounts.builder()
-                .company(c)
-                .accountCode("BANK-001")
-                .accountName("Cash at Bank")
-                .type("asset")
-                .status("active")
-                .build());
-
-        repo.save(ChartOfAccounts.builder()
-                .company(c)
-                .accountCode("AR-001")
-                .accountName("Accounts Receivable")
-                .type("asset")
-                .glAccountType("AR")
-                .status("active")
-                .build());
-
-        repo.save(ChartOfAccounts.builder()
-                .company(c)
-                .accountCode("AP-001")
-                .accountName("Accounts Payable")
-                .type("liability")
-                .glAccountType("AP")
-                .status("active")
-                .build());
-
-        repo.save(ChartOfAccounts.builder()
-                .company(c)
-                .accountCode("REV-001")
-                .accountName("Sales Revenue")
-                .type("income")
-                .status("active")
-                .build());
-
-        repo.save(ChartOfAccounts.builder()
-                .company(c)
-                .accountCode("EXP-001")
-                .accountName("Expense Account")
-                .type("expense")
-                .status("active")
-                .build());
-    }
 
     // =============================================================
     // DTO MAPPER
@@ -213,17 +147,30 @@ public class ChartOfAccountsService {
     private ChartOfAccountResponseDTO toDTO(ChartOfAccounts acc) {
         return ChartOfAccountResponseDTO.builder()
                 .id(acc.getId())
+                .accountNo(acc.getAccountNo())
                 .accountCode(acc.getAccountCode())
                 .accountName(acc.getAccountName())
                 .description(acc.getDescription())
-                .type(acc.getType())
-                .parentId(acc.getParent() != null ? acc.getParent().getId() : null)
-                .currency(acc.getCurrency())
-                .status(acc.getStatus())
-                .companyId(acc.getCompany().getId())
-                .glAccountType(acc.getGlAccountType())
-                .glAccountClassTypeKey(acc.getGlAccountClassTypeKey())
+                .type(String.valueOf(acc.getType()))
                 .balance(acc.getBalance())
+                .companyId(acc.getCompany().getId())
+                .parentId(acc.getParent() != null ? acc.getParent().getId() : null)
+                .parentName(acc.getParent() != null ? acc.getParent().getAccountName() : null)
+                .parentAccountNo(acc.getParent() != null ? acc.getParent().getAccountNo() : null)
+                .parentCode(acc.getParent() != null ? acc.getParent().getAccountCode() : null)
+                .parentType(acc.getParent() != null ? String.valueOf(acc.getParent().getType()) : null)
+                .departmentId(acc.getDepartment() != null ? acc.getDepartment().getId() : null)
+                .departmentCode(acc.getDepartment() != null ? acc.getDepartment().getDepartmentCode() : null)
+                .departmentName(acc.getDepartment() != null ? acc.getDepartment().getDepartmentName() : null)
+                .projectCode(acc.getProjectCode())
+                .createdById(acc.getCreatedBy().getId())
+                .createdByName(acc.getCreatedBy().getFullName())
+                .createdAt(acc.getCreatedAt())
+                .updatedAt(acc.getUpdatedAt())
+                .updatedById(acc.getUpdatedBy() != null ? acc.getUpdatedBy().getId() : null)
+                .updatedByName(acc.getUpdatedBy() != null ? acc.getUpdatedBy().getFullName() : null)
+                .interCompanyNumber(acc.getInterCompanyNumber())
+                .asOfDate(acc.getAsOfDate())
                 .build();
     }
 

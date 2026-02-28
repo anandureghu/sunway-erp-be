@@ -1,9 +1,10 @@
 package com.erp.controller.finance;
 
-import com.erp.dto.finance.CreateAccountDTO;
 import com.erp.dto.finance.ChartOfAccountResponseDTO;
+import com.erp.dto.finance.CreateAccountDTO;
 import com.erp.service.finance.ChartOfAccountsService;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
@@ -21,9 +22,9 @@ public class ChartOfAccountsController {
         return service.createAccount(dto);
     }
 
-    @GetMapping("/company/{companyId}")
-    public List<ChartOfAccountResponseDTO> listAll(@PathVariable("companyId") Long companyId) {
-        return service.listAll(companyId);
+    @GetMapping()
+    public List<ChartOfAccountResponseDTO> listAll() {
+        return service.listAll();
     }
 
     @GetMapping("/{id}")

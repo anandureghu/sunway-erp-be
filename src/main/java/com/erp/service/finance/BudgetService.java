@@ -11,14 +11,13 @@ import com.erp.dto.finance.*;
 import com.erp.repo.finance.BudgetHeaderRepository;
 import com.erp.repo.finance.BudgetLineRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
+import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +31,7 @@ public class BudgetService {
     private final ChartOfAccountsRepository accountRepo;
     private final DepartmentRepository deptRepo;
     private final AuthContext auth;
-    private final TransactionService transactionService;
+    private final CompanyRepository companyRepository;
 
     public BudgetService(
             BudgetHeaderRepository headerRepo,
@@ -40,14 +39,14 @@ public class BudgetService {
             ChartOfAccountsRepository accountRepo,
             DepartmentRepository deptRepo,
             AuthContext auth,
-            TransactionService transactionService
+            CompanyRepository companyRepository
     ) {
         this.headerRepo = headerRepo;
         this.lineRepo = lineRepo;
         this.accountRepo = accountRepo;
         this.deptRepo = deptRepo;
         this.auth = auth;
-        this.transactionService = transactionService;
+        this.companyRepository = companyRepository;
     }
 
     // --------------------------------------
@@ -57,25 +56,21 @@ public class BudgetService {
 
         Long companyId = auth.getCurrentCompanyId();
 
-        Department dept = null;
-        if (dto.getDepartment() != null) {
-            dept = deptRepo.findById(dto.getDepartment())
-                    .orElseThrow(() -> new RuntimeException("Department not found"));
-        }
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+
         User user = User.builder()
                 .id(auth.getCurrentUserId()).build();
 
         BudgetHeader header = BudgetHeader.builder()
                 .budgetName(dto.getBudgetName())
-                .budgetYear(dto.getBudgetYear())
+                .fiscalYear(dto.getFiscalYear())
                 .startDate(dto.getStartDate())
                 .endDate(dto.getEndDate())
-                .amount(0L)
+                .amount(dto.getAmount())
                 .status(BudgetStatus.IMPLEMENTED)
                 .lines(new ArrayList<>())
-                .department(dept)
-                .projectId(dto.getProjectId())
-                .company(Company.builder().id(companyId).build())
+                .company(company)
                 .createdByUser(user)
                 .build();
 
@@ -117,24 +112,15 @@ public class BudgetService {
         BudgetHeader header = headerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Budget not found"));
 
-
-        Department dept = null;
-        if (dto.getDepartment() != null) {
-            dept = deptRepo.findById(dto.getDepartment())
-                    .orElseThrow(() -> new RuntimeException("Department not found"));
-        }
-
         if (!header.getCompany().getId().equals(auth.getCurrentCompanyId())) {
             throw new RuntimeException("Access denied");
         }
 
         header.setBudgetName(dto.getBudgetName());
-        header.setBudgetYear(dto.getBudgetYear());
+        header.setFiscalYear(dto.getFiscalYear());
         header.setStartDate(dto.getStartDate());
         header.setEndDate(dto.getEndDate());
         header.setAmount(dto.getAmount());
-        header.setDepartment(dept);
-        header.setProjectId(dto.getProjectId());
 
         return toDTO(headerRepo.save(header));
     }
@@ -172,7 +158,7 @@ public class BudgetService {
         return BudgetResponseDTO.builder()
                 .id(h.getId())
                 .budgetName(h.getBudgetName())
-                .budgetYear(h.getBudgetYear())
+                .fiscalYear(h.getFiscalYear())
                 .status(h.getStatus())
                 .amount(h.getAmount())
                 .startDate(h.getStartDate())
@@ -187,13 +173,26 @@ public class BudgetService {
                                 BudgetLineDTO.builder()
                                         .id(l.getId())
                                         .accountId(l.getAccount().getId())
-                                        .accountName(l.getAccount().getAccountName())
+                                        .accountName(l.getAccount() != null ? l.getAccount().getAccountName() : null)
+                                        .accountCode(l.getAccount() != null ? l.getAccount().getAccountCode() : null)
                                         .departmentId(l.getDepartment() != null ? l.getDepartment().getId() : null)
+                                        .departmentName(l.getDepartment() != null ? l.getDepartment().getDepartmentName() : null)
+                                        .departmentCode(l.getDepartment() != null ? l.getDepartment().getDepartmentCode() : null)
+                                        .status(l.getStatus())
                                         .projectId(l.getProjectId())
                                         .startDate(l.getStartDate())
                                         .endDate(l.getEndDate())
                                         .amount(l.getAmount())
                                         .notes(l.getNotes())
+                                        .createdByUserName(l.getCreatedByUser() != null ? l.getCreatedByUser().getFullName() : null)
+                                        .createdByUserId(l.getCreatedByUser() != null ? l.getCreatedByUser().getId() : null)
+                                        .createdAt(l.getCreatedAt())
+                                        .updatedAt(l.getUpdatedAt())
+                                        .updatedByUserName(l.getUpdatedByUser() != null ? l.getUpdatedByUser().getFullName() : null)
+                                        .updatedByUserId(l.getUpdatedByUser() != null ? l.getUpdatedByUser().getId() : null)
+                                        .approvedByUserName(l.getApprovedByUser() != null ? l.getApprovedByUser().getFullName() : null)
+                                        .approvedByUserId(l.getApprovedByUser() != null ? l.getApprovedByUser().getId() : null)
+
                                         .build()
                         ).toList()
                 )
@@ -204,13 +203,11 @@ public class BudgetService {
     @Transactional
     public BudgetResponseDTO addLine(Long journalEntryId, BudgetLineCreateDTO dto) {
 
+        User user = User.builder()
+                .id(auth.getCurrentUserId()).build();
+
         BudgetHeader bh = headerRepo.findById(journalEntryId)
                 .orElseThrow(() -> new RuntimeException("Journal Entry not found"));
-
-        // 2. Ensure JE belongs to the logged-in company
-        if (!bh.getCompany().getId().equals(auth.getCurrentCompanyId())) {
-            throw new RuntimeException("Access denied");
-        }
 
         // 3. Initialize lazy list to avoid transient issues
         List<BudgetLine> lines = bh.getLines();
@@ -240,15 +237,13 @@ public class BudgetService {
                         dto.getProjectId()
                 );
 
-        BudgetLine affectedLine;
 
         if ((dto.getDepartmentId() != null || dto.getProjectId() != null) && existing.isPresent()) {
             BudgetLine bl = existing.get();
-            bh.setAmount(bh.getAmount() - bl.getAmount() + dto.getAmount());
+//            bh.setAmount(bh.getAmount() - bl.getAmount() + dto.getAmount());
             bl.setAmount(dto.getAmount());
             bl.setNotes(dto.getNotes());
 
-            affectedLine = bl;
         } else {
             BudgetLine line = BudgetLine.builder()
                     .budgetHeader(bh)
@@ -259,31 +254,33 @@ public class BudgetService {
                     .amount(dto.getAmount())
                     .startDate(dto.getStartDate())
                     .endDate(dto.getEndDate())
+                    .createdByUser(user)
+                    .status(BudgetStatus.IMPLEMENTED)
                     .build();
 
             bh.getLines().add(line);
-            bh.setAmount(bh.getAmount() + line.getAmount());
+//            bh.setAmount(bh.getAmount() + line.getAmount());
 
-            affectedLine = line;
         }
 
         headerRepo.save(bh);
 
-        transactionService.create(CreateTransactionDTO.builder()
-                .companyId(auth.getCurrentCompanyId())
-                .transactionType("BUDGET")
-                .transactionDate(LocalDate.now())
-                .amount(BigDecimal.valueOf(dto.getAmount()))
-                .relatedId(bh.getId())
-                .relatedSubId(affectedLine.getId())
-                .debitAccount(account.getId())
-                .creditAccount(account.getId())
-                .transactionDescription(
-                        StringUtils.defaultIfBlank(
-                                dto.getNotes(),
-                                "Budget allocation"
-                        )
-                ).build());
+        // TODO: do this on confirmation
+//        transactionService.create(CreateTransactionDTO.builder()
+//                .companyId(auth.getCurrentCompanyId())
+//                .transactionType("BUDGET")
+//                .transactionDate(LocalDate.now())
+//                .amount(dto.getAmount())
+//                .relatedId(bh.getId())
+//                .relatedSubId(affectedLine.getId())
+//                .debitAccount(account.getId())
+//                .creditAccount(account.getId())
+//                .transactionDescription(
+//                        StringUtils.defaultIfBlank(
+//                                dto.getNotes(),
+//                                "Budget allocation"
+//                        )
+//                ).build());
 
 
         return toDTO(bh);
@@ -292,6 +289,8 @@ public class BudgetService {
 
     @Transactional
     public BudgetResponseDTO updateLine(Long bhId, Long lineId, BudgetLineUpdateDTO dto) {
+        User user = User.builder()
+                .id(auth.getCurrentUserId()).build();
         BudgetHeader bh = getBHEntity(bhId);
 
         BudgetLine line = lineRepo.findById(lineId)
@@ -309,7 +308,7 @@ public class BudgetService {
         if (!line.getBudgetHeader().getId().equals(bhId))
             throw new RuntimeException("Line does not belong to this budget");
 
-        Long prevAmount = line.getAmount();
+        BigDecimal prevAmount = line.getAmount();
 
 
         Optional<BudgetLine> existing =
@@ -322,9 +321,10 @@ public class BudgetService {
 
         if ((dto.getDepartmentId() != null || dto.getProjectId() != null) && existing.isPresent()) {
             BudgetLine bl = existing.get();
-            bh.setAmount(bh.getAmount() - (prevAmount + bl.getAmount()) + line.getAmount());
+//            bh.setAmount(bh.getAmount() - (prevAmount + bl.getAmount()) + line.getAmount());
             bl.setAmount(dto.getAmount());
             bl.setNotes(dto.getNotes());
+            bl.setUpdatedByUser(user);
             lineRepo.delete(line);
             lineRepo.save(bl);
         } else {
@@ -333,12 +333,13 @@ public class BudgetService {
             line.setProjectId(dto.getProjectId());
             line.setNotes(dto.getNotes());
             line.setAmount(dto.getAmount());
+            line.setUpdatedByUser(user);
             line.setStartDate(dto.getStartDate());
             line.setEndDate(dto.getEndDate());
-            bh.setAmount(bh.getAmount() - prevAmount + line.getAmount());
+//            bh.setAmount(bh.getAmount() - prevAmount + line.getAmount());
             lineRepo.save(line);
         }
-        headerRepo.updateAmountOnly(bh.getId(), bh.getAmount());
+//        headerRepo.updateAmountOnly(bh.getId(), bh.getAmount());
         return toDTO(bh);
     }
 
@@ -354,7 +355,7 @@ public class BudgetService {
             throw new RuntimeException("Line does not belong to this budget");
 
         bh.getLines().remove(line);
-        bh.setAmount(bh.getAmount() - line.getAmount());
+//        bh.setAmount(bh.getAmount() - line.getAmount());
         lineRepo.delete(line);
 
 //        recalcTotals(je);
