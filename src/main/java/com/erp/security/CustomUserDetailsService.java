@@ -1,7 +1,9 @@
 package com.erp.security;
 
 import com.erp.domain.User;
+import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
+import com.erp.service.security.CustomUserPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -9,18 +11,29 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
+
     private final UserRepository userRepository;
-    public CustomUserDetailsService(UserRepository userRepository) { this.userRepository = userRepository; }
+    private final EmployeeRepository employeeRepository;
+
+    public CustomUserDetailsService(UserRepository userRepository,
+                                    EmployeeRepository employeeRepository) {
+        this.userRepository = userRepository;
+        this.employeeRepository = employeeRepository;
+    }
 
     @Override
-    public UserDetails loadUserByUsername(String usernameOrEmail) throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(String usernameOrEmail)
+            throws UsernameNotFoundException {
+
         User user = userRepository.findByEmail(usernameOrEmail)
                 .or(() -> userRepository.findByUsername(usernameOrEmail))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-        return org.springframework.security.core.userdetails.User
-                .withUsername(user.getUsername())
-                .password(user.getPassword())
-                .roles(user.getRole().name())
-                .build();
+
+        return new CustomUserPrincipal(
+                user.getId(),
+                user.getUsername(),
+                user.getPassword(),
+                user.getRole()
+        );
     }
 }

@@ -1,7 +1,7 @@
 package com.erp.repo;
 
 import com.erp.domain.Employee;
-import com.erp.domain.Role;
+import com.erp.domain.security.Role;
 import com.erp.domain.hr.Company;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

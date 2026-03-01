@@ -2,7 +2,7 @@ package com.erp.startup;
 
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeContactInfo;
-import com.erp.domain.Role;
+import com.erp.domain.security.Role;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.repo.EmployeeRepository;

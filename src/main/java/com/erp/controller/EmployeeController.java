@@ -1,6 +1,8 @@
 package com.erp.controller;
 
 import com.erp.domain.User;
+import com.erp.domain.security.HrAction;
+import com.erp.domain.security.HrModule;
 import com.erp.dto.common.PageResponse;
 import com.erp.dto.hr.CreateEmployeeDTO;
 import com.erp.dto.hr.EmployeeResponseDTO;
@@ -8,6 +10,7 @@ import com.erp.dto.hr.UpdateEmployeeDTO;
 import com.erp.repo.UserRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.EmployeeService;
+import com.erp.service.security.annotation.HrPermission;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,7 +38,9 @@ public class EmployeeController {
 
     // ======================================================
     // CREATE EMPLOYEE
+    // Requires CREATE — only admins/HR can create employees
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.CREATE})
     @PostMapping
     public ResponseEntity<EmployeeResponseDTO> createEmployee(
             @Valid @RequestBody CreateEmployeeDTO dto) {
@@ -46,6 +51,7 @@ public class EmployeeController {
 
     // ======================================================
     // GET COMPANY ADMIN
+    // No permission guard — internal utility endpoint
     // ======================================================
     @GetMapping("/admin/{companyId}")
     public ResponseEntity<EmployeeResponseDTO> getCompanyAdmin(
@@ -55,10 +61,13 @@ public class EmployeeController {
     }
 
     // ======================================================
-    // GET EMPLOYEES (PAGINATED)
+    // GET EMPLOYEES PAGINATED
+    // VIEW_OWN allows user to see employee list (their company)
+    // VIEW_ALL also allowed
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping("/page")
-    public ResponseEntity<PageResponse<EmployeeResponseDTO>> getEmployees(
+    public ResponseEntity<PageResponse<EmployeeResponseDTO>> getEmployeesPaginated(
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "10") int size) {
 
@@ -67,7 +76,9 @@ public class EmployeeController {
 
     // ======================================================
     // SYNC ALL LEAVE BALANCES
+    // Requires EDIT on LEAVES — admin/HR operation
     // ======================================================
+    @HrPermission(module = HrModule.LEAVES, action = {HrAction.EDIT})
     @PostMapping("/sync-all-leave-balances")
     public ResponseEntity<Void> syncAllLeaveBalances() {
         User authUser = getAuthUser();
@@ -76,8 +87,11 @@ public class EmployeeController {
     }
 
     // ======================================================
-    // GET EMPLOYEES (CURRENT COMPANY)
+    // GET ALL EMPLOYEES (CURRENT COMPANY)
+    // VIEW_OWN allows user to see the employee list
+    // VIEW_ALL also allowed
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping
     public ResponseEntity<List<EmployeeResponseDTO>> getEmployees() {
         return ResponseEntity.ok(employeeService.getEmployees());
@@ -85,7 +99,10 @@ public class EmployeeController {
 
     // ======================================================
     // GET EMPLOYEE BY ID
+    // VIEW_OWN — user can view their own profile
+    // VIEW_ALL — admin/HR can view any profile
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping("/{id}")
     public ResponseEntity<EmployeeResponseDTO> getEmployeeById(
             @PathVariable("id") Long id) {
@@ -95,7 +112,9 @@ public class EmployeeController {
 
     // ======================================================
     // UPDATE EMPLOYEE
+    // EDIT — user can edit their own profile if granted
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.EDIT})
     @PutMapping("/{id}")
     public ResponseEntity<EmployeeResponseDTO> updateEmployee(
             @PathVariable("id") Long id,
@@ -106,7 +125,10 @@ public class EmployeeController {
 
     // ======================================================
     // GET EMPLOYEES BY COMPANY
+    // VIEW_ALL only — seeing all employees of a company
+    // is an admin/HR level operation
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
     @GetMapping("/company/{companyId}")
     public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByCompany(
             @PathVariable("companyId") Long companyId) {
@@ -116,7 +138,9 @@ public class EmployeeController {
 
     // ======================================================
     // GET EMPLOYEES BY DEPARTMENT
+    // VIEW_ALL only — department-level listing is admin/HR
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
     @GetMapping("/department/{departmentId}")
     public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByDepartment(
             @PathVariable("departmentId") Long departmentId) {
@@ -126,7 +150,9 @@ public class EmployeeController {
 
     // ======================================================
     // DELETE EMPLOYEE
+    // DELETE only — hard delete is admin only
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.DELETE})
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteEmployee(
             @PathVariable("id") Long id) {
@@ -136,8 +162,10 @@ public class EmployeeController {
     }
 
     // ======================================================
-    // UPLOAD PROFILE IMAGE (AZURE FIXED)
+    // UPLOAD PROFILE IMAGE
+    // EDIT — same permission as updating profile
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.EDIT})
     @PostMapping("/{id}/upload-image")
     public ResponseEntity<EmployeeResponseDTO> uploadImage(
             @PathVariable("id") Long id,

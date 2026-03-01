@@ -1,13 +1,20 @@
 package com.erp.service;
 
-import com.erp.domain.*;
-import com.erp.dto.currentjob.*;
+import com.erp.domain.Employee;
+import com.erp.domain.EmployeeCurrentJob;
+import com.erp.domain.hr.Department;
+import com.erp.domain.hrsettings.JobCode;
+import com.erp.dto.currentjob.EmployeeCurrentJobRequestDTO;
+import com.erp.dto.currentjob.EmployeeCurrentJobResponseDTO;
+import com.erp.exception.NotFoundException;
 import com.erp.mapper.EmployeeCurrentJobMapper;
 import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeRepository;
-import jakarta.transaction.Transactional;
+import com.erp.repo.hr.DepartmentRepository;
+import com.erp.repo.hrsettings.JobCodeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -16,37 +23,99 @@ public class CurrentJobService {
 
     private final EmployeeCurrentJobRepo currentJobRepo;
     private final EmployeeRepository employeeRepo;
+    private final JobCodeRepository jobCodeRepo;
+    private final DepartmentRepository departmentRepo;
 
+    // ======================================================
+    // GET CURRENT JOB
+    // ======================================================
+    @Transactional(readOnly = true)
     public EmployeeCurrentJobResponseDTO get(Long employeeId) {
-        return currentJobRepo.findByEmployeeId(employeeId)
-                .map(EmployeeCurrentJobMapper::toDTO)
+
+        EmployeeCurrentJob job = currentJobRepo
+                .findByEmployee_Id(employeeId)
                 .orElse(null);
+
+        if (job == null) return null;
+
+        // ✅ Force-initialize lazy relations while session is open
+        initializeLazyRelations(job);
+
+        return EmployeeCurrentJobMapper.toDTO(job);
     }
 
-    public EmployeeCurrentJobResponseDTO create(Long employeeId, EmployeeCurrentJobRequestDTO dto) {
+    // ======================================================
+    // CREATE CURRENT JOB
+    // ======================================================
+    public EmployeeCurrentJobResponseDTO create(Long employeeId,
+                                                EmployeeCurrentJobRequestDTO dto) {
 
-        if (currentJobRepo.existsByEmployeeId(employeeId)) {
-            throw new RuntimeException("Current job already exists");
+        if (currentJobRepo.existsByEmployee_Id(employeeId)) {
+            throw new RuntimeException("Current job already exists for this employee");
         }
 
         Employee employee = employeeRepo.findById(employeeId)
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+                .orElseThrow(() -> new NotFoundException("Employee not found"));
+
+        JobCode jobCode = jobCodeRepo.findById(dto.getJobCodeId())
+                .orElseThrow(() -> new NotFoundException("Job code not found"));
+
+        Department department = departmentRepo.findById(dto.getDepartmentId())
+                .orElseThrow(() -> new NotFoundException("Department not found"));
 
         EmployeeCurrentJob job = new EmployeeCurrentJob();
         job.setEmployee(employee);
+        job.setJobCode(jobCode);
+        job.setDepartment(department);
 
         EmployeeCurrentJobMapper.updateEntity(job, dto);
-        currentJobRepo.save(job);
 
-        return EmployeeCurrentJobMapper.toDTO(job);
+        // ✅ Save and flush so ID is generated before toDTO is called
+        EmployeeCurrentJob saved = currentJobRepo.saveAndFlush(job);
+
+        return EmployeeCurrentJobMapper.toDTO(saved);
     }
 
-    public EmployeeCurrentJobResponseDTO update(Long employeeId, EmployeeCurrentJobRequestDTO dto) {
+    // ======================================================
+    // UPDATE CURRENT JOB
+    // ======================================================
+    public EmployeeCurrentJobResponseDTO update(Long employeeId,
+                                                EmployeeCurrentJobRequestDTO dto) {
 
-        EmployeeCurrentJob job = currentJobRepo.findByEmployeeId(employeeId)
-                .orElseThrow(() -> new RuntimeException("Current job not found"));
+        EmployeeCurrentJob job = currentJobRepo.findByEmployee_Id(employeeId)
+                .orElseThrow(() -> new NotFoundException("Current job not found"));
+
+        JobCode jobCode = jobCodeRepo.findById(dto.getJobCodeId())
+                .orElseThrow(() -> new NotFoundException("Job code not found"));
+
+        Department department = departmentRepo.findById(dto.getDepartmentId())
+                .orElseThrow(() -> new NotFoundException("Department not found"));
+
+        job.setJobCode(jobCode);
+        job.setDepartment(department);
 
         EmployeeCurrentJobMapper.updateEntity(job, dto);
-        return EmployeeCurrentJobMapper.toDTO(job);
+
+        // ✅ Flush to persist before mapping
+        EmployeeCurrentJob saved = currentJobRepo.saveAndFlush(job);
+
+        return EmployeeCurrentJobMapper.toDTO(saved);
+    }
+
+    // ======================================================
+    // HELPER — force initialize lazy relations inside session
+    // ======================================================
+    private void initializeLazyRelations(EmployeeCurrentJob job) {
+        // Touch each lazy relation to trigger Hibernate to load them
+        // This must be called while the @Transactional session is still open
+        if (job.getEmployee() != null) {
+            job.getEmployee().getId(); // ✅ triggers load
+        }
+        if (job.getJobCode() != null) {
+            job.getJobCode().getId();  // ✅ triggers load
+        }
+        if (job.getDepartment() != null) {
+            job.getDepartment().getId(); // ✅ triggers load
+        }
     }
 }

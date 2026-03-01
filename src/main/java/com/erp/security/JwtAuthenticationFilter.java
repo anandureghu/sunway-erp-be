@@ -1,5 +1,7 @@
 package com.erp.security;
 
+import com.erp.domain.security.Role;
+import com.erp.service.security.CustomUserPrincipal;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -11,7 +13,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -22,7 +23,9 @@ import java.util.stream.Collectors;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
+    private static final Logger log =
+            LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtService jwtService;
 
@@ -33,34 +36,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
-                                    FilterChain chain) throws ServletException, IOException {
+                                    FilterChain chain)
+            throws ServletException, IOException {
 
-        // Let CORS preflight pass quickly
+        // Allow CORS preflight
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             chain.doFilter(request, response);
             return;
         }
 
-        // If already authenticated, don’t do it again
+        // If already authenticated, skip
         if (SecurityContextHolder.getContext().getAuthentication() != null) {
             chain.doFilter(request, response);
             return;
         }
 
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+
         if (header == null || !header.startsWith("Bearer ")) {
             chain.doFilter(request, response);
             return;
         }
 
         String token = header.substring(7).trim();
+
         try {
             Claims claims = jwtService.parse(token).getBody();
 
-            // Username from "username" -> "preferred_username" -> "sub"
+            // 🔹 Extract username
             String username = safeString(claims.get("username"));
-            if (isBlank(username)) username = safeString(claims.get("preferred_username"));
-            if (isBlank(username)) username = claims.getSubject();
+            if (isBlank(username))
+                username = safeString(claims.get("preferred_username"));
+            if (isBlank(username))
+                username = claims.getSubject();
 
             if (isBlank(username)) {
                 log.warn("JWT missing username/sub claim");
@@ -68,35 +76,69 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            // Authorities from role/roles/authorities/scope
-            Collection<SimpleGrantedAuthority> authorities = extractAuthorities(claims);
+            // 🔹 Extract authorities
+            Collection<SimpleGrantedAuthority> authorities =
+                    extractAuthorities(claims);
 
             if (authorities.isEmpty()) {
-                // If you prefer default user role, uncomment:
-                // authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
+                chain.doFilter(request, response);
+                return;
             }
 
-            User principal = new User(username, "", authorities);
-            var auth = new UsernamePasswordAuthenticationToken(principal, null, authorities);
+            // 🔥 Extract role from authorities
+            String roleName = authorities.stream()
+                    .map(SimpleGrantedAuthority::getAuthority)
+                    .findFirst()
+                    .map(r -> r.replace("ROLE_", ""))
+                    .orElse(null);
 
-            // Store both web details and JWT claims in authentication details
+            if (roleName == null) {
+                chain.doFilter(request, response);
+                return;
+            }
+
+            Role role = Role.valueOf(roleName);
+
+            // 🔥 Create CustomUserPrincipal instead of Spring User
+            CustomUserPrincipal principal =
+                    new CustomUserPrincipal(
+                            null,           // userId (optional if not in token)
+                            username,
+                            "",             // password not needed for JWT
+                            role
+                    );
+
+            UsernamePasswordAuthenticationToken auth =
+                    new UsernamePasswordAuthenticationToken(
+                            principal,
+                            null,
+                            authorities
+                    );
+
+            // Add details
             Map<String, Object> details = new HashMap<>();
-            details.put("web", new WebAuthenticationDetailsSource().buildDetails(request));
+            details.put("web",
+                    new WebAuthenticationDetailsSource()
+                            .buildDetails(request));
             details.put("claims", claims);
 
             auth.setDetails(details);
-            SecurityContextHolder.getContext().setAuthentication(auth);
+
+            SecurityContextHolder.getContext()
+                    .setAuthentication(auth);
 
             if (log.isDebugEnabled()) {
-                log.debug("JWT authenticated '{}', authorities={}", username, authorities);
+                log.debug("JWT authenticated '{}', role={}", username, role);
             }
+
         } catch (Exception ex) {
-            // Don’t throw — let the chain continue and your entry point will return 401
             log.debug("JWT parse/authorize failed: {}", ex.getMessage());
         }
 
         chain.doFilter(request, response);
     }
+
+    /* ================= HELPERS ================= */
 
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
@@ -107,37 +149,43 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @SuppressWarnings("unchecked")
-    private static Collection<SimpleGrantedAuthority> extractAuthorities(Claims claims) {
+    private static Collection<SimpleGrantedAuthority>
+    extractAuthorities(Claims claims) {
+
         Set<String> roles = new LinkedHashSet<>();
 
-        // Single "role": "ADMIN"
+        // role: "ADMIN"
         String singleRole = safeString(claims.get("role"));
         if (!isBlank(singleRole)) roles.add(singleRole);
 
-        // Array "roles": ["ADMIN","HR"]
+        // roles: ["ADMIN","HR"]
         Object arr = claims.get("roles");
         if (arr instanceof Collection<?> c) {
-            c.forEach(x -> { String s = safeString(x); if (!isBlank(s)) roles.add(s); });
+            c.forEach(x -> {
+                String s = safeString(x);
+                if (!isBlank(s)) roles.add(s);
+            });
         }
 
-        // Array "authorities": ["ROLE_ADMIN","ROLE_HR"] (normalize by stripping a leading ROLE_)
+        // authorities: ["ROLE_ADMIN"]
         Object auths = claims.get("authorities");
         if (auths instanceof Collection<?> c) {
             c.forEach(x -> {
                 String s = safeString(x);
-                if (!isBlank(s)) roles.add(s.replaceFirst("^ROLE_", ""));
+                if (!isBlank(s))
+                    roles.add(s.replaceFirst("^ROLE_", ""));
             });
         }
 
-        // Space-delimited "scope": "read write admin" -> treat as roles if you use it
+        // scope: "admin user"
         String scope = safeString(claims.get("scope"));
         if (!isBlank(scope)) {
             for (String s : scope.split("\\s+")) {
-                if (!isBlank(s)) roles.add(s.toUpperCase(Locale.ROOT));
+                if (!isBlank(s))
+                    roles.add(s.toUpperCase(Locale.ROOT));
             }
         }
 
-        // Map to ROLE_*
         return roles.stream()
                 .filter(r -> !isBlank(r))
                 .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)

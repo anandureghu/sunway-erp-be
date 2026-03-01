@@ -1,37 +1,54 @@
 package com.erp.mapper;
 
 import com.erp.domain.EmployeeCurrentJob;
-import com.erp.dto.currentjob.*;
+import com.erp.dto.currentjob.EmployeeCurrentJobResponseDTO;
 
 public class EmployeeCurrentJobMapper {
 
     public static EmployeeCurrentJobResponseDTO toDTO(EmployeeCurrentJob e) {
-        EmployeeCurrentJobResponseDTO d = new EmployeeCurrentJobResponseDTO();
-        d.setId(e.getId());
-        d.setEmployeeId(e.getEmployee().getId());
-        d.setJobCode(e.getJobCode());
-        d.setJobTitle(e.getJobTitle());
-        d.setJobLevel(e.getJobLevel());
-        d.setGrade(e.getGrade());
-        d.setDepartmentCode(e.getDepartmentCode());
-        d.setDepartmentName(e.getDepartmentName());
-        d.setEffectiveFrom(e.getEffectiveFrom());
-        d.setStartDate(e.getStartDate());
-        d.setExpectedEndDate(e.getExpectedEndDate());
-        d.setWorkLocation(e.getWorkLocation());
-        d.setWorkCity(e.getWorkCity());
-        d.setWorkCountry(e.getWorkCountry());
 
-        return d;
+        // ✅ Null-safe JobInfo
+        EmployeeCurrentJobResponseDTO.JobInfo jobInfo = null;
+        if (e.getJobCode() != null) {
+            jobInfo = EmployeeCurrentJobResponseDTO.JobInfo.builder()
+                    .id(e.getJobCode().getId())
+                    .code(e.getJobCode().getCode())
+                    .title(e.getJobCode().getTitle())
+                    .level(e.getJobCode().getLevel())
+                    .grade(e.getJobCode().getGrade())
+                    .build();
+        }
+
+        // ✅ Null-safe DepartmentInfo
+        EmployeeCurrentJobResponseDTO.DepartmentInfo departmentInfo = null;
+        if (e.getDepartment() != null) {
+            departmentInfo = EmployeeCurrentJobResponseDTO.DepartmentInfo.builder()
+                    .id(e.getDepartment().getId())
+                    .code(e.getDepartment().getDepartmentCode())
+                    .name(e.getDepartment().getDepartmentName())
+                    .build();
+        }
+
+        // ✅ Null-safe employeeId
+        Long employeeId = e.getEmployee() != null ? e.getEmployee().getId() : null;
+
+        return EmployeeCurrentJobResponseDTO.builder()
+                .id(e.getId())
+                .employeeId(employeeId)
+                .job(jobInfo)
+                .department(departmentInfo)
+                .workLocation(e.getWorkLocation())
+                .workCity(e.getWorkCity())
+                .workCountry(e.getWorkCountry())
+                .effectiveFrom(e.getEffectiveFrom())
+                .startDate(e.getStartDate())
+                .expectedEndDate(e.getExpectedEndDate())
+                .build();
     }
 
-    public static void updateEntity(EmployeeCurrentJob e, EmployeeCurrentJobRequestDTO d) {
-        e.setJobCode(d.getJobCode());
-        e.setJobTitle(d.getJobTitle());
-        e.setJobLevel(d.getJobLevel());
-        e.setGrade(d.getGrade());
-        e.setDepartmentCode(d.getDepartmentCode());
-        e.setDepartmentName(d.getDepartmentName());
+    public static void updateEntity(EmployeeCurrentJob e,
+                                    com.erp.dto.currentjob.EmployeeCurrentJobRequestDTO d) {
+
         e.setEffectiveFrom(d.getEffectiveFrom());
         e.setStartDate(d.getStartDate());
         e.setExpectedEndDate(d.getExpectedEndDate());

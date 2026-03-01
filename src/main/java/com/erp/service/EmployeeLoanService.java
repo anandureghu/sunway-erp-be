@@ -4,11 +4,13 @@ import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLoan;
 import com.erp.domain.LoanSequence;
 import com.erp.domain.LoanType;
+import com.erp.domain.salary.EmployeeCompensation;
 import com.erp.dto.loan.LoanRequestDTO;
 import com.erp.dto.loan.LoanResponseDTO;
-import com.erp.repo.EmployeeRepository;
 import com.erp.repo.EmployeeLoanRepository;
+import com.erp.repo.EmployeeRepository;
 import com.erp.repo.LoanSequenceRepository;
+import com.erp.repo.salary.EmployeeCompensationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,8 +26,10 @@ public class EmployeeLoanService {
     private final EmployeeRepository employeeRepo;
     private final EmployeeLoanRepository loanRepo;
     private final LoanSequenceRepository sequenceRepo;
+    private final EmployeeCompensationRepository compensationRepo;
 
     /* ================= GENERATE LOAN CODE ================= */
+
     @Transactional
     public String generateLoanCode(LoanType loanType) {
 
@@ -45,11 +49,14 @@ public class EmployeeLoanService {
     }
 
     /* ================= APPLY LOAN ================= */
+
     @Transactional
     public LoanResponseDTO applyLoan(Long employeeId, LoanRequestDTO dto) {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
 
         String loanCode = generateLoanCode(dto.getLoanType());
 
@@ -70,10 +77,12 @@ public class EmployeeLoanService {
         loan.setNotes(dto.getNotes());
 
         loan = loanRepo.save(loan);
+
         return toDTO(loan);
     }
 
     /* ================= UPDATE LOAN ================= */
+
     @Transactional
     public LoanResponseDTO updateLoan(Long employeeId, Long loanId, LoanRequestDTO dto) {
 
@@ -87,23 +96,26 @@ public class EmployeeLoanService {
             throw new RuntimeException("Loan does not belong to this employee");
         }
 
+        validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
+
+        Double monthlyDeduction = dto.getLoanAmount() / dto.getLoanPeriod();
+        LocalDate endDate = dto.getStartDate().plusMonths(dto.getLoanPeriod());
+
         loan.setLoanType(dto.getLoanType());
         loan.setLoanAmount(dto.getLoanAmount());
         loan.setLoanPeriod(dto.getLoanPeriod());
-        loan.setStartDate(dto.getStartDate());
-
-        Double monthlyDeduction = dto.getLoanAmount() / dto.getLoanPeriod();
         loan.setMonthlyDeduction(monthlyDeduction);
-
-        LocalDate endDate = dto.getStartDate().plusMonths(dto.getLoanPeriod());
+        loan.setStartDate(dto.getStartDate());
         loan.setEndDate(endDate);
         loan.setNotes(dto.getNotes());
 
         loan = loanRepo.save(loan);
+
         return toDTO(loan);
     }
 
     /* ================= GET EMPLOYEE LOANS ================= */
+
     public List<LoanResponseDTO> getEmployeeLoans(Long employeeId) {
 
         Employee employee = employeeRepo.findById(employeeId)
@@ -120,6 +132,7 @@ public class EmployeeLoanService {
     }
 
     /* ================= GET LOAN BY ID ================= */
+
     public LoanResponseDTO getLoanById(Long loanId) {
 
         EmployeeLoan loan = loanRepo.findById(loanId)
@@ -129,6 +142,7 @@ public class EmployeeLoanService {
     }
 
     /* ================= DELETE LOAN ================= */
+
     @Transactional
     public void deleteLoan(Long employeeId, Long loanId) {
 
@@ -146,6 +160,7 @@ public class EmployeeLoanService {
     }
 
     /* ================= MAKE PAYMENT ================= */
+
     @Transactional
     public LoanResponseDTO makePayment(Long loanId, Double amount) {
 
@@ -154,6 +169,10 @@ public class EmployeeLoanService {
 
         if (!loan.getStatus().equals("ACTIVE")) {
             throw new RuntimeException("Loan is not active");
+        }
+
+        if (amount <= 0) {
+            throw new RuntimeException("Payment amount must be greater than zero");
         }
 
         Double newBalance = loan.getBalance() - amount;
@@ -169,10 +188,50 @@ public class EmployeeLoanService {
         }
 
         loan = loanRepo.save(loan);
+
         return toDTO(loan);
     }
 
-    /* ================= MAPPER ================= */
+    /* ================= VALIDATION METHOD ================= */
+
+    private void validateLoanAgainstSalary(Employee employee,
+                                           Double loanAmount,
+                                           Integer loanPeriod) {
+
+        if (loanAmount == null || loanPeriod == null || loanPeriod <= 0) {
+            throw new RuntimeException("Invalid loan amount or period");
+        }
+
+        EmployeeCompensation compensation = compensationRepo
+                .findActiveByEmployee(employee)
+                .orElseThrow(() ->
+                        new RuntimeException("Active employee compensation not configured"));
+
+        Double salary = compensation.getBasicSalary(); // 🔥 using basic salary
+
+        if (salary == null || salary <= 0) {
+            throw new RuntimeException("Employee basic salary not configured");
+        }
+
+        Double monthlyDeduction = loanAmount / loanPeriod;
+
+        Double maxAllowed = salary * 0.30; // 30% rule
+
+        if (monthlyDeduction > maxAllowed) {
+            throw new RuntimeException(
+                    "Monthly deduction exceeds 30% of salary. Max allowed: " + maxAllowed
+            );
+        }
+
+        if (monthlyDeduction > salary) {
+            throw new RuntimeException(
+                    "Monthly deduction cannot exceed employee salary"
+            );
+        }
+    }
+
+    /* ================= DTO MAPPER ================= */
+
     private LoanResponseDTO toDTO(EmployeeLoan loan) {
 
         LoanResponseDTO dto = new LoanResponseDTO();
@@ -191,10 +250,10 @@ public class EmployeeLoanService {
 
         Employee employee = loan.getEmployee();
         if (employee != null) {
+
             dto.setEmployeeId(employee.getId());
             dto.setEmployeeName(employee.getFirstName() + " " + employee.getLastName());
 
-            // 🔥 ADD CURRENCY FROM COMPANY
             if (employee.getCompany() != null &&
                     employee.getCompany().getCurrency() != null) {
 

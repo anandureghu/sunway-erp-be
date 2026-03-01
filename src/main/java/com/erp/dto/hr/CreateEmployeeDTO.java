@@ -1,7 +1,7 @@
 package com.erp.dto.hr;
 
 import com.erp.domain.EmployeeStatus;
-import com.erp.domain.Role;
+import com.erp.domain.security.Role;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -40,11 +40,11 @@ public class CreateEmployeeDTO {
     // =======================
     // RELATIONS
     // =======================
-    private Long companyId;      // required only for SUPER_ADMIN
+    private Long companyId;
     private Long departmentId;
 
     // =======================
     // ROLE
     // =======================
-    private Role role;           // defaults to USER if null
+    private Role role;
 }

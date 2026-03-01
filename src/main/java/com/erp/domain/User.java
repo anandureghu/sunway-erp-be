@@ -1,6 +1,7 @@
 package com.erp.domain;
 
 import com.erp.domain.hr.Company;
+import com.erp.domain.security.Role;
 import jakarta.persistence.*;
 import lombok.*;
 

@@ -15,5 +15,6 @@ public class LoanRequestDTO {
     private Double loanAmount;
     private Integer loanPeriod; // months
     private LocalDate startDate;
+    private LocalDate endDate;
     private String notes;
 }

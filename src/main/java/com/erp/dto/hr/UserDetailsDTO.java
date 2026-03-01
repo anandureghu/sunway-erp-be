@@ -1,6 +1,6 @@
 package com.erp.dto.hr;
 
-import com.erp.domain.Role;
+import com.erp.domain.security.Role;
 import lombok.*;
 
 @Data
