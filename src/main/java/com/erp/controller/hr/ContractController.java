@@ -56,10 +56,14 @@ public class ContractController {
             @PathVariable("employeeId") Long employeeId
     ) {
 
-        ContractResponseDTO response =
+        ContractResponseDTO contract =
                 contractService.getByEmployee(employeeId);
 
-        return ResponseEntity.ok(response);
+        if (contract == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(contract);
     }
 
     // ====================================================

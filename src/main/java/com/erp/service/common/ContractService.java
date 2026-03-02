@@ -7,12 +7,15 @@ import com.erp.dto.hr.AllowanceResponseDTO;
 import com.erp.dto.hr.ContractRequestDTO;
 import com.erp.dto.hr.ContractResponseDTO;
 import com.erp.repo.EmployeeRepository;
-import com.erp.repo.hr.*;
+import com.erp.repo.hr.AllowanceTypeRepository;
+import com.erp.repo.hr.ContractRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -25,9 +28,8 @@ public class ContractService {
 
     // ================= CREATE =================
 
-    public ContractResponseDTO createContract(
-            Long employeeId,
-            ContractRequestDTO dto) {
+    public ContractResponseDTO createContract(Long employeeId,
+                                              ContractRequestDTO dto) {
 
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
@@ -40,6 +42,7 @@ public class ContractService {
         contract.setExpirationDate(dto.getExpirationDate());
         contract.setNoticePeriodDays(dto.getNoticePeriodDays());
         contract.setEmployee(employee);
+        contract.setAllowances(new ArrayList<>());
 
         mapAllowances(contract, dto.getAllowances());
 
@@ -50,9 +53,8 @@ public class ContractService {
 
     // ================= UPDATE =================
 
-    public ContractResponseDTO updateContract(
-            Long contractId,
-            ContractRequestDTO dto) {
+    public ContractResponseDTO updateContract(Long contractId,
+                                              ContractRequestDTO dto) {
 
         Contract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new RuntimeException("Contract not found"));
@@ -63,7 +65,7 @@ public class ContractService {
         contract.setExpirationDate(dto.getExpirationDate());
         contract.setNoticePeriodDays(dto.getNoticePeriodDays());
 
-        // Clear old allowances
+        // Clear old allowances (requires orphanRemoval = true)
         contract.getAllowances().clear();
 
         mapAllowances(contract, dto.getAllowances());
@@ -73,50 +75,59 @@ public class ContractService {
 
     // ================= GET =================
 
+    @Transactional(readOnly = true)
     public ContractResponseDTO getByEmployee(Long employeeId) {
 
-        Contract contract = contractRepository.findByEmployeeId(employeeId)
-                .orElseThrow(() -> new RuntimeException("Contract not found"));
-
-        return mapToResponse(contract);
+        return contractRepository.findByEmployeeId(employeeId)
+                .map(this::mapToResponse)
+                .orElse(null);   // IMPORTANT: no exception, no 500
     }
 
     // ================= DELETE =================
 
-    public void delete(Long id) {
-        Contract contract = contractRepository.findById(id)
+    public void delete(Long contractId) {
+
+        Contract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new RuntimeException("Contract not found"));
 
         contract.setDeleted(true);
     }
 
-    // ================= MAPPING METHODS =================
+    // ================= ALLOWANCE MAPPING =================
 
-    private void mapAllowances(
-            Contract contract,
-            List<AllowanceRequestDTO> allowanceDTOs) {
+    private void mapAllowances(Contract contract,
+                               List<AllowanceRequestDTO> allowanceDTOs) {
 
-        List<SalaryAllowance> allowances = allowanceDTOs
-                .stream()
-                .map(a -> {
+        if (allowanceDTOs == null || allowanceDTOs.isEmpty()) {
+            return;
+        }
 
-                    AllowanceType type = allowanceTypeRepository
-                            .findById(a.getAllowanceTypeId())
-                            .orElseThrow(() ->
-                                    new RuntimeException("Allowance type not found"));
+        for (AllowanceRequestDTO dto : allowanceDTOs) {
 
-                    return SalaryAllowance.builder()
-                            .allowanceType(type)
-                            .amount(a.getAmount())
-                            .effectiveDate(a.getEffectiveDate())
-                            .note(a.getNote())
-                            .contract(contract)
-                            .build();
-                })
-                .toList();
+            String name = dto.getAllowanceType().trim();
 
-        contract.getAllowances().addAll(allowances);
+            // Find existing OR create new automatically
+            AllowanceType type = allowanceTypeRepository
+                    .findByNameIgnoreCase(name)
+                    .orElseGet(() -> {
+                        AllowanceType newType = new AllowanceType();
+                        newType.setName(name);
+                        newType.setActive(true);
+                        return allowanceTypeRepository.save(newType);
+                    });
+
+            SalaryAllowance allowance = SalaryAllowance.builder()
+                    .allowanceType(type)
+                    .amount(dto.getAmount())
+                    .effectiveDate(dto.getEffectiveDate())
+                    .note(dto.getNote())
+                    .contract(contract)
+                    .build();
+
+            contract.getAllowances().add(allowance);
+        }
     }
+    // ================= RESPONSE MAPPING =================
 
     private ContractResponseDTO mapToResponse(Contract contract) {
 
@@ -125,6 +136,7 @@ public class ContractService {
                         .stream()
                         .map(a -> AllowanceResponseDTO.builder()
                                 .id(a.getId())
+                                .allowanceTypeId(a.getAllowanceType().getId())
                                 .allowanceType(a.getAllowanceType().getName())
                                 .amount(a.getAmount())
                                 .effectiveDate(a.getEffectiveDate())

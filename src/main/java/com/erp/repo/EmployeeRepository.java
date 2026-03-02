@@ -1,8 +1,8 @@
 package com.erp.repo;
 
 import com.erp.domain.Employee;
-import com.erp.domain.security.Role;
 import com.erp.domain.hr.Company;
+import com.erp.domain.security.Role;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
@@ -35,8 +35,17 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     // Get paginated employees by company
     Page<Employee> findByCompanyId(Long companyId, Pageable pageable);
 
-    // Find company admin (ADMIN or SUPER_ADMIN)
-    Optional<Employee> findByCompanyIdAndUserRoleIn(Long companyId, List<Role> roles);
+    // 🔥 FIXED: Get FIRST company admin (prevents crash)
+    Optional<Employee> findFirstByCompanyIdAndUserRoleIn(
+            Long companyId,
+            List<Role> roles
+    );
+
+    // Optional: If you ever need ALL admins
+    List<Employee> findAllByCompanyIdAndUserRoleIn(
+            Long companyId,
+            List<Role> roles
+    );
 
     // Check if company already has admin
     boolean existsByCompanyIdAndUserRole(Long companyId, Role role);

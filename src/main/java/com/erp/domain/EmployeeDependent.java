@@ -46,4 +46,27 @@ public class EmployeeDependent {
 
     @Column(length = 50)
     private String relationship;
+
+    // ✅ Contact Information
+
+    @Column(length = 20)
+    private String phoneNumber;
+
+    @Column(length = 150)
+    private String addressLine1;
+
+    @Column(length = 150)
+    private String addressLine2;
+
+    @Column(length = 100)
+    private String city;
+
+    @Column(length = 100)
+    private String state;
+
+    @Column(length = 20)
+    private String postalCode;
+
+    @Column(length = 100)
+    private String country;
 }

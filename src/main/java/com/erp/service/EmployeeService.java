@@ -320,7 +320,7 @@ public class EmployeeService {
         List<Role> roles = List.of(Role.ADMIN, Role.SUPER_ADMIN);
 
         Employee admin = employeeRepository
-                .findByCompanyIdAndUserRoleIn(companyId, roles)
+                .findFirstByCompanyIdAndUserRoleIn(companyId, roles)
                 .orElseThrow(() -> new RuntimeException("Admin not found"));
 
         return toDTO(admin);

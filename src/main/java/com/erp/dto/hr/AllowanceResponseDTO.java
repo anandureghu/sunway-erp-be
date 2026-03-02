@@ -11,6 +11,7 @@ import java.time.LocalDate;
 public class AllowanceResponseDTO {
 
     private Long id;
+    private Long allowanceTypeId;
     private String allowanceType;
     private BigDecimal amount;
     private LocalDate effectiveDate;

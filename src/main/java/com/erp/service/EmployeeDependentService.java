@@ -38,6 +38,16 @@ public class EmployeeDependentService {
                 .nationality(dto.getNationality())
                 .maritalStatus(dto.getMaritalStatus())
                 .relationship(dto.getRelationship())
+
+                // ✅ Contact Information
+                .phoneNumber(dto.getPhoneNumber())
+                .addressLine1(dto.getAddressLine1())
+                .addressLine2(dto.getAddressLine2())
+                .city(dto.getCity())
+                .state(dto.getState())
+                .postalCode(dto.getPostalCode())
+                .country(dto.getCountry())
+
                 .build();
 
         dependentRepository.save(dependent);
@@ -61,6 +71,15 @@ public class EmployeeDependentService {
         dependent.setNationality(dto.getNationality());
         dependent.setMaritalStatus(dto.getMaritalStatus());
         dependent.setRelationship(dto.getRelationship());
+
+        // ✅ Contact Information
+        dependent.setPhoneNumber(dto.getPhoneNumber());
+        dependent.setAddressLine1(dto.getAddressLine1());
+        dependent.setAddressLine2(dto.getAddressLine2());
+        dependent.setCity(dto.getCity());
+        dependent.setState(dto.getState());
+        dependent.setPostalCode(dto.getPostalCode());
+        dependent.setCountry(dto.getCountry());
 
         dependentRepository.save(dependent);
         return toDTO(dependent);
@@ -89,6 +108,9 @@ public class EmployeeDependentService {
     // DELETE DEPENDENT
     // =========================
     public void deleteDependent(Long dependentId) {
+        if (!dependentRepository.existsById(dependentId)) {
+            throw new RuntimeException("Dependent not found");
+        }
         dependentRepository.deleteById(dependentId);
     }
 
@@ -108,6 +130,16 @@ public class EmployeeDependentService {
                 .nationality(dep.getNationality())
                 .maritalStatus(dep.getMaritalStatus())
                 .relationship(dep.getRelationship())
+
+                // ✅ Contact Information
+                .phoneNumber(dep.getPhoneNumber())
+                .addressLine1(dep.getAddressLine1())
+                .addressLine2(dep.getAddressLine2())
+                .city(dep.getCity())
+                .state(dep.getState())
+                .postalCode(dep.getPostalCode())
+                .country(dep.getCountry())
+
                 .build();
     }
 }

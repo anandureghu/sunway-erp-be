@@ -11,4 +11,6 @@ public interface AllowanceTypeRepository extends JpaRepository<AllowanceType, Lo
     Optional<AllowanceType> findByName(String name);
 
     List<AllowanceType> findByActiveTrue();
+
+    Optional<AllowanceType> findByNameIgnoreCase(String name);
 }
