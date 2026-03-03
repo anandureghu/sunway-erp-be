@@ -1,0 +1,3 @@
+package com.erp.domain.security;
+public enum Role { ADMIN, HR, USER, SUPER_ADMIN, FINANCE_MANAGER, ACCOUNTANT, AP_AR_CLERK
+,CONTROLLER, AUDITOR_EXTERNAL}

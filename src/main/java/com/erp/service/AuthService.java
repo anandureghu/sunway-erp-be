@@ -1,7 +1,7 @@
 package com.erp.service;
 
 import com.erp.domain.Employee;
-import com.erp.domain.Role;
+import com.erp.domain.security.Role;
 import com.erp.domain.User;
 import com.erp.dto.auth.LoginRequest;
 import com.erp.dto.auth.RegisterRequest;

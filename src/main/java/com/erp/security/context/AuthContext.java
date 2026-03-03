@@ -8,7 +8,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
-
 @Component
 public class AuthContext {
 
@@ -18,12 +17,9 @@ public class AuthContext {
         this.userRepository = userRepository;
     }
 
-    // ============================================================
-    // Get FULL authenticated User entity
-    // ============================================================
-    public User getCurrentUser() {
-
+    private Claims getClaims() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
         if (auth == null || !auth.isAuthenticated()) {
             return null;
         }
@@ -32,49 +28,41 @@ public class AuthContext {
 
         if (details instanceof Map<?, ?> map &&
                 map.get("claims") instanceof Claims claims) {
-
-            Object userId = claims.get("userId");
-            if (userId == null) {
-                return null;
-            }
-
-            return userRepository.findById(
-                    Long.valueOf(String.valueOf(userId))
-            ).orElse(null);
+            return claims;
         }
 
         return null;
+    }
+
+    public Long getCurrentUserId() {
+        Claims claims = getClaims();
+        if (claims == null) return null;
+
+        Object userId = claims.get("userId");
+        return userId != null ? Long.valueOf(String.valueOf(userId)) : null;
     }
 
     public Long getCurrentCompanyId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.isAuthenticated()) {
-            Object details = auth.getDetails();
-            if (details instanceof Map<?, ?> map && map.get("claims") instanceof Claims claims) {
-                Object companyId = claims.get("companyId");
-                if (companyId != null) {
-                    return Long.valueOf(String.valueOf(companyId));
-                }
-            }
-        }
-        return null;
-    }
+        Claims claims = getClaims();
+        if (claims == null) return null;
 
-    // ============================================================
-    // Convenience methods (still useful)
-    // ============================================================
-    public Long getCurrentUserId() {
-        User user = getCurrentUser();
-        return user != null ? user.getId() : null;
-    }
-
-    public String getCurrentUsername() {
-        User user = getCurrentUser();
-        return user != null ? user.getUsername() : null;
+        Object companyId = claims.get("companyId");
+        return companyId != null ? Long.valueOf(String.valueOf(companyId)) : null;
     }
 
     public String getCurrentUserRole() {
-        User user = getCurrentUser();
-        return user != null ? user.getRole().name() : null;
+        Claims claims = getClaims();
+        if (claims == null) return null;
+
+        Object role = claims.get("role");
+        return role != null ? String.valueOf(role) : null;
+    }
+
+    // Only call DB when really needed
+    public User getCurrentUser() {
+        Long userId = getCurrentUserId();
+        return userId != null
+                ? userRepository.findById(userId).orElse(null)
+                : null;
     }
 }

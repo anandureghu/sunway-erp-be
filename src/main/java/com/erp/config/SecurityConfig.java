@@ -22,9 +22,8 @@ import org.springframework.web.cors.*;
 
 import java.util.Arrays;
 import java.util.List;
-
 @Configuration
-@EnableMethodSecurity
+@EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final RestAuthenticationEntryPoint entryPoint;

@@ -1,8 +1,12 @@
 package com.erp.controller;
 
+import com.erp.domain.security.HrAction;
+import com.erp.domain.security.HrModule;
 import com.erp.dto.immigration.PassportRequestDTO;
 import com.erp.dto.immigration.PassportResponseDTO;
 import com.erp.service.PassportService;
+import com.erp.service.security.annotation.HrPermission;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +18,12 @@ public class EmployeePassportController {
 
     private final PassportService passportService;
 
+    // ======================================================
+    // GET PASSPORT
+    // VIEW_OWN — user views their own passport
+    // VIEW_ALL — admin/HR views anyone's passport
+    // ======================================================
+    @HrPermission(module = HrModule.IMMIGRATION, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping("/{employeeId}/passport")
     public ResponseEntity<PassportResponseDTO> getPassport(
             @PathVariable("employeeId") Long employeeId
@@ -21,24 +31,39 @@ public class EmployeePassportController {
         return ResponseEntity.ok(passportService.getByEmployee(employeeId));
     }
 
+    // ======================================================
+    // CREATE PASSPORT
+    // CREATE — adding a new passport record
+    // ======================================================
+    @HrPermission(module = HrModule.IMMIGRATION, action = {HrAction.CREATE})
     @PostMapping("/{employeeId}/passport")
     public ResponseEntity<PassportResponseDTO> createPassport(
             @PathVariable("employeeId") Long employeeId,
-            @RequestBody PassportRequestDTO dto
+            @Valid @RequestBody PassportRequestDTO dto
     ) {
         dto.setEmployeeId(employeeId);
         return ResponseEntity.ok(passportService.create(dto));
     }
 
+    // ======================================================
+    // UPDATE PASSPORT
+    // EDIT — updating an existing passport record
+    // ======================================================
+    @HrPermission(module = HrModule.IMMIGRATION, action = {HrAction.EDIT})
     @PutMapping("/{employeeId}/passport")
     public ResponseEntity<PassportResponseDTO> updatePassport(
             @PathVariable("employeeId") Long employeeId,
-            @RequestBody PassportRequestDTO dto
+            @Valid @RequestBody PassportRequestDTO dto
     ) {
         dto.setEmployeeId(employeeId);
         return ResponseEntity.ok(passportService.update(dto));
     }
 
+    // ======================================================
+    // DELETE PASSPORT
+    // DELETE — removing a passport record
+    // ======================================================
+    @HrPermission(module = HrModule.IMMIGRATION, action = {HrAction.DELETE})
     @DeleteMapping("/{employeeId}/passport")
     public ResponseEntity<Void> deletePassport(
             @PathVariable("employeeId") Long employeeId

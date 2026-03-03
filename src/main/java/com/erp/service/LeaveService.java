@@ -228,7 +228,7 @@ public class LeaveService {
     }
 
     /*
-       🔥 AUTO CREATE BALANCE IF MISSING
+        AUTO CREATE BALANCE IF MISSING
     */
     private EmployeeLeaveBalance getOrCreateBalance(
             Employee emp,

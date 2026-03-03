@@ -14,5 +14,4 @@ public class CreateDepartmentDTO {
     private String departmentName;
     private String description;
     private Long managerId;
-    private Long companyId; // Instead of full company object
 }

@@ -3,6 +3,9 @@ package com.erp.service;
 import com.erp.domain.*;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.Department;
+import com.erp.domain.security.HrAction;
+import com.erp.domain.security.HrModule;
+import com.erp.domain.security.Role;
 import com.erp.dto.common.PageResponse;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -18,11 +21,13 @@ import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
+import com.erp.service.security.PermissionCheckService;
 import com.erp.util.EmployeeUserUtil;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,10 +47,11 @@ public class EmployeeService {
     private final EmployeeContactInfoRepository contactInfoRepository;
     private final CompanyLeavePolicyRepository policyRepo;
     private final EmployeeLeaveBalanceRepository balanceRepo;
-    private final LeavePolicyService leavePolicyService; // ✅ Added
+    private final LeavePolicyService leavePolicyService;
     private final AuthContext authContext;
     private final PasswordEncoder passwordEncoder;
     private final FileStorageService fileStorageService;
+    private final PermissionCheckService permissionCheckService;
 
     public EmployeeService(
             EmployeeRepository employeeRepository,
@@ -55,10 +61,10 @@ public class EmployeeService {
             EmployeeContactInfoRepository contactInfoRepository,
             CompanyLeavePolicyRepository policyRepo,
             EmployeeLeaveBalanceRepository balanceRepo,
-            LeavePolicyService leavePolicyService, 
+            LeavePolicyService leavePolicyService,
             AuthContext authContext,
             PasswordEncoder passwordEncoder,
-            FileStorageService fileStorageService
+            FileStorageService fileStorageService, PermissionCheckService permissionCheckService
     ) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
@@ -67,21 +73,33 @@ public class EmployeeService {
         this.contactInfoRepository = contactInfoRepository;
         this.policyRepo = policyRepo;
         this.balanceRepo = balanceRepo;
-        this.leavePolicyService = leavePolicyService; 
+        this.leavePolicyService = leavePolicyService;
         this.authContext = authContext;
         this.passwordEncoder = passwordEncoder;
         this.fileStorageService = fileStorageService;
+        this.permissionCheckService = permissionCheckService;
     }
 
     // ======================================================
     // CREATE EMPLOYEE
     // ======================================================
+
     @Transactional
     public EmployeeResponseDTO createEmployee(@Valid CreateEmployeeDTO dto) {
 
         User authUser = getAuthUser();
 
-        Company company = authUser.getCompany();
+        Company company;
+
+        if (dto.getCompanyId() != null) {
+            company = companyRepository.findById(dto.getCompanyId())
+                    .orElseThrow(() -> new RuntimeException("Company not found"));
+        } else {
+            company = authUser.getCompany();
+            if (company == null) {
+                throw new RuntimeException("Company must be specified");
+            }
+        }
 
         Role role = dto.getRole() == null ? Role.USER : dto.getRole();
 
@@ -132,8 +150,6 @@ public class EmployeeService {
                 .build();
 
         employeeRepository.save(employee);
-
-        // ✅ Auto initialize leave balances
         leavePolicyService.initializeLeaveBalancesForEmployee(employee);
 
         return toDTO(employee);
@@ -142,26 +158,38 @@ public class EmployeeService {
     // ======================================================
     // UPDATE EMPLOYEE
     // ======================================================
+
     @Transactional
     public EmployeeResponseDTO updateEmployee(Long id, UpdateEmployeeDTO dto) {
 
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
+        if (dto.getEmployeeNo() != null) employee.setEmployeeNo(dto.getEmployeeNo());
+        if (dto.getPrefix() != null) employee.setPrefix(dto.getPrefix());
         if (dto.getFirstName() != null) employee.setFirstName(dto.getFirstName());
         if (dto.getLastName() != null) employee.setLastName(dto.getLastName());
         if (dto.getGender() != null) employee.setGender(dto.getGender());
         if (dto.getStatus() != null) employee.setStatus(dto.getStatus());
+        if (dto.getDateOfBirth() != null) employee.setDateOfBirth(dto.getDateOfBirth());
+        if (dto.getJoinDate() != null) employee.setJoinDate(dto.getJoinDate());
+        if (dto.getMaritalStatus() != null) employee.setMaritalStatus(dto.getMaritalStatus());
+        if (dto.getNotes() != null) employee.setNotes(dto.getNotes());
+
+        if (dto.getDepartmentId() != null) {
+            Department department = departmentRepository.findById(dto.getDepartmentId())
+                    .orElseThrow(() -> new RuntimeException("Department not found"));
+            employee.setDepartment(department);
+        }
 
         employee.setUpdatedAt(Instant.now());
-        employeeRepository.save(employee);
-
-        return toDTO(employee);
+        return toDTO(employeeRepository.save(employee));
     }
 
     // ======================================================
     // UPLOAD PROFILE IMAGE
     // ======================================================
+
     @Transactional
     public EmployeeResponseDTO uploadProfileImage(Long id, MultipartFile image) {
 
@@ -169,14 +197,12 @@ public class EmployeeService {
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
         if (image != null && !image.isEmpty()) {
-
             FileUploadResult upload = fileStorageService.upload(
                     image,
                     FileCategory.EMPLOYEE_PROFILE,
                     id.toString(),
                     true
             );
-
             employee.setImageUrl(upload.getBlobPath());
             employeeRepository.save(employee);
         }
@@ -184,13 +210,69 @@ public class EmployeeService {
         return toDTO(employee);
     }
 
-    // ======================================================
-    // GET METHODS
-    // ======================================================
-
     public EmployeeResponseDTO getEmployeeById(Long id) {
-        return toDTO(employeeRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Employee not found")));
+
+        User authUser = getAuthUser();
+
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        // 🔥 If USER and no VIEW_ALL → allow only self
+        if (authUser.getRole() == Role.USER) {
+
+            boolean hasViewAll = permissionCheckService.hasAccess(
+                    SecurityContextHolder.getContext().getAuthentication(),
+                    HrModule.EMPLOYEE_PROFILE,
+                    HrAction.VIEW_ALL
+            );
+
+            if (!hasViewAll) {
+
+                if (employee.getUser() == null ||
+                        !employee.getUser().getId().equals(authUser.getId())) {
+
+                    throw new RuntimeException("Access denied: cannot view other employees");
+                }
+            }
+        }
+
+        return toDTO(employee);
+    }
+
+    // ======================================================
+    // GET METHODS (SECURE USER FILTER)
+    // ======================================================
+    public List<EmployeeResponseDTO> getEmployees() {
+
+        User authUser = getAuthUser();
+
+        if (authUser.getCompany() == null) {
+            throw new RuntimeException("User not linked to any company");
+        }
+
+        if (authUser.getRole() == Role.USER) {
+
+            boolean hasViewAll = permissionCheckService.hasAccess(
+                    SecurityContextHolder.getContext().getAuthentication(),
+                    HrModule.EMPLOYEE_PROFILE,
+                    HrAction.VIEW_ALL
+            );
+
+            if (!hasViewAll) {
+                Employee self = employeeRepository
+                        .findByUserId(authUser.getId())
+                        .orElseThrow(() ->
+                                new RuntimeException("Employee record not found"));
+
+                return List.of(toDTO(self));
+            }
+        }
+
+        return employeeRepository
+                .findByCompanyId(authUser.getCompany().getId())
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
     public List<EmployeeResponseDTO> getEmployeesByCompany(Long companyId) {
@@ -204,6 +286,23 @@ public class EmployeeService {
     }
 
     public PageResponse<EmployeeResponseDTO> getEmployees(int page, int size) {
+
+        User authUser = getAuthUser();
+
+        if (authUser.getRole() == Role.USER) {
+
+            Employee self = employeeRepository.findByUserId(authUser.getId())
+                    .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+            return PageResponse.of(
+                    List.of(toDTO(self)),
+                    1,
+                    1,
+                    0,
+                    1
+            );
+        }
+
         Pageable pageable = PageRequest.of(page, size);
         Page<Employee> empPage = employeeRepository.findAll(pageable);
 
@@ -215,44 +314,30 @@ public class EmployeeService {
                 size
         );
     }
-
+    
     public EmployeeResponseDTO getCompanyAdmin(Long companyId) {
 
         List<Role> roles = List.of(Role.ADMIN, Role.SUPER_ADMIN);
 
         Employee admin = employeeRepository
-                .findByCompanyIdAndUserRoleIn(companyId, roles)
+                .findFirstByCompanyIdAndUserRoleIn(companyId, roles)
                 .orElseThrow(() -> new RuntimeException("Admin not found"));
 
         return toDTO(admin);
     }
 
     public void syncAllEmployeeLeaveBalances(Long companyId) {
-        // Keep existing logic if needed
+        // your existing logic retained
     }
 
     public void deleteEmployee(Long id) {
         employeeRepository.deleteById(id);
     }
 
-    public List<EmployeeResponseDTO> getEmployees() {
-
-        User authUser = getAuthUser();
-
-        if (authUser.getCompany() == null) {
-            throw new RuntimeException("User not linked to any company");
-        }
-
-        return employeeRepository
-                .findByCompanyId(authUser.getCompany().getId())
-                .stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
-    }
-
     // ======================================================
     // DTO MAPPER
     // ======================================================
+
     private EmployeeResponseDTO toDTO(Employee e) {
 
         Company c = e.getCompany();
@@ -269,29 +354,36 @@ public class EmployeeService {
                 .lastName(e.getLastName())
                 .gender(e.getGender())
                 .prefix(e.getPrefix())
-                .status(e.getStatus().name())
+                .status(e.getStatus() != null ? e.getStatus().name() : null)
                 .maritalStatus(e.getMaritalStatus())
                 .dateOfBirth(e.getDateOfBirth())
                 .joinDate(e.getJoinDate())
+                .notes(e.getNotes())
+
+                // ✅ CONTACT
                 .phoneNo(ci != null ? ci.getPhone() : null)
                 .altPhone(ci != null ? ci.getAltPhone() : null)
+
+                // ✅ USER INFO (THIS FIXES YOUR ISSUE)
                 .email(e.getUser() != null ? e.getUser().getEmail() : null)
-                .notes(e.getNotes())
-                .companyId(c != null ? c.getId() : null)
-                .companyName(c != null ? c.getCompanyName() : null)
-                .departmentId(e.getDepartment() != null ? e.getDepartment().getId() : null)
-                .departmentName(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
-                .userId(e.getUser() != null ? e.getUser().getId() : null)
                 .username(e.getUser() != null ? e.getUser().getUsername() : null)
+                .userId(e.getUser() != null ? e.getUser().getId() : null)
                 .role(e.getUser() != null ? e.getUser().getRole() : null)
                 .forcePasswordReset(e.getUser() != null ? e.getUser().getForcePasswordReset() : null)
+
+                // ✅ COMPANY
+                .companyId(c != null ? c.getId() : null)
+                .companyName(c != null ? c.getCompanyName() : null)
+
+                // ✅ DEPARTMENT
+                .departmentId(e.getDepartment() != null ? e.getDepartment().getId() : null)
+                .departmentName(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
+
+                // ✅ IMAGE
                 .imageUrl(imageUrl)
+
                 .build();
     }
-
-    // ======================================================
-    // AUTH HELPER
-    // ======================================================
     private User getAuthUser() {
         Long userId = authContext.getCurrentUserId();
         if (userId == null) throw new RuntimeException("Unauthorized");

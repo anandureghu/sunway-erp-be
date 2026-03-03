@@ -8,7 +8,10 @@ import java.util.List;
 
 @Repository
 public interface DepartmentRepository extends JpaRepository<Department, Long> {
-    List<Department> findAllByCompanyCreatedBy(String createdBy);
 
+    // ✅ Fetch departments by company
     List<Department> findAllByCompanyId(Long companyId);
+
+    // ✅ Prevent duplicate department codes within same company
+    boolean existsByDepartmentCodeAndCompanyId(String departmentCode, Long companyId);
 }

@@ -1,9 +1,13 @@
 package com.erp.controller;
 
 import com.erp.domain.LoanType;
+import com.erp.domain.security.HrAction;
+import com.erp.domain.security.HrModule;
 import com.erp.dto.loan.LoanRequestDTO;
 import com.erp.dto.loan.LoanResponseDTO;
 import com.erp.service.EmployeeLoanService;
+import com.erp.service.security.annotation.HrPermission;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +23,11 @@ public class EmployeeLoanController {
 
     private final EmployeeLoanService loanService;
 
-    /* ========= GET LOAN TYPES (for picklist) ========= */
+    // ======================================================
+    // GET LOAN TYPES (picklist)
+    // VIEW_OWN — needed to populate the loan type dropdown
+    // ======================================================
+    @HrPermission(module = HrModule.LOANS, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping("/types")
     public ResponseEntity<List<LoanTypeDTO>> getLoanTypes() {
         List<LoanTypeDTO> types = Arrays.stream(LoanType.values())
@@ -28,31 +36,24 @@ public class EmployeeLoanController {
         return ResponseEntity.ok(types);
     }
 
-    /* ========= APPLY FOR LOAN ========= */
-    @PostMapping
-    public ResponseEntity<LoanResponseDTO> applyLoan(
-            @PathVariable("employeeId") Long employeeId,
-            @RequestBody LoanRequestDTO dto) {
-        return ResponseEntity.ok(loanService.applyLoan(employeeId, dto));
-    }
-
-    /* ========= UPDATE LOAN ========= */
-    @PutMapping("/{loanId}")
-    public ResponseEntity<LoanResponseDTO> updateLoan(
-            @PathVariable("employeeId") Long employeeId,
-            @PathVariable("loanId") Long loanId,
-            @RequestBody LoanRequestDTO dto) {
-        return ResponseEntity.ok(loanService.updateLoan(employeeId, loanId, dto));
-    }
-
-    /* ========= GET EMPLOYEE LOANS ========= */
+    // ======================================================
+    // GET ALL LOANS FOR EMPLOYEE
+    // VIEW_OWN — user views their own loans
+    // VIEW_ALL — admin/HR views anyone's loans
+    // ======================================================
+    @HrPermission(module = HrModule.LOANS, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping
     public ResponseEntity<List<LoanResponseDTO>> getLoans(
             @PathVariable("employeeId") Long employeeId) {
         return ResponseEntity.ok(loanService.getEmployeeLoans(employeeId));
     }
 
-    /* ========= GET LOAN BY ID ========= */
+    // ======================================================
+    // GET LOAN BY ID
+    // VIEW_OWN — user views their own loan detail
+    // VIEW_ALL — admin/HR views anyone's loan detail
+    // ======================================================
+    @HrPermission(module = HrModule.LOANS, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping("/{loanId}")
     public ResponseEntity<LoanResponseDTO> getLoan(
             @PathVariable("employeeId") Long employeeId,
@@ -60,16 +61,49 @@ public class EmployeeLoanController {
         return ResponseEntity.ok(loanService.getLoanById(loanId));
     }
 
-    /* ========= MAKE PAYMENT ========= */
+    // ======================================================
+    // APPLY FOR LOAN
+    // CREATE — applying for a new loan
+    // ======================================================
+    @HrPermission(module = HrModule.LOANS, action = {HrAction.CREATE})
+    @PostMapping
+    public ResponseEntity<LoanResponseDTO> applyLoan(
+            @PathVariable("employeeId") Long employeeId,
+            @Valid @RequestBody LoanRequestDTO dto) {
+        return ResponseEntity.ok(loanService.applyLoan(employeeId, dto));
+    }
+
+    // ======================================================
+    // UPDATE LOAN
+    // EDIT — updating an existing loan
+    // ======================================================
+    @HrPermission(module = HrModule.LOANS, action = {HrAction.EDIT})
+    @PutMapping("/{loanId}")
+    public ResponseEntity<LoanResponseDTO> updateLoan(
+            @PathVariable("employeeId") Long employeeId,
+            @PathVariable("loanId") Long loanId,
+            @Valid @RequestBody LoanRequestDTO dto) {
+        return ResponseEntity.ok(loanService.updateLoan(employeeId, loanId, dto));
+    }
+
+    // ======================================================
+    // MAKE LOAN PAYMENT
+    // EDIT — making a payment modifies the loan record
+    // ======================================================
+    @HrPermission(module = HrModule.LOANS, action = {HrAction.EDIT})
     @PostMapping("/{loanId}/payment")
     public ResponseEntity<LoanResponseDTO> makePayment(
             @PathVariable("employeeId") Long employeeId,
             @PathVariable("loanId") Long loanId,
-            @RequestBody PaymentDTO payment) {
+            @Valid @RequestBody PaymentDTO payment) {
         return ResponseEntity.ok(loanService.makePayment(loanId, payment.getAmount()));
     }
 
-    /* ========= DELETE LOAN ========= */
+    // ======================================================
+    // DELETE LOAN
+    // DELETE — removing a loan record
+    // ======================================================
+    @HrPermission(module = HrModule.LOANS, action = {HrAction.DELETE})
     @DeleteMapping("/{loanId}")
     public ResponseEntity<Void> deleteLoan(
             @PathVariable("employeeId") Long employeeId,
@@ -78,7 +112,9 @@ public class EmployeeLoanController {
         return ResponseEntity.noContent().build();
     }
 
-    // DTO for loan type picklist
+    // ======================================================
+    // INNER DTOs
+    // ======================================================
     @lombok.Data
     @lombok.AllArgsConstructor
     static class LoanTypeDTO {
@@ -86,7 +122,6 @@ public class EmployeeLoanController {
         private String label;
     }
 
-    // DTO for payment
     @lombok.Data
     static class PaymentDTO {
         private Double amount;

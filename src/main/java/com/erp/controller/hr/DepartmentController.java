@@ -4,11 +4,9 @@ import com.erp.dto.hr.CreateDepartmentDTO;
 import com.erp.dto.hr.DepartmentResponseDTO;
 import com.erp.service.hr.DepartmentService;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
-
 @RestController
-@RequestMapping("/api/departments")
+@RequestMapping("/api/companies/{companyId}/departments")
 public class DepartmentController {
 
     private final DepartmentService departmentService;
@@ -17,33 +15,43 @@ public class DepartmentController {
         this.departmentService = departmentService;
     }
 
-    // Get all departments for logged-in user's companies
     @GetMapping
-    public List<DepartmentResponseDTO> getDepartments() {
-        return departmentService.getDepartmentsForCurrentUser();
-    }
+    public List<DepartmentResponseDTO> getDepartments(
+            @PathVariable("companyId") Long companyId) {
 
-    // Create department
-    @PostMapping
-    public DepartmentResponseDTO createDepartment(@RequestBody CreateDepartmentDTO dto) {
-        return departmentService.createDepartment(dto);
-    }
-
-    // Get single department
-    @GetMapping("/{id}")
-    public DepartmentResponseDTO getDepartmentById(@PathVariable("id") Long id) {
-        return departmentService.getDepartmentById(id);
-    }
-
-    // Delete department
-    @DeleteMapping("/{id}")
-    public void deleteDepartment(@PathVariable("id") Long id) {
-        departmentService.deleteDepartment(id);
-    }
-
-    // Get departments by company
-    @GetMapping("/company/{companyId}")
-    public List<DepartmentResponseDTO> getDepartmentsByCompany(@PathVariable("companyId") Long companyId) {
         return departmentService.getDepartmentsByCompanyId(companyId);
+    }
+
+    @PostMapping
+    public DepartmentResponseDTO createDepartment(
+            @PathVariable("companyId") Long companyId,
+            @RequestBody CreateDepartmentDTO dto) {
+
+        return departmentService.createDepartment(companyId, dto);
+    }
+
+    @PutMapping("/{id}")
+    public DepartmentResponseDTO updateDepartment(
+            @PathVariable("companyId") Long companyId,
+            @PathVariable("id") Long id,
+            @RequestBody CreateDepartmentDTO dto) {
+
+        return departmentService.updateDepartment(companyId, id, dto);
+    }
+
+    @GetMapping("/{id}")
+    public DepartmentResponseDTO getDepartmentById(
+            @PathVariable("companyId") Long companyId,
+            @PathVariable("id") Long id) {
+
+        return departmentService.getDepartmentById(companyId, id);
+    }
+
+    @DeleteMapping("/{id}")
+    public void deleteDepartment(
+            @PathVariable("companyId") Long companyId,
+            @PathVariable("id") Long id) {
+
+        departmentService.deleteDepartment(companyId, id);
     }
 }

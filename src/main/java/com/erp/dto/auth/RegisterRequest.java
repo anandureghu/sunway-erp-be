@@ -1,6 +1,6 @@
 package com.erp.dto.auth;
 
-import com.erp.domain.Role;
+import com.erp.domain.security.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
