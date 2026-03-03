@@ -11,7 +11,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
 @Entity
 @Table(
         name = "contracts",
@@ -64,6 +63,9 @@ public class Contract {
 
     private String attachmentPath;
 
+    @Column(length = 2000) // 🔥 ADD THIS
+    private String termsAndConditions;
+
     // Soft delete
     @Column(nullable = false)
     private boolean deleted = false;
@@ -82,14 +84,16 @@ public class Contract {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // 🔗 Many contracts belong to one employee
+    // Many contracts belong to one employee
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", nullable = false)
     private Employee employee;
 
-    // 🔗 One contract has many allowances
-    @OneToMany(mappedBy = "contract",
+    // One contract has many allowances
+    @OneToMany(
+            mappedBy = "contract",
             cascade = CascadeType.ALL,
-            orphanRemoval = true)
+            orphanRemoval = true
+    )
     private List<SalaryAllowance> allowances = new ArrayList<>();
 }

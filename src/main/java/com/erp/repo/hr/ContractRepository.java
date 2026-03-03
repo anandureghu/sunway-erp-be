@@ -7,7 +7,7 @@ import java.util.Optional;
 
 public interface ContractRepository extends JpaRepository<Contract, Long> {
 
-    Optional<Contract> findByEmployeeId(Long employeeId);
+    Optional<Contract> findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(Long employeeId);
 
     boolean existsByContractCode(String contractCode);
 }

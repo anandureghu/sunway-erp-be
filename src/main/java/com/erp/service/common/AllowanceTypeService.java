@@ -17,10 +17,19 @@ public class AllowanceTypeService {
 
     private final AllowanceTypeRepository repository;
 
+    // ================= CREATE =================
+
     public AllowanceTypeResponseDTO create(AllowanceTypeRequestDTO dto) {
 
+        String normalizedName = dto.getName().trim().toUpperCase();
+
+        repository.findByNameIgnoreCase(normalizedName)
+                .ifPresent(existing -> {
+                    throw new RuntimeException("Allowance type already exists");
+                });
+
         AllowanceType type = AllowanceType.builder()
-                .name(dto.getName().toUpperCase())
+                .name(normalizedName)
                 .description(dto.getDescription())
                 .active(dto.getActive() != null ? dto.getActive() : true)
                 .build();
@@ -28,6 +37,9 @@ public class AllowanceTypeService {
         return mapToResponse(repository.save(type));
     }
 
+    // ================= GET ACTIVE =================
+
+    @Transactional(readOnly = true)
     public List<AllowanceTypeResponseDTO> getActiveTypes() {
 
         return repository.findByActiveTrue()
@@ -36,17 +48,30 @@ public class AllowanceTypeService {
                 .toList();
     }
 
+    // ================= UPDATE =================
+
     public AllowanceTypeResponseDTO update(Long id, AllowanceTypeRequestDTO dto) {
 
         AllowanceType type = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Allowance type not found"));
 
-        type.setName(dto.getName().toUpperCase());
+        String normalizedName = dto.getName().trim().toUpperCase();
+
+        // Prevent renaming to an existing name
+        repository.findByNameIgnoreCase(normalizedName)
+                .filter(existing -> !existing.getId().equals(id))
+                .ifPresent(existing -> {
+                    throw new RuntimeException("Allowance type already exists");
+                });
+
+        type.setName(normalizedName);
         type.setDescription(dto.getDescription());
-        type.setActive(dto.getActive());
+        type.setActive(dto.getActive() != null ? dto.getActive() : true);
 
         return mapToResponse(type);
     }
+
+    // ================= DEACTIVATE =================
 
     public void deactivate(Long id) {
 
@@ -55,6 +80,8 @@ public class AllowanceTypeService {
 
         type.setActive(false);
     }
+
+    // ================= MAPPER =================
 
     private AllowanceTypeResponseDTO mapToResponse(AllowanceType type) {
 

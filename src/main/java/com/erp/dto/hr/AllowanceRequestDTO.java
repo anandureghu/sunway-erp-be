@@ -1,6 +1,6 @@
 package com.erp.dto.hr;
 
-import jakarta.validation.constraints.NotBlank;
+
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
@@ -11,8 +11,6 @@ import java.time.LocalDate;
 @Data
 public class AllowanceRequestDTO {
 
-    @NotBlank(message = "Allowance type is required")
-    private String allowanceType;
 
     @NotNull(message = "Amount is required")
     @Positive(message = "Amount must be greater than 0")
@@ -23,4 +21,6 @@ public class AllowanceRequestDTO {
 
     private String note;
 
+    @NotNull
+    private Long allowanceTypeId;
 }
