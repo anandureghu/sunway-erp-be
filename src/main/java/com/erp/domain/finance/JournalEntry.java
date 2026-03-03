@@ -6,92 +6,72 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.LocalDateTime;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 @Entity
 @Table(name = "journal_entries")
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class JournalEntry {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "journal_entry_number", nullable = false, length = 50, unique = true)
-    private String journalEntryNumber;
+    @Column(name = "je_number", unique = true)
+    private String jeNumber;
 
-    @Column(name = "entry_date", nullable = false)
-    private LocalDate entryDate;
+    @ManyToOne()
+    @JoinColumn(name = "credit_account_id", nullable = false)
+    private ChartOfAccounts creditAccount;
 
-    @Column(name = "period_id")
-    private Long periodId;
+    @ManyToOne()
+    @JoinColumn(name = "debit_account_id", nullable = false)
+    private ChartOfAccounts debitAccount;
 
-    @Column(length = 30)
-    private String source; // Manual, AP, AR, System
+    @Column(nullable = false, precision = 18, scale = 2)
+    private BigDecimal amount;
 
-    @Column(length = 20)
-    private String status; // Draft, Pending, Posted, Reversed
+    private String source;
 
-    @Column(length = 500)
     private String description;
 
-    @Column(name = "total_debit_amount", precision = 18, scale = 2)
-    private BigDecimal totalDebitAmount = BigDecimal.ZERO;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private JournalEntryStatus status;
 
-    @Column(name = "total_credit_amount", precision = 18, scale = 2)
-    private BigDecimal totalCreditAmount = BigDecimal.ZERO;
-
-    // Audit users
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_user_id")
-    private User createdByUser;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "created_by", nullable = false)
+    private User createdBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "approved_by_user_id")
-    private User approvedByUser;
+    @JoinColumn(name = "approved_by")
+    private User approvedBy;
 
-    // Multi-company enforcement
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "company_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "updated_by")
+    private User updatedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
-    // Relations
-    @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<JournalLine> lines = new ArrayList<>();
-
-    // NEW: Posting timestamps
-    @Column(name = "posted_at")
-    private Instant postedAt;
-
-    @Column(name = "reversed_at")
-    private Instant reversedAt;
-
-    // NEW: Link to reversal entry
-    @Column(name = "reversal_entry_id")
-    private Long reversalEntryId;
-
-    // Audit timestamps
-    @Column(name = "created_at")
-    private Instant createdAt;
-
-    @Column(name = "updated_at")
-    private Instant updatedAt;
+    private LocalDateTime createdAt;
+    private LocalDateTime approvedAt;
+    private LocalDateTime updatedAt;
 
     @PrePersist
-    void onCreate() {
-        createdAt = Instant.now();
-        updatedAt = createdAt;
+    public void prePersist() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+        this.status = (this.status == null) ? JournalEntryStatus.PENDING_APPROVAL : this.status;
     }
 
     @PreUpdate
-    void onUpdate() {
-        updatedAt = Instant.now();
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
     }
 }

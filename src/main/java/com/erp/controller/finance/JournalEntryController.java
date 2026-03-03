@@ -1,72 +1,72 @@
 package com.erp.controller.finance;
 
-import com.erp.dto.finance.JournalEntryCreateDTO;
-import com.erp.dto.finance.JournalEntryResponseDTO;
-import com.erp.dto.finance.JournalLineCreateDTO;
-import com.erp.dto.finance.JournalLineUpdateDTO;
+import com.erp.dto.finance.CreateJournalEntryRequest;
+import com.erp.dto.finance.JournalEntryResponse;
+import com.erp.dto.finance.UpdateJournalEntryRequest;
 import com.erp.service.finance.JournalEntryService;
-import org.springframework.http.ResponseEntity;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/finance/journal-entries")
+@RequiredArgsConstructor
 public class JournalEntryController {
 
     private final JournalEntryService service;
 
-    public JournalEntryController(JournalEntryService service) {
-        this.service = service;
-    }
-
-    @PostMapping
-    public ResponseEntity<JournalEntryResponseDTO> create(@RequestBody JournalEntryCreateDTO dto) {
-        return ResponseEntity.ok(service.createJE(dto));
-    }
-
-    @PostMapping("/{id}/post")
-    public ResponseEntity<JournalEntryResponseDTO> post(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(service.postJE(id));
-    }
-
-    @PostMapping("/{id}/reverse")
-    public ResponseEntity<JournalEntryResponseDTO> reverse(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(service.reverseJE(id));
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<JournalEntryResponseDTO> get(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(service.getJE(id));
-    }
 
     @GetMapping
-    public List<JournalEntryResponseDTO> list() {
-        return service.listForCompany();
+    public Page<JournalEntryResponse> getAll(Pageable pageable) {
+        return service.getAll(pageable);
     }
 
-    @PostMapping("/{id}/lines")
-    public ResponseEntity<JournalEntryResponseDTO> addLine(
-            @PathVariable("id") Long id,
-            @RequestBody JournalLineCreateDTO dto
+    // ============================
+    // CREATE
+    // ============================
+    @PostMapping
+    public JournalEntryResponse create(
+            @RequestBody CreateJournalEntryRequest request
     ) {
-        return ResponseEntity.ok(service.addLine(id, dto));
+        return service.create(request);
     }
 
-    @PutMapping("/{id}/lines/{lineId}")
-    public ResponseEntity<JournalEntryResponseDTO> updateLine(
-            @PathVariable("id") Long id,
-            @PathVariable("lineId") Long lineId,
-            @RequestBody JournalLineUpdateDTO dto
+    // ============================
+    // APPROVE
+    // ============================
+    @PutMapping("/{id}/approve")
+    public JournalEntryResponse approve(
+            @PathVariable("id") Long id
     ) {
-        return ResponseEntity.ok(service.updateLine(id, lineId, dto));
+        return service.approve(id);
     }
 
-    @DeleteMapping("/{id}/lines/{lineId}")
-    public ResponseEntity<JournalEntryResponseDTO> deleteLine(
-            @PathVariable("id") Long id,
-            @PathVariable("lineId") Long lineId
+    // ============================
+    // REJECT
+    // ============================
+    @PutMapping("/{id}/reject")
+    public JournalEntryResponse reject(
+            @PathVariable("id") Long id
     ) {
-        return ResponseEntity.ok(service.deleteLine(id, lineId));
+        return service.reject(id);
+    }
+
+    // ============================
+    // HOLD
+    // ============================
+    @PutMapping("/{id}/hold")
+    public JournalEntryResponse hold(
+            @PathVariable("id") Long id
+    ) {
+        return service.hold(id);
+    }
+
+    @PutMapping("/{id}")
+    public JournalEntryResponse edit(
+            @PathVariable("id") Long id,
+            @RequestBody UpdateJournalEntryRequest request
+    ) {
+        return service.edit(id, request);
     }
 }
