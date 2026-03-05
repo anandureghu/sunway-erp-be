@@ -107,22 +107,64 @@ public class BudgetService {
     // --------------------------------------
     // UPDATE
     // --------------------------------------
-    public BudgetResponseDTO updateBudget(Long id, BudgetUpdateDTO dto) {
+    @Transactional
+    public BudgetResponseDTO revise(Long id, BudgetUpdateDTO dto) {
 
         BudgetHeader header = headerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Budget not found"));
 
-        if (!header.getCompany().getId().equals(auth.getCurrentCompanyId())) {
-            throw new RuntimeException("Access denied");
+        // Always revise from root budget
+        if (header.getParentBudget() != null) {
+            header = header.getParentBudget();
         }
 
-        header.setBudgetName(dto.getBudgetName());
-        header.setFiscalYear(dto.getFiscalYear());
-        header.setStartDate(dto.getStartDate());
-        header.setEndDate(dto.getEndDate());
-        header.setAmount(dto.getAmount());
+        long reviseCount = headerRepo.countByParentBudgetId(header.getId());
 
-        return toDTO(headerRepo.save(header));
+        if (reviseCount >= 5) {
+            throw new RuntimeException("Exceeded maximum revise limit (5)");
+        }
+
+        // update parent revision count
+        header.setReviseCount((header.getReviseCount() == null ? 0 : header.getReviseCount()) + 1);
+        headerRepo.save(header);
+
+        BudgetHeader newHeader = BudgetHeader.builder()
+                .parentBudget(header)
+                .status(BudgetStatus.REVISED)
+                .budgetName(header.getBudgetName() + " (Rev " + (reviseCount + 1) + ")")
+                .fiscalYear(header.getFiscalYear())
+                .startDate(header.getStartDate())
+                .endDate(header.getEndDate())
+                .amount(dto.getAmount())
+                .reviseCount(reviseCount + 1)
+                .company(header.getCompany())
+                .build();
+
+        newHeader = headerRepo.save(newHeader);
+
+        BudgetHeader finalNewHeader = newHeader;
+        List<BudgetLine> copiedLines = header.getLines() == null || header.getLines().isEmpty()
+                ? new ArrayList<>()
+                : header.getLines().stream()
+                .map(l -> BudgetLine.builder()
+                        .account(l.getAccount())
+                        .department(l.getDepartment())
+                        .projectId(l.getProjectId())
+                        .startDate(l.getStartDate())
+                        .endDate(l.getEndDate())
+                        .notes(l.getNotes())
+                        .status(BudgetStatus.IMPLEMENTED)
+                        .createdByUser(l.getCreatedByUser())
+                        .updatedByUser(l.getUpdatedByUser())
+                        .approvedByUser(l.getApprovedByUser())
+                        .amount(l.getAmount())
+                        .budgetHeader(finalNewHeader)
+                        .build())
+                .toList();
+
+        newHeader.setLines(copiedLines);
+
+        return toDTO(headerRepo.save(newHeader));
     }
 
     // --------------------------------------
@@ -145,7 +187,16 @@ public class BudgetService {
         BudgetHeader header = headerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Budget not found"));
 
-        header.setStatus(BudgetStatus.CLOSED);
+        header.setStatus(BudgetStatus.REJECTED);
+
+        return toDTO(headerRepo.save(header));
+    }
+
+    public BudgetResponseDTO hold(Long id) {
+        BudgetHeader header = headerRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Budget not found"));
+
+        header.setStatus(BudgetStatus.HOLD);
 
         return toDTO(headerRepo.save(header));
     }
@@ -169,7 +220,7 @@ public class BudgetService {
                 .createdByUserId(h.getCreatedByUser() != null ? h.getCreatedByUser().getId() : null)
                 .approvedByUserId(h.getApprovedByUser() != null ? h.getApprovedByUser().getId() : null)
                 .lines(
-                        h.getLines().stream().map(l ->
+                        h.getLines() != null ? h.getLines().stream().map(l ->
                                 BudgetLineDTO.builder()
                                         .id(l.getId())
                                         .accountId(l.getAccount().getId())
@@ -194,7 +245,7 @@ public class BudgetService {
                                         .approvedByUserId(l.getApprovedByUser() != null ? l.getApprovedByUser().getId() : null)
 
                                         .build()
-                        ).toList()
+                        ).toList() : new ArrayList<>()
                 )
                 .build();
     }

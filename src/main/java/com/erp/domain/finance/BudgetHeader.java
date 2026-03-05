@@ -36,7 +36,12 @@ public class BudgetHeader {
 
     @Column(nullable = false, length = 20)
     private BudgetStatus status;
-    // Draft, Active, Closed
+
+    @ManyToOne()
+    @JoinColumn(name = "parent_budget")
+    private BudgetHeader parentBudget;
+
+    private Long reviseCount = 0L;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")

@@ -22,4 +22,6 @@ public interface BudgetHeaderRepository extends JpaRepository<BudgetHeader, Long
             """)
     void updateAmountOnly(@Param("id") Long id,
                           @Param("amount") Long amount);
+
+    long countByParentBudgetId(Long parentId);
 }

@@ -33,8 +33,8 @@ public class BudgetController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<BudgetResponseDTO> update(@PathVariable("id") Long id, @RequestBody BudgetUpdateDTO dto) {
-        return ResponseEntity.ok(service.updateBudget(id, dto));
+    public ResponseEntity<BudgetResponseDTO> revise(@PathVariable("id") Long id, @RequestBody BudgetUpdateDTO dto) {
+        return ResponseEntity.ok(service.revise(id, dto));
     }
 
     @PostMapping("/{id}/activate")
@@ -47,6 +47,10 @@ public class BudgetController {
         return ResponseEntity.ok(service.close(id));
     }
 
+    @PostMapping("/{id}/hold")
+    public ResponseEntity<BudgetResponseDTO> hold(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(service.hold(id));
+    }
 
     @PostMapping("/{id}/lines")
     public ResponseEntity<BudgetResponseDTO> addLine(
