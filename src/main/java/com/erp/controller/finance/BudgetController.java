@@ -1,5 +1,6 @@
 package com.erp.controller.finance;
 
+import com.erp.domain.finance.BudgetStatus;
 import com.erp.dto.finance.*;
 import com.erp.service.finance.BudgetService;
 import org.springframework.http.ResponseEntity;
@@ -67,6 +68,15 @@ public class BudgetController {
             @RequestBody BudgetLineUpdateDTO dto
     ) {
         return ResponseEntity.ok(service.updateLine(id, lineId, dto));
+    }
+
+    @PatchMapping("/{id}/lines/{lineId}")
+    public ResponseEntity<BudgetResponseDTO> updateLineStatus(
+            @PathVariable("id") Long id,
+            @PathVariable("lineId") Long lineId,
+            @RequestParam("status") BudgetStatus status
+    ) {
+        return ResponseEntity.ok(service.updateLineStatus(id, lineId, status));
     }
 
     @DeleteMapping("/{id}/lines/{lineId}")

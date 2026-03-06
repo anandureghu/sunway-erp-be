@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -112,6 +113,10 @@ public class BudgetService {
 
         BudgetHeader header = headerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Budget not found"));
+
+        if (Objects.equals(header.getAmount(), dto.getAmount())) {
+            throw new RuntimeException("revised amount is same as budget");
+        }
 
         // Always revise from root budget
         if (header.getParentBudget() != null) {
@@ -260,6 +265,10 @@ public class BudgetService {
         BudgetHeader bh = headerRepo.findById(journalEntryId)
                 .orElseThrow(() -> new RuntimeException("Journal Entry not found"));
 
+        if (bh.getStatus() != BudgetStatus.APPROVED) {
+            throw new RuntimeException("Budget is not approved");
+        }
+
         // 3. Initialize lazy list to avoid transient issues
         List<BudgetLine> lines = bh.getLines();
         if (lines == null) {
@@ -267,6 +276,8 @@ public class BudgetService {
             bh.setLines(lines);
         } else {
             lines.size(); // forces initialization
+            // Validate budget limit
+            validateBudgetLimit(bh, dto.getAmount());
         }
 
         // 4. Load managed Account (required)
@@ -337,6 +348,23 @@ public class BudgetService {
         return toDTO(bh);
     }
 
+    private void validateBudgetLimit(BudgetHeader bh, BigDecimal newAmount) {
+
+        BigDecimal totalAllocated = bh.getLines()
+                .stream()
+                .map(BudgetLine::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalAfterAdd = totalAllocated.add(newAmount);
+
+        if (totalAfterAdd.compareTo(bh.getAmount()) > 0) {
+            throw new RuntimeException(
+                    "Budget exceeded. Remaining budget: " +
+                            bh.getAmount().subtract(totalAllocated)
+            );
+        }
+    }
+
 
     @Transactional
     public BudgetResponseDTO updateLine(Long bhId, Long lineId, BudgetLineUpdateDTO dto) {
@@ -360,8 +388,7 @@ public class BudgetService {
             throw new RuntimeException("Line does not belong to this budget");
 
         BigDecimal prevAmount = line.getAmount();
-
-
+        
         Optional<BudgetLine> existing =
                 lineRepo.findByBudgetHeaderAndAccountAndDepartmentAndProjectId(
                         bh,
@@ -394,6 +421,34 @@ public class BudgetService {
         return toDTO(bh);
     }
 
+    @Transactional
+    public BudgetResponseDTO updateLineStatus(Long bhId, Long lineId, BudgetStatus status) {
+
+        User user = User.builder()
+                .id(auth.getCurrentUserId())
+                .build();
+
+        BudgetHeader bh = getBHEntity(bhId);
+
+        BudgetLine line = lineRepo.findById(lineId)
+                .orElseThrow(() -> new RuntimeException("Budget line not found"));
+
+        if (!line.getBudgetHeader().getId().equals(bhId)) {
+            throw new RuntimeException("Line does not belong to this budget");
+        }
+
+        line.setStatus(status);
+
+        if (status == BudgetStatus.APPROVED) {
+            line.setApprovedByUser(user);
+        }
+
+        line.setUpdatedByUser(user);
+
+        lineRepo.save(line);
+
+        return toDTO(bh);
+    }
 
     @Transactional
     public BudgetResponseDTO deleteLine(Long bhId, Long lineId) {
