@@ -64,7 +64,8 @@ public class EmployeeService {
             LeavePolicyService leavePolicyService,
             AuthContext authContext,
             PasswordEncoder passwordEncoder,
-            FileStorageService fileStorageService, PermissionCheckService permissionCheckService
+            FileStorageService fileStorageService,
+            PermissionCheckService permissionCheckService
     ) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
@@ -90,17 +91,15 @@ public class EmployeeService {
         User authUser = getAuthUser();
 
         Company company;
-
         if (dto.getCompanyId() != null) {
             company = companyRepository.findById(dto.getCompanyId())
                     .orElseThrow(() -> new RuntimeException("Company not found"));
         } else {
             company = authUser.getCompany();
-            if (company == null) {
-                throw new RuntimeException("Company must be specified");
-            }
+            if (company == null) throw new RuntimeException("Company must be specified");
         }
 
+        // Security role — controls access/permissions
         Role role = dto.getRole() == null ? Role.USER : dto.getRole();
 
         Department department = null;
@@ -112,12 +111,8 @@ public class EmployeeService {
         employeeRepository.incrementEmployeeNo();
         String employeeNo = String.valueOf(employeeRepository.getCurrentEmployeeNo());
 
-        String username = EmployeeUserUtil.generateUsername(
-                dto.getFirstName(),
-                dto.getLastName()
-        );
-
-        String email = EmployeeUserUtil.generateEmail(username, company);
+        String username    = EmployeeUserUtil.generateUsername(dto.getFirstName(), dto.getLastName());
+        String email       = EmployeeUserUtil.generateEmail(username, company);
         String rawPassword = EmployeeUserUtil.generateDefaultPassword(username);
 
         User user = new User();
@@ -125,7 +120,8 @@ public class EmployeeService {
         user.setUsername(username);
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(rawPassword));
-        user.setRole(role);
+        user.setRole(role);                          // ← Spring Security role (enum)
+        user.setCompanyRole(dto.getCompanyRole());   // ← HR business role (dynamic) ✅
         user.setCompany(company);
         user.setForcePasswordReset(true);
 
@@ -145,6 +141,11 @@ public class EmployeeService {
                 .company(company)
                 .department(department)
                 .user(user)
+                .birthplace(dto.getBirthplace())
+                .hometown(dto.getHometown())
+                .nationality(dto.getNationality())
+                .religion(dto.getReligion())
+                .identification(dto.getIdentification())
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
@@ -165,21 +166,32 @@ public class EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        if (dto.getEmployeeNo() != null) employee.setEmployeeNo(dto.getEmployeeNo());
-        if (dto.getPrefix() != null) employee.setPrefix(dto.getPrefix());
-        if (dto.getFirstName() != null) employee.setFirstName(dto.getFirstName());
-        if (dto.getLastName() != null) employee.setLastName(dto.getLastName());
-        if (dto.getGender() != null) employee.setGender(dto.getGender());
-        if (dto.getStatus() != null) employee.setStatus(dto.getStatus());
-        if (dto.getDateOfBirth() != null) employee.setDateOfBirth(dto.getDateOfBirth());
-        if (dto.getJoinDate() != null) employee.setJoinDate(dto.getJoinDate());
+        if (dto.getEmployeeNo()    != null) employee.setEmployeeNo(dto.getEmployeeNo());
+        if (dto.getPrefix()        != null) employee.setPrefix(dto.getPrefix());
+        if (dto.getFirstName()     != null) employee.setFirstName(dto.getFirstName());
+        if (dto.getLastName()      != null) employee.setLastName(dto.getLastName());
+        if (dto.getGender()        != null) employee.setGender(dto.getGender());
+        if (dto.getStatus()        != null) employee.setStatus(dto.getStatus());
+        if (dto.getDateOfBirth()   != null) employee.setDateOfBirth(dto.getDateOfBirth());
+        if (dto.getJoinDate()      != null) employee.setJoinDate(dto.getJoinDate());
         if (dto.getMaritalStatus() != null) employee.setMaritalStatus(dto.getMaritalStatus());
-        if (dto.getNotes() != null) employee.setNotes(dto.getNotes());
+        if (dto.getNotes()         != null) employee.setNotes(dto.getNotes());
+        if (dto.getBirthplace()    != null) employee.setBirthplace(dto.getBirthplace());
+        if (dto.getHometown()      != null) employee.setHometown(dto.getHometown());
+        if (dto.getNationality()   != null) employee.setNationality(dto.getNationality());
+        if (dto.getReligion()      != null) employee.setReligion(dto.getReligion());
+        if (dto.getIdentification()!= null) employee.setIdentification(dto.getIdentification());
 
         if (dto.getDepartmentId() != null) {
             Department department = departmentRepository.findById(dto.getDepartmentId())
                     .orElseThrow(() -> new RuntimeException("Department not found"));
             employee.setDepartment(department);
+        }
+
+        // Update companyRole on linked user if provided ✅
+        if (dto.getCompanyRole() != null && employee.getUser() != null) {
+            employee.getUser().setCompanyRole(dto.getCompanyRole());
+            userRepository.save(employee.getUser());
         }
 
         employee.setUpdatedAt(Instant.now());
@@ -198,17 +210,17 @@ public class EmployeeService {
 
         if (image != null && !image.isEmpty()) {
             FileUploadResult upload = fileStorageService.upload(
-                    image,
-                    FileCategory.EMPLOYEE_PROFILE,
-                    id.toString(),
-                    true
-            );
+                    image, FileCategory.EMPLOYEE_PROFILE, id.toString(), true);
             employee.setImageUrl(upload.getBlobPath());
             employeeRepository.save(employee);
         }
 
         return toDTO(employee);
     }
+
+    // ======================================================
+    // GET SINGLE EMPLOYEE
+    // ======================================================
 
     public EmployeeResponseDTO getEmployeeById(Long id) {
 
@@ -217,20 +229,16 @@ public class EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        // 🔥 If USER and no VIEW_ALL → allow only self
+        // Role.USER without VIEW_ALL → can only see themselves
         if (authUser.getRole() == Role.USER) {
-
             boolean hasViewAll = permissionCheckService.hasAccess(
                     SecurityContextHolder.getContext().getAuthentication(),
                     HrModule.EMPLOYEE_PROFILE,
                     HrAction.VIEW_ALL
             );
-
             if (!hasViewAll) {
-
                 if (employee.getUser() == null ||
                         !employee.getUser().getId().equals(authUser.getId())) {
-
                     throw new RuntimeException("Access denied: cannot view other employees");
                 }
             }
@@ -240,30 +248,25 @@ public class EmployeeService {
     }
 
     // ======================================================
-    // GET METHODS (SECURE USER FILTER)
+    // GET METHODS
     // ======================================================
+
     public List<EmployeeResponseDTO> getEmployees() {
 
         User authUser = getAuthUser();
 
-        if (authUser.getCompany() == null) {
+        if (authUser.getCompany() == null)
             throw new RuntimeException("User not linked to any company");
-        }
 
         if (authUser.getRole() == Role.USER) {
-
             boolean hasViewAll = permissionCheckService.hasAccess(
                     SecurityContextHolder.getContext().getAuthentication(),
                     HrModule.EMPLOYEE_PROFILE,
                     HrAction.VIEW_ALL
             );
-
             if (!hasViewAll) {
-                Employee self = employeeRepository
-                        .findByUserId(authUser.getId())
-                        .orElseThrow(() ->
-                                new RuntimeException("Employee record not found"));
-
+                Employee self = employeeRepository.findByUserId(authUser.getId())
+                        .orElseThrow(() -> new RuntimeException("Employee record not found"));
                 return List.of(toDTO(self));
             }
         }
@@ -290,17 +293,9 @@ public class EmployeeService {
         User authUser = getAuthUser();
 
         if (authUser.getRole() == Role.USER) {
-
             Employee self = employeeRepository.findByUserId(authUser.getId())
                     .orElseThrow(() -> new RuntimeException("Employee not found"));
-
-            return PageResponse.of(
-                    List.of(toDTO(self)),
-                    1,
-                    1,
-                    0,
-                    1
-            );
+            return PageResponse.of(List.of(toDTO(self)), 1, 1, 0, 1);
         }
 
         Pageable pageable = PageRequest.of(page, size);
@@ -314,20 +309,18 @@ public class EmployeeService {
                 size
         );
     }
-    
+
     public EmployeeResponseDTO getCompanyAdmin(Long companyId) {
-
+        // Uses Role enum — correct, this is a security/access concern
         List<Role> roles = List.of(Role.ADMIN, Role.SUPER_ADMIN);
-
         Employee admin = employeeRepository
                 .findFirstByCompanyIdAndUserRoleIn(companyId, roles)
                 .orElseThrow(() -> new RuntimeException("Admin not found"));
-
         return toDTO(admin);
     }
 
     public void syncAllEmployeeLeaveBalances(Long companyId) {
-        // your existing logic retained
+        // existing logic retained
     }
 
     public void deleteEmployee(Long id) {
@@ -340,8 +333,8 @@ public class EmployeeService {
 
     private EmployeeResponseDTO toDTO(Employee e) {
 
-        Company c = e.getCompany();
-        EmployeeContactInfo ci = e.getContactInfo();
+        Company              c  = e.getCompany();
+        EmployeeContactInfo  ci = e.getContactInfo();
 
         String imageUrl = e.getImageUrl() != null
                 ? fileStorageService.getPublicUrl(e.getImageUrl())
@@ -360,34 +353,54 @@ public class EmployeeService {
                 .joinDate(e.getJoinDate())
                 .notes(e.getNotes())
 
-                // ✅ CONTACT
+                .birthplace(e.getBirthplace())
+                .hometown(e.getHometown())
+                .nationality(e.getNationality())
+                .religion(e.getReligion())
+                .identification(e.getIdentification())
+
                 .phoneNo(ci != null ? ci.getPhone() : null)
                 .altPhone(ci != null ? ci.getAltPhone() : null)
 
-                // ✅ USER INFO (THIS FIXES YOUR ISSUE)
-                .email(e.getUser() != null ? e.getUser().getEmail() : null)
-                .username(e.getUser() != null ? e.getUser().getUsername() : null)
-                .userId(e.getUser() != null ? e.getUser().getId() : null)
-                .role(e.getUser() != null ? e.getUser().getRole() : null)
+                .email(e.getUser()     != null ? e.getUser().getEmail()              : null)
+                .username(e.getUser()  != null ? e.getUser().getUsername()           : null)
+                .userId(e.getUser()    != null ? e.getUser().getId()                 : null)
+                .role(e.getUser()      != null ? e.getUser().getRole()               : null) // enum — for permissions
+                .CompanyRole(e.getUser() != null ? e.getUser().getCompanyRole()      : null) // dynamic — for display ✅
                 .forcePasswordReset(e.getUser() != null ? e.getUser().getForcePasswordReset() : null)
 
-                // ✅ COMPANY
-                .companyId(c != null ? c.getId() : null)
-                .companyName(c != null ? c.getCompanyName() : null)
+                .companyId(c   != null ? c.getId()                              : null)
+                .companyName(c != null ? c.getCompanyName()                     : null)
 
-                // ✅ DEPARTMENT
-                .departmentId(e.getDepartment() != null ? e.getDepartment().getId() : null)
+                .departmentId(e.getDepartment()   != null ? e.getDepartment().getId()             : null)
                 .departmentName(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
 
-                // ✅ IMAGE
                 .imageUrl(imageUrl)
-
                 .build();
     }
+
+    // ======================================================
+    // AUTH HELPER
+    // ======================================================
+
     private User getAuthUser() {
         Long userId = authContext.getCurrentUserId();
         if (userId == null) throw new RuntimeException("Unauthorized");
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    public List<EmployeeResponseDTO> getManagersByCompany(Long companyId) {
+
+        List<Employee> managers =
+                employeeRepository
+                        .findByCompanyIdAndUserCompanyRoleIgnoreCase(
+                                companyId,
+                                "Manager"
+                        );
+
+        return managers.stream()
+                .map(this::toDTO)
+                .toList();
     }
 }

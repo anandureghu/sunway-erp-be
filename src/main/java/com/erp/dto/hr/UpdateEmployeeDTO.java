@@ -13,46 +13,40 @@ import java.time.LocalDate;
 @Builder
 public class UpdateEmployeeDTO {
 
-    // =============================
-    // Core
-    // =============================
-    private String employeeNo;
-    private String firstName;
-    private String lastName;
-    private String prefix;
-    private String gender;
-
-    /**
-     * ACTIVE | INACTIVE | ON_LEAVE
-     * Optional → if null, existing status remains unchanged
-     */
+    // ── Core ──────────────────────────────────────────────────────────────────
+    private String         employeeNo;
+    private String         firstName;
+    private String         lastName;
+    private String         prefix;
+    private String         gender;
     private EmployeeStatus status;
 
-    // =============================
-    // Dates
-    // =============================
+    // ── Dates ─────────────────────────────────────────────────────────────────
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate dateOfBirth;
-
-    private String maritalStatus;
-
+    private String    maritalStatus;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate joinDate;
 
-    // =============================
-    // Misc
-    // =============================
+    // ── Personal ──────────────────────────────────────────────────────────────
+    private String birthplace;
+    private String hometown;
+    private String nationality;
+    private String religion;
+    private String identification;
+
+    // ── Misc ──────────────────────────────────────────────────────────────────
     private String notes;
 
-    // =============================
-    // Contact Info
-    // =============================
+    // ── Contact ───────────────────────────────────────────────────────────────
     private String phoneNo;
     private String altPhone;
     private String email;
 
-    // =============================
-    // Relations
-    // =============================
+    // ── Relations ─────────────────────────────────────────────────────────────
     private Long departmentId;
+
+    // ── Role ──────────────────────────────────────────────────────────────────
+    /** HR-managed dynamic role — e.g. "HR Manager", "Finance Lead" */
+    private String companyRole;
 }

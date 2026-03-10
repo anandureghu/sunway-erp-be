@@ -26,36 +26,56 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     Long getCurrentEmployeeNo();
 
     // ======================================================
-    // STANDARD QUERIES
+    // COMPANY QUERIES
     // ======================================================
 
-    // Get all employees by company
     List<Employee> findByCompanyId(Long companyId);
 
-    // Get paginated employees by company
     Page<Employee> findByCompanyId(Long companyId, Pageable pageable);
 
-    // 🔥 FIXED: Get FIRST company admin (prevents crash)
+    List<Employee> findByCompany(Company company);
+
+    // ======================================================
+    // ADMIN (SPRING SECURITY ROLE - ENUM)
+    // ======================================================
+
     Optional<Employee> findFirstByCompanyIdAndUserRoleIn(
             Long companyId,
             List<Role> roles
     );
 
-    // Optional: If you ever need ALL admins
     List<Employee> findAllByCompanyIdAndUserRoleIn(
             Long companyId,
             List<Role> roles
     );
 
-    // Check if company already has admin
-    boolean existsByCompanyIdAndUserRole(Long companyId, Role role);
+    boolean existsByCompanyIdAndUserRole(
+            Long companyId,
+            Role role
+    );
 
-    // Find employees by department
+    // ======================================================
+    // BUSINESS ROLE (STRING companyRole in User)
+    // ======================================================
+
+    /**
+     * Find employees by company and business role name (case insensitive)
+     * Example: "Manager"
+     */
+    List<Employee> findByCompanyIdAndUserCompanyRoleIgnoreCase(
+            Long companyId,
+            String roleName
+    );
+
+    // ======================================================
+    // DEPARTMENT
+    // ======================================================
+
     List<Employee> findByDepartmentId(Long departmentId);
 
-    // Find employee by linked user
-    Optional<Employee> findByUserId(Long userId);
+    // ======================================================
+    // USER LINK
+    // ======================================================
 
-    // Find employees by company entity
-    List<Employee> findByCompany(Company company);
+    Optional<Employee> findByUserId(Long userId);
 }

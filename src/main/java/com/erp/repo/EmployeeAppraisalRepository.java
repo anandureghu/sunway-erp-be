@@ -1,19 +1,23 @@
 package com.erp.repo;
 
-import com.erp.domain.EmployeeAppraisal;
+import com.erp.domain.appraisal.EmployeeAppraisal;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.List;
 import java.util.Optional;
 
-public interface EmployeeAppraisalRepository
-        extends JpaRepository<EmployeeAppraisal, Long> {
+public interface EmployeeAppraisalRepository extends JpaRepository<EmployeeAppraisal, Long> {
 
-    List<EmployeeAppraisal> findByEmployeeIdOrderByYearDescMonthDesc(Long employeeId);
+    Page<EmployeeAppraisal> findByEmployeeId(Long employeeId, Pageable pageable);
 
-    void deleteByIdAndEmployeeId(Long id, Long employeeId);
+    Page<EmployeeAppraisal> findByYear(Integer year, Pageable pageable);
 
-    boolean existsByIdAndEmployeeId(Long appraisalId, Long employeeId);
+    Optional<EmployeeAppraisal> findByIdAndEmployeeId(Long id, Long employeeId);
 
-    Optional<EmployeeAppraisal> findByIdAndEmployeeId(Long appraisalId, Long employeeId);
+    // New: month+year uniqueness check
+    boolean existsByEmployeeIdAndYearAndMonth(Long employeeId, Integer year, String month);
+
+    // Keep old one for backward compat if used elsewhere
+    boolean existsByEmployeeIdAndYear(Long employeeId, Integer year);
 }

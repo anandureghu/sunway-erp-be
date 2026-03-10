@@ -9,7 +9,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "users", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_users_email", columnNames = "email"),
+        @UniqueConstraint(name = "uk_users_email",    columnNames = "email"),
         @UniqueConstraint(name = "uk_users_username", columnNames = "username")
 })
 @Getter
@@ -36,20 +36,18 @@ public class User {
     @Column(nullable = false)
     private String password;
 
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private Role role = Role.USER;
 
-    @Column(nullable = false, updatable = false)
-   
-    private Instant createdAt = Instant.now();
+    @Column(name = "company_role", length = 100)
+    private String companyRole;
 
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt = Instant.now();
 
     @Column(name = "force_password_reset", nullable = false)
     private Boolean forcePasswordReset = true;
-
-
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id")

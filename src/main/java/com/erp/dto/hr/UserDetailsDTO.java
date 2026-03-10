@@ -9,23 +9,30 @@ import lombok.*;
 @NoArgsConstructor
 public class UserDetailsDTO {
 
-    // User info
-    private Long userId;
+    // ── User info ─────────────────────────────────────────────────────────────
+    private Long   userId;
     private String fullName;
     private String email;
     private String username;
-    private Role role;
 
-    // Employee info (optional)
-    private Long employeeId;
+    /** Spring Security role — use only for permission checks (hasRole, @PreAuthorize) */
+    private Role   role;
+
+    /** HR-managed dynamic role — use for appraisals, org chart, display, filtering */
+    private String companyRole;
+
+    // ── Employee info (optional — null if user has no employee record) ────────
+    private Long   employeeId;
     private String employeeNo;
     private String firstName;
     private String lastName;
     private String phoneNo;
 
-    private Long companyId;
+    // ── Company info ──────────────────────────────────────────────────────────
+    private Long   companyId;
     private String companyName;
 
-    private Long departmentId;
+    // ── Department info ───────────────────────────────────────────────────────
+    private Long   departmentId;
     private String departmentName;
 }
