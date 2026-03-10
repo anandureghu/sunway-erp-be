@@ -24,10 +24,19 @@ public class EmployeeResponseDTO {
     // =========================
     private String gender;
     private String prefix;
-    private String status;          // ACTIVE | INACTIVE | ON_LEAVE
+    private String status;
     private String maritalStatus;
     private LocalDate dateOfBirth;
     private LocalDate joinDate;
+
+    // =========================
+    // NEW PERSONAL FIELDS
+    // =========================
+    private String birthplace;
+    private String hometown;
+    private String nationality;
+    private String religion;
+    private String identification;
 
     // =========================
     // Contact info
@@ -52,6 +61,7 @@ public class EmployeeResponseDTO {
     private Long userId;
     private String username;
     private Role role;
+    private String CompanyRole;
 
     // =========================
     // UI / UX helpers

@@ -1,8 +1,9 @@
 package com.erp.controller.security;
 
-import com.erp.domain.security.Role;
 import com.erp.domain.security.RolePermission;
 import com.erp.dto.security.ModulePermissionDTO;
+import com.erp.service.security.CustomUserPrincipal;
+import com.erp.service.security.PermissionCheckService;
 import com.erp.service.security.RolePermissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,19 +18,28 @@ import java.util.List;
 public class RolePermissionController {
 
     private final RolePermissionService service;
+    private final PermissionCheckService permissionCheckService;
 
-    // ✅ NEW - Any logged-in user can fetch their OWN permissions
-    // No @PreAuthorize - just needs to be authenticated
+    /* ── My Permissions ──────────────────────────────────────────────────────── */
+
     @GetMapping("/my-permissions")
     public List<RolePermission> getMyPermissions(Authentication authentication) {
-        String roleName = authentication.getAuthorities()
-                .stream().findFirst().orElseThrow()
-                .getAuthority().replace("ROLE_", "");
-        Role role = Role.valueOf(roleName);
-        return service.getByRole(role);
+
+        if (!(authentication.getPrincipal() instanceof CustomUserPrincipal user)) {
+            throw new RuntimeException("Unable to resolve user principal");
+        }
+
+        Long employeeId = permissionCheckService.getLoggedUserId(authentication);
+
+        // Use companyRole if available, fall back to security role name
+        String roleName = user.getCompanyRole() != null
+                ? user.getCompanyRole()
+                : user.getRole().name();
+
+        return service.getPermissionsForUser(employeeId, roleName);
     }
 
-    // ⬇️ Keep all existing endpoints unchanged ⬇️
+    /* ── Get Permissions for a Role ─────────────────────────────────────────── */
 
     @PreAuthorize("""
         @permissionChecker.has(
@@ -39,10 +49,19 @@ public class RolePermissionController {
         )
     """)
     @GetMapping("/{role}")
-    public List<RolePermission> getByRole(@PathVariable("role") String role) {
-        Role roleEnum = Role.valueOf(role.toUpperCase());
-        return service.getByRole(roleEnum);
+    public List<RolePermission> getPermissions(
+            @PathVariable("role") String role,
+            @RequestParam(value = "employeeId", required = false) Long employeeId
+    ) {
+        // role is now a plain string — "External Auditor", "HR Manager", "USER" etc.
+        // NO Role.valueOf() — that was the bug
+        if (employeeId != null) {
+            return service.getPermissionsForUser(employeeId, role);
+        }
+        return service.getByRole(role);
     }
+
+    /* ── Assign Permissions ──────────────────────────────────────────────────── */
 
     @PreAuthorize("""
         @permissionChecker.has(
@@ -54,10 +73,14 @@ public class RolePermissionController {
     @PostMapping("/{role}")
     public void assignPermissions(
             @PathVariable("role") String role,
-            @RequestBody List<ModulePermissionDTO> dtos) {
-        Role roleEnum = Role.valueOf(role.toUpperCase());
-        service.assignPermissions(roleEnum, dtos);
+            @RequestParam(value = "employeeId", required = false) Long employeeId,
+            @RequestBody List<ModulePermissionDTO> dtos
+    ) {
+        // role is a plain string — pass directly, no enum conversion
+        service.assignPermissions(role, employeeId, dtos);
     }
+
+    /* ── Remove All Permissions for a Role ───────────────────────────────────── */
 
     @PreAuthorize("""
         @permissionChecker.has(
@@ -68,8 +91,6 @@ public class RolePermissionController {
     """)
     @DeleteMapping("/{role}")
     public void removeAll(@PathVariable("role") String role) {
-        System.out.println("DELETE ENDPOINT HIT FOR ROLE: " + role);
-        Role roleEnum = Role.valueOf(role.toUpperCase());
-        service.removeAll(roleEnum);
+        service.removeAll(role);
     }
 }

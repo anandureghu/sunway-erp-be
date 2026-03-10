@@ -1,27 +1,31 @@
 package com.erp.repo.security;
 
-import com.erp.domain.security.RolePermission;
-import com.erp.domain.security.Role;
 import com.erp.domain.security.HrModule;
+import com.erp.domain.security.RolePermission;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface RolePermissionRepository
-        extends JpaRepository<RolePermission, Long> {
+@Repository
+public interface RolePermissionRepository extends JpaRepository<RolePermission, Long> {
 
-    // Find specific module permission for a role
-    Optional<RolePermission> findByRoleAndModule(Role role, HrModule module);
+    // All permissions for a role (including employee overrides)
+    List<RolePermission> findByRole(String role);
 
-    // Get all permissions for a role
-    List<RolePermission> findByRole(Role role);
+    // Role-wide permissions only (no employee override)
+    List<RolePermission> findByRoleAndEmployeeIsNull(String role);
 
-    // ✅ Proper delete query (guaranteed execution)
-    @Modifying
-    @Query("DELETE FROM RolePermission rp WHERE rp.role = :role")
-    void deleteAllByRole(@Param("role") Role role);
+    // Specific role + module (for upsert on role-wide)
+    Optional<RolePermission> findByRoleAndModule(String role, HrModule module);
+
+    // All permissions for a specific employee
+    List<RolePermission> findByEmployee_Id(Long employeeId);
+
+    // Specific employee + module (for upsert on employee override)
+    Optional<RolePermission> findByEmployee_IdAndModule(Long employeeId, HrModule module);
+
+    // Delete all role-wide permissions for a role
+    void deleteAllByRole(String role);
 }

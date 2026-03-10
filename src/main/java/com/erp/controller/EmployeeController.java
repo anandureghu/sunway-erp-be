@@ -38,7 +38,6 @@ public class EmployeeController {
 
     // ======================================================
     // CREATE EMPLOYEE
-    // Requires CREATE — only admins/HR can create employees
     // ======================================================
     @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.CREATE})
     @PostMapping
@@ -51,7 +50,6 @@ public class EmployeeController {
 
     // ======================================================
     // GET COMPANY ADMIN
-    // No permission guard — internal utility endpoint
     // ======================================================
     @GetMapping("/admin/{companyId}")
     public ResponseEntity<EmployeeResponseDTO> getCompanyAdmin(
@@ -62,8 +60,6 @@ public class EmployeeController {
 
     // ======================================================
     // GET EMPLOYEES PAGINATED
-    // VIEW_OWN allows user to see employee list (their company)
-    // VIEW_ALL also allowed
     // ======================================================
     @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping("/page")
@@ -76,7 +72,6 @@ public class EmployeeController {
 
     // ======================================================
     // SYNC ALL LEAVE BALANCES
-    // Requires EDIT on LEAVES — admin/HR operation
     // ======================================================
     @HrPermission(module = HrModule.LEAVES, action = {HrAction.EDIT})
     @PostMapping("/sync-all-leave-balances")
@@ -88,8 +83,6 @@ public class EmployeeController {
 
     // ======================================================
     // GET ALL EMPLOYEES (CURRENT COMPANY)
-    // VIEW_OWN allows user to see the employee list
-    // VIEW_ALL also allowed
     // ======================================================
     @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping
@@ -98,9 +91,42 @@ public class EmployeeController {
     }
 
     // ======================================================
-    // GET EMPLOYEE BY ID
-    // VIEW_OWN — user can view their own profile
-    // VIEW_ALL — admin/HR can view any profile
+    // GET EMPLOYEES BY COMPANY
+    // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
+    @GetMapping("/company/{companyId}")
+    public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByCompany(
+            @PathVariable("companyId") Long companyId) {
+
+        return ResponseEntity.ok(employeeService.getEmployeesByCompany(companyId));
+    }
+
+    // ======================================================
+    // GET MANAGERS BY COMPANY  ✅ FIXED POSITION
+    // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
+    @GetMapping("/company/{companyId}/managers")
+    public ResponseEntity<List<EmployeeResponseDTO>> getManagersByCompany(
+            @PathVariable("companyId") Long companyId) {
+
+        return ResponseEntity.ok(
+                employeeService.getManagersByCompany(companyId)
+        );
+    }
+
+    // ======================================================
+    // GET EMPLOYEES BY DEPARTMENT
+    // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
+    @GetMapping("/department/{departmentId}")
+    public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByDepartment(
+            @PathVariable("departmentId") Long departmentId) {
+
+        return ResponseEntity.ok(employeeService.getEmployeesByDepartment(departmentId));
+    }
+
+    // ======================================================
+    // GET EMPLOYEE BY ID  ⚠️ KEEP BELOW SPECIFIC ROUTES
     // ======================================================
     @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
     @GetMapping("/{id}")
@@ -112,7 +138,6 @@ public class EmployeeController {
 
     // ======================================================
     // UPDATE EMPLOYEE
-    // EDIT — user can edit their own profile if granted
     // ======================================================
     @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.EDIT})
     @PutMapping("/{id}")
@@ -124,33 +149,7 @@ public class EmployeeController {
     }
 
     // ======================================================
-    // GET EMPLOYEES BY COMPANY
-    // VIEW_ALL only — seeing all employees of a company
-    // is an admin/HR level operation
-    // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
-    @GetMapping("/company/{companyId}")
-    public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByCompany(
-            @PathVariable("companyId") Long companyId) {
-
-        return ResponseEntity.ok(employeeService.getEmployeesByCompany(companyId));
-    }
-
-    // ======================================================
-    // GET EMPLOYEES BY DEPARTMENT
-    // VIEW_ALL only — department-level listing is admin/HR
-    // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
-    @GetMapping("/department/{departmentId}")
-    public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByDepartment(
-            @PathVariable("departmentId") Long departmentId) {
-
-        return ResponseEntity.ok(employeeService.getEmployeesByDepartment(departmentId));
-    }
-
-    // ======================================================
     // DELETE EMPLOYEE
-    // DELETE only — hard delete is admin only
     // ======================================================
     @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.DELETE})
     @DeleteMapping("/{id}")
@@ -163,7 +162,6 @@ public class EmployeeController {
 
     // ======================================================
     // UPLOAD PROFILE IMAGE
-    // EDIT — same permission as updating profile
     // ======================================================
     @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.EDIT})
     @PostMapping("/{id}/upload-image")
@@ -177,7 +175,7 @@ public class EmployeeController {
     }
 
     // ======================================================
-    // HELPER METHOD
+    // HELPER
     // ======================================================
     private User getAuthUser() {
         Long userId = authContext.getCurrentUserId();

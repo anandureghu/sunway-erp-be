@@ -1,11 +1,14 @@
 package com.erp.service.hr;
 
 import com.erp.domain.hr.Company;
+import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.hr.Currency;
 import com.erp.dto.hr.CompanyDTO;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,30 +18,29 @@ import java.util.List;
 @Service
 public class CompanyService {
 
-    private final CompanyRepository companyRepository;
-    private final AuthContext authContext;
-    private final CurrencyRepository currencyRepository;
+    private final CompanyRepository     companyRepository;
+    private final CompanyRoleRepository roleRepository;
+    private final CurrencyRepository    currencyRepository;
+    private final AuthContext           authContext;
 
     public CompanyService(
             CompanyRepository companyRepository,
-            AuthContext authContext,
-            CurrencyRepository currencyRepository) {
+            CompanyRoleRepository roleRepository,
+            CurrencyRepository currencyRepository,
+            AuthContext authContext) {
 
-        this.companyRepository = companyRepository;
-        this.authContext = authContext;
+        this.companyRepository  = companyRepository;
+        this.roleRepository     = roleRepository;
         this.currencyRepository = currencyRepository;
+        this.authContext        = authContext;
     }
 
     // ======================================================
     // GET ALL COMPANIES
     // ======================================================
     public List<Company> getAllCompanies() {
-
         Long userId = authContext.getCurrentUserId();
-        if (userId == null) {
-            throw new RuntimeException("User not authenticated");
-        }
-
+        if (userId == null) throw new RuntimeException("User not authenticated");
         return companyRepository.findAll();
     }
 
@@ -77,11 +79,15 @@ public class CompanyService {
                 .build();
 
         Long userId = authContext.getCurrentUserId();
-        if (userId != null) {
-            company.setCreatedBy(String.valueOf(userId));
-        }
+        if (userId != null) company.setCreatedBy(String.valueOf(userId));
 
-        return companyRepository.save(company);
+        Company saved = companyRepository.save(company);
+
+        // Seed default roles for this company on day 1
+        // HR can add/rename/delete these later from Settings → Roles
+        seedDefaultRoles(saved);
+
+        return saved;
     }
 
     // ======================================================
@@ -105,7 +111,6 @@ public class CompanyService {
         existing.setCountry(updated.getCountry());
         existing.setPhoneNo(updated.getPhoneNo());
         existing.setCurrency(currency);
-
         existing.setHrEnabled(updated.isHrEnabled());
         existing.setFinanceEnabled(updated.isFinanceEnabled());
         existing.setInventoryEnabled(updated.isInventoryEnabled());
@@ -118,5 +123,36 @@ public class CompanyService {
     // ======================================================
     public void deleteCompany(Long id) {
         companyRepository.deleteById(id);
+    }
+
+    // ======================================================
+    // SEED DEFAULT ROLES
+    // Called once on company creation — not exposed via API
+    // ======================================================
+    private void seedDefaultRoles(Company company) {
+
+        // { name, description }
+        List<String[]> defaults = List.of(
+                new String[]{ "Admin",            "Full system access"               },
+                new String[]{ "HR Manager",       "HR and payroll management"        },
+                new String[]{ "Finance Manager",  "Finance and budget management"    },
+                new String[]{ "Accountant",       "Accounting and reporting"         },
+                new String[]{ "AP/AR Clerk",      "Accounts payable and receivable"  },
+                new String[]{ "Controller",       "Financial control"                },
+                new String[]{ "External Auditor", "External audit read access"       },
+                new String[]{ "Employee",         "Standard employee access"         }
+        );
+
+        List<CompanyRole> roles = defaults.stream()
+                .filter(d -> !roleRepository.existsByCompanyIdAndName(company.getId(), d[0]))
+                .map(d -> CompanyRole.builder()
+                        .name(d[0])
+                        .description(d[1])
+                        .active(true)
+                        .company(company)
+                        .build())
+                .toList();
+
+        roleRepository.saveAll(roles);
     }
 }

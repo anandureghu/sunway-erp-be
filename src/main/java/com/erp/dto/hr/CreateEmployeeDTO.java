@@ -23,13 +23,18 @@ public class CreateEmployeeDTO {
     private LocalDate dateOfBirth;
     private LocalDate joinDate;
 
-    /**
-     * ACTIVE | INACTIVE | ON_LEAVE
-     * Optional → defaults handled in service/entity
-     */
     private EmployeeStatus status;
 
     private String notes;
+
+    // =======================
+    // NEW PERSONAL FIELDS
+    // =======================
+    private String birthplace;
+    private String hometown;
+    private String nationality;
+    private String religion;
+    private String identification;
 
     // =======================
     // CONTACT DETAILS
@@ -47,4 +52,6 @@ public class CreateEmployeeDTO {
     // ROLE
     // =======================
     private Role role;
+
+    private String CompanyRole;
 }

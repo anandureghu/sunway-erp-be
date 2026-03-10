@@ -24,25 +24,22 @@ import java.util.List;
 public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
-    private final CompanyRepository companyRepository;
-    private final EmployeeRepository employeeRepository;
-    private final AuthContext authContext;
+    private final CompanyRepository    companyRepository;
+    private final EmployeeRepository   employeeRepository;
+    private final AuthContext          authContext;
 
-    // ============================================================
-    // CREATE
-    // ============================================================
+    // ── Create ────────────────────────────────────────────────────────────────
 
     public DepartmentResponseDTO createDepartment(Long companyId, CreateDepartmentDTO dto) {
 
         Company company = resolveCompany(companyId);
 
-        // Prevent duplicate department code within same company
         if (departmentRepository.existsByDepartmentCodeAndCompanyId(
                 dto.getDepartmentCode(), company.getId())) {
-
             throw new ConflictException("Department code already exists in this company");
         }
 
+        // ✅ Manager is mandatory — throws if null or not found
         Employee manager = resolveManager(dto.getManagerId(), company.getId());
 
         Department department = Department.builder()
@@ -57,9 +54,7 @@ public class DepartmentService {
         return toDTO(departmentRepository.save(department));
     }
 
-    // ============================================================
-    // UPDATE
-    // ============================================================
+    // ── Update ────────────────────────────────────────────────────────────────
 
     public DepartmentResponseDTO updateDepartment(Long companyId, Long id, CreateDepartmentDTO dto) {
 
@@ -72,15 +67,13 @@ public class DepartmentService {
             throw new ConflictException("Department does not belong to this company");
         }
 
-        // Prevent duplicate department code
         if (!department.getDepartmentCode().equals(dto.getDepartmentCode()) &&
                 departmentRepository.existsByDepartmentCodeAndCompanyId(
-                        dto.getDepartmentCode(),
-                        company.getId())) {
-
+                        dto.getDepartmentCode(), company.getId())) {
             throw new ConflictException("Department code already exists in this company");
         }
 
+        // ✅ Manager is mandatory on update too
         department.setDepartmentCode(dto.getDepartmentCode());
         department.setDepartmentName(dto.getDepartmentName());
         department.setDescription(dto.getDescription());
@@ -89,28 +82,18 @@ public class DepartmentService {
         return toDTO(departmentRepository.save(department));
     }
 
-    // ============================================================
-    // GET ALL BY COMPANY
-    // ============================================================
+    // ── Get All ───────────────────────────────────────────────────────────────
 
     public List<DepartmentResponseDTO> getDepartmentsByCompanyId(Long companyId) {
-
-        Company company = resolveCompany(companyId);
-
-        return departmentRepository.findAllByCompanyId(company.getId())
-                .stream()
-                .map(this::toDTO)
-                .toList();
+        return departmentRepository.findAllByCompanyId(resolveCompany(companyId).getId())
+                .stream().map(this::toDTO).toList();
     }
 
-    // ============================================================
-    // GET SINGLE
-    // ============================================================
+    // ── Get Single ────────────────────────────────────────────────────────────
 
     public DepartmentResponseDTO getDepartmentById(Long companyId, Long id) {
 
-        Company company = resolveCompany(companyId);
-
+        Company    company    = resolveCompany(companyId);
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Department not found"));
 
@@ -121,14 +104,11 @@ public class DepartmentService {
         return toDTO(department);
     }
 
-    // ============================================================
-    // DELETE
-    // ============================================================
+    // ── Delete ────────────────────────────────────────────────────────────────
 
     public void deleteDepartment(Long companyId, Long id) {
 
-        Company company = resolveCompany(companyId);
-
+        Company    company    = resolveCompany(companyId);
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Department not found"));
 
@@ -139,67 +119,56 @@ public class DepartmentService {
         departmentRepository.delete(department);
     }
 
-    // ============================================================
-    // PRIVATE HELPERS
-    // ============================================================
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * Resolves company based on role.
-     * SUPER_ADMIN → uses path companyId
-     * Others → use logged-in user's company
-     */
     private Company resolveCompany(Long pathCompanyId) {
 
-        String role = authContext.getCurrentUserRole();
-        Long userCompanyId = authContext.getCurrentCompanyId();
+        String role          = authContext.getCurrentUserRole();
+        Long   userCompanyId = authContext.getCurrentCompanyId();
 
         if ("SUPER_ADMIN".equals(role)) {
-
-            if (pathCompanyId == null) {
+            if (pathCompanyId == null)
                 throw new ConflictException("Company must be selected");
-            }
-
             return companyRepository.findById(pathCompanyId)
                     .orElseThrow(() -> new NotFoundException("Company not found"));
         }
 
-        if (userCompanyId == null) {
+        if (userCompanyId == null)
             throw new ConflictException("User not associated with any company");
-        }
 
         return companyRepository.findById(userCompanyId)
                 .orElseThrow(() -> new NotFoundException("Company not found"));
     }
 
     /**
-     * Validates and resolves manager
+     * Manager is MANDATORY — throws ConflictException if not provided.
+     * Also validates the manager belongs to the same company.
      */
     private Employee resolveManager(Long managerId, Long companyId) {
 
         if (managerId == null) {
-            return null;
+            throw new ConflictException("Manager is mandatory for a department");
         }
 
         Employee manager = employeeRepository.findById(managerId)
                 .orElseThrow(() -> new NotFoundException("Manager not found"));
 
         if (!manager.getCompany().getId().equals(companyId)) {
-            throw new ConflictException("Manager must belong to same company");
+            throw new ConflictException("Manager must belong to the same company");
         }
 
         return manager;
     }
 
     private DepartmentResponseDTO toDTO(Department d) {
-
         return DepartmentResponseDTO.builder()
                 .id(d.getId())
                 .departmentCode(d.getDepartmentCode())
                 .departmentName(d.getDepartmentName())
                 .description(d.getDescription())
-                .managerId(d.getManager() != null ? d.getManager().getId() : null)
+                .managerId(d.getManager() != null ? d.getManager().getId()        : null)
                 .managerFirstName(d.getManager() != null ? d.getManager().getFirstName() : null)
-                .managerLastName(d.getManager() != null ? d.getManager().getLastName() : null)
+                .managerLastName(d.getManager()  != null ? d.getManager().getLastName()  : null)
                 .companyId(d.getCompany().getId())
                 .companyName(d.getCompany().getCompanyName())
                 .build();

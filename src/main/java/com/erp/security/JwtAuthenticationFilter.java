@@ -45,14 +45,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // If already authenticated, skip
+        // Already authenticated — skip
         if (SecurityContextHolder.getContext().getAuthentication() != null) {
             chain.doFilter(request, response);
             return;
         }
 
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-
         if (header == null || !header.startsWith("Bearer ")) {
             chain.doFilter(request, response);
             return;
@@ -63,12 +62,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             Claims claims = jwtService.parse(token).getBody();
 
-            // 🔹 Extract username
+            // ── Extract username ──────────────────────────────────────────────
             String username = safeString(claims.get("username"));
-            if (isBlank(username))
-                username = safeString(claims.get("preferred_username"));
-            if (isBlank(username))
-                username = claims.getSubject();
+            if (isBlank(username)) username = safeString(claims.get("preferred_username"));
+            if (isBlank(username)) username = claims.getSubject();
 
             if (isBlank(username)) {
                 log.warn("JWT missing username/sub claim");
@@ -76,16 +73,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            // 🔹 Extract authorities
-            Collection<SimpleGrantedAuthority> authorities =
-                    extractAuthorities(claims);
-
+            // ── Extract authorities ───────────────────────────────────────────
+            Collection<SimpleGrantedAuthority> authorities = extractAuthorities(claims);
             if (authorities.isEmpty()) {
                 chain.doFilter(request, response);
                 return;
             }
 
-            // 🔥 Extract role from authorities
+            // ── Extract security Role enum from authorities ────────────────────
             String roleName = authorities.stream()
                     .map(SimpleGrantedAuthority::getAuthority)
                     .findFirst()
@@ -99,37 +94,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             Role role = Role.valueOf(roleName);
 
-            // 🔥 Create CustomUserPrincipal instead of Spring User
-            CustomUserPrincipal principal =
-                    new CustomUserPrincipal(
-                            null,           // userId (optional if not in token)
-                            username,
-                            "",             // password not needed for JWT
-                            role
-                    );
+            // ── Extract companyRole from JWT claims ───────────────────────────
+            // This is set when the JWT is generated (AuthService/login)
+            // e.g. "HR Manager", "Finance Lead" — nullable
+            String companyRole = safeString(claims.get("companyRole"));
+
+            // ── Build principal ───────────────────────────────────────────────
+            CustomUserPrincipal principal = new CustomUserPrincipal(
+                    null,         // userId — not in JWT, resolved per-request via DB
+                    username,
+                    "",           // password not needed for JWT auth
+                    role,
+                    companyRole   // ← HR-managed dynamic role ✅
+            );
 
             UsernamePasswordAuthenticationToken auth =
-                    new UsernamePasswordAuthenticationToken(
-                            principal,
-                            null,
-                            authorities
-                    );
+                    new UsernamePasswordAuthenticationToken(principal, null, authorities);
 
-            // Add details
             Map<String, Object> details = new HashMap<>();
-            details.put("web",
-                    new WebAuthenticationDetailsSource()
-                            .buildDetails(request));
+            details.put("web", new WebAuthenticationDetailsSource().buildDetails(request));
             details.put("claims", claims);
-
             auth.setDetails(details);
 
-            SecurityContextHolder.getContext()
-                    .setAuthentication(auth);
+            SecurityContextHolder.getContext().setAuthentication(auth);
 
-            if (log.isDebugEnabled()) {
-                log.debug("JWT authenticated '{}', role={}", username, role);
-            }
+            log.debug("JWT authenticated '{}', role={}, companyRole={}", username, role, companyRole);
 
         } catch (Exception ex) {
             log.debug("JWT parse/authorize failed: {}", ex.getMessage());
@@ -138,7 +127,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    /* ================= HELPERS ================= */
+    /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
@@ -149,8 +138,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @SuppressWarnings("unchecked")
-    private static Collection<SimpleGrantedAuthority>
-    extractAuthorities(Claims claims) {
+    private static Collection<SimpleGrantedAuthority> extractAuthorities(Claims claims) {
 
         Set<String> roles = new LinkedHashSet<>();
 
@@ -158,13 +146,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String singleRole = safeString(claims.get("role"));
         if (!isBlank(singleRole)) roles.add(singleRole);
 
-        // roles: ["ADMIN","HR"]
+        // roles: ["ADMIN", "HR"]
         Object arr = claims.get("roles");
         if (arr instanceof Collection<?> c) {
-            c.forEach(x -> {
-                String s = safeString(x);
-                if (!isBlank(s)) roles.add(s);
-            });
+            c.forEach(x -> { String s = safeString(x); if (!isBlank(s)) roles.add(s); });
         }
 
         // authorities: ["ROLE_ADMIN"]
@@ -172,8 +157,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (auths instanceof Collection<?> c) {
             c.forEach(x -> {
                 String s = safeString(x);
-                if (!isBlank(s))
-                    roles.add(s.replaceFirst("^ROLE_", ""));
+                if (!isBlank(s)) roles.add(s.replaceFirst("^ROLE_", ""));
             });
         }
 
@@ -181,8 +165,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String scope = safeString(claims.get("scope"));
         if (!isBlank(scope)) {
             for (String s : scope.split("\\s+")) {
-                if (!isBlank(s))
-                    roles.add(s.toUpperCase(Locale.ROOT));
+                if (!isBlank(s)) roles.add(s.toUpperCase(Locale.ROOT));
             }
         }
 

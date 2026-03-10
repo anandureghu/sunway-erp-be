@@ -22,7 +22,6 @@ public class UserService {
         User user = userRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Check if user is also an employee
         Employee emp = employeeRepo.findByUserId(id).orElse(null);
 
         return UserDetailsDTO.builder()
@@ -31,18 +30,23 @@ public class UserService {
                 .email(user.getEmail())
                 .username(user.getUsername())
                 .role(user.getRole())
+                .companyRole(user.getCompanyRole())              // ← added
 
                 .employeeId(emp != null ? emp.getId() : null)
-                .employeeNo(String.valueOf(emp != null ? emp.getEmployeeNo() : null))
+                .employeeNo(emp != null ? emp.getEmployeeNo() : null)
                 .firstName(emp != null ? emp.getFirstName() : null)
                 .lastName(emp != null ? emp.getLastName() : null)
                 .phoneNo(emp != null ? emp.getPhoneNo() : null)
 
-                .companyId(emp != null && emp.getCompany() != null ? emp.getCompany().getId() : null)
-                .companyName(emp != null && emp.getCompany() != null ? emp.getCompany().getCompanyName() : null)
+                .companyId(emp != null && emp.getCompany() != null
+                        ? emp.getCompany().getId() : null)
+                .companyName(emp != null && emp.getCompany() != null
+                        ? emp.getCompany().getCompanyName() : null)
 
-                .departmentId(emp != null && emp.getDepartment() != null ? emp.getDepartment().getId() : null)
-                .departmentName(emp != null && emp.getDepartment() != null ? emp.getDepartment().getDepartmentName() : null)
+                .departmentId(emp != null && emp.getDepartment() != null
+                        ? emp.getDepartment().getId() : null)
+                .departmentName(emp != null && emp.getDepartment() != null
+                        ? emp.getDepartment().getDepartmentName() : null)
                 .build();
     }
 }

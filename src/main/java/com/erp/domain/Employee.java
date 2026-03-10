@@ -53,6 +53,25 @@ public class Employee {
 
     private LocalDate joinDate;
 
+    /* ================= NEW PERSONAL FIELDS ================= */
+
+    @Column(length = 100)
+    private String birthplace;
+
+    @Column(length = 100)
+    private String hometown;
+
+    @Column(length = 100)
+    private String nationality;
+
+    @Column(length = 100)
+    private String religion;
+
+    @Column(length = 100)
+    private String identification; // ID number (Aadhar / Passport / etc.)
+
+    /* ================= EXISTING FIELDS ================= */
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 
@@ -129,5 +148,4 @@ public class Employee {
                 ? user.getRole().name()
                 : null;
     }
-
 }
