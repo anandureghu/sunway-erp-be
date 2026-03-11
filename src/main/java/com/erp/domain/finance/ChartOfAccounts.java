@@ -8,6 +8,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Calendar;
 
 @Getter
 @Setter
@@ -17,7 +18,7 @@ import java.time.Instant;
 @Entity
 @Table(name = "chart_of_accounts",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"company_id", "account_code"})
+                @UniqueConstraint(columnNames = {"company_id", "account_code"}),
         })
 public class ChartOfAccounts {
 
@@ -25,7 +26,7 @@ public class ChartOfAccounts {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "account_no", nullable = false, length = 6)
+    @Column(name = "account_no", nullable = false, length = 7)
     private String accountNo;
 
     @Column(name = "inter_company_number", nullable = false, length = 3)
@@ -33,7 +34,7 @@ public class ChartOfAccounts {
 
     // system generated code
     // companyCode(3).department/projectCode(4).accountCode(6).intercompanyNumber(3)
-    @Column(name = "account_code", nullable = false, length = 19)
+    @Column(name = "account_code", nullable = false, length = 20)
     private String accountCode;
 
     @Column(name = "account_name", nullable = false, length = 255)
@@ -77,6 +78,11 @@ public class ChartOfAccounts {
 
     @Column(name = "project_code", length = 6)
     private String projectCode;
+
+    @Column(name = "is_active")
+    private Boolean isActive = true;
+
+    private int year = Calendar.getInstance().getWeekYear();
 
     @PrePersist
     public void onCreate() {

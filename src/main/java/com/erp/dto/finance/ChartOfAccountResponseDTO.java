@@ -37,4 +37,5 @@ public class ChartOfAccountResponseDTO {
     private String departmentCode;
 
     private String projectCode;
+    private boolean active;
 }

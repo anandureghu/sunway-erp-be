@@ -75,4 +75,7 @@ public class BudgetHeader {
     void onUpdate() {
         updatedAt = Instant.now();
     }
+
+    @Column(name = "is_active")
+    private Boolean isActive = true;
 }
