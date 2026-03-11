@@ -114,6 +114,10 @@ public class BudgetService {
         BudgetHeader header = headerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Budget not found"));
 
+        if (!header.getIsActive()) {
+            throw new RuntimeException("only active budget can be revised");
+        }
+
         if (Objects.equals(header.getAmount(), dto.getAmount())) {
             throw new RuntimeException("revised amount is same as budget");
         }
@@ -133,6 +137,8 @@ public class BudgetService {
         header.setReviseCount((header.getReviseCount() == null ? 0 : header.getReviseCount()) + 1);
         headerRepo.save(header);
 
+        header.setIsActive(false); // only one active account at a time
+
         BudgetHeader newHeader = BudgetHeader.builder()
                 .parentBudget(header)
                 .status(BudgetStatus.REVISED)
@@ -142,6 +148,7 @@ public class BudgetService {
                 .endDate(header.getEndDate())
                 .amount(dto.getAmount())
                 .reviseCount(reviseCount + 1)
+                .isActive(true)
                 .company(header.getCompany())
                 .build();
 
@@ -183,6 +190,7 @@ public class BudgetService {
                 .id(auth.getCurrentUserId()).build();
 
         header.setStatus(BudgetStatus.APPROVED);
+        header.setIsActive(true);
         header.setApprovedByUser(user);
 
         return toDTO(headerRepo.save(header));
@@ -193,6 +201,7 @@ public class BudgetService {
                 .orElseThrow(() -> new RuntimeException("Budget not found"));
 
         header.setStatus(BudgetStatus.REJECTED);
+        header.setIsActive(false);
 
         return toDTO(headerRepo.save(header));
     }
@@ -217,6 +226,7 @@ public class BudgetService {
                 .fiscalYear(h.getFiscalYear())
                 .status(h.getStatus())
                 .amount(h.getAmount())
+                .isActive(h.getIsActive())
                 .startDate(h.getStartDate())
                 .endDate(h.getEndDate())
                 .createdAt(h.getCreatedAt())
@@ -388,7 +398,7 @@ public class BudgetService {
             throw new RuntimeException("Line does not belong to this budget");
 
         BigDecimal prevAmount = line.getAmount();
-        
+
         Optional<BudgetLine> existing =
                 lineRepo.findByBudgetHeaderAndAccountAndDepartmentAndProjectId(
                         bh,

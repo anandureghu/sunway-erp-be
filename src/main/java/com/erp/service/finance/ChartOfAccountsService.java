@@ -76,6 +76,7 @@ public class ChartOfAccountsService {
                 .accountName(dto.getAccountName())
                 .description(dto.getDescription())
                 .type(COAType.valueOf(dto.getType()))
+                .isActive(true)
                 .parent(parent)
                 .balance(dto.getOpeningBalance() == null ? null : dto.getOpeningBalance())
                 .interCompanyNumber(dto.getInterCompanyNumber())
@@ -137,7 +138,8 @@ public class ChartOfAccountsService {
         if (account.getBalance().compareTo(BigDecimal.ZERO) > 0) {
             throw new RuntimeException("Cannot delete account, balance is greater than 0");
         }
-        repo.deleteById(id);
+        account.setIsActive(false);
+        repo.save(account);
     }
 
 
@@ -152,6 +154,7 @@ public class ChartOfAccountsService {
                 .accountName(acc.getAccountName())
                 .description(acc.getDescription())
                 .type(String.valueOf(acc.getType()))
+                .active(acc.getIsActive())
                 .balance(acc.getBalance())
                 .companyId(acc.getCompany().getId())
                 .parentId(acc.getParent() != null ? acc.getParent().getId() : null)
