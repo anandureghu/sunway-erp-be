@@ -1,6 +1,9 @@
 package com.erp.service;
 
-import com.erp.domain.*;
+import com.erp.domain.Employee;
+import com.erp.domain.EmployeeContactInfo;
+import com.erp.domain.EmployeeStatus;
+import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.Department;
 import com.erp.domain.security.HrAction;
@@ -22,7 +25,6 @@ import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.security.PermissionCheckService;
-import com.erp.util.EmployeeUserUtil;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -111,9 +113,17 @@ public class EmployeeService {
         employeeRepository.incrementEmployeeNo();
         String employeeNo = String.valueOf(employeeRepository.getCurrentEmployeeNo());
 
-        String username    = EmployeeUserUtil.generateUsername(dto.getFirstName(), dto.getLastName());
-        String email       = EmployeeUserUtil.generateEmail(username, company);
-        String rawPassword = EmployeeUserUtil.generateDefaultPassword(username);
+        String username = dto.getUsername();
+        String email = dto.getEmail();
+        String rawPassword = dto.getPassword();
+
+        if (userRepository.existsByEmail(email)) {
+            throw new RuntimeException("Email already exists");
+        }
+
+        if (userRepository.existsByUsername(username)) {
+            throw new RuntimeException("Username already exists");
+        }
 
         User user = new User();
         user.setFullName(dto.getFirstName() + " " + dto.getLastName());
@@ -166,21 +176,21 @@ public class EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        if (dto.getEmployeeNo()    != null) employee.setEmployeeNo(dto.getEmployeeNo());
-        if (dto.getPrefix()        != null) employee.setPrefix(dto.getPrefix());
-        if (dto.getFirstName()     != null) employee.setFirstName(dto.getFirstName());
-        if (dto.getLastName()      != null) employee.setLastName(dto.getLastName());
-        if (dto.getGender()        != null) employee.setGender(dto.getGender());
-        if (dto.getStatus()        != null) employee.setStatus(dto.getStatus());
-        if (dto.getDateOfBirth()   != null) employee.setDateOfBirth(dto.getDateOfBirth());
-        if (dto.getJoinDate()      != null) employee.setJoinDate(dto.getJoinDate());
+        if (dto.getEmployeeNo() != null) employee.setEmployeeNo(dto.getEmployeeNo());
+        if (dto.getPrefix() != null) employee.setPrefix(dto.getPrefix());
+        if (dto.getFirstName() != null) employee.setFirstName(dto.getFirstName());
+        if (dto.getLastName() != null) employee.setLastName(dto.getLastName());
+        if (dto.getGender() != null) employee.setGender(dto.getGender());
+        if (dto.getStatus() != null) employee.setStatus(dto.getStatus());
+        if (dto.getDateOfBirth() != null) employee.setDateOfBirth(dto.getDateOfBirth());
+        if (dto.getJoinDate() != null) employee.setJoinDate(dto.getJoinDate());
         if (dto.getMaritalStatus() != null) employee.setMaritalStatus(dto.getMaritalStatus());
-        if (dto.getNotes()         != null) employee.setNotes(dto.getNotes());
-        if (dto.getBirthplace()    != null) employee.setBirthplace(dto.getBirthplace());
-        if (dto.getHometown()      != null) employee.setHometown(dto.getHometown());
-        if (dto.getNationality()   != null) employee.setNationality(dto.getNationality());
-        if (dto.getReligion()      != null) employee.setReligion(dto.getReligion());
-        if (dto.getIdentification()!= null) employee.setIdentification(dto.getIdentification());
+        if (dto.getNotes() != null) employee.setNotes(dto.getNotes());
+        if (dto.getBirthplace() != null) employee.setBirthplace(dto.getBirthplace());
+        if (dto.getHometown() != null) employee.setHometown(dto.getHometown());
+        if (dto.getNationality() != null) employee.setNationality(dto.getNationality());
+        if (dto.getReligion() != null) employee.setReligion(dto.getReligion());
+        if (dto.getIdentification() != null) employee.setIdentification(dto.getIdentification());
 
         if (dto.getDepartmentId() != null) {
             Department department = departmentRepository.findById(dto.getDepartmentId())
@@ -333,8 +343,8 @@ public class EmployeeService {
 
     private EmployeeResponseDTO toDTO(Employee e) {
 
-        Company              c  = e.getCompany();
-        EmployeeContactInfo  ci = e.getContactInfo();
+        Company c = e.getCompany();
+        EmployeeContactInfo ci = e.getContactInfo();
 
         String imageUrl = e.getImageUrl() != null
                 ? fileStorageService.getPublicUrl(e.getImageUrl())
@@ -362,17 +372,17 @@ public class EmployeeService {
                 .phoneNo(ci != null ? ci.getPhone() : null)
                 .altPhone(ci != null ? ci.getAltPhone() : null)
 
-                .email(e.getUser()     != null ? e.getUser().getEmail()              : null)
-                .username(e.getUser()  != null ? e.getUser().getUsername()           : null)
-                .userId(e.getUser()    != null ? e.getUser().getId()                 : null)
-                .role(e.getUser()      != null ? e.getUser().getRole()               : null) // enum — for permissions
-                .CompanyRole(e.getUser() != null ? e.getUser().getCompanyRole()      : null) // dynamic — for display ✅
+                .email(e.getUser() != null ? e.getUser().getEmail() : null)
+                .username(e.getUser() != null ? e.getUser().getUsername() : null)
+                .userId(e.getUser() != null ? e.getUser().getId() : null)
+                .role(e.getUser() != null ? e.getUser().getRole() : null) // enum — for permissions
+                .CompanyRole(e.getUser() != null ? e.getUser().getCompanyRole() : null) // dynamic — for display ✅
                 .forcePasswordReset(e.getUser() != null ? e.getUser().getForcePasswordReset() : null)
 
-                .companyId(c   != null ? c.getId()                              : null)
-                .companyName(c != null ? c.getCompanyName()                     : null)
+                .companyId(c != null ? c.getId() : null)
+                .companyName(c != null ? c.getCompanyName() : null)
 
-                .departmentId(e.getDepartment()   != null ? e.getDepartment().getId()             : null)
+                .departmentId(e.getDepartment() != null ? e.getDepartment().getId() : null)
                 .departmentName(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
 
                 .imageUrl(imageUrl)

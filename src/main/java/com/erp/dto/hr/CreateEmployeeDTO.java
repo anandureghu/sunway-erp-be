@@ -2,7 +2,10 @@ package com.erp.dto.hr;
 
 import com.erp.domain.EmployeeStatus;
 import com.erp.domain.security.Role;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
@@ -17,6 +20,11 @@ public class CreateEmployeeDTO {
     // =======================
     private String firstName;
     private String lastName;
+
+    private String email;
+    private String username;
+    private String password;
+
     private String gender;
     private String prefix;
     private String maritalStatus;
