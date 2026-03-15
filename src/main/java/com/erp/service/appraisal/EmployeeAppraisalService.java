@@ -49,15 +49,24 @@ public class EmployeeAppraisalService {
                     "Appraisal already exists for " + normalizedMonth + " " + year);
         }
 
-        AppraisalConfig config = configRepository
-                .findByYearAndStatus(year, "ACTIVE")
-                .orElseThrow(() -> new IllegalStateException(
-                        "No ACTIVE appraisal config for year " + year));
+        // ✅ Use List to avoid "Query did not return a unique result" when duplicates exist
+        List<AppraisalConfig> configs = configRepository.findByYearAndStatus(year, "ACTIVE");
+        if (configs.isEmpty()) {
+            throw new IllegalStateException("No ACTIVE appraisal config for year " + year);
+        }
+        AppraisalConfig config = configs.get(0);
+
+        // ✅ Use companyRole ("Admin", "Manager") — matches what HR configured in appraisal settings
+        //    Falls back to security enum name only if companyRole is not set
+        String employeeRoleName = (employee.getUser() != null && employee.getUser().getCompanyRole() != null
+                && !employee.getUser().getCompanyRole().isBlank())
+                ? employee.getUser().getCompanyRole()
+                : employee.getRole();
 
         AppraisalRoleConfig roleConfig = roleConfigRepository
-                .findByConfigIdAndRoleName(config.getId(), employee.getRole())
+                .findByConfigIdAndRoleName(config.getId(), employeeRoleName)
                 .orElseThrow(() -> new IllegalStateException(
-                        "No role config found for role: " + employee.getRole() +
+                        "No role config found for role: " + employeeRoleName +
                                 ". Please configure this role in HR Settings → Appraisal."));
 
         List<AppraisalGoalTemplate> templates =
@@ -281,7 +290,11 @@ public class EmployeeAppraisalService {
                 .id(a.getId())
                 .employeeId(a.getEmployee().getId())
                 .employeeName(a.getEmployee().getFirstName() + " " + a.getEmployee().getLastName())
-                .employeeRole(a.getEmployee().getRole())
+                .employeeRole(
+                        a.getEmployee().getUser() != null && a.getEmployee().getUser().getCompanyRole() != null
+                                ? a.getEmployee().getUser().getCompanyRole()
+                                : a.getEmployee().getRole()
+                )
                 .year(a.getYear())
                 .month(a.getMonth())
                 .status(a.getStatus())

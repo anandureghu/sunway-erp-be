@@ -62,7 +62,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             Claims claims = jwtService.parse(token).getBody();
 
-            // ── Extract username ──────────────────────────────────────────────
+            // ── Extract username ──────────────────────────────────────────
             String username = safeString(claims.get("username"));
             if (isBlank(username)) username = safeString(claims.get("preferred_username"));
             if (isBlank(username)) username = claims.getSubject();
@@ -73,14 +73,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            // ── Extract authorities ───────────────────────────────────────────
+            // ── Extract authorities ───────────────────────────────────────
             Collection<SimpleGrantedAuthority> authorities = extractAuthorities(claims);
             if (authorities.isEmpty()) {
                 chain.doFilter(request, response);
                 return;
             }
 
-            // ── Extract security Role enum from authorities ────────────────────
+            // ── Extract Role enum ─────────────────────────────────────────
             String roleName = authorities.stream()
                     .map(SimpleGrantedAuthority::getAuthority)
                     .findFirst()
@@ -94,18 +94,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             Role role = Role.valueOf(roleName);
 
-            // ── Extract companyRole from JWT claims ───────────────────────────
-            // This is set when the JWT is generated (AuthService/login)
-            // e.g. "HR Manager", "Finance Lead" — nullable
+            // ── Extract companyRole ───────────────────────────────────────
             String companyRole = safeString(claims.get("companyRole"));
 
-            // ── Build principal ───────────────────────────────────────────────
+            // ── Extract userId ────────────────────────────────────────────
+            Long userId = null;
+            Object userIdClaim = claims.get("userId");
+            if (userIdClaim instanceof Integer i) {
+                userId = i.longValue();
+            } else if (userIdClaim instanceof Long l) {
+                userId = l;
+            } else if (userIdClaim != null) {
+                try {
+                    userId = Long.parseLong(String.valueOf(userIdClaim));
+                } catch (NumberFormatException ignored) {}
+            }
+
+            if (userId == null) {
+                log.warn("JWT missing userId claim for user '{}'", username);
+            }
+
+            // ── Build principal ───────────────────────────────────────────
             CustomUserPrincipal principal = new CustomUserPrincipal(
-                    null,         // userId — not in JWT, resolved per-request via DB
+                    userId,       // ✅ now populated from JWT claim
                     username,
-                    "",           // password not needed for JWT auth
+                    "",
                     role,
-                    companyRole   // ← HR-managed dynamic role ✅
+                    companyRole
             );
 
             UsernamePasswordAuthenticationToken auth =
@@ -118,7 +133,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(auth);
 
-            log.debug("JWT authenticated '{}', role={}, companyRole={}", username, role, companyRole);
+            log.debug("JWT authenticated '{}', id={}, role={}, companyRole={}",
+                    username, userId, role, companyRole);
 
         } catch (Exception ex) {
             log.debug("JWT parse/authorize failed: {}", ex.getMessage());
@@ -127,7 +143,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    /* ── Helpers ─────────────────────────────────────────────────────────────── */
+    /* ── Helpers ─────────────────────────────────────────────────────────── */
 
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();

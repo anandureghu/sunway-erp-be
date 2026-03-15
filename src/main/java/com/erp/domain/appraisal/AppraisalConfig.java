@@ -21,12 +21,10 @@ public class AppraisalConfig {
     private Long id;
 
     private Integer year;
-
     private String cycleName;
-
     private String status; // DRAFT, ACTIVE, CLOSED
 
-    /* ================= PERIOD ================= */
+    /* ── Period ─────────────────────────────────── */
 
     @Column(nullable = false)
     private String startMonth;
@@ -34,22 +32,28 @@ public class AppraisalConfig {
     @Column(nullable = false)
     private String endMonth;
 
-    /* ================= FLAGS ================= */
+    /* ── Goals limits ───────────────────────────── */
+
+    private Integer minGoals;  // ✅ proper field
+    private Integer maxGoals;  // ✅ proper field
+
+    /* ── Flags ──────────────────────────────────── */
 
     private Boolean enableSelfAssessment;
     private Boolean enableMidYear;
     private Boolean enablePIP;
 
-    /* ================= ROLES ================= */
+    /* ── Roles ──────────────────────────────────── */
 
     @OneToMany(
             mappedBy = "config",
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
+    @Builder.Default
     private List<AppraisalRoleConfig> roleConfigs = new ArrayList<>();
 
-    /* ================= AUDIT ================= */
+    /* ── Audit ──────────────────────────────────── */
 
     private LocalDateTime createdDate;
     private LocalDateTime updatedDate;

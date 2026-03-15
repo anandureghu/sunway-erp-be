@@ -21,15 +21,28 @@ public class AllowanceTypeService {
 
     public AllowanceTypeResponseDTO create(AllowanceTypeRequestDTO dto) {
 
-        String normalizedName = dto.getName().trim().toUpperCase();
+        // ✅ allow null/blank name — manual allowances don't need a type
+        if (dto.getName() != null && !dto.getName().isBlank()) {
 
-        repository.findByNameIgnoreCase(normalizedName)
-                .ifPresent(existing -> {
-                    throw new RuntimeException("Allowance type already exists");
-                });
+            String normalizedName = dto.getName().trim().toUpperCase();
 
+            repository.findByNameIgnoreCase(normalizedName)
+                    .ifPresent(existing -> {
+                        throw new RuntimeException("Allowance type already exists");
+                    });
+
+            AllowanceType type = AllowanceType.builder()
+                    .name(normalizedName)
+                    .description(dto.getDescription())
+                    .active(dto.getActive() != null ? dto.getActive() : true)
+                    .build();
+
+            return mapToResponse(repository.save(type));
+        }
+
+        // manual allowance with no type — save with null name
         AllowanceType type = AllowanceType.builder()
-                .name(normalizedName)
+                .name(null)
                 .description(dto.getDescription())
                 .active(dto.getActive() != null ? dto.getActive() : true)
                 .build();
@@ -41,7 +54,6 @@ public class AllowanceTypeService {
 
     @Transactional(readOnly = true)
     public List<AllowanceTypeResponseDTO> getActiveTypes() {
-
         return repository.findByActiveTrue()
                 .stream()
                 .map(this::mapToResponse)
@@ -55,16 +67,22 @@ public class AllowanceTypeService {
         AllowanceType type = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Allowance type not found"));
 
-        String normalizedName = dto.getName().trim().toUpperCase();
+        // ✅ only check duplicate name if name is provided
+        if (dto.getName() != null && !dto.getName().isBlank()) {
 
-        // Prevent renaming to an existing name
-        repository.findByNameIgnoreCase(normalizedName)
-                .filter(existing -> !existing.getId().equals(id))
-                .ifPresent(existing -> {
-                    throw new RuntimeException("Allowance type already exists");
-                });
+            String normalizedName = dto.getName().trim().toUpperCase();
 
-        type.setName(normalizedName);
+            repository.findByNameIgnoreCase(normalizedName)
+                    .filter(existing -> !existing.getId().equals(id))
+                    .ifPresent(existing -> {
+                        throw new RuntimeException("Allowance type already exists");
+                    });
+
+            type.setName(normalizedName);
+        } else {
+            type.setName(null);
+        }
+
         type.setDescription(dto.getDescription());
         type.setActive(dto.getActive() != null ? dto.getActive() : true);
 
@@ -74,17 +92,14 @@ public class AllowanceTypeService {
     // ================= DEACTIVATE =================
 
     public void deactivate(Long id) {
-
         AllowanceType type = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Allowance type not found"));
-
         type.setActive(false);
     }
 
     // ================= MAPPER =================
 
     private AllowanceTypeResponseDTO mapToResponse(AllowanceType type) {
-
         return AllowanceTypeResponseDTO.builder()
                 .id(type.getId())
                 .name(type.getName())

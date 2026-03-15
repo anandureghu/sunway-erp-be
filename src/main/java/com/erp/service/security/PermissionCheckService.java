@@ -12,8 +12,6 @@ public class PermissionCheckService {
 
     private final RolePermissionRepository repository;
 
-    /* ── Basic checks ────────────────────────────────────────────────────────── */
-
     public boolean has(Authentication auth, HrModule module, HrAction action) {
         return hasAccess(auth, module, action);
     }
@@ -25,37 +23,41 @@ public class PermissionCheckService {
         return false;
     }
 
-    /* ── Core permission logic ───────────────────────────────────────────────── */
-
     public boolean hasAccess(Authentication auth, HrModule module, HrAction action) {
-
         if (auth == null || !auth.isAuthenticated()) return false;
 
         Role securityRole = extractSecurityRole(auth);
         if (securityRole == null) return false;
 
-        // ADMIN / SUPER_ADMIN bypass — always full access
+        // ADMIN / SUPER_ADMIN bypass
         if (securityRole == Role.ADMIN || securityRole == Role.SUPER_ADMIN) return true;
 
         Long userId = getLoggedUserId(auth);
-
         RolePermission permission = null;
 
-        // 1. Employee-specific override takes priority
+        // 1. Employee-specific override
         if (userId != null) {
             permission = repository
                     .findByEmployee_IdAndModule(userId, module)
                     .orElse(null);
         }
 
-        // 2. Fallback to role-wide permission
-        //    Use companyRole ("HR Manager") — that's what's stored in role_permissions.role
-        //    Fall back to enum name ("HR") for legacy/unassigned users
+        // 2. Try companyRole first ("User", "HR Manager") — for when permissions are stored against companyRole
         if (permission == null) {
-            String roleName = extractRoleName(auth);
-            if (roleName != null) {
+            String companyRole = extractCompanyRole(auth);
+            if (companyRole != null) {
                 permission = repository
-                        .findByRoleAndModule(roleName, module)
+                        .findByRoleAndModule(companyRole, module)
+                        .orElse(null);
+            }
+        }
+
+        // 3. Fallback to enum name ("USER", "HR") — for when permissions are stored against enum
+        if (permission == null) {
+            String enumRole = extractEnumRoleName(auth);
+            if (enumRole != null) {
+                permission = repository
+                        .findByRoleAndModule(enumRole, module)
                         .orElse(null);
             }
         }
@@ -72,11 +74,6 @@ public class PermissionCheckService {
         };
     }
 
-    /* ── Role extraction ─────────────────────────────────────────────────────── */
-
-    /**
-     * Returns the security Role enum — used ONLY for ADMIN/SUPER_ADMIN bypass check.
-     */
     private Role extractSecurityRole(Authentication auth) {
         if (auth.getPrincipal() instanceof CustomUserPrincipal user) {
             return user.getRole();
@@ -85,23 +82,25 @@ public class PermissionCheckService {
     }
 
     /**
-     * Returns the role name to use for permission table lookups.
-     * Prefers companyRole ("HR Manager") over enum name ("HR").
-     * This must match what's stored in role_permissions.role column.
+     * Returns companyRole e.g. "User", "HR Manager" — checked first.
      */
-    private String extractRoleName(Authentication auth) {
+    private String extractCompanyRole(Authentication auth) {
         if (auth.getPrincipal() instanceof CustomUserPrincipal user) {
-            // companyRole is the dynamic HR-managed role stored in role_permissions
-            if (user.getCompanyRole() != null && !user.getCompanyRole().isBlank()) {
-                return user.getCompanyRole();
-            }
-            // Fallback: enum name for users who haven't been assigned a companyRole yet
-            return user.getRole() != null ? user.getRole().name() : null;
+            String cr = user.getCompanyRole();
+            return (cr != null && !cr.isBlank()) ? cr : null;
         }
         return null;
     }
 
-    /* ── User ID helper ──────────────────────────────────────────────────────── */
+    /**
+     * Returns enum name e.g. "USER", "HR" — fallback when no companyRole match.
+     */
+    private String extractEnumRoleName(Authentication auth) {
+        if (auth.getPrincipal() instanceof CustomUserPrincipal user) {
+            return user.getRole() != null ? user.getRole().name() : null;
+        }
+        return null;
+    }
 
     public Long getLoggedUserId(Authentication auth) {
         if (auth != null && auth.getPrincipal() instanceof CustomUserPrincipal user) {

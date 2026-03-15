@@ -7,6 +7,7 @@ import com.erp.dto.hr.CreateDepartmentDTO;
 import com.erp.dto.hr.DepartmentResponseDTO;
 import com.erp.exception.NotFoundException;
 import com.erp.exception.ConflictException;
+import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
@@ -27,6 +28,7 @@ public class DepartmentService {
     private final CompanyRepository    companyRepository;
     private final EmployeeRepository   employeeRepository;
     private final AuthContext          authContext;
+    private final EmployeeCurrentJobRepo employeeCurrentJobRepository;
 
     // ── Create ────────────────────────────────────────────────────────────────
 
@@ -108,12 +110,19 @@ public class DepartmentService {
 
     public void deleteDepartment(Long companyId, Long id) {
 
-        Company    company    = resolveCompany(companyId);
+        Company company = resolveCompany(companyId);
+
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Department not found"));
 
         if (!department.getCompany().getId().equals(company.getId())) {
             throw new ConflictException("Access denied for this department");
+        }
+
+        if (employeeCurrentJobRepository.existsByDepartment_Id(id)) {
+            throw new ConflictException(
+                    "Cannot delete department because employees are assigned to it."
+            );
         }
 
         departmentRepository.delete(department);
