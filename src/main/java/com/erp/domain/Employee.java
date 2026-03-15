@@ -70,6 +70,8 @@ public class Employee {
     @Column(length = 100)
     private String identification; // ID number (Aadhar / Passport / etc.)
 
+
+
     /* ================= EXISTING FIELDS ================= */
 
     @Column(columnDefinition = "TEXT")
@@ -148,4 +150,5 @@ public class Employee {
                 ? user.getRole().name()
                 : null;
     }
+
 }

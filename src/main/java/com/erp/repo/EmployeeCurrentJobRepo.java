@@ -13,4 +13,5 @@ public interface EmployeeCurrentJobRepo extends JpaRepository<EmployeeCurrentJob
     Optional<EmployeeCurrentJob> findByEmployee_Id(Long employeeId);
 
     boolean existsByEmployee_Id(Long employeeId);
+    boolean existsByDepartment_Id(Long departmentId);
 }

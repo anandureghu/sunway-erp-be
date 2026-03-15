@@ -20,7 +20,7 @@ public class SalaryAllowance {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "allowance_type_id", nullable = false)
+    @JoinColumn(name = "allowance_type_id", nullable = true)  // ✅ nullable now
     private AllowanceType allowanceType;
 
     @Column(nullable = false)
@@ -29,6 +29,10 @@ public class SalaryAllowance {
     private LocalDate effectiveDate;
 
     private String note;
+
+    // ✅ add this — for manual allowances without a type, store name directly
+    @Column(name = "custom_name")
+    private String customName;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "contract_id", nullable = false)

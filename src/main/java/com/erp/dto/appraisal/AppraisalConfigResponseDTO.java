@@ -14,6 +14,11 @@ public class AppraisalConfigResponseDTO {
     private String cycleName;
     private String status;
 
+    private String startMonth;
+    private String endMonth;
+    private Integer minGoals;
+    private Integer maxGoals;
+
     private Boolean enableSelfAssessment;
     private Boolean enableMidYear;
     private Boolean enablePIP;

@@ -25,25 +25,18 @@ public class AppraisalConfigService {
     /* ================= CREATE ================= */
 
     public AppraisalConfigResponseDTO create(AppraisalConfigRequestDTO dto) {
-
         if (configRepository.findByYear(dto.getYear()).isPresent()) {
-            throw new IllegalStateException(
-                    "Config already exists for year " + dto.getYear()
-            );
+            throw new IllegalStateException("Config already exists for year " + dto.getYear());
         }
-
         AppraisalConfig config = mapToEntity(dto);
         config.setStatus("DRAFT");
-
         validateRoleWeights(config);
-
         return mapToDTO(configRepository.save(config));
     }
 
     /* ================= UPDATE ================= */
 
     public AppraisalConfigResponseDTO update(Long id, AppraisalConfigRequestDTO dto) {
-
         AppraisalConfig existing = configRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Config not found"));
 
@@ -51,44 +44,30 @@ public class AppraisalConfigService {
             throw new IllegalStateException("Cannot edit ACTIVE config");
         }
 
-        // Always safe to update metadata
         existing.setCycleName(dto.getCycleName());
+        existing.setStartMonth(dto.getStartMonth());
+        existing.setEndMonth(dto.getEndMonth());
+        existing.setMinGoals(dto.getMinGoals());
+        existing.setMaxGoals(dto.getMaxGoals());
         existing.setEnableSelfAssessment(dto.getEnableSelfAssessment());
         existing.setEnableMidYear(dto.getEnableMidYear());
         existing.setEnablePIP(dto.getEnablePIP());
 
-        // Find which existing role names have templates already used in employee appraisals
         Set<String> lockedRoleNames = existing.getRoleConfigs().stream()
                 .filter(role -> role.getGoalTemplates().stream()
                         .anyMatch(template ->
-                                employeeAppraisalGoalRepository.existsByTemplateId(template.getId())
-                        )
-                )
+                                employeeAppraisalGoalRepository.existsByTemplateId(template.getId())))
                 .map(AppraisalRoleConfig::getRoleName)
                 .collect(Collectors.toSet());
 
-        // Find role names in the incoming DTO
-        Set<String> incomingRoleNames = dto.getRoles() == null ? Set.of() :
-                dto.getRoles().stream()
-                        .map(AppraisalRoleConfigRequestDTO::getRoleName)
-                        .collect(Collectors.toSet());
-
-        // Remove only roles that are NOT locked (safe to delete)
         existing.getRoleConfigs().removeIf(role -> !lockedRoleNames.contains(role.getRoleName()));
         configRepository.saveAndFlush(existing);
 
-        // Add/replace roles from the DTO
         if (dto.getRoles() != null) {
             for (AppraisalRoleConfigRequestDTO roleDTO : dto.getRoles()) {
-
                 String roleName = roleDTO.getRoleName();
+                if (lockedRoleNames.contains(roleName)) continue;
 
-                if (lockedRoleNames.contains(roleName)) {
-                    // This role's templates are in use — skip replacing its KPIs
-                    continue;
-                }
-
-                // New or unlocked role — add it fresh
                 AppraisalRoleConfig role = new AppraisalRoleConfig();
                 role.setRoleName(roleName);
                 role.setConfig(existing);
@@ -104,13 +83,11 @@ public class AppraisalConfigService {
                         role.getGoalTemplates().add(goal);
                     }
                 }
-
                 existing.getRoleConfigs().add(role);
             }
         }
 
         validateRoleWeights(existing);
-
         return mapToDTO(configRepository.saveAndFlush(existing));
     }
 
@@ -118,65 +95,107 @@ public class AppraisalConfigService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AppraisalConfigResponseDTO activate(Long id) {
-
         AppraisalConfig config = configRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Config not found with id: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Config not found with id: " + id));
 
-        configRepository.findByYearAndStatus(config.getYear(), "ACTIVE")
-                .ifPresent(active -> {
-                    active.setStatus("CLOSED");
-                    configRepository.save(active);
-                });
+        // ✅ findByYearAndStatus returns List — iterate instead of .ifPresent()
+        List<AppraisalConfig> activeConfigs = configRepository.findByYearAndStatus(config.getYear(), "ACTIVE");
+        for (AppraisalConfig active : activeConfigs) {
+            if (!active.getId().equals(id)) {
+                active.setStatus("CLOSED");
+                configRepository.save(active);
+            }
+        }
 
         config.setStatus("ACTIVE");
+        return mapToDTO(configRepository.save(config));
+    }
 
+    /* ================= DEACTIVATE ================= */
+
+    public AppraisalConfigResponseDTO deactivate(Long id) {
+        AppraisalConfig config = configRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Config not found"));
+        if (!"ACTIVE".equals(config.getStatus())) {
+            throw new IllegalStateException("Only ACTIVE config can be deactivated");
+        }
+        config.setStatus("DRAFT");
         return mapToDTO(configRepository.save(config));
     }
 
     /* ================= CLOSE ================= */
 
     public AppraisalConfigResponseDTO close(Long id) {
-
         AppraisalConfig config = configRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Config not found"));
-
         if (!"ACTIVE".equals(config.getStatus())) {
             throw new IllegalStateException("Only ACTIVE config can be closed");
         }
-
         config.setStatus("CLOSED");
-
         return mapToDTO(configRepository.save(config));
     }
 
     /* ================= SAVE AND ACTIVATE ================= */
 
     public AppraisalConfigResponseDTO saveAndActivate(AppraisalConfigRequestDTO dto) {
-
         Optional<AppraisalConfig> existing = configRepository.findByYear(dto.getYear());
-
         Long configId;
 
         if (existing.isPresent()) {
             AppraisalConfig config = existing.get();
-
             if ("ACTIVE".equals(config.getStatus())) {
                 throw new IllegalStateException(
                         "An ACTIVE config already exists for year " + dto.getYear() +
-                                ". Close or deactivate it before activating a new one."
-                );
+                                ". Close or deactivate it before activating a new one.");
             }
-
             configId = config.getId();
             update(configId, dto);
-
         } else {
-            AppraisalConfigResponseDTO created = create(dto);
-            configId = created.getId();
+            configId = create(dto).getId();
         }
 
         return activate(configId);
+    }
+
+    /* ================= DUPLICATE ================= */
+
+    public AppraisalConfigResponseDTO duplicate(Integer fromYear, Integer toYear) {
+        AppraisalConfig source = configRepository.findByYear(fromYear)
+                .orElseThrow(() -> new IllegalArgumentException("No config found for year " + fromYear));
+
+        if (configRepository.findByYear(toYear).isPresent()) {
+            throw new IllegalStateException("Config already exists for year " + toYear);
+        }
+
+        AppraisalConfig copy = new AppraisalConfig();
+        copy.setYear(toYear);
+        copy.setCycleName(source.getCycleName() + " (copy)");
+        copy.setStartMonth(source.getStartMonth());
+        copy.setEndMonth(source.getEndMonth());
+        copy.setMinGoals(source.getMinGoals());
+        copy.setMaxGoals(source.getMaxGoals());
+        copy.setEnableSelfAssessment(source.getEnableSelfAssessment());
+        copy.setEnableMidYear(source.getEnableMidYear());
+        copy.setEnablePIP(source.getEnablePIP());
+        copy.setStatus("DRAFT");
+
+        for (AppraisalRoleConfig sourceRole : source.getRoleConfigs()) {
+            AppraisalRoleConfig role = new AppraisalRoleConfig();
+            role.setRoleName(sourceRole.getRoleName());
+            role.setConfig(copy);
+            for (AppraisalGoalTemplate sourceGoal : sourceRole.getGoalTemplates()) {
+                AppraisalGoalTemplate goal = new AppraisalGoalTemplate();
+                goal.setKpi(sourceGoal.getKpi());
+                goal.setDescription(sourceGoal.getDescription());
+                goal.setWeight(sourceGoal.getWeight());
+                goal.setActive(sourceGoal.getActive());
+                goal.setRoleConfig(role);
+                role.getGoalTemplates().add(goal);
+            }
+            copy.getRoleConfigs().add(role);
+        }
+
+        return mapToDTO(configRepository.save(copy));
     }
 
     /* ================= GET ACTIVE ================= */
@@ -196,7 +215,6 @@ public class AppraisalConfigService {
     /* ================= DELETE ================= */
 
     public void delete(Long id) {
-
         AppraisalConfig config = configRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Config not found"));
 
@@ -207,13 +225,11 @@ public class AppraisalConfigService {
         boolean templatesInUse = config.getRoleConfigs().stream()
                 .flatMap(role -> role.getGoalTemplates().stream())
                 .anyMatch(template ->
-                        employeeAppraisalGoalRepository.existsByTemplateId(template.getId())
-                );
+                        employeeAppraisalGoalRepository.existsByTemplateId(template.getId()));
 
         if (templatesInUse) {
             throw new IllegalStateException(
-                    "Cannot delete configuration because its KPI templates are already used in employee appraisals."
-            );
+                    "Cannot delete configuration because its KPI templates are already used in employee appraisals.");
         }
 
         configRepository.delete(config);
@@ -222,24 +238,24 @@ public class AppraisalConfigService {
     /* ================= ENTITY MAPPING ================= */
 
     private AppraisalConfig mapToEntity(AppraisalConfigRequestDTO dto) {
-
         AppraisalConfig config = new AppraisalConfig();
         config.setYear(dto.getYear());
         config.setCycleName(dto.getCycleName());
+        config.setStartMonth(dto.getStartMonth());
+        config.setEndMonth(dto.getEndMonth());
+        config.setMinGoals(dto.getMinGoals());
+        config.setMaxGoals(dto.getMaxGoals());
         config.setEnableSelfAssessment(dto.getEnableSelfAssessment());
         config.setEnableMidYear(dto.getEnableMidYear());
         config.setEnablePIP(dto.getEnablePIP());
 
         if (dto.getRoles() != null) {
             for (AppraisalRoleConfigRequestDTO roleDTO : dto.getRoles()) {
-
                 AppraisalRoleConfig role = new AppraisalRoleConfig();
                 role.setRoleName(roleDTO.getRoleName());
                 role.setConfig(config);
-
                 if (roleDTO.getGoals() != null) {
                     for (AppraisalGoalTemplateRequestDTO goalDTO : roleDTO.getGoals()) {
-
                         AppraisalGoalTemplate goal = new AppraisalGoalTemplate();
                         goal.setKpi(goalDTO.getKpi());
                         goal.setDescription(goalDTO.getDescription());
@@ -249,44 +265,38 @@ public class AppraisalConfigService {
                         role.getGoalTemplates().add(goal);
                     }
                 }
-
                 config.getRoleConfigs().add(role);
             }
         }
-
         return config;
     }
 
     /* ================= RESPONSE MAPPING ================= */
 
     private AppraisalConfigResponseDTO mapToDTO(AppraisalConfig config) {
-
-        List<RoleConfigResponseDTO> roleDTOs =
-                config.getRoleConfigs().stream().map(role -> {
-
-                    List<EmployeeGoalDTO> goalDTOs =
-                            role.getGoalTemplates().stream().map(goal -> {
-
-                                EmployeeGoalDTO goalDTO = new EmployeeGoalDTO();
-                                goalDTO.setGoalId(goal.getId());
-                                goalDTO.setKpi(goal.getKpi());
-                                goalDTO.setDescription(goal.getDescription());
-                                goalDTO.setWeight(goal.getWeight());
-                                return goalDTO;
-
-                            }).toList();
-
-                    return RoleConfigResponseDTO.builder()
-                            .roleName(role.getRoleName())
-                            .goals(goalDTOs)
-                            .build();
-
-                }).toList();
+        List<RoleConfigResponseDTO> roleDTOs = config.getRoleConfigs().stream().map(role -> {
+            List<EmployeeGoalDTO> goalDTOs = role.getGoalTemplates().stream().map(goal -> {
+                EmployeeGoalDTO goalDTO = new EmployeeGoalDTO();
+                goalDTO.setGoalId(goal.getId());
+                goalDTO.setKpi(goal.getKpi());
+                goalDTO.setDescription(goal.getDescription());
+                goalDTO.setWeight(goal.getWeight());
+                return goalDTO;
+            }).toList();
+            return RoleConfigResponseDTO.builder()
+                    .roleName(role.getRoleName())
+                    .goals(goalDTOs)
+                    .build();
+        }).toList();
 
         return AppraisalConfigResponseDTO.builder()
                 .id(config.getId())
                 .year(config.getYear())
                 .cycleName(config.getCycleName())
+                .startMonth(config.getStartMonth())
+                .endMonth(config.getEndMonth())
+                .minGoals(config.getMinGoals())
+                .maxGoals(config.getMaxGoals())
                 .status(config.getStatus())
                 .enableSelfAssessment(config.getEnableSelfAssessment())
                 .enableMidYear(config.getEnableMidYear())
@@ -298,19 +308,15 @@ public class AppraisalConfigService {
     /* ================= VALIDATION ================= */
 
     private void validateRoleWeights(AppraisalConfig config) {
-
         for (AppraisalRoleConfig role : config.getRoleConfigs()) {
-
             int totalWeight = role.getGoalTemplates().stream()
                     .filter(t -> Boolean.TRUE.equals(t.getActive()))
                     .mapToInt(AppraisalGoalTemplate::getWeight)
                     .sum();
-
             if (totalWeight != 100) {
                 throw new IllegalStateException(
                         "Total weight for role '" + role.getRoleName() +
-                                "' must equal 100. Current: " + totalWeight
-                );
+                                "' must equal 100. Current: " + totalWeight);
             }
         }
     }

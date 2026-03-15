@@ -20,4 +20,8 @@ public enum LoanType {
     public String getDisplayName() {
         return this.name().replace("_", " ");
     }
+
+    public String getName() {
+        return getDisplayName();
+    }
 }

@@ -1,6 +1,7 @@
 package com.erp.dto.hr;
 
 import com.erp.domain.EmployeeStatus;
+import com.erp.domain.security.Role;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -46,7 +47,10 @@ public class UpdateEmployeeDTO {
     // ── Relations ─────────────────────────────────────────────────────────────
     private Long departmentId;
 
-    // ── Role ──────────────────────────────────────────────────────────────────
+    // ── Roles ─────────────────────────────────────────────────────────────────
     /** HR-managed dynamic role — e.g. "HR Manager", "Finance Lead" */
     private String companyRole;
+
+    /** Spring Security role — ADMIN/HR/USER etc. Only updatable by ADMIN */
+    private Role role;
 }

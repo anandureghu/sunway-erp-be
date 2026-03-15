@@ -11,6 +11,7 @@ import com.erp.security.JwtService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @Service
@@ -21,12 +22,17 @@ public class AuthService {
     private final PasswordEncoder encoder;
     private final JwtService jwt;
 
-    public AuthService(UserRepository userRepository, EmployeeRepository employeeRepository, PasswordEncoder encoder, JwtService jwt) {
-        this.userRepository = userRepository;
+    public AuthService(UserRepository userRepository,
+                       EmployeeRepository employeeRepository,
+                       PasswordEncoder encoder,
+                       JwtService jwt) {
+        this.userRepository     = userRepository;
         this.employeeRepository = employeeRepository;
-        this.encoder = encoder;
-        this.jwt = jwt;
+        this.encoder            = encoder;
+        this.jwt                = jwt;
     }
+
+    // ── existing — untouched ──────────────────────────────────────────────
 
     public User register(RegisterRequest req) {
         if (userRepository.existsByEmail(req.getEmail()))
@@ -43,6 +49,8 @@ public class AuthService {
         return userRepository.save(u);
     }
 
+    // ── fixed: added userId to claims map ────────────────────────────────
+
     public Map<String, String> login(LoginRequest req) {
         User u = userRepository.findByEmail(req.getLoginId())
                 .or(() -> userRepository.findByUsername(req.getLoginId()))
@@ -55,18 +63,19 @@ public class AuthService {
         if (!encoder.matches(req.getPassword(), u.getPassword()))
             throw new IllegalArgumentException("Invalid credentials");
 
-        // ✅ Include userId, username, and role in the token
-        Map<String, Object> claims = Map.of(
-                "userId", u.getId(),
-                "username", u.getUsername(),
-                "companyId", emp.getCompany().getId(),
-                "role", u.getRole().name()
-        );
+        // ✅ fixed — clean HashMap, userId now included
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId",    u.getId());
+        claims.put("username",  u.getUsername());
+        claims.put("companyId", emp.getCompany().getId());
+        claims.put("role",      u.getRole().name());
 
-        String access = jwt.generateAccessToken(u.getUsername(), claims);
+        String access  = jwt.generateAccessToken(u.getUsername(), claims);
         String refresh = jwt.generateRefreshToken(u.getUsername());
         return Map.of("accessToken", access, "refreshToken", refresh);
     }
+
+    // ── existing — untouched ──────────────────────────────────────────────
 
     public Map<String, String> refresh(String refreshToken) {
         var claims = jwt.parse(refreshToken).getBody();
@@ -75,21 +84,21 @@ public class AuthService {
         User u = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found for refresh"));
 
-
         Employee emp = employeeRepository
                 .findByUserId(u.getId())
                 .orElseThrow(() -> new IllegalArgumentException("User not found for refresh"));
 
-        Map<String, Object> newClaims = Map.of(
-                "userId", u.getId(),
-                "username", u.getUsername(),
-                "companyId", emp.getCompany().getId(),
-                "role", u.getRole().name()
-        );
+        Map<String, Object> newClaims = new HashMap<>();
+        newClaims.put("userId",    u.getId());
+        newClaims.put("username",  u.getUsername());
+        newClaims.put("companyId", emp.getCompany().getId());
+        newClaims.put("role",      u.getRole().name());
 
         String access = jwt.generateAccessToken(u.getUsername(), newClaims);
         return Map.of("accessToken", access, "refreshToken", refreshToken);
     }
+
+    // ── existing — untouched ──────────────────────────────────────────────
 
     public String hash(String raw) {
         return encoder.encode(raw);

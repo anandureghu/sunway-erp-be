@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Payslip</title>
+
+  <style type="text/css">
+
+    @page {
+        size: A4;
+        margin: 30px;
+    }
+
+    body {
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 13px;
+        color: #1F2937;
+    }
+
+    h1 {
+        margin: 0;
+        font-size: 22px;
+    }
+
+    .section {
+        margin-top: 25px;
+    }
+
+    .row {
+        display: table;
+        width: 100%;
+    }
+
+    .col {
+        display: table-cell;
+        vertical-align: top;
+    }
+
+    .col-50 { width: 50%; }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th {
+        background: #F3F4F6;
+        padding: 8px;
+        text-align: left;
+        font-size: 12px;
+    }
+
+    td {
+        padding: 8px;
+        border-bottom: 1px solid #E5E7EB;
+    }
+
+    .text-right {
+        text-align: right;
+    }
+
+    .total {
+        font-weight: bold;
+        font-size: 15px;
+    }
+
+    .footer {
+        margin-top: 40px;
+        font-size: 11px;
+        color: #6B7280;
+    }
+
+  </style>
+</head>
+
+<body>
+
+<h1>Payslip</h1>
+
+<div class="section row">
+  <div class="col col-50">
+    <strong>Employee:</strong>
+    <span th:text="${firstName + ' ' + lastName}">John Doe</span><br/>
+
+    <strong>Employee No:</strong>
+    <span th:text="${employeeNo}">EMP001</span><br/>
+
+    <strong>Department:</strong>
+    <span th:text="${department}">IT</span><br/>
+
+    <strong>Designation:</strong>
+    <span th:text="${designation}">Developer</span><br/>
+
+    <strong>Date of Joining:</strong>
+    <span th:text="${dateOfJoining}">01 Jan 2024</span>
+  </div>
+
+  <div class="col col-50 text-right">
+    <strong>Payroll Code:</strong>
+    <span th:text="${payrollCode}">PR-001</span><br/>
+
+    <strong>Pay Period:</strong>
+    <span th:text="${payPeriod}">March 2026</span><br/>
+
+    <strong>Pay Date:</strong>
+    <span th:text="${payDate}">31 Mar 2026</span><br/>
+
+    <strong>Generated:</strong>
+    <span th:text="${generatedAt}">14 Mar 2026</span>
+  </div>
+</div>
+
+<!-- Earnings -->
+<div class="section">
+  <h3>Earnings</h3>
+  <table>
+    <tr>
+      <th>Description</th>
+      <th class="text-right">Amount (<span th:text="${currencyCode}">OMR</span>)</th>
+    </tr>
+    <tr th:each="e : ${earnings}">
+      <td th:text="${e.label}">Basic Salary</td>
+      <td class="text-right"
+          th:text="${#numbers.formatDecimal(e.amount,1,'COMMA',2,'POINT')}">
+        0.00
+      </td>
+    </tr>
+  </table>
+</div>
+
+<!-- Deductions -->
+<div class="section">
+  <h3>Deductions</h3>
+  <table>
+    <tr>
+      <th>Description</th>
+      <th class="text-right">Amount (<span th:text="${currencyCode}">OMR</span>)</th>
+    </tr>
+    <tr th:each="d : ${deductions}">
+      <td th:text="${d.label}">Loan</td>
+      <td class="text-right"
+          th:text="${#numbers.formatDecimal(d.amount,1,'COMMA',2,'POINT')}">
+        0.00
+      </td>
+    </tr>
+  </table>
+</div>
+
+<!-- Totals -->
+<div class="section">
+  <table>
+    <tr>
+      <td class="total">Gross Pay</td>
+      <td class="text-right total"
+          th:text="${#numbers.formatDecimal(grossPay,1,'COMMA',2,'POINT')}">
+        0.00
+      </td>
+    </tr>
+    <tr>
+      <td class="total">Total Deductions</td>
+      <td class="text-right total"
+          th:text="${#numbers.formatDecimal(totalDeductions,1,'COMMA',2,'POINT')}">
+        0.00
+      </td>
+    </tr>
+    <tr>
+      <td class="total">Net Payable</td>
+      <td class="text-right total"
+          th:text="${#numbers.formatDecimal(netPayable,1,'COMMA',2,'POINT')}">
+        0.00
+      </td>
+    </tr>
+  </table>
+</div>
+
+<!-- Bank -->
+<div class="section">
+  <h3>Bank Details</h3>
+  <strong>Bank:</strong> <span th:text="${bankName}">Bank Name</span><br/>
+  <strong>Branch:</strong> <span th:text="${bankBranch}">Main Branch</span><br/>
+  <strong>Account:</strong> <span th:text="${maskedAccount}">1234 •••• 5678</span>
+</div>
+
+<div class="footer">
+  This is a system generated payslip and does not require a signature.
+</div>
+
+</body>
+</html>

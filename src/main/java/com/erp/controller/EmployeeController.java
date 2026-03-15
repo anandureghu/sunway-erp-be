@@ -105,15 +105,12 @@ public class EmployeeController {
     // GET MANAGERS BY COMPANY  ✅ FIXED POSITION
     // ======================================================
     @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
-    @GetMapping("/company/{companyId}/managers")
+    @GetMapping("/managers")
     public ResponseEntity<List<EmployeeResponseDTO>> getManagersByCompany(
-            @PathVariable("companyId") Long companyId) {
+            @RequestParam("companyId") Long companyId) {
 
-        return ResponseEntity.ok(
-                employeeService.getManagersByCompany(companyId)
-        );
+        return ResponseEntity.ok(employeeService.getManagersByCompany(companyId));
     }
-
     // ======================================================
     // GET EMPLOYEES BY DEPARTMENT
     // ======================================================
