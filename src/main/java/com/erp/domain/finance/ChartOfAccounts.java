@@ -82,6 +82,11 @@ public class ChartOfAccounts {
     @Column(name = "is_active")
     private Boolean isActive = true;
 
+    /** Once true, opening balance cannot be changed via the initial-balance endpoint. */
+    @Column(name = "initial_balance_set", nullable = false)
+    @Builder.Default
+    private Boolean initialBalanceSet = false;
+
     private int year = Calendar.getInstance().getWeekYear();
 
     @PrePersist

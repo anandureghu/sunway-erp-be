@@ -32,5 +32,5 @@ public class BudgetResponseDTO {
     private Long approvedByUserId;
     private String approvedByUserName;
     private List<BudgetLineDTO> lines;
-    private boolean isActive;
+    private Boolean isActive;
 }

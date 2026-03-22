@@ -2,6 +2,8 @@ package com.erp.controller.finance;
 
 import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.TransactionResponseDTO;
+import com.erp.dto.finance.UpdateTransactionDTO;
+import com.erp.dto.finance.UpdateTransactionSourceDTO;
 import com.erp.service.finance.TransactionService;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +32,20 @@ public class TransactionController {
     @PostMapping
     public TransactionResponseDTO create(@RequestBody CreateTransactionDTO dto) {
         return txService.create(dto);
+    }
+
+    @PutMapping("/{id}")
+    public TransactionResponseDTO update(
+            @PathVariable("id") Long id,
+            @RequestBody UpdateTransactionDTO dto) {
+        return txService.update(id, dto);
+    }
+
+    @PatchMapping("/{id}/source")
+    public TransactionResponseDTO updateSource(
+            @PathVariable("id") Long id,
+            @RequestBody UpdateTransactionSourceDTO dto) {
+        return txService.updateSource(id, dto);
     }
 
     @PostMapping("/{id}/post")

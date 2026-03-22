@@ -23,4 +23,7 @@ public class CreateTransactionDTO {
     private Long relatedId;
     private Long relatedSubId;
     private String transactionDescription;
+
+    /** Defaults to UNKNOWN when null. */
+    private String source;
 }

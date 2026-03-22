@@ -14,10 +14,13 @@ import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -33,6 +36,7 @@ public class BudgetService {
     private final DepartmentRepository deptRepo;
     private final AuthContext auth;
     private final CompanyRepository companyRepository;
+    private final TransactionService transactionService;
 
     public BudgetService(
             BudgetHeaderRepository headerRepo,
@@ -40,7 +44,8 @@ public class BudgetService {
             ChartOfAccountsRepository accountRepo,
             DepartmentRepository deptRepo,
             AuthContext auth,
-            CompanyRepository companyRepository
+            CompanyRepository companyRepository,
+            TransactionService transactionService
     ) {
         this.headerRepo = headerRepo;
         this.lineRepo = lineRepo;
@@ -48,6 +53,7 @@ public class BudgetService {
         this.deptRepo = deptRepo;
         this.auth = auth;
         this.companyRepository = companyRepository;
+        this.transactionService = transactionService;
     }
 
     // --------------------------------------
@@ -59,6 +65,12 @@ public class BudgetService {
 
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        if (headerRepo.findByCompanyIdAndFiscalYearAndIsActiveTrue(companyId, dto.getFiscalYear()).isPresent()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "An active budget already exists for this fiscal year");
+        }
 
         User user = User.builder()
                 .id(auth.getCurrentUserId()).build();
@@ -106,59 +118,130 @@ public class BudgetService {
     }
 
     // --------------------------------------
-    // UPDATE
+    // UPDATE (PUT): approved budgets → revise chain; others → new version row, original unchanged
     // --------------------------------------
     @Transactional
-    public BudgetResponseDTO revise(Long id, BudgetUpdateDTO dto) {
+    public BudgetResponseDTO updateBudget(Long id, BudgetUpdateDTO dto) {
+        BudgetHeader h = getBHEntity(id);
+        if (h.getStatus() == BudgetStatus.APPROVED) {
+            return reviseApprovedBudget(h, dto);
+        }
+        return editBudgetAsNewCopy(h, dto);
+    }
 
-        BudgetHeader header = headerRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Budget not found"));
-
-        if (!header.getIsActive()) {
-            throw new RuntimeException("only active budget can be revised");
+    /**
+     * Only {@link BudgetStatus#APPROVED} active budgets can be revised (new child under fiscal root).
+     */
+    private BudgetResponseDTO reviseApprovedBudget(BudgetHeader budget, BudgetUpdateDTO dto) {
+        if (dto.getAmount() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount is required to revise an approved budget");
+        }
+        if (!Boolean.TRUE.equals(budget.getIsActive())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only the active budget can be revised");
+        }
+        if (budget.getAmount() != null && budget.getAmount().compareTo(dto.getAmount()) == 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Revised amount must differ from the current budget");
         }
 
-        if (Objects.equals(header.getAmount(), dto.getAmount())) {
-            throw new RuntimeException("revised amount is same as budget");
-        }
-
-        // Always revise from root budget
-        if (header.getParentBudget() != null) {
-            header = header.getParentBudget();
-        }
-
-        long reviseCount = headerRepo.countByParentBudgetId(header.getId());
-
+        BudgetHeader root = budget.getParentBudget() == null ? budget : budget.getParentBudget();
+        long reviseCount = headerRepo.countByParentBudgetId(root.getId());
         if (reviseCount >= 5) {
-            throw new RuntimeException("Exceeded maximum revise limit (5)");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Exceeded maximum revise limit (5)");
         }
 
-        // update parent revision count
-        header.setReviseCount((header.getReviseCount() == null ? 0 : header.getReviseCount()) + 1);
-        headerRepo.save(header);
+        User user = User.builder().id(auth.getCurrentUserId()).build();
 
-        header.setIsActive(false); // only one active account at a time
+        root.setReviseCount((root.getReviseCount() == null ? 0 : root.getReviseCount()) + 1);
+        headerRepo.save(root);
+
+        budget.setIsActive(false);
+        headerRepo.save(budget);
 
         BudgetHeader newHeader = BudgetHeader.builder()
-                .parentBudget(header)
+                .parentBudget(root)
                 .status(BudgetStatus.REVISED)
-                .budgetName(header.getBudgetName() + " (Rev " + (reviseCount + 1) + ")")
-                .fiscalYear(header.getFiscalYear())
-                .startDate(header.getStartDate())
-                .endDate(header.getEndDate())
+                .budgetName(budget.getBudgetName() + " (Rev " + (reviseCount + 1) + ")")
+                .fiscalYear(budget.getFiscalYear())
+                .startDate(budget.getStartDate())
+                .endDate(budget.getEndDate())
                 .amount(dto.getAmount())
                 .reviseCount(reviseCount + 1)
                 .isActive(true)
-                .company(header.getCompany())
+                .company(budget.getCompany())
+                .createdByUser(user)
                 .build();
 
-        newHeader = headerRepo.save(newHeader);
+        List<BudgetLine> copiedLines = copyLinesOntoHeader(budget, newHeader);
+        newHeader.setLines(copiedLines);
 
-        BudgetHeader finalNewHeader = newHeader;
-        List<BudgetLine> copiedLines = header.getLines() == null || header.getLines().isEmpty()
-                ? new ArrayList<>()
-                : header.getLines().stream()
+        BudgetHeader saved = headerRepo.save(newHeader);
+        headerRepo.deactivateOtherActivesForFiscalYear(
+                saved.getCompany().getId(), saved.getFiscalYear(), saved.getId());
+        return toDTO(headerRepo.findById(saved.getId()).orElseThrow());
+    }
+
+    /**
+     * Non-approved budgets: create a new header with merged fields and copied lines; original row
+     * keeps its status and is deactivated (one active budget per fiscal year).
+     */
+    private BudgetResponseDTO editBudgetAsNewCopy(BudgetHeader budget, BudgetUpdateDTO dto) {
+        if (budget.getStatus() == BudgetStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use revise flow for approved budgets");
+        }
+
+        String newName = dto.getBudgetName() != null ? dto.getBudgetName() : budget.getBudgetName();
+        String newFy = dto.getFiscalYear() != null ? dto.getFiscalYear() : budget.getFiscalYear();
+        LocalDate newStart = dto.getStartDate() != null ? dto.getStartDate() : budget.getStartDate();
+        LocalDate newEnd = dto.getEndDate() != null ? dto.getEndDate() : budget.getEndDate();
+        BigDecimal newAmount = dto.getAmount() != null ? dto.getAmount() : budget.getAmount();
+
+        if (Objects.equals(newName, budget.getBudgetName())
+                && Objects.equals(newFy, budget.getFiscalYear())
+                && Objects.equals(newStart, budget.getStartDate())
+                && Objects.equals(newEnd, budget.getEndDate())
+                && (budget.getAmount() == null && newAmount == null
+                    || budget.getAmount() != null && newAmount != null
+                        && budget.getAmount().compareTo(newAmount) == 0)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No changes to apply");
+        }
+
+        User user = User.builder().id(auth.getCurrentUserId()).build();
+
+        budget.setIsActive(false);
+        headerRepo.save(budget);
+
+        BudgetHeader fresh = BudgetHeader.builder()
+                .budgetName(newName)
+                .fiscalYear(newFy)
+                .startDate(newStart)
+                .endDate(newEnd)
+                .amount(newAmount)
+                .status(budget.getStatus())
+                .lines(new ArrayList<>())
+                .company(budget.getCompany())
+                .createdByUser(user)
+                .isActive(true)
+                .parentBudget(null)
+                .reviseCount(0L)
+                .build();
+
+        List<BudgetLine> copiedLines = copyLinesOntoHeader(budget, fresh);
+        fresh.setLines(copiedLines);
+
+        BudgetHeader saved = headerRepo.save(fresh);
+        headerRepo.deactivateOtherActivesForFiscalYear(
+                saved.getCompany().getId(), saved.getFiscalYear(), saved.getId());
+        return toDTO(headerRepo.findById(saved.getId()).orElseThrow());
+    }
+
+    private List<BudgetLine> copyLinesOntoHeader(BudgetHeader source, BudgetHeader target) {
+        List<BudgetLine> src = lineRepo.findByBudgetHeader_Id(source.getId());
+        if (src.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return src.stream()
                 .map(l -> BudgetLine.builder()
+                        .budgetHeader(target)
                         .account(l.getAccount())
                         .department(l.getDepartment())
                         .projectId(l.getProjectId())
@@ -167,16 +250,11 @@ public class BudgetService {
                         .notes(l.getNotes())
                         .status(BudgetStatus.IMPLEMENTED)
                         .createdByUser(l.getCreatedByUser())
-                        .updatedByUser(l.getUpdatedByUser())
-                        .approvedByUser(l.getApprovedByUser())
+                        .updatedByUser(null)
+                        .approvedByUser(null)
                         .amount(l.getAmount())
-                        .budgetHeader(finalNewHeader)
                         .build())
                 .toList();
-
-        newHeader.setLines(copiedLines);
-
-        return toDTO(headerRepo.save(newHeader));
     }
 
     // --------------------------------------
@@ -185,9 +263,15 @@ public class BudgetService {
     public BudgetResponseDTO activate(Long id) {
         BudgetHeader header = headerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Budget not found"));
+        if (!header.getCompany().getId().equals(auth.getCurrentCompanyId())) {
+            throw new RuntimeException("Access denied");
+        }
 
         User user = User.builder()
                 .id(auth.getCurrentUserId()).build();
+
+        headerRepo.deactivateOtherActivesForFiscalYear(
+                header.getCompany().getId(), header.getFiscalYear(), header.getId());
 
         header.setStatus(BudgetStatus.APPROVED);
         header.setIsActive(true);
@@ -226,7 +310,7 @@ public class BudgetService {
                 .fiscalYear(h.getFiscalYear())
                 .status(h.getStatus())
                 .amount(h.getAmount())
-                .isActive(h.getIsActive())
+                .isActive(Boolean.TRUE.equals(h.getIsActive()))
                 .startDate(h.getStartDate())
                 .endDate(h.getEndDate())
                 .createdAt(h.getCreatedAt())
@@ -276,7 +360,7 @@ public class BudgetService {
                 .orElseThrow(() -> new RuntimeException("Journal Entry not found"));
 
         if (bh.getStatus() != BudgetStatus.APPROVED) {
-            throw new RuntimeException("Budget is not approved");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Budget is not approved");
         }
 
         // 3. Initialize lazy list to avoid transient issues
@@ -337,23 +421,7 @@ public class BudgetService {
 
         headerRepo.save(bh);
 
-        // TODO: do this on confirmation
-//        transactionService.create(CreateTransactionDTO.builder()
-//                .companyId(auth.getCurrentCompanyId())
-//                .transactionType("BUDGET")
-//                .transactionDate(LocalDate.now())
-//                .amount(dto.getAmount())
-//                .relatedId(bh.getId())
-//                .relatedSubId(affectedLine.getId())
-//                .debitAccount(account.getId())
-//                .creditAccount(account.getId())
-//                .transactionDescription(
-//                        StringUtils.defaultIfBlank(
-//                                dto.getNotes(),
-//                                "Budget allocation"
-//                        )
-//                ).build());
-
+        // GL: posting runs when a line is first approved (updateLineStatus → APPROVED), not on addLine.
 
         return toDTO(bh);
     }
@@ -381,6 +449,10 @@ public class BudgetService {
         User user = User.builder()
                 .id(auth.getCurrentUserId()).build();
         BudgetHeader bh = getBHEntity(bhId);
+        if (bh.getStatus() != BudgetStatus.APPROVED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Distributions can only be edited when the budget is approved");
+        }
 
         BudgetLine line = lineRepo.findById(lineId)
                 .orElseThrow(() -> new RuntimeException("Line not found"));
@@ -439,6 +511,10 @@ public class BudgetService {
                 .build();
 
         BudgetHeader bh = getBHEntity(bhId);
+        if (bh.getStatus() != BudgetStatus.APPROVED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Line status can only be updated when the budget is approved");
+        }
 
         BudgetLine line = lineRepo.findById(lineId)
                 .orElseThrow(() -> new RuntimeException("Budget line not found"));
@@ -446,6 +522,8 @@ public class BudgetService {
         if (!line.getBudgetHeader().getId().equals(bhId)) {
             throw new RuntimeException("Line does not belong to this budget");
         }
+
+        BudgetStatus previous = line.getStatus();
 
         line.setStatus(status);
 
@@ -457,12 +535,24 @@ public class BudgetService {
 
         lineRepo.save(line);
 
+        if (status == BudgetStatus.APPROVED
+                && previous != BudgetStatus.APPROVED
+                && line.getAmount() != null
+                && line.getAmount().compareTo(BigDecimal.ZERO) != 0
+                && !transactionService.hasBudgetPostingForLine(lineId)) {
+            transactionService.recordBudgetLineApproved(line);
+        }
+
         return toDTO(bh);
     }
 
     @Transactional
     public BudgetResponseDTO deleteLine(Long bhId, Long lineId) {
         BudgetHeader bh = getBHEntity(bhId);
+        if (bh.getStatus() != BudgetStatus.APPROVED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Distributions can only be removed when the budget is approved");
+        }
 
         BudgetLine line = lineRepo.findById(lineId)
                 .orElseThrow(() -> new RuntimeException("Line not found"));

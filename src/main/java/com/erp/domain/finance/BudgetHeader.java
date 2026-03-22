@@ -65,10 +65,17 @@ public class BudgetHeader {
     @OneToMany(mappedBy = "budgetHeader", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BudgetLine> lines;
 
+    @Builder.Default
+    @Column(name = "is_active")
+    private Boolean isActive = true;
+
     @PrePersist
     void onCreate() {
         createdAt = Instant.now();
         updatedAt = createdAt;
+        if (isActive == null) {
+            isActive = Boolean.TRUE;
+        }
     }
 
     @PreUpdate
@@ -76,6 +83,10 @@ public class BudgetHeader {
         updatedAt = Instant.now();
     }
 
-    @Column(name = "is_active")
-    private Boolean isActive = true;
+    @PostLoad
+    void normalizeIsActive() {
+        if (isActive == null) {
+            isActive = Boolean.TRUE;
+        }
+    }
 }

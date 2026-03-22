@@ -31,6 +31,7 @@ public class JournalEntryService {
     private final ChartOfAccountsRepository accountRepo;
     private final UserRepository userRepo;
     private final CompanyRepository companyRepo;
+    private final TransactionService transactionService;
 
 
     public Page<JournalEntryResponse> getAll(Pageable pageable) {
@@ -93,10 +94,12 @@ public class JournalEntryService {
         JournalEntry entry = getEntry(id);
         Long approverId = authContext.getCurrentUserId();
 
-
-//        if (entry.getCreatedBy().getId().equals(approverId)) {
-//            throw new RuntimeException("Maker cannot approve own journal entry");
-//        }
+        if (entry.getStatus() == JournalEntryStatus.APPROVED) {
+            throw new RuntimeException("Journal entry already approved");
+        }
+        if (entry.getStatus() == JournalEntryStatus.REJECTED) {
+            throw new RuntimeException("Cannot approve a rejected journal entry");
+        }
 
         User approver = userRepo.findById(approverId)
                 .orElseThrow(() -> new RuntimeException("Approver not found"));
@@ -106,10 +109,10 @@ public class JournalEntryService {
         entry.setApprovedAt(LocalDateTime.now());
         entry.setUpdatedBy(approver);
 
-        ChartOfAccounts debitAccount = entry.getDebitAccount();
-        ChartOfAccounts creditAccount = entry.getCreditAccount();
-        debitAccount.setBalance(debitAccount.getBalance().subtract(entry.getAmount()));
-        creditAccount.setBalance(creditAccount.getBalance().add(entry.getAmount()));
+        journalRepo.save(entry);
+
+        // Finance transaction + COA posting only on approval (not on create)
+        transactionService.createForJournalEntryApproval(entry);
 
         return map(entry);
     }
