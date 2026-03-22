@@ -8,6 +8,8 @@ import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
+import com.erp.dto.inventory.ItemStockAdjustDTO;
+import com.erp.dto.inventory.ItemStockReceiveDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
@@ -121,7 +123,7 @@ public class ItemService {
     // --------------------------
     // Update Item
     // --------------------------
-    public ItemResponseDTO update(Long id, ItemUpdateDTO dto) {
+    public ItemResponseDTO update(Long id, ItemUpdateDTO dto, MultipartFile image) {
 
         Item item = getItemEntity(id); // 🔒 company check here
 
@@ -148,6 +150,40 @@ public class ItemService {
         item.setWarehouse(warehouse);
         item.setUpdatedAt(Instant.now());
 
+        Item saved = itemRepo.save(item);
+
+        if (image != null && !image.isEmpty()) {
+            FileUploadResult upload = fileStorageService.upload(
+                    image,
+                    FileCategory.INVENTORY_IMAGE,
+                    saved.getId().toString(),
+                    true
+            );
+            saved.setImageUrl(upload.getBlobPath());
+            saved = itemRepo.save(saved);
+        }
+
+        return toDTO(saved);
+    }
+
+    public ItemResponseDTO updateItemImage(Long id, MultipartFile image) {
+        if (image == null || image.isEmpty()) {
+            throw new IllegalArgumentException("Image is required");
+        }
+        Item item = getItemEntity(id);
+        User user = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        FileUploadResult upload = fileStorageService.upload(
+                image,
+                FileCategory.INVENTORY_IMAGE,
+                item.getId().toString(),
+                true
+        );
+        item.setImageUrl(upload.getBlobPath());
+        item.setUpdatedBy(user);
+        item.setUpdatedAt(Instant.now());
+
         return toDTO(itemRepo.save(item));
     }
 
@@ -165,6 +201,81 @@ public class ItemService {
     public ItemResponseDTO getItem(Long id) {
         Item item = getItemEntity(id);
         return toDTO(item);
+    }
+
+    // --------------------------
+    // Stock movements
+    // --------------------------
+
+    public ItemResponseDTO receiveStock(Long id, ItemStockReceiveDTO dto) {
+        Item item = getItemEntity(id);
+        User user = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (dto.getQuantityReceived() == null || dto.getQuantityReceived() <= 0) {
+            throw new IllegalArgumentException("quantityReceived must be positive");
+        }
+
+        if (dto.getWarehouseId() != null
+                && !dto.getWarehouseId().equals(item.getWarehouse().getId())) {
+            throw new IllegalArgumentException("Warehouse does not match this item");
+        }
+
+        int add = dto.getQuantityReceived();
+        int q = item.getQuantity() == null ? 0 : item.getQuantity();
+        int a = item.getAvailable() == null ? 0 : item.getAvailable();
+        item.setQuantity(q + add);
+        item.setAvailable(a + add);
+
+        if (dto.getCostPrice() != null) {
+            item.setCostPrice(dto.getCostPrice());
+        }
+        if (dto.getUnitPrice() != null) {
+            item.setSellingPrice(dto.getUnitPrice());
+        }
+
+        item.setUpdatedBy(user);
+        item.setUpdatedAt(Instant.now());
+
+        return toDTO(itemRepo.save(item));
+    }
+
+    public ItemResponseDTO adjustStock(Long id, ItemStockAdjustDTO dto) {
+        Item item = getItemEntity(id);
+        User user = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (dto.getWarehouseId() != null
+                && !dto.getWarehouseId().equals(item.getWarehouse().getId())) {
+            throw new IllegalArgumentException("Warehouse does not match this item");
+        }
+
+        int currentQty = item.getQuantity() == null ? 0 : item.getQuantity();
+        int reserved = item.getReserved() == null ? 0 : item.getReserved();
+
+        int newQty;
+        if (dto.getNewQuantity() != null) {
+            newQty = dto.getNewQuantity();
+        } else if (dto.getAdjustmentQuantity() != null) {
+            newQty = currentQty + dto.getAdjustmentQuantity();
+        } else {
+            throw new IllegalArgumentException("Either newQuantity or adjustmentQuantity is required");
+        }
+
+        if (newQty < 0) {
+            throw new IllegalArgumentException("Resulting quantity cannot be negative");
+        }
+
+        if (dto.getReason() == null || dto.getReason().isBlank()) {
+            throw new IllegalArgumentException("Reason is required");
+        }
+
+        item.setQuantity(newQty);
+        item.setAvailable(Math.max(0, newQty - reserved));
+        item.setUpdatedBy(user);
+        item.setUpdatedAt(Instant.now());
+
+        return toDTO(itemRepo.save(item));
     }
 
     // --------------------------
