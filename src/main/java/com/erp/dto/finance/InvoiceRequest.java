@@ -21,4 +21,5 @@ public class InvoiceRequest {
     private Long orderId;
     private Long creditAccount;
     private Long debitAccount;
+    private Long bankAccountId;
 }

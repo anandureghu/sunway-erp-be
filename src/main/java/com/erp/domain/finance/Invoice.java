@@ -1,6 +1,7 @@
 package com.erp.domain.finance;
 
 import com.erp.domain.InvoiceType;
+import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
@@ -42,6 +43,9 @@ public class Invoice {
     private LocalDate paidDate;
 
     private BigDecimal amount;
+    private BigDecimal subtotalAmount;
+    private BigDecimal discountAmount;
+    private BigDecimal taxAmount;
     private BigDecimal openAmount;
     private BigDecimal outstanding;
 
@@ -71,6 +75,10 @@ public class Invoice {
     @ManyToOne(optional = false)
     @JoinColumn(name = "debit_account")
     private ChartOfAccounts debitAccount;
+
+    @ManyToOne
+    @JoinColumn(name = "bank_account_id")
+    private BankAccount bankAccount;
 
     @PrePersist
     public void onCreate() {

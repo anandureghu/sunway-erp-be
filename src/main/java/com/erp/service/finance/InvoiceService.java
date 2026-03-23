@@ -3,19 +3,25 @@ package com.erp.service.finance;
 import com.erp.domain.InvoiceType;
 import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.Invoice;
+import com.erp.domain.finance.Payment;
+import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
+import com.erp.domain.inventory.Customer;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
-import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.InvoiceRequest;
 import com.erp.dto.finance.InvoiceResponse;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.sales.SalesOrderResponseDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
+import com.erp.repo.finance.PaymentRepository;
+import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
+import com.erp.service.notification.CustomerEmailService;
 import com.erp.service.pdf.InvoicePDFService;
 import com.erp.service.purchase.PurchaseOrderService;
 import com.erp.service.sales.SalesOrderService;
@@ -37,12 +43,15 @@ public class InvoiceService {
     private final InvoiceRepository repo;
     private final CompanyRepository companyRepo;
     private final ChartOfAccountsRepository coaRepo;
+    private final BankAccountRepository bankAccountRepo;
+    private final SalesOrderRepository salesOrderRepo;
+    private final PaymentRepository paymentRepo;
     private final InvoicePDFService pdfService;
     private final FileStorageService fileStorageService;
     private final AuthContext auth;
     private final SalesOrderService salesOrderService;
     private final PurchaseOrderService purchaseOrderService;
-    private final PaymentService paymentService;
+    private final CustomerEmailService customerEmailService;
 
     // ============================================================
     // GET OR CREATE PDF (IDEMPOTENT)
@@ -64,7 +73,7 @@ public class InvoiceService {
     // ============================================================
     public InvoiceResponse createInvoice(InvoiceRequest req) {
 
-        if (repo.findByOrderId(req.getOrderId()) != null) {
+        if (repo.findByOrderIdAndType(req.getOrderId(), req.getType()).isPresent()) {
             throw new RuntimeException("Invoice already exists for selected order");
         }
 
@@ -77,6 +86,12 @@ public class InvoiceService {
         ChartOfAccounts creditAccount = coaRepo.findById(req.getCreditAccount())
                 .orElseThrow(() -> new RuntimeException("Credit Account not found"));
 
+        BankAccount bankAccount = req.getBankAccountId() == null
+                ? null
+                : bankAccountRepo.findById(req.getBankAccountId())
+                .filter(b -> b.getCompany().getId().equals(company.getId()))
+                .orElseThrow(() -> new RuntimeException("Bank account not found"));
+
         String invoiceCode = "INV-" + UUID.randomUUID().toString().substring(0, 8);
 
         Invoice invoice = Invoice.builder()
@@ -87,6 +102,9 @@ public class InvoiceService {
                 .dueDate(req.getDueDate())
                 .status("UNPAID")
                 .amount(req.getAmount())
+                .subtotalAmount(req.getAmount())
+                .discountAmount(BigDecimal.ZERO)
+                .taxAmount(BigDecimal.ZERO)
                 .openAmount(req.getAmount())
                 .outstanding(req.getAmount())
                 .itemDescription(req.getItemDescription())
@@ -99,24 +117,85 @@ public class InvoiceService {
                 .orderId(req.getOrderId())
                 .debitAccount(debitAccount)
                 .creditAccount(creditAccount)
+                .bankAccount(bankAccount)
                 .build();
 
         Invoice saved = repo.save(invoice);
 
-        // Create payment record
-        CreatePaymentDTO payment = CreatePaymentDTO.builder()
-                .invoiceId(saved.getInvoiceId())
-                .amount(saved.getAmount())
-                .companyId(company.getId())
-                .effectiveDate(saved.getDueDate())
-                .build();
-
-        paymentService.createPayment(payment);
+        if (req.getType() == InvoiceType.SALES) {
+            createPendingPaymentEntry(saved);
+        }
 
         // Generate & upload PDF once
         generateAndUploadInvoicePdf(saved);
 
+        if (req.getType() == InvoiceType.SALES && req.getOrderId() != null) {
+            Customer customer = salesOrderRepo.findById(req.getOrderId())
+                    .map(so -> so.getCustomer())
+                    .orElse(null);
+            customerEmailService.sendInvoiceCreatedEmail(customer, saved);
+        }
+
         return toDTO(saved);
+    }
+
+    private void createPendingPaymentEntry(Invoice invoice) {
+        if (paymentRepo.findByInvoiceId(invoice.getInvoiceId()).isEmpty()) {
+            Payment payment = Payment.builder()
+                    .paymentCode("PAY-REQ-" + UUID.randomUUID().toString().substring(0, 8))
+                    .company(invoice.getCompany())
+                    .paymentMethod("PENDING_REQUEST")
+                    .amount(invoice.getAmount())
+                    .effectiveDate(invoice.getDueDate())
+                    .notes("Auto-created payment request entry for invoice " + invoice.getInvoiceId())
+                    .invoiceId(invoice.getInvoiceId())
+                    .createdBy(auth.getCurrentUserId())
+                    .build();
+            paymentRepo.save(payment);
+        }
+    }
+
+    public InvoiceResponse createInvoiceForConfirmedSalesOrder(Long salesOrderId) {
+        var order = salesOrderRepo.findById(salesOrderId)
+                .orElseThrow(() -> new RuntimeException("Sales order not found"));
+        if (repo.findByOrderIdAndType(order.getId(), InvoiceType.SALES).isPresent()) {
+            throw new RuntimeException("Invoice already exists for this sales order");
+        }
+        if (order.getDebitAccount() == null) {
+            throw new RuntimeException("Sales order is missing debit account");
+        }
+        if (order.getCreditAccount() == null) {
+            throw new RuntimeException("Sales order is missing credit account");
+        }
+        if (order.getBankAccount() == null) {
+            throw new RuntimeException("Sales order is missing bank account");
+        }
+        if (order.getInvoiceDueDate() == null) {
+            throw new RuntimeException("Sales order is missing invoice due date");
+        }
+
+        InvoiceRequest req = new InvoiceRequest();
+        req.setType(InvoiceType.SALES);
+        req.setOrderId(order.getId());
+        req.setToParty(order.getCustomer().getCustomerName());
+        req.setInvoiceDate(LocalDate.now());
+        req.setDueDate(order.getInvoiceDueDate());
+        req.setAmount(order.getTotalAmount());
+        req.setDebitAccount(order.getDebitAccount().getId());
+        req.setCreditAccount(order.getCreditAccount().getId());
+        req.setBankAccountId(order.getBankAccount().getId());
+        req.setItemDescription("Auto-generated from sales order " + order.getOrderNumber());
+        req.setNotesRemarks("Invoice created on sales order confirmation.");
+        InvoiceResponse response = createInvoice(req);
+        Invoice saved = repo.findById(response.getId())
+                .orElseThrow(() -> new RuntimeException("Invoice not found after creation"));
+        saved.setSubtotalAmount(order.getSubtotalAmount() == null ? BigDecimal.ZERO : order.getSubtotalAmount());
+        saved.setDiscountAmount(order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount());
+        saved.setTaxAmount(order.getTaxAmount() == null ? BigDecimal.ZERO : order.getTaxAmount());
+        saved.setAmount(order.getTotalAmount());
+        saved.setOpenAmount(order.getTotalAmount());
+        saved.setOutstanding(order.getTotalAmount());
+        return toDTO(repo.save(saved));
     }
 
     // ============================================================
@@ -151,6 +230,11 @@ public class InvoiceService {
                 .orElseThrow(() -> new RuntimeException("Invoice not found")));
     }
 
+    public InvoiceResponse getInvoiceByCode(String invoiceCode) {
+        return toDTO(repo.findByInvoiceId(invoiceCode)
+                .orElseThrow(() -> new RuntimeException("Invoice not found")));
+    }
+
     public List<InvoiceResponse> getAllInvoices() {
         return repo.findAll().stream().map(this::toDTO).toList();
     }
@@ -162,6 +246,33 @@ public class InvoiceService {
     public List<InvoiceResponse> getInvoicesByStatus(Long companyId, String status) {
         return repo.findByCompanyIdAndStatus(companyId, status)
                 .stream().map(this::toDTO).toList();
+    }
+
+    public void emailInvoice(Long invoiceId) {
+        Invoice invoice = repo.findById(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+            return;
+        }
+        Customer customer = salesOrderRepo.findById(invoice.getOrderId())
+                .map(so -> so.getCustomer())
+                .orElse(null);
+        customerEmailService.sendInvoiceCreatedEmail(customer, invoice);
+    }
+
+    public void emailReceipt(Long invoiceId) {
+        Invoice invoice = repo.findById(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
+            throw new RuntimeException("Receipt can be sent only for paid invoices");
+        }
+        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+            return;
+        }
+        Customer customer = salesOrderRepo.findById(invoice.getOrderId())
+                .map(so -> so.getCustomer())
+                .orElse(null);
+        customerEmailService.sendReceiptEmail(customer, invoice);
     }
 
     // ============================================================
@@ -253,6 +364,9 @@ public class InvoiceService {
                 .dueDate(i.getDueDate())
                 .paidDate(i.getPaidDate())
                 .amount(i.getAmount())
+                .subtotalAmount(i.getSubtotalAmount() == null ? BigDecimal.ZERO : i.getSubtotalAmount())
+                .discountAmount(i.getDiscountAmount() == null ? BigDecimal.ZERO : i.getDiscountAmount())
+                .taxAmount(i.getTaxAmount() == null ? BigDecimal.ZERO : i.getTaxAmount())
                 .openAmount(i.getOpenAmount())
                 .outstanding(i.getOutstanding())
                 .itemDescription(i.getItemDescription())
@@ -270,6 +384,11 @@ public class InvoiceService {
                 .debitAccountName(i.getDebitAccount().getAccountName())
                 .creditAccountId(i.getCreditAccount().getId())
                 .creditAccountName(i.getCreditAccount().getAccountName())
+                .bankAccountId(i.getBankAccount() != null ? i.getBankAccount().getId() : null)
+                .bankAccountName(i.getBankAccount() != null ? i.getBankAccount().getBankName() : null)
+                .bankAccountNumber(i.getBankAccount() != null ? i.getBankAccount().getAccountNumber() : null)
+                .bankIfscCode(i.getBankAccount() != null ? i.getBankAccount().getIfscCode() : null)
+                .bankBranchName(i.getBankAccount() != null ? i.getBankAccount().getBranchName() : null)
                 .build();
     }
 }

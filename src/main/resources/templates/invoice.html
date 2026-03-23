@@ -286,7 +286,8 @@
                 </td>
                 <td style="text-align:right;">
                     <div class="badge">
-                        <div class="badge-title">INVOICE</div>
+                        <div class="badge-title"
+                             th:text="${invoice.status == 'PAID' ? 'RECEIPT' : 'INVOICE'}">INVOICE</div>
                         <div class="badge-id"
                              th:text="${invoice.invoiceId}">
                             INV-0000
@@ -457,14 +458,42 @@
             </table>
         </div>
 
+        <div class="terms" th:if="${invoice.bankAccount != null and invoice.status != 'PAID'}">
+            <h4>Payment Information</h4>
+            <p><strong>Bank Name:</strong> <span th:text="${invoice.bankAccount.bankName}">Bank</span></p>
+            <p><strong>Account Holder:</strong> <span th:text="${invoice.bankAccount.accountHolderName}">Holder</span></p>
+            <p><strong>Account Number:</strong> <span th:text="${invoice.bankAccount.accountNumber}">0000</span></p>
+            <p><strong>IFSC/SWIFT:</strong> <span th:text="${invoice.bankAccount.ifscCode}">IFSC</span></p>
+            <p><strong>Branch:</strong> <span th:text="${invoice.bankAccount.branchName}">Branch</span></p>
+            <p><strong>Reference:</strong> <span th:text="${invoice.invoiceId}">INV-0000</span></p>
+        </div>
+
         <div class="notes">
             <h4>Notes</h4>
-            <p th:text="|Thank you for choosing ${company.companyName} for your digital transformation needs.
-            This invoice covers the complete website redesign project as per our agreement dated December 15, 2024.
-            All services have been delivered as specified, and the website is now live at your production domain.
-            Please ensure payment is made by the due date to maintain uninterrupted hosting services.
-            For any questions or clarifications regarding this invoice, please contact our accounts department at
-            email@example.com or call 9876543210|">
+            <p th:if="${invoice.status != 'PAID'}">
+                <strong th:text="${company.companyName}">Company</strong>
+                has issued this invoice on
+                <strong th:text="${#temporals.format(invoice.invoiceDate, 'dd/MM/yyyy')}">01/01/2026</strong>.
+                Payment is due on
+                <strong th:text="${#temporals.format(invoice.dueDate, 'dd/MM/yyyy')}">15/01/2026</strong>.
+                Please use the bank details listed above and include reference
+                <strong th:text="${invoice.invoiceId}">INV-0000</strong>.
+            </p>
+            <p th:if="${invoice.status == 'PAID'}">
+                <strong th:text="${company.companyName}">Company</strong>
+                confirms receipt of payment for reference
+                <strong th:text="${invoice.invoiceId}">INV-0000</strong>
+                on
+                <strong th:text="${invoice.paidDate != null ? #temporals.format(invoice.paidDate, 'dd/MM/yyyy') : 'N/A'}">N/A</strong>.
+                Thank you for your payment.
+            </p>
+            <p th:if="${company.street != null or company.city != null or company.country != null}">
+                Company Address:
+                <span th:text="|${company.street != null ? company.street : ''} ${company.city != null ? company.city : ''} ${company.country != null ? company.country : ''}|">Address</span>
+            </p>
+            <p th:if="${company.phoneNo != null}">
+                Contact:
+                <span th:text="${company.phoneNo}">0000000000</span>
             </p>
         </div>
 

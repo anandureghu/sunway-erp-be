@@ -1,6 +1,8 @@
 package com.erp.domain.sales;
 
 import com.erp.domain.User;
+import com.erp.domain.finance.ChartOfAccounts;
+import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Customer;
 import jakarta.persistence.*;
@@ -35,14 +37,38 @@ public class SalesOrder {
     private LocalDate orderDate;
 
     @Column(nullable = false)
+    private LocalDate invoiceDueDate;
+
+    @Column(nullable = false)
     private String status; // DRAFT, CONFIRMED, CANCELLED
 
     @Column(precision = 18, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(precision = 18, scale = 2)
+    private BigDecimal subtotalAmount;
+
+    @Column(precision = 18, scale = 2)
+    private BigDecimal discountAmount;
+
+    @Column(precision = 18, scale = 2)
+    private BigDecimal taxAmount;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")
     private Company company;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "bank_account_id")
+    private BankAccount bankAccount;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "debit_account_id")
+    private ChartOfAccounts debitAccount;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "credit_account_id")
+    private ChartOfAccounts creditAccount;
 
     @ManyToOne
     @JoinColumn(name = "created_by")

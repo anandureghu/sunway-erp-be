@@ -22,7 +22,18 @@ public class SalesOrderResponseDTO {
     private String customerEmail;
     private String customerPhone;
     private LocalDate orderDate;
+    private LocalDate invoiceDueDate;
     private String status;
+    private String paymentStatus;
+    private BigDecimal subtotalAmount;
+    private BigDecimal discountAmount;
+    private BigDecimal taxAmount;
     private BigDecimal totalAmount;
+    private Long bankAccountId;
+    private String bankAccountName;
+    private Long debitAccountId;
+    private String debitAccountName;
+    private Long creditAccountId;
+    private String creditAccountName;
     private List<SalesOrderItemResponseDTO> items;
 }

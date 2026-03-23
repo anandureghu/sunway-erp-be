@@ -286,9 +286,7 @@ public class TransactionService {
         Transaction tx = tb.build();
 
         Transaction saved = repo.save(tx);
-        if (dto.getRelatedId() == null) {
-            applyPostingToCoa(saved);
-        }
+        applyPostingToCoa(saved);
         return toDTO(repo.findById(saved.getId()).orElseThrow());
     }
 
@@ -500,6 +498,7 @@ public class TransactionService {
                 .amount(amount)
                 .creditAccount(creditAccount)
                 .debitAccount(debitAccount)
+                .paymentId(paymentId != null ? String.valueOf(paymentId) : null)
                 .source(null)
                 .sourceLocked(false)
                 .createdAt(Instant.now())

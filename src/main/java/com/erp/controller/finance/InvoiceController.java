@@ -33,10 +33,27 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.getInvoiceById(id));
     }
 
+    @GetMapping("/code/{invoiceCode}")
+    public ResponseEntity<InvoiceResponse> getInvoiceByCode(@PathVariable("invoiceCode") String invoiceCode) {
+        return ResponseEntity.ok(invoiceService.getInvoiceByCode(invoiceCode));
+    }
+
     @GetMapping("/{id}/pdf")
     public ResponseEntity<String> getInvoicePdfUrl(@PathVariable("id") Long id) {
         String pdfUrl = invoiceService.getOrCreateInvoicePdfUrl(id);
         return ResponseEntity.ok(pdfUrl);
+    }
+
+    @PostMapping("/{id}/email")
+    public ResponseEntity<Void> sendInvoiceEmail(@PathVariable("id") Long id) {
+        invoiceService.emailInvoice(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{id}/receipt-email")
+    public ResponseEntity<Void> sendReceiptEmail(@PathVariable("id") Long id) {
+        invoiceService.emailReceipt(id);
+        return ResponseEntity.ok().build();
     }
 
 
@@ -46,7 +63,7 @@ public class InvoiceController {
     }
 
     @GetMapping("/status/{status}/{companyId}")
-    public ResponseEntity<List<InvoiceResponse>> getInvoicesByStatus(@PathVariable("customerId") String status, @PathVariable("companyId") Long companyId) {
+    public ResponseEntity<List<InvoiceResponse>> getInvoicesByStatus(@PathVariable("status") String status, @PathVariable("companyId") Long companyId) {
         return ResponseEntity.ok(invoiceService.getInvoicesByStatus(companyId, status));
     }
 

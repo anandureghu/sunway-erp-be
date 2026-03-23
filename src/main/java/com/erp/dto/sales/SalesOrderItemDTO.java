@@ -13,4 +13,6 @@ public class SalesOrderItemDTO {
     private Long itemId;
     private Integer quantity;
     private Double unitPrice;
+    private Double discountPercent;
+    private Double taxRate;
 }

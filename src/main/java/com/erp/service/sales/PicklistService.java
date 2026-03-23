@@ -1,10 +1,12 @@
 package com.erp.service.sales;
 
+import com.erp.domain.InvoiceType;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.sales.Picklist;
 import com.erp.domain.sales.PicklistItem;
 import com.erp.domain.sales.SalesOrder;
+import com.erp.repo.finance.InvoiceRepository;
 import com.erp.dto.sales.PicklistItemDTO;
 import com.erp.dto.sales.PicklistResponseDTO;
 import com.erp.repo.UserRepository;
@@ -23,6 +25,7 @@ public class PicklistService {
 
     private final PicklistRepository repo;
     private final SalesOrderRepository soRepo;
+    private final InvoiceRepository invoiceRepo;
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
     private final AuthContext auth;
@@ -30,12 +33,14 @@ public class PicklistService {
     public PicklistService(
             PicklistRepository repo,
             SalesOrderRepository soRepo,
+            InvoiceRepository invoiceRepo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
             AuthContext auth
     ) {
         this.repo = repo;
         this.soRepo = soRepo;
+        this.invoiceRepo = invoiceRepo;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
         this.auth = auth;
@@ -52,6 +57,11 @@ public class PicklistService {
 
         if (!"CONFIRMED".equals(so.getStatus())) {
             throw new RuntimeException("Picklist can be generated only for CONFIRMED sales orders");
+        }
+        var invoice = invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
+                .orElseThrow(() -> new RuntimeException("Invoice not found for this sales order"));
+        if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
+            throw new RuntimeException("Picklist can be generated only after full customer payment");
         }
 
         if (repo.findBySalesOrderId(so.getId()).isPresent()) {

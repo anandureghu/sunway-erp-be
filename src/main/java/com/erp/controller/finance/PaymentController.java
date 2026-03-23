@@ -25,6 +25,16 @@ public class PaymentController {
         return paymentService.createPayment(dto);
     }
 
+    @PutMapping("/{id}")
+    public PaymentResponseDTO updatePayment(@PathVariable("id") Long id, @RequestBody CreatePaymentDTO dto) {
+        return paymentService.updatePayment(id, dto);
+    }
+
+    @PostMapping("/{id}/confirm")
+    public PaymentResponseDTO confirmPayment(@PathVariable("id") Long id) {
+        return paymentService.confirmPayment(id);
+    }
+
     // ----------------------------------------------------------
     // 2️⃣ Get a payment by ID
     // ----------------------------------------------------------
