@@ -53,7 +53,7 @@ public class Employee {
 
     private LocalDate joinDate;
 
-    /* ================= NEW PERSONAL FIELDS ================= */
+    /* ================= PERSONAL FIELDS ================= */
 
     @Column(length = 100)
     private String birthplace;
@@ -68,11 +68,9 @@ public class Employee {
     private String religion;
 
     @Column(length = 100)
-    private String identification; // ID number (Aadhar / Passport / etc.)
+    private String identification;
 
-
-
-    /* ================= EXISTING FIELDS ================= */
+    /* ================= OTHER FIELDS ================= */
 
     @Column(columnDefinition = "TEXT")
     private String notes;
@@ -91,7 +89,7 @@ public class Employee {
     private Department department;
 
     /**
-     * Role comes from User entity
+     * Linked User (contains role + companyRole)
      */
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", unique = true)
@@ -143,7 +141,8 @@ public class Employee {
     }
 
     /**
-     * Returns role from linked User entity
+     * 🔹 Security Role (ENUM)
+     * Example: USER, ADMIN
      */
     public String getRole() {
         return user != null && user.getRole() != null
@@ -151,4 +150,20 @@ public class Employee {
                 : null;
     }
 
+    /**
+     * 🔥 Company Role (USED FOR PERMISSIONS)
+     * Example: "Team Lead", "HR Manager"
+     */
+    public String getCompanyRole() {
+        return (user != null && user.getCompanyRole() != null && !user.getCompanyRole().isBlank())
+                ? user.getCompanyRole().trim()
+                : null;
+    }
+
+    /**
+     * 🔹 Company ID helper (useful everywhere)
+     */
+    public Long getCompanyId() {
+        return company != null ? company.getId() : null;
+    }
 }

@@ -26,43 +26,39 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     Long getCurrentEmployeeNo();
 
     // ======================================================
-    // COMPANY QUERIES
+    // COMPANY QUERIES (✅ FIXED)
     // ======================================================
 
-    List<Employee> findByCompanyId(Long companyId);
+    List<Employee> findByCompany_Id(Long companyId);
 
-    Page<Employee> findByCompanyId(Long companyId, Pageable pageable);
+    Page<Employee> findByCompany_Id(Long companyId, Pageable pageable);
 
     List<Employee> findByCompany(Company company);
 
     // ======================================================
-    // ADMIN (SPRING SECURITY ROLE - ENUM)
+    // ADMIN (SPRING SECURITY ROLE - ENUM) ✅ FIXED
     // ======================================================
 
-    Optional<Employee> findFirstByCompanyIdAndUserRoleIn(
+    Optional<Employee> findFirstByCompany_IdAndUserRoleIn(
             Long companyId,
             List<Role> roles
     );
 
-    List<Employee> findAllByCompanyIdAndUserRoleIn(
+    List<Employee> findAllByCompany_IdAndUserRoleIn(
             Long companyId,
             List<Role> roles
     );
 
-    boolean existsByCompanyIdAndUserRole(
+    boolean existsByCompany_IdAndUserRole(
             Long companyId,
             Role role
     );
 
     // ======================================================
-    // BUSINESS ROLE (STRING companyRole in User)
+    // BUSINESS ROLE (companyRole - STRING) ✅ ALREADY CORRECT
     // ======================================================
 
-    /**
-     * Find employees by company and business role name (case insensitive)
-     * Example: "Manager"
-     */
-    List<Employee> findByCompanyIdAndUserCompanyRoleIgnoreCase(
+    List<Employee> findByCompany_IdAndUserCompanyRoleIgnoreCase(
             Long companyId,
             String roleName
     );
@@ -77,5 +73,5 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     // USER LINK
     // ======================================================
 
-    Optional<Employee> findByUserId(Long userId);
+    Optional<Employee> findByUser_Id(Long userId);
 }

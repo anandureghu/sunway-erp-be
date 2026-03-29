@@ -3,14 +3,22 @@ package com.erp.service.security;
 import com.erp.domain.security.*;
 import com.erp.repo.security.RolePermissionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service("permissionChecker")
 @RequiredArgsConstructor
+@Slf4j
 public class PermissionCheckService {
 
     private final RolePermissionRepository repository;
+
+    // ======================================================
+    // PUBLIC METHODS
+    // ======================================================
 
     public boolean has(Authentication auth, HrModule module, HrAction action) {
         return hasAccess(auth, module, action);
@@ -23,47 +31,91 @@ public class PermissionCheckService {
         return false;
     }
 
+    // ======================================================
+    // CORE LOGIC (FIXED)
+    // ======================================================
+
     public boolean hasAccess(Authentication auth, HrModule module, HrAction action) {
-        if (auth == null || !auth.isAuthenticated()) return false;
 
-        Role securityRole = extractSecurityRole(auth);
-        if (securityRole == null) return false;
+        if (auth == null || !auth.isAuthenticated()) {
+            log.debug("Permission denied: unauthenticated");
+            return false;
+        }
 
-        // ADMIN / SUPER_ADMIN bypass
-        if (securityRole == Role.ADMIN || securityRole == Role.SUPER_ADMIN) return true;
+        if (!(auth.getPrincipal() instanceof CustomUserPrincipal user)) {
+            log.warn("Permission denied: invalid principal");
+            return false;
+        }
 
-        Long userId = getLoggedUserId(auth);
+        // ✅ ADMIN / SUPER_ADMIN bypass
+        if (isAdmin(user)) {
+            log.debug("Admin bypass granted for user {}", user.getUsername());
+            return true;
+        }
+
+        Long userId = user.getId();
+
+        // 🔥 USE EFFECTIVE ROLE (CRITICAL FIX)
+        String role = normalizeRole(user.getEffectiveRole());
+
         RolePermission permission = null;
 
-        // 1. Employee-specific override
+        // ======================================================
+        // 1. Employee override (highest priority)
+        // ======================================================
         if (userId != null) {
-            permission = repository
-                    .findByEmployee_IdAndModule(userId, module)
-                    .orElse(null);
-        }
+            Optional<RolePermission> empPerm =
+                    repository.findByEmployee_IdAndModule(userId, module);
 
-        // 2. Try companyRole first ("User", "HR Manager") — for when permissions are stored against companyRole
-        if (permission == null) {
-            String companyRole = extractCompanyRole(auth);
-            if (companyRole != null) {
-                permission = repository
-                        .findByRoleAndModule(companyRole, module)
-                        .orElse(null);
+            if (empPerm.isPresent()) {
+                permission = empPerm.get();
+                log.debug("Using EMPLOYEE override for user {} module {}", userId, module);
             }
         }
 
-        // 3. Fallback to enum name ("USER", "HR") — for when permissions are stored against enum
-        if (permission == null) {
-            String enumRole = extractEnumRoleName(auth);
-            if (enumRole != null) {
-                permission = repository
-                        .findByRoleAndModule(enumRole, module)
-                        .orElse(null);
+        // ======================================================
+        // 2. Role-based permission (companyRole or enum fallback)
+        // ======================================================
+        if (permission == null && role != null) {
+
+            Optional<RolePermission> rolePerm =
+                    repository.findByRoleIgnoreCaseAndModule(role, module);
+
+            if (rolePerm.isPresent()) {
+                permission = rolePerm.get();
+                log.debug("Using ROLE '{}' for module {}", role, module);
+            } else {
+                log.warn("No permission found for role='{}' module='{}'", role, module);
+                return false;
             }
         }
 
-        if (permission == null) return false;
+        // ======================================================
+        // FINAL CHECK
+        // ======================================================
+        if (permission == null) {
+            log.warn("Permission NOT FOUND for user={}, module={}",
+                    user.getUsername(), module);
+            return false;
+        }
 
+        boolean allowed = evaluate(permission, action);
+
+        log.debug("Permission check: user={}, role={}, module={}, action={}, allowed={}",
+                user.getUsername(), role, module, action, allowed);
+
+        return allowed;
+    }
+
+    // ======================================================
+    // HELPERS
+    // ======================================================
+
+    private boolean isAdmin(CustomUserPrincipal user) {
+        return user.getRole() == Role.ADMIN || user.getRole() == Role.SUPER_ADMIN;
+    }
+
+    private boolean evaluate(RolePermission permission, HrAction action) {
         return switch (action) {
             case VIEW_OWN -> permission.isViewOwn();
             case VIEW_ALL -> permission.isViewAll();
@@ -74,32 +126,10 @@ public class PermissionCheckService {
         };
     }
 
-    private Role extractSecurityRole(Authentication auth) {
-        if (auth.getPrincipal() instanceof CustomUserPrincipal user) {
-            return user.getRole();
-        }
-        return null;
-    }
-
-    /**
-     * Returns companyRole e.g. "User", "HR Manager" — checked first.
-     */
-    private String extractCompanyRole(Authentication auth) {
-        if (auth.getPrincipal() instanceof CustomUserPrincipal user) {
-            String cr = user.getCompanyRole();
-            return (cr != null && !cr.isBlank()) ? cr : null;
-        }
-        return null;
-    }
-
-    /**
-     * Returns enum name e.g. "USER", "HR" — fallback when no companyRole match.
-     */
-    private String extractEnumRoleName(Authentication auth) {
-        if (auth.getPrincipal() instanceof CustomUserPrincipal user) {
-            return user.getRole() != null ? user.getRole().name() : null;
-        }
-        return null;
+    private String normalizeRole(String role) {
+        return (role == null || role.isBlank())
+                ? null
+                : role.trim().toUpperCase();
     }
 
     public Long getLoggedUserId(Authentication auth) {

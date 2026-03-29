@@ -21,10 +21,6 @@ public class CreateEmployeeDTO {
     private String firstName;
     private String lastName;
 
-    private String email;
-    private String username;
-    private String password;
-
     private String gender;
     private String prefix;
     private String maritalStatus;
@@ -44,11 +40,6 @@ public class CreateEmployeeDTO {
     private String religion;
     private String identification;
 
-    // =======================
-    // CONTACT DETAILS
-    // =======================
-    private String phoneNo;
-    private String altPhone;
 
     // =======================
     // RELATIONS

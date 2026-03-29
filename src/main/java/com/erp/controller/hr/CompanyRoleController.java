@@ -5,6 +5,7 @@ import com.erp.service.hr.CompanyRoleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,11 +13,21 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/roles")
 @RequiredArgsConstructor
+@PreAuthorize("""
+    @permissionChecker.has(
+        authentication,
+        T(com.erp.domain.security.HrModule).HR_SETTINGS,
+        T(com.erp.domain.security.HrAction).VIEW_ALL
+    )
+""")
 public class CompanyRoleController {
 
     private final CompanyRoleService roleService;
 
-    /* ── GET /api/roles?companyId=2 ── */
+    // ======================================================
+    // LIST ROLES
+    // ======================================================
+
     @GetMapping
     public ResponseEntity<List<CompanyRoleDTO.Response>> list(
             @RequestParam("companyId") Long companyId
@@ -24,7 +35,10 @@ public class CompanyRoleController {
         return ResponseEntity.ok(roleService.listByCompany(companyId));
     }
 
-    /* ── GET /api/roles/active?companyId=2 ── */
+    // ======================================================
+    // LIST ACTIVE ROLES
+    // ======================================================
+
     @GetMapping("/active")
     public ResponseEntity<List<CompanyRoleDTO.Response>> listActive(
             @RequestParam("companyId") Long companyId
@@ -32,7 +46,10 @@ public class CompanyRoleController {
         return ResponseEntity.ok(roleService.listActiveByCompany(companyId));
     }
 
-    /* ── GET /api/roles/{id} ── */
+    // ======================================================
+    // GET ROLE BY ID
+    // ======================================================
+
     @GetMapping("/{id}")
     public ResponseEntity<CompanyRoleDTO.Response> getById(
             @PathVariable("id") Long id
@@ -40,7 +57,17 @@ public class CompanyRoleController {
         return ResponseEntity.ok(roleService.getById(id));
     }
 
-    /* ── POST /api/roles ── */
+    // ======================================================
+    // CREATE ROLE
+    // ======================================================
+
+    @PreAuthorize("""
+        @permissionChecker.has(
+            authentication,
+            T(com.erp.domain.security.HrModule).HR_SETTINGS,
+            T(com.erp.domain.security.HrAction).EDIT
+        )
+    """)
     @PostMapping
     public ResponseEntity<CompanyRoleDTO.Response> create(
             @Valid @RequestBody CompanyRoleDTO.Request dto
@@ -48,7 +75,17 @@ public class CompanyRoleController {
         return ResponseEntity.ok(roleService.create(dto));
     }
 
-    /* ── PUT /api/roles/{id} ── */
+    // ======================================================
+    // UPDATE ROLE
+    // ======================================================
+
+    @PreAuthorize("""
+        @permissionChecker.has(
+            authentication,
+            T(com.erp.domain.security.HrModule).HR_SETTINGS,
+            T(com.erp.domain.security.HrAction).EDIT
+        )
+    """)
     @PutMapping("/{id}")
     public ResponseEntity<CompanyRoleDTO.Response> update(
             @PathVariable("id") Long id,
@@ -57,7 +94,17 @@ public class CompanyRoleController {
         return ResponseEntity.ok(roleService.update(id, dto));
     }
 
-    /* ── PUT /api/roles/{id}/toggle ── */
+    // ======================================================
+    // TOGGLE ACTIVE
+    // ======================================================
+
+    @PreAuthorize("""
+        @permissionChecker.has(
+            authentication,
+            T(com.erp.domain.security.HrModule).HR_SETTINGS,
+            T(com.erp.domain.security.HrAction).EDIT
+        )
+    """)
     @PutMapping("/{id}/toggle")
     public ResponseEntity<CompanyRoleDTO.Response> toggle(
             @PathVariable("id") Long id
@@ -65,7 +112,17 @@ public class CompanyRoleController {
         return ResponseEntity.ok(roleService.toggleActive(id));
     }
 
-    /* ── DELETE /api/roles/{id} ── */
+    // ======================================================
+    // DELETE ROLE
+    // ======================================================
+
+    @PreAuthorize("""
+        @permissionChecker.has(
+            authentication,
+            T(com.erp.domain.security.HrModule).HR_SETTINGS,
+            T(com.erp.domain.security.HrAction).DELETE
+        )
+    """)
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @PathVariable("id") Long id

@@ -36,7 +36,7 @@ public class UserService {
         User user = userRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Employee emp = employeeRepo.findByUserId(id).orElse(null);
+        Employee emp = employeeRepo.findByUser_Id(id).orElse(null);
 
         return UserDetailsDTO.builder()
                 .userId(user.getId())
@@ -74,7 +74,7 @@ public class UserService {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
-        Employee emp = employeeRepo.findByUserId(userId).orElse(null);
+        Employee emp = employeeRepo.findByUser_Id(userId).orElse(null);
 
         return ProfileResponse.from(user, emp);
     }
