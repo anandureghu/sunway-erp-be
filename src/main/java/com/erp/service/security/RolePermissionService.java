@@ -6,69 +6,73 @@ import com.erp.dto.security.ModulePermissionDTO;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.security.RolePermissionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class RolePermissionService {
 
     private final RolePermissionRepository repository;
-    private final EmployeeRepository       employeeRepository;
+    private final EmployeeRepository employeeRepository;
 
-    /* ── Get by Role ─────────────────────────────────────────────────────────── */
+    // ======================================================
+    // GET BY ROLE
+    // ======================================================
 
-    /**
-     * @param role plain string — "External Auditor", "HR Manager", "USER" etc.
-     */
     public List<RolePermission> getByRole(String role) {
-        return repository.findByRole(role);
+        role = normalizeRole(role);
+        return repository.findByRoleIgnoreCaseAndEmployeeIsNull(role);
     }
 
-    /* ── Get Permissions for User ────────────────────────────────────────────── */
+    // ======================================================
+    // GET PERMISSIONS FOR USER (🔥 FIXED MERGE LOGIC)
+    // ======================================================
 
-    /**
-     * Employee-specific permissions take priority over role-wide permissions.
-     *
-     * @param employeeId the employee's ID
-     * @param role       plain string role name
-     */
     public List<RolePermission> getPermissionsForUser(Long employeeId, String role) {
 
-        // 1. Check employee-specific overrides first
-        List<RolePermission> employeePermissions =
-                repository.findByEmployee_Id(employeeId);
+        role = normalizeRole(role);
 
-        if (employeePermissions != null && !employeePermissions.isEmpty()) {
-            return employeePermissions.stream()
-                    .filter(this::hasAnyPermission)
-                    .toList();
+        List<RolePermission> rolePermissions =
+                repository.findByRoleIgnoreCaseAndEmployeeIsNull(role);
+
+        List<RolePermission> employeePermissions =
+                employeeId != null
+                        ? repository.findByEmployee_Id(employeeId)
+                        : Collections.emptyList();
+
+        // 🔥 MERGE LOGIC (Employee overrides role)
+        Map<HrModule, RolePermission> finalPermissions = new HashMap<>();
+
+        for (RolePermission rp : rolePermissions) {
+            finalPermissions.put(rp.getModule(), rp);
         }
 
-        // 2. Fallback to role-wide permissions
-        return repository.findByRoleAndEmployeeIsNull(role)
-                .stream()
+        for (RolePermission ep : employeePermissions) {
+            finalPermissions.put(ep.getModule(), ep); // override
+        }
+
+        return finalPermissions.values().stream()
                 .filter(this::hasAnyPermission)
                 .toList();
     }
 
-    /* ── Assign Permissions ──────────────────────────────────────────────────── */
+    // ======================================================
+    // ASSIGN PERMISSIONS (🔥 FIXED UPSERT + DELETE SAFETY)
+    // ======================================================
 
-    /**
-     * Upserts permissions for a role or a specific employee.
-     * If employeeId is provided → employee-specific override.
-     * If employeeId is null    → role-wide rule.
-     *
-     * @param role       plain string role name
-     * @param employeeId optional — null for role-wide
-     * @param dtos       list of module permission configs
-     */
     public void assignPermissions(String role, Long employeeId, List<ModulePermissionDTO> dtos) {
+
+        role = normalizeRole(role);
+
+        if (role == null) {
+            throw new IllegalArgumentException("Role cannot be null");
+        }
 
         Employee employee = null;
         if (employeeId != null) {
@@ -76,25 +80,26 @@ public class RolePermissionService {
                     .orElseThrow(() -> new RuntimeException("Employee not found"));
         }
 
-        // Collect incoming modules
         Set<HrModule> incomingModules = new HashSet<>();
         for (ModulePermissionDTO dto : dtos) {
-            if (dto.getModule() != null) incomingModules.add(dto.getModule());
+            if (dto.getModule() != null) {
+                incomingModules.add(dto.getModule());
+            }
         }
 
-        // Load existing permissions
-        List<RolePermission> existingPermissions = employeeId != null
-                ? repository.findByEmployee_Id(employeeId)
-                : repository.findByRole(role);
+        // ✅ SAFE DELETE (no cross-delete)
+        List<RolePermission> existingPermissions =
+                employeeId != null
+                        ? repository.findByEmployee_Id(employeeId)
+                        : repository.findByRoleIgnoreCaseAndEmployeeIsNull(role);
 
-        // Remove modules no longer present
         for (RolePermission existing : existingPermissions) {
             if (!incomingModules.contains(existing.getModule())) {
                 repository.delete(existing);
             }
         }
 
-        // Upsert each module permission
+        // ✅ UPSERT
         for (ModulePermissionDTO dto : dtos) {
 
             if (dto.getModule() == null || dto.getPermission() == null) continue;
@@ -105,7 +110,6 @@ public class RolePermissionService {
             RolePermission permission;
 
             if (employeeId != null) {
-                // Employee-specific: find by employee + module
                 permission = repository
                         .findByEmployee_IdAndModule(employeeId, module)
                         .orElse(null);
@@ -119,9 +123,8 @@ public class RolePermissionService {
                 }
 
             } else {
-                // Role-wide: find by role string + module
                 permission = repository
-                        .findByRoleAndModule(role, module)
+                        .findByRoleIgnoreCaseAndModule(role, module)
                         .orElse(null);
 
                 if (permission == null) {
@@ -143,19 +146,24 @@ public class RolePermissionService {
         }
     }
 
-    /* ── Remove All Permissions for a Role ───────────────────────────────────── */
+    // ======================================================
+    // REMOVE ALL
+    // ======================================================
 
-    /**
-     * @param role plain string role name
-     */
     public void removeAll(String role) {
-        List<RolePermission> permissions = repository.findByRole(role);
-        if (!permissions.isEmpty()) {
-            repository.deleteAll(permissions);
-        }
+        role = normalizeRole(role);
+        repository.deleteAllByRoleIgnoreCase(role);
     }
 
-    /* ── Helper ──────────────────────────────────────────────────────────────── */
+    // ======================================================
+    // HELPERS
+    // ======================================================
+
+    private String normalizeRole(String role) {
+        return (role == null || role.isBlank())
+                ? null
+                : role.trim().toUpperCase(); // ✅ SYSTEM STANDARD
+    }
 
     private boolean hasAnyPermission(RolePermission p) {
         return p.isViewOwn()

@@ -11,21 +11,18 @@ import java.util.Optional;
 @Repository
 public interface RolePermissionRepository extends JpaRepository<RolePermission, Long> {
 
-    // All permissions for a role (including employee overrides)
-    List<RolePermission> findByRole(String role);
+    // ✅ Case-insensitive role queries
+    List<RolePermission> findByRoleIgnoreCase(String role);
 
-    // Role-wide permissions only (no employee override)
-    List<RolePermission> findByRoleAndEmployeeIsNull(String role);
+    List<RolePermission> findByRoleIgnoreCaseAndEmployeeIsNull(String role);
 
-    // Specific role + module (for upsert on role-wide)
-    Optional<RolePermission> findByRoleAndModule(String role, HrModule module);
+    Optional<RolePermission> findByRoleIgnoreCaseAndModule(String role, HrModule module);
 
-    // All permissions for a specific employee
+    // Employee-specific
     List<RolePermission> findByEmployee_Id(Long employeeId);
 
-    // Specific employee + module (for upsert on employee override)
     Optional<RolePermission> findByEmployee_IdAndModule(Long employeeId, HrModule module);
 
-    // Delete all role-wide permissions for a role
-    void deleteAllByRole(String role);
+    // Delete
+    void deleteAllByRoleIgnoreCase(String role);
 }

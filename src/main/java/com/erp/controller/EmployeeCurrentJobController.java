@@ -28,7 +28,7 @@ public class EmployeeCurrentJobController {
     ) {
         EmployeeCurrentJobResponseDTO result = service.get(employeeId);
         if (result == null) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.noContent().build();
         }
         return ResponseEntity.ok(result);
     }

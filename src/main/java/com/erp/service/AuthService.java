@@ -57,7 +57,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
 
         Employee emp = employeeRepository
-                .findByUserId(u.getId())
+                .findByUser_Id(u.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
 
         if (!encoder.matches(req.getPassword(), u.getPassword()))
@@ -85,7 +85,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found for refresh"));
 
         Employee emp = employeeRepository
-                .findByUserId(u.getId())
+                .findByUser_Id(u.getId())
                 .orElseThrow(() -> new IllegalArgumentException("User not found for refresh"));
 
         Map<String, Object> newClaims = new HashMap<>();

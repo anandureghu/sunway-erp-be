@@ -40,6 +40,7 @@ public class User {
     @Column(nullable = false, length = 50)
     private Role role = Role.USER;
 
+    // 🔹 Company role (Team Lead, HR Manager, etc.)
     @Column(name = "company_role", length = 100)
     private String companyRole;
 
@@ -49,7 +50,13 @@ public class User {
     @Column(name = "force_password_reset", nullable = false)
     private Boolean forcePasswordReset = true;
 
+    // 🔹 Company relation
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id")
     private Company company;
+
+    // ✅ FIXED METHOD
+    public Long getCompanyId() {
+        return company != null ? company.getId() : null;
+    }
 }
