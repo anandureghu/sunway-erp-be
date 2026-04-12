@@ -86,9 +86,13 @@ public class InvoiceService {
         ChartOfAccounts creditAccount = coaRepo.findById(req.getCreditAccount())
                 .orElseThrow(() -> new RuntimeException("Credit Account not found"));
 
-        BankAccount bankAccount = req.getBankAccountId() == null
+        Long bankId = req.getBankAccountId();
+        if (bankId == null && company.getDefaultBankAccountId() != null) {
+            bankId = company.getDefaultBankAccountId();
+        }
+        BankAccount bankAccount = bankId == null
                 ? null
-                : bankAccountRepo.findById(req.getBankAccountId())
+                : bankAccountRepo.findById(bankId)
                 .filter(b -> b.getCompany().getId().equals(company.getId()))
                 .orElseThrow(() -> new RuntimeException("Bank account not found"));
 

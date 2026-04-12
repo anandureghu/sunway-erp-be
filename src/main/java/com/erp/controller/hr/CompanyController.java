@@ -1,6 +1,7 @@
 package com.erp.controller.hr;
 
 import com.erp.domain.hr.Company;
+import com.erp.dto.hr.AccountingDefaultsDTO;
 import com.erp.dto.hr.CompanyDTO;
 import com.erp.service.hr.CompanyService;
 import org.springframework.http.ResponseEntity;
@@ -39,6 +40,13 @@ public class CompanyController {
     @PutMapping("/{id}")
     public Company updateCompany(@PathVariable("id") Long id, @RequestBody CompanyDTO updated) {
         return companyService.updateCompany(id, updated);
+    }
+
+    @PutMapping("/{id}/accounting-defaults")
+    public Company updateAccountingDefaults(
+            @PathVariable("id") Long id,
+            @RequestBody AccountingDefaultsDTO body) {
+        return companyService.updateAccountingDefaults(id, body);
     }
 
     @DeleteMapping("/{id}")
