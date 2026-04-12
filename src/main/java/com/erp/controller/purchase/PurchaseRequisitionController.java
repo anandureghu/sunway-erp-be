@@ -1,9 +1,7 @@
 package com.erp.controller.purchase;
 
-import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.purchase.PurchaseRequisitionCreateDTO;
 import com.erp.dto.purchase.PurchaseRequisitionResponseDTO;
-import com.erp.dto.purchase.RequisitionToPurchaseOrderDTO;
 import com.erp.service.purchase.PurchaseRequisitionService;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,11 +39,8 @@ public class PurchaseRequisitionController {
         return service.list();
     }
 
-    @PostMapping("/{id}/convert-to-po")
-    public PurchaseOrderResponseDTO convertToPO(
-            @PathVariable("id") Long id,
-            @RequestBody RequisitionToPurchaseOrderDTO dto
-    ) {
-        return service.convertToPurchaseOrder(id, dto);
+    @GetMapping("/{id}")
+    public PurchaseRequisitionResponseDTO get(@PathVariable("id") Long id) {
+        return service.get(id);
     }
 }

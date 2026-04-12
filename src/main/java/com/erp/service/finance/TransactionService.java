@@ -38,6 +38,10 @@ public class TransactionService {
     public static final String TYPE_JOURNAL = "JOURNAL";
     public static final String TYPE_RECONCILIATION = "RECONCILIATION";
     public static final String TYPE_BUDGET = "BUDGET";
+    /** Two-sided COA posting when a purchase requisition is approved to a PO. */
+    public static final String TYPE_PURCHASE_REQUISITION = "PURCHASE_REQUISITION";
+    /** Vendor payment confirmed in AP: reduces AP and cash (custom posting, not {@link #applyPostingToCoa}). */
+    public static final String TYPE_VENDOR_PAYMENT = "VENDOR_PAYMENT";
 
     private final TransactionRepository repo;
     private final CompanyRepository companyRepo;
@@ -508,5 +512,49 @@ public class TransactionService {
         Transaction saved = repo.save(tx);
         applyPostingToCoa(saved);
         return saved;
+    }
+
+    /**
+     * Records vendor payment settlement: decreases accounts payable and cash.
+     * Does not use {@link #applyPostingToCoa} (that moves one account down and one up); both legs must decrease.
+     */
+    @Transactional
+    public TransactionResponseDTO createVendorPaymentSettlement(
+            Long paymentId,
+            Long companyId,
+            BigDecimal amount,
+            Long accountsPayableAccountId,
+            Long cashAccountId,
+            LocalDate txDate,
+            Long relatedPurchaseOrderId) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount must be positive");
+        }
+        Company company = companyRepo.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+        ChartOfAccounts ap = coaRepo.findById(accountsPayableAccountId)
+                .orElseThrow(() -> new RuntimeException("Accounts payable account not found"));
+        ChartOfAccounts cash = coaRepo.findById(cashAccountId)
+                .orElseThrow(() -> new RuntimeException("Cash account not found"));
+
+        Transaction tx = Transaction.builder()
+                .transactionCode("TX-VP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .transactionType(TYPE_VENDOR_PAYMENT)
+                .company(company)
+                .transactionDate(txDate == null ? LocalDate.now() : txDate)
+                .amount(amount)
+                .debitAccount(ap)
+                .creditAccount(cash)
+                .paymentId(paymentId != null ? String.valueOf(paymentId) : null)
+                .transactionDescription("Vendor payment — AP and cash")
+                .relatedId(relatedPurchaseOrderId)
+                .createdAt(Instant.now())
+                .createdBy(auth.getCurrentUserId())
+                .build();
+
+        Transaction saved = repo.save(tx);
+        coaAdjust(ap, amount.negate());
+        coaAdjust(cash, amount.negate());
+        return toDTO(saved);
     }
 }

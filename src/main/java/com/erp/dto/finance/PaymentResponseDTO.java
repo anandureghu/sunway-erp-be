@@ -14,6 +14,9 @@ public class PaymentResponseDTO {
     private String paymentMethod;
     private LocalDate effectiveDate;
     private String invoiceId;
+    /** CUSTOMER = AR receipt; VENDOR = AP vendor payable / payment */
+    private String paymentDirection;
+    private Long purchaseOrderId;
     private String pdfUrl;
     private Instant createdAt;
 }

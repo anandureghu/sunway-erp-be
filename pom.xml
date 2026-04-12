@@ -179,6 +179,8 @@
                 <version>3.12.1</version>
                 <configuration>
                     <release>${java.version}</release>
+                    <!-- Spring can resolve @RequestParam / @PathVariable names from bytecode -->
+                    <parameters>true</parameters>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
