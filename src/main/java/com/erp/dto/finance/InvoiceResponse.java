@@ -1,6 +1,7 @@
 package com.erp.dto.finance;
 
 import com.erp.domain.InvoiceType;
+import com.erp.domain.finance.InvoiceDocumentSource;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.sales.SalesOrderResponseDTO;
 import lombok.Builder;
@@ -42,6 +43,9 @@ public class InvoiceResponse {
 
     private String partyClassification;
     private String pdfUrl;
+    private String supplierInvoiceNumber;
+    private InvoiceDocumentSource documentSource;
+    private String externalDocumentUrl;
 
     private InvoiceType type;
     private Long orderId;

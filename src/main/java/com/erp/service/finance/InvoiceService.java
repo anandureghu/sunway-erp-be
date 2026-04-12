@@ -3,6 +3,7 @@ package com.erp.service.finance;
 import com.erp.domain.InvoiceType;
 import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.Invoice;
+import com.erp.domain.finance.InvoiceDocumentSource;
 import com.erp.domain.finance.Payment;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
@@ -61,9 +62,18 @@ public class InvoiceService {
         Invoice invoice = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
-//        if (invoice.getPdfUrl() != null && !invoice.getPdfUrl().isBlank()) {
-//            return invoice.getPdfUrl();
-//        }
+        if (invoice.getDocumentSource() == InvoiceDocumentSource.SUPPLIER_UPLOAD
+                && invoice.getPdfUrl() != null && !invoice.getPdfUrl().isBlank()) {
+            return invoice.getPdfUrl();
+        }
+        if (invoice.getDocumentSource() == InvoiceDocumentSource.EXTERNAL_LINK) {
+            if (invoice.getPdfUrl() != null && !invoice.getPdfUrl().isBlank()) {
+                return invoice.getPdfUrl();
+            }
+            if (invoice.getExternalDocumentUrl() != null && !invoice.getExternalDocumentUrl().isBlank()) {
+                return invoice.getExternalDocumentUrl();
+            }
+        }
 
         return generateAndUploadInvoicePdf(invoice);
     }
@@ -72,13 +82,24 @@ public class InvoiceService {
     // CREATE MANUAL INVOICE
     // ============================================================
     public InvoiceResponse createInvoice(InvoiceRequest req) {
+        return createInvoice(req, null);
+    }
 
-        if (repo.findByOrderIdAndType(req.getOrderId(), req.getType()).isPresent()) {
-            throw new RuntimeException("Invoice already exists for selected order");
-        }
+    public InvoiceResponse createInvoice(InvoiceRequest req, MultipartFile supplierDocument) {
 
         Company company = companyRepo.findById(auth.getCurrentCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        assertNoDuplicateInvoice(company, req);
+
+        InvoiceDocumentSource docSource = req.getDocumentSource() != null
+                ? req.getDocumentSource()
+                : InvoiceDocumentSource.GENERATED;
+
+        if (docSource == InvoiceDocumentSource.EXTERNAL_LINK
+                && (req.getExternalDocumentUrl() == null || req.getExternalDocumentUrl().isBlank())) {
+            throw new RuntimeException("externalDocumentUrl is required when documentSource is EXTERNAL_LINK");
+        }
 
         ChartOfAccounts debitAccount = coaRepo.findById(req.getDebitAccount())
                 .orElseThrow(() -> new RuntimeException("Debit Account not found"));
@@ -96,6 +117,18 @@ public class InvoiceService {
                 .filter(b -> b.getCompany().getId().equals(company.getId()))
                 .orElseThrow(() -> new RuntimeException("Bank account not found"));
 
+        BigDecimal amount = req.getAmount() != null ? req.getAmount() : BigDecimal.ZERO;
+        BigDecimal subtotal = req.getSubtotalAmount() != null ? req.getSubtotalAmount() : amount;
+        BigDecimal discount = req.getDiscountAmount() != null ? req.getDiscountAmount() : BigDecimal.ZERO;
+        BigDecimal tax = req.getTaxAmount() != null ? req.getTaxAmount() : BigDecimal.ZERO;
+
+        String supplierRef = req.getSupplierInvoiceNumber() != null
+                ? req.getSupplierInvoiceNumber().trim()
+                : null;
+        if (supplierRef != null && supplierRef.isEmpty()) {
+            supplierRef = null;
+        }
+
         String invoiceCode = "INV-" + UUID.randomUUID().toString().substring(0, 8);
 
         Invoice invoice = Invoice.builder()
@@ -105,12 +138,12 @@ public class InvoiceService {
                 .invoiceDate(req.getInvoiceDate() == null ? LocalDate.now() : req.getInvoiceDate())
                 .dueDate(req.getDueDate())
                 .status("UNPAID")
-                .amount(req.getAmount())
-                .subtotalAmount(req.getAmount())
-                .discountAmount(BigDecimal.ZERO)
-                .taxAmount(BigDecimal.ZERO)
-                .openAmount(req.getAmount())
-                .outstanding(req.getAmount())
+                .amount(amount)
+                .subtotalAmount(subtotal)
+                .discountAmount(discount)
+                .taxAmount(tax)
+                .openAmount(amount)
+                .outstanding(amount)
                 .itemDescription(req.getItemDescription())
                 .notesRemarks(req.getNotesRemarks())
                 .gracePeriod(req.getGracePeriod())
@@ -122,7 +155,16 @@ public class InvoiceService {
                 .debitAccount(debitAccount)
                 .creditAccount(creditAccount)
                 .bankAccount(bankAccount)
+                .documentSource(docSource)
+                .supplierInvoiceNumber(supplierRef)
+                .externalDocumentUrl(
+                        req.getExternalDocumentUrl() != null && !req.getExternalDocumentUrl().isBlank()
+                                ? req.getExternalDocumentUrl().trim()
+                                : null
+                )
                 .build();
+
+        applyExternalLinkPdfHint(invoice);
 
         Invoice saved = repo.save(invoice);
 
@@ -130,8 +172,7 @@ public class InvoiceService {
             createPendingPaymentEntry(saved);
         }
 
-        // Generate & upload PDF once
-        generateAndUploadInvoicePdf(saved);
+        finalizeInvoiceDocument(saved, supplierDocument);
 
         if (req.getType() == InvoiceType.SALES && req.getOrderId() != null) {
             Customer customer = salesOrderRepo.findById(req.getOrderId())
@@ -140,7 +181,100 @@ public class InvoiceService {
             customerEmailService.sendInvoiceCreatedEmail(customer, saved);
         }
 
-        return toDTO(saved);
+        return toDTO(repo.findById(saved.getId()).orElse(saved));
+    }
+
+    private void assertNoDuplicateInvoice(Company company, InvoiceRequest req) {
+        if (req.getType() == InvoiceType.SALES && req.getOrderId() != null) {
+            if (repo.findByOrderIdAndType(req.getOrderId(), InvoiceType.SALES).isPresent()) {
+                throw new RuntimeException("Invoice already exists for selected order");
+            }
+            return;
+        }
+        if (req.getType() == InvoiceType.PURCHASE
+                && req.getOrderId() != null
+                && req.getSupplierInvoiceNumber() != null
+                && !req.getSupplierInvoiceNumber().isBlank()) {
+            if (repo.findByCompany_IdAndOrderIdAndTypeAndSupplierInvoiceNumber(
+                    company.getId(),
+                    req.getOrderId(),
+                    InvoiceType.PURCHASE,
+                    req.getSupplierInvoiceNumber().trim()
+            ).isPresent()) {
+                throw new RuntimeException(
+                        "A purchase invoice with this supplier invoice number already exists for this order");
+            }
+        }
+    }
+
+    /**
+     * If external URL looks like a direct PDF, mirror into pdfUrl so clients can embed-preview.
+     */
+    private void applyExternalLinkPdfHint(Invoice invoice) {
+        if (invoice.getDocumentSource() != InvoiceDocumentSource.EXTERNAL_LINK) {
+            return;
+        }
+        String url = invoice.getExternalDocumentUrl();
+        if (url == null) {
+            return;
+        }
+        String lower = url.toLowerCase();
+        if (lower.contains(".pdf") && (lower.endsWith(".pdf") || lower.contains(".pdf?"))) {
+            invoice.setPdfUrl(url);
+        }
+    }
+
+    private void finalizeInvoiceDocument(Invoice saved, MultipartFile supplierDocument) {
+        InvoiceDocumentSource docSource = saved.getDocumentSource();
+
+        if (docSource == InvoiceDocumentSource.SUPPLIER_UPLOAD) {
+            if (supplierDocument != null && !supplierDocument.isEmpty()) {
+                uploadSupplierPdfAndPersist(saved, supplierDocument);
+            }
+            return;
+        }
+        if (docSource == InvoiceDocumentSource.EXTERNAL_LINK) {
+            repo.save(saved);
+            return;
+        }
+
+        // GENERATED
+        if (saved.getType() == InvoiceType.PURCHASE && saved.getOrderId() == null) {
+            throw new RuntimeException("Generated purchase invoices require a purchase order (orderId)");
+        }
+        Invoice refreshed = repo.findById(saved.getId()).orElse(saved);
+        generateAndUploadInvoicePdf(refreshed);
+    }
+
+    public InvoiceResponse attachSupplierDocument(Long invoiceId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new RuntimeException("File is required");
+        }
+        Invoice inv = repo.findById(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        if (inv.getType() != InvoiceType.PURCHASE) {
+            throw new RuntimeException("Supplier documents apply only to purchase invoices");
+        }
+        inv.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+        uploadSupplierPdfAndPersist(inv, file);
+        return toDTO(repo.findById(inv.getId()).orElse(inv));
+    }
+
+    private void uploadSupplierPdfAndPersist(Invoice invoice, MultipartFile file) {
+        try {
+            FileUploadResult uploadResult = fileStorageService.upload(
+                    file,
+                    FileCategory.INVOICE_PDF,
+                    invoice.getId().toString(),
+                    true
+            );
+            String pdfUrl = fileStorageService.getPublicUrl(uploadResult.getBlobPath());
+            invoice.setPdfUrl(pdfUrl);
+            invoice.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+            repo.save(invoice);
+        } catch (Exception e) {
+            throw new RuntimeException("Supplier document upload failed", e);
+        }
     }
 
     private void createPendingPaymentEntry(Invoice invoice) {
@@ -240,7 +374,17 @@ public class InvoiceService {
     }
 
     public List<InvoiceResponse> getAllInvoices() {
-        return repo.findAll().stream().map(this::toDTO).toList();
+        return repo.findByCompanyId(auth.getCurrentCompanyId()).stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    public List<InvoiceResponse> listInvoicesForCurrentCompany(InvoiceType type) {
+        Long companyId = auth.getCurrentCompanyId();
+        if (type == null) {
+            return repo.findByCompanyId(companyId).stream().map(this::toDTO).toList();
+        }
+        return repo.findByCompany_IdAndType(companyId, type).stream().map(this::toDTO).toList();
     }
 
     public List<InvoiceResponse> getInvoicesByCustomer(String toParty) {
@@ -296,6 +440,33 @@ public class InvoiceService {
         inv.setInterestRate(req.getInterestRate());
         inv.setPartyClassification(req.getPartyClassification());
 
+        if (req.getAmount() != null) {
+            inv.setAmount(req.getAmount());
+            inv.setOpenAmount(req.getAmount());
+            inv.setOutstanding(req.getAmount());
+        }
+        if (req.getSubtotalAmount() != null) {
+            inv.setSubtotalAmount(req.getSubtotalAmount());
+        }
+        if (req.getDiscountAmount() != null) {
+            inv.setDiscountAmount(req.getDiscountAmount());
+        }
+        if (req.getTaxAmount() != null) {
+            inv.setTaxAmount(req.getTaxAmount());
+        }
+        if (req.getSupplierInvoiceNumber() != null) {
+            String s = req.getSupplierInvoiceNumber().trim();
+            inv.setSupplierInvoiceNumber(s.isEmpty() ? null : s);
+        }
+        if (req.getDocumentSource() != null) {
+            inv.setDocumentSource(req.getDocumentSource());
+        }
+        if (req.getExternalDocumentUrl() != null) {
+            String u = req.getExternalDocumentUrl().trim();
+            inv.setExternalDocumentUrl(u.isEmpty() ? null : u);
+            applyExternalLinkPdfHint(inv);
+        }
+
         return toDTO(repo.save(inv));
     }
 
@@ -310,6 +481,11 @@ public class InvoiceService {
     // PRIVATE: PDF GENERATION + UPLOAD (SINGLE SOURCE OF TRUTH)
     // ============================================================
     private String generateAndUploadInvoicePdf(Invoice invoice) {
+
+        InvoiceDocumentSource src = invoice.getDocumentSource();
+        if (src != null && src != InvoiceDocumentSource.GENERATED) {
+            throw new RuntimeException("Internal PDF generation applies only to GENERATED documents");
+        }
 
         try {
             byte[] pdfBytes = pdfService.generateInvoicePdf(invoice);
@@ -349,11 +525,11 @@ public class InvoiceService {
         SalesOrderResponseDTO salesOrder = null;
         PurchaseOrderResponseDTO purchaseOrder = null;
 
-        if (i.getType() == InvoiceType.SALES) {
+        if (i.getType() == InvoiceType.SALES && i.getOrderId() != null) {
             salesOrder = salesOrderService.get(i.getOrderId());
         }
 
-        if (i.getType() == InvoiceType.PURCHASE) {
+        if (i.getType() == InvoiceType.PURCHASE && i.getOrderId() != null) {
             purchaseOrder = purchaseOrderService.get(i.getOrderId());
         }
 
@@ -379,6 +555,9 @@ public class InvoiceService {
                 .interestRate(i.getInterestRate())
                 .partyClassification(i.getPartyClassification())
                 .pdfUrl(i.getPdfUrl())
+                .supplierInvoiceNumber(i.getSupplierInvoiceNumber())
+                .documentSource(i.getDocumentSource())
+                .externalDocumentUrl(i.getExternalDocumentUrl())
                 .createdAt(i.getCreatedAt())
                 .orderId(i.getOrderId())
                 .type(i.getType())
