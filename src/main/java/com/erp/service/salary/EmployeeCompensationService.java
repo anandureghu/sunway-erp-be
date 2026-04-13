@@ -31,7 +31,7 @@ public class EmployeeCompensationService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        //  Deactivate old ACTIVE salary
+        // 🔒 Deactivate old ACTIVE salary
         compensationRepo.findByEmployeeAndStatus(employee, "ACTIVE")
                 .ifPresent(old -> {
                     old.setStatus("INACTIVE");
@@ -79,12 +79,18 @@ public class EmployeeCompensationService {
 
         SalaryResponseDTO dto = new SalaryResponseDTO();
 
-        //  CURRENCY FROM COMPANY
-        dto.setCurrencyCode(
-                employee.getCompany().getCurrency().getCurrencyCode());
+        // 🔥 CURRENCY FROM COMPANY - WITH NULL CHECKS
+        if (employee.getCompany() != null && employee.getCompany().getCurrency() != null) {
+            dto.setCurrencyCode(
+                    employee.getCompany().getCurrency().getCurrencyCode());
 
-        dto.setCurrencySymbol(
-                employee.getCompany().getCurrency().getCurrencySymbol());
+            dto.setCurrencySymbol(
+                    employee.getCompany().getCurrency().getCurrencySymbol());
+        } else {
+            // Set default values if company or currency is null
+            dto.setCurrencyCode("USD");
+            dto.setCurrencySymbol("$");
+        }
 
         dto.setBasicSalary(c.getBasicSalary());
 

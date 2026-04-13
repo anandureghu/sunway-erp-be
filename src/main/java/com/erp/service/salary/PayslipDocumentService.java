@@ -104,11 +104,15 @@ public class PayslipDocumentService {
 
         dto.setDateOfJoining(employee.getJoinDate());
 
-        // ── Currency ────────────────────────────────
-        dto.setCurrencyCode(
-                employee.getCompany().getCurrency().getCurrencyCode());
-        dto.setCurrencySymbol(
-                employee.getCompany().getCurrency().getCurrencySymbol());
+        // ── Currency ──────────────────────────────── WITH NULL CHECKS
+        if (employee.getCompany() != null && employee.getCompany().getCurrency() != null) {
+            dto.setCurrencyCode(employee.getCompany().getCurrency().getCurrencyCode());
+            dto.setCurrencySymbol(employee.getCompany().getCurrency().getCurrencySymbol());
+        } else {
+            // Set default values if company or currency is null
+            dto.setCurrencyCode("USD");
+            dto.setCurrencySymbol("$");
+        }
 
         // ── Payroll ─────────────────────────────────
         dto.setPayrollCode(payroll.getPayrollCode());
@@ -204,31 +208,29 @@ public class PayslipDocumentService {
         ctx.setVariable("totalDays",     dto.getTotalDays());
         ctx.setVariable("leaveTaken",    dto.getLeaveTaken());
 
-// Currency
+        // Currency
         ctx.setVariable("currencyCode",   esc(dto.getCurrencyCode()));
         ctx.setVariable("currencySymbol", esc(dto.getCurrencySymbol()));
 
-// Payroll
+        // Payroll
         ctx.setVariable("payrollCode", esc(dto.getPayrollCode()));
         ctx.setVariable("payPeriod",   esc(formatPayPeriod(dto.getPayPeriodStart())));
         ctx.setVariable("payDate",     esc(formatDate(dto.getPayDate())));
 
-// Line items — escape labels too
+        // Line items — escape labels too
         ctx.setVariable("earnings",   escapeLineItems(dto.getEarnings()));
         ctx.setVariable("deductions", escapeLineItems(dto.getDeductions()));
 
-// Totals — numbers, no escaping needed
+        // Totals — numbers, no escaping needed
         ctx.setVariable("grossPay",        dto.getGrossPay());
         ctx.setVariable("totalDeductions", dto.getTotalDeductions());
         ctx.setVariable("netPayable",      dto.getNetPayable());
 
-// Bank
+        // Bank
         ctx.setVariable("bankName",      esc(dto.getBankName()));
         ctx.setVariable("bankBranch",    esc(dto.getBankBranch()));
         ctx.setVariable("maskedAccount", esc(maskAccount(dto.getAccountNo())));
 
-// Meta
-        ctx.setVariable("generatedAt", LocalDate.now().format(DATE_FMT));
         // Meta
         ctx.setVariable("generatedAt", LocalDate.now().format(DATE_FMT));
 
