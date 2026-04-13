@@ -1,14 +1,18 @@
 package com.erp.service.hr;
 
+import com.erp.domain.finance.ChartOfAccounts;
+import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.hr.Currency;
+import com.erp.dto.hr.AccountingDefaultsDTO;
 import com.erp.dto.hr.CompanyDTO;
+import com.erp.repo.finance.ChartOfAccountsRepository;
+import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,21 +22,27 @@ import java.util.List;
 @Service
 public class CompanyService {
 
-    private final CompanyRepository     companyRepository;
-    private final CompanyRoleRepository roleRepository;
-    private final CurrencyRepository    currencyRepository;
-    private final AuthContext           authContext;
+    private final CompanyRepository           companyRepository;
+    private final CompanyRoleRepository       roleRepository;
+    private final CurrencyRepository          currencyRepository;
+    private final ChartOfAccountsRepository   chartOfAccountsRepository;
+    private final BankAccountRepository       bankAccountRepository;
+    private final AuthContext                 authContext;
 
     public CompanyService(
             CompanyRepository companyRepository,
             CompanyRoleRepository roleRepository,
             CurrencyRepository currencyRepository,
+            ChartOfAccountsRepository chartOfAccountsRepository,
+            BankAccountRepository bankAccountRepository,
             AuthContext authContext) {
 
-        this.companyRepository  = companyRepository;
-        this.roleRepository     = roleRepository;
-        this.currencyRepository = currencyRepository;
-        this.authContext        = authContext;
+        this.companyRepository         = companyRepository;
+        this.roleRepository            = roleRepository;
+        this.currencyRepository        = currencyRepository;
+        this.chartOfAccountsRepository = chartOfAccountsRepository;
+        this.bankAccountRepository     = bankAccountRepository;
+        this.authContext               = authContext;
     }
 
     // ======================================================
@@ -116,6 +126,55 @@ public class CompanyService {
         existing.setInventoryEnabled(updated.isInventoryEnabled());
 
         return companyRepository.save(existing);
+    }
+
+    @Transactional
+    public Company updateAccountingDefaults(Long companyId, AccountingDefaultsDTO dto) {
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        if (currentCompanyId == null || !currentCompanyId.equals(companyId)) {
+            throw new RuntimeException("Not allowed to update this company's accounting defaults");
+        }
+        Company company = getCompanyById(companyId);
+        applyAccountingDefaults(company, dto);
+        return companyRepository.save(company);
+    }
+
+    private void applyAccountingDefaults(Company company, AccountingDefaultsDTO dto) {
+        Long cid = company.getId();
+        company.setDefaultSalesDebitAccountId(
+                resolveCoaId(cid, dto.getDefaultSalesDebitAccountId(), "Default sales debit account"));
+        company.setDefaultSalesCreditAccountId(
+                resolveCoaId(cid, dto.getDefaultSalesCreditAccountId(), "Default sales credit account"));
+        company.setDefaultPurchaseDebitAccountId(
+                resolveCoaId(cid, dto.getDefaultPurchaseDebitAccountId(), "Default purchase debit account"));
+        company.setDefaultPurchaseCreditAccountId(
+                resolveCoaId(cid, dto.getDefaultPurchaseCreditAccountId(), "Default purchase credit account"));
+        company.setDefaultBankAccountId(
+                resolveBankId(cid, dto.getDefaultBankAccountId()));
+    }
+
+    private Long resolveCoaId(Long companyId, Long coaId, String label) {
+        if (coaId == null) {
+            return null;
+        }
+        ChartOfAccounts coa = chartOfAccountsRepository.findById(coaId)
+                .orElseThrow(() -> new RuntimeException(label + " not found"));
+        if (!coa.getCompany().getId().equals(companyId)) {
+            throw new RuntimeException(label + " does not belong to this company");
+        }
+        return coaId;
+    }
+
+    private Long resolveBankId(Long companyId, Long bankId) {
+        if (bankId == null) {
+            return null;
+        }
+        BankAccount bank = bankAccountRepository.findById(bankId)
+                .orElseThrow(() -> new RuntimeException("Default bank account not found"));
+        if (!bank.getCompany().getId().equals(companyId)) {
+            throw new RuntimeException("Default bank account does not belong to this company");
+        }
+        return bankId;
     }
 
     // ======================================================

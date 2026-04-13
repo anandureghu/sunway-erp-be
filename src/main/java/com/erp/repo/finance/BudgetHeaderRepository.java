@@ -8,10 +8,26 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface BudgetHeaderRepository extends JpaRepository<BudgetHeader, Long> {
     List<BudgetHeader> findByCompanyId(Long companyId);
+
+    Optional<BudgetHeader> findByCompanyIdAndFiscalYearAndIsActiveTrue(Long companyId, String fiscalYear);
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            update BudgetHeader bh
+            set bh.isActive = false
+            where bh.company.id = :companyId
+              and bh.fiscalYear = :fiscalYear
+              and bh.id <> :exceptId
+            """)
+    int deactivateOtherActivesForFiscalYear(
+            @Param("companyId") Long companyId,
+            @Param("fiscalYear") String fiscalYear,
+            @Param("exceptId") Long exceptId);
 
     @Modifying
     @Query("""

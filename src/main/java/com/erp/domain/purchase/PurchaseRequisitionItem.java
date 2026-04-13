@@ -4,6 +4,8 @@ import com.erp.domain.inventory.Item;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,5 +24,9 @@ public class PurchaseRequisitionItem {
     private Item item;
 
     private Integer requestedQty;
+
+    @Column(precision = 18, scale = 2)
+    private BigDecimal estimatedUnitCost;
+
     private String remarks;
 }

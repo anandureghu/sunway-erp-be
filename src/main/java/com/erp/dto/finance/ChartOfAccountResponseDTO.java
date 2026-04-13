@@ -38,4 +38,5 @@ public class ChartOfAccountResponseDTO {
 
     private String projectCode;
     private boolean active;
+    private boolean initialBalanceSet;
 }

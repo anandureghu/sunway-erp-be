@@ -19,5 +19,26 @@ public class PurchaseRequisitionResponseDTO {
     private String status;
     private Instant createdAt;
     private Instant approvedAt;
+    private Instant convertedAt;
+
+    private Long preferredSupplierId;
+    private String preferredSupplierName;
+
+    private Long departmentId;
+    private String departmentName;
+
+    private Long requestedById;
+    private String requestedByName;
+
+    /** Populated when approval creates a purchase order in the same request. */
+    private Long createdPurchaseOrderId;
+
+    private Long debitAccountId;
+    private String debitAccountName;
+    private Long creditAccountId;
+    private String creditAccountName;
+    /** Posted finance transaction when this PR was approved. */
+    private Long financeTransactionId;
+
     private List<PurchaseRequisitionItemDTO> items;
 }

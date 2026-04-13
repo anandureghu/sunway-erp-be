@@ -35,7 +35,16 @@ public class Payment {
     private String notes;
 
     @Column(name = "invoice_id", length = 64)
-    private String invoiceId; // invoice business id / code
+    private String invoiceId; // invoice business id / code (sales) or null for vendor payables
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_direction", length = 20)
+    @Builder.Default
+    private PaymentDirection paymentDirection = PaymentDirection.CUSTOMER;
+
+    /** Set when this row is a vendor payable tied to a purchase order. */
+    @Column(name = "purchase_order_id")
+    private Long purchaseOrderId;
 
     @Column(name = "pdf_url", length = 500)
     private String pdfUrl;

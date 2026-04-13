@@ -16,6 +16,7 @@ import java.util.List;
 public class PurchaseOrderResponseDTO {
     private Long id;
     private String orderNumber;
+    private Long sourceRequisitionId;
     private Long supplierId;
     private String supplierName;
     private LocalDate orderDate;
@@ -25,4 +26,6 @@ public class PurchaseOrderResponseDTO {
     private String createdAt;
     private Long createdById;
     private String createdByName;
+    /** False when a vendor payable exists and is still unpaid (blocks release to supplier). */
+    private Boolean vendorPaymentSettled;
 }

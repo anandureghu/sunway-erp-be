@@ -17,6 +17,10 @@ public class SalesOrderItemResponseDTO {
     private String itemDescription;
     private Integer quantity;
     private BigDecimal unitPrice;
+    private BigDecimal lineSubtotal;
+    private BigDecimal discountPercent;
+    private BigDecimal taxRate;
+    private BigDecimal taxAmount;
     private BigDecimal lineTotal;
     private Long warehouseId;
     private String warehouseName;

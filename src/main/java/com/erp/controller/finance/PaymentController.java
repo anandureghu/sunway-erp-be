@@ -1,5 +1,6 @@
 package com.erp.controller.finance;
 
+import com.erp.domain.finance.PaymentDirection;
 import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
 import com.erp.service.finance.PaymentService;
@@ -25,6 +26,16 @@ public class PaymentController {
         return paymentService.createPayment(dto);
     }
 
+    @PutMapping("/{id}")
+    public PaymentResponseDTO updatePayment(@PathVariable("id") Long id, @RequestBody CreatePaymentDTO dto) {
+        return paymentService.updatePayment(id, dto);
+    }
+
+    @PostMapping("/{id}/confirm")
+    public PaymentResponseDTO confirmPayment(@PathVariable("id") Long id) {
+        return paymentService.confirmPayment(id);
+    }
+
     // ----------------------------------------------------------
     // 2️⃣ Get a payment by ID
     // ----------------------------------------------------------
@@ -37,8 +48,14 @@ public class PaymentController {
     // 3️⃣ List all payments for a company
     // ----------------------------------------------------------
     @GetMapping("/company/{companyId}")
-    public List<PaymentResponseDTO> getPaymentsForCompany(@PathVariable("companyId") Long companyId) {
-        return paymentService.getPaymentsForCompany(companyId);
+    public List<PaymentResponseDTO> getPaymentsForCompany(
+            @PathVariable("companyId") Long companyId,
+            @RequestParam(value = "direction", required = false) String direction) {
+        if (direction == null || direction.isBlank()) {
+            return paymentService.getPaymentsForCompany(companyId);
+        }
+        return paymentService.getPaymentsForCompany(
+                companyId, PaymentDirection.valueOf(direction.trim().toUpperCase()));
     }
 
     // ----------------------------------------------------------

@@ -13,7 +13,10 @@ import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,24 +31,28 @@ public class ChartOfAccountsService {
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
     private final AuthContext auth;
+    private final TransactionService transactionService;
 
     public ChartOfAccountsService(
             ChartOfAccountsRepository repo,
             CompanyRepository companyRepo,
             UserRepository userRepository,
             DepartmentRepository departmentRepository,
-            AuthContext auth
+            AuthContext auth,
+            TransactionService transactionService
     ) {
         this.repo = repo;
         this.companyRepo = companyRepo;
         this.userRepository = userRepository;
         this.departmentRepository = departmentRepository;
         this.auth = auth;
+        this.transactionService = transactionService;
     }
 
     // =============================================================
     // CREATE ACCOUNT
     // =============================================================
+    @Transactional
     public ChartOfAccountResponseDTO createAccount(CreateAccountDTO dto) {
 
         Long companyId = auth.getCurrentCompanyId();
@@ -78,7 +85,8 @@ public class ChartOfAccountsService {
                 .type(COAType.valueOf(dto.getType()))
                 .isActive(true)
                 .parent(parent)
-                .balance(dto.getOpeningBalance() == null ? null : dto.getOpeningBalance())
+                .balance(null)
+                .initialBalanceSet(false)
                 .interCompanyNumber(dto.getInterCompanyNumber())
                 .accountNo(dto.getAccountNo())
                 .asOfDate(Instant.now())
@@ -87,7 +95,20 @@ public class ChartOfAccountsService {
                 .createdBy(user)
                 .build();
 
-        return toDTO(repo.save(acc));
+        ChartOfAccounts saved = repo.save(acc);
+
+        if (dto.getOpeningBalance() != null) {
+            if (dto.getOpeningBalance().compareTo(BigDecimal.ZERO) != 0) {
+                transactionService.recordOpeningBalanceCreditOnly(saved.getId(), dto.getOpeningBalance());
+            }
+            saved = repo.findById(saved.getId())
+                    .orElseThrow(() -> new RuntimeException("Account not found"));
+            saved.setInitialBalanceSet(true);
+            saved.setAsOfDate(Instant.now());
+            saved = repo.save(saved);
+        }
+
+        return toDTO(saved);
     }
 
     // =============================================================
@@ -107,6 +128,38 @@ public class ChartOfAccountsService {
         acc.setUpdatedBy(user);
 
         return toDTO(repo.save(acc));
+    }
+
+    @Transactional
+    public ChartOfAccountResponseDTO setInitialBalance(Long id, BigDecimal amount) {
+        if (amount == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount is required");
+        }
+        Long companyId = auth.getCurrentCompanyId();
+        Long userId = auth.getCurrentUserId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        ChartOfAccounts acc = repo.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+        if (!acc.getCompany().getId().equals(companyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account does not belong to your company");
+        }
+        if (Boolean.TRUE.equals(acc.getInitialBalanceSet())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Initial balance has already been set for this account");
+        }
+
+        transactionService.recordOpeningBalanceCreditOnly(id, amount);
+
+        ChartOfAccounts updated = repo.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+        updated.setAsOfDate(Instant.now());
+        updated.setInitialBalanceSet(true);
+        updated.setUpdatedBy(user);
+
+        return toDTO(repo.save(updated));
     }
 
 
@@ -166,6 +219,7 @@ public class ChartOfAccountsService {
                 .departmentCode(acc.getDepartment() != null ? acc.getDepartment().getDepartmentCode() : null)
                 .departmentName(acc.getDepartment() != null ? acc.getDepartment().getDepartmentName() : null)
                 .projectCode(acc.getProjectCode())
+                .initialBalanceSet(Boolean.TRUE.equals(acc.getInitialBalanceSet()))
                 .createdById(acc.getCreatedBy().getId())
                 .createdByName(acc.getCreatedBy().getFullName())
                 .createdAt(acc.getCreatedAt())
@@ -178,7 +232,9 @@ public class ChartOfAccountsService {
     }
 
     public void updateBalance(ChartOfAccounts acc, BigDecimal amount) {
-        acc.setBalance(acc.getBalance().add(amount));
+        BigDecimal cur = acc.getBalance() == null ? BigDecimal.ZERO : acc.getBalance();
+        CoaBalanceRules.assertSufficientBalance(acc, amount);
+        acc.setBalance(cur.add(amount));
         repo.save(acc);
     }
 }

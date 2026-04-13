@@ -73,4 +73,22 @@ public class Company {
 
     @Column(name = "is_inventory_enabled", nullable = false)
     private boolean inventoryEnabled;
+
+    /** Chart of accounts id; must belong to this company. Used for sales orders and sales invoices. */
+    @Column(name = "default_sales_debit_account_id")
+    private Long defaultSalesDebitAccountId;
+
+    @Column(name = "default_sales_credit_account_id")
+    private Long defaultSalesCreditAccountId;
+
+    /** Used for purchase requisitions. */
+    @Column(name = "default_purchase_debit_account_id")
+    private Long defaultPurchaseDebitAccountId;
+
+    @Column(name = "default_purchase_credit_account_id")
+    private Long defaultPurchaseCreditAccountId;
+
+    /** Default bank for sales orders and sales invoices. */
+    @Column(name = "default_bank_account_id")
+    private Long defaultBankAccountId;
 }

@@ -17,6 +17,7 @@ import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.finance.VendorPayableService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,7 @@ public class PurchaseOrderService {
     private final ItemRepository itemRepo;
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
+    private final VendorPayableService vendorPayableService;
     private final AuthContext auth;
 
     public PurchaseOrderService(
@@ -40,6 +42,7 @@ public class PurchaseOrderService {
             ItemRepository itemRepo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
+            VendorPayableService vendorPayableService,
             AuthContext auth
     ) {
         this.repo = repo;
@@ -47,6 +50,7 @@ public class PurchaseOrderService {
         this.itemRepo = itemRepo;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
+        this.vendorPayableService = vendorPayableService;
         this.auth = auth;
     }
 
@@ -92,7 +96,9 @@ public class PurchaseOrderService {
                 .items(items)
                 .build();
 
-        return toDTO(repo.save(po));
+        PurchaseOrder saved = repo.save(po);
+        vendorPayableService.createVendorPayableForPurchaseOrder(saved);
+        return toDTO(saved);
     }
 
     public PurchaseOrderResponseDTO confirm(Long id) {
@@ -100,6 +106,11 @@ public class PurchaseOrderService {
 
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
             throw new RuntimeException("Only DRAFT purchase orders can be confirmed");
+        }
+
+        if (!vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId())) {
+            throw new RuntimeException(
+                    "Confirm vendor payment in Finance → Accounts Payable → Vendor Payments before releasing this PO to the supplier.");
         }
 
         po.setStatus(PurchaseOrderStatus.CONFIRMED);
@@ -173,6 +184,10 @@ public class PurchaseOrderService {
         return PurchaseOrderResponseDTO.builder()
                 .id(po.getId())
                 .orderNumber(po.getOrderNumber())
+                .sourceRequisitionId(
+                        po.getSourceRequisition() != null
+                                ? po.getSourceRequisition().getId()
+                                : null)
                 .supplierId(po.getSupplier().getId())
                 .supplierName(po.getSupplier().getVendorName())
                 .orderDate(po.getOrderDate())
@@ -181,6 +196,7 @@ public class PurchaseOrderService {
                 .createdById(po.getCreatedBy().getId())
                 .createdByName(po.getCreatedBy().getFullName())
                 .totalAmount(po.getTotalAmount())
+                .vendorPaymentSettled(vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId()))
                 .items(
                         po.getItems().stream().map(i ->
                                 PurchaseOrderItemDTO.builder()

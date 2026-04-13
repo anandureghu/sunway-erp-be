@@ -2,6 +2,8 @@ package com.erp.controller.inventory;
 
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
+import com.erp.dto.inventory.ItemStockAdjustDTO;
+import com.erp.dto.inventory.ItemStockReceiveDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
@@ -32,12 +34,29 @@ public class ItemController {
         return service.create(dto, image);
     }
 
-    @PutMapping("/{id}")
-    public ItemResponseDTO update(
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ItemResponseDTO updateJson(
             @PathVariable("id") Long id,
             @RequestBody ItemUpdateDTO dto
     ) {
-        return service.update(id, dto);
+        return service.update(id, dto, null);
+    }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ItemResponseDTO updateMultipart(
+            @PathVariable("id") Long id,
+            @RequestPart("data") ItemUpdateDTO dto,
+            @RequestPart(value = "image", required = false) MultipartFile image
+    ) {
+        return service.update(id, dto, image);
+    }
+
+    @PostMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ItemResponseDTO updateItemImage(
+            @PathVariable("id") Long id,
+            @RequestPart("image") MultipartFile image
+    ) {
+        return service.updateItemImage(id, image);
     }
 
     @GetMapping
@@ -48,5 +67,21 @@ public class ItemController {
     @GetMapping("/{id}")
     public ItemResponseDTO get(@PathVariable("id") Long id) {
         return service.getItem(id);
+    }
+
+    @PostMapping("/{id}/stock/receive")
+    public ItemResponseDTO receiveStock(
+            @PathVariable("id") Long id,
+            @RequestBody ItemStockReceiveDTO dto
+    ) {
+        return service.receiveStock(id, dto);
+    }
+
+    @PostMapping("/{id}/stock/adjust")
+    public ItemResponseDTO adjustStock(
+            @PathVariable("id") Long id,
+            @RequestBody ItemStockAdjustDTO dto
+    ) {
+        return service.adjustStock(id, dto);
     }
 }

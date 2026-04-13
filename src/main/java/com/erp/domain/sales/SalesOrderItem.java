@@ -29,5 +29,17 @@ public class SalesOrderItem {
     private BigDecimal unitPrice;
 
     @Column(precision = 18, scale = 2)
+    private BigDecimal lineSubtotal;
+
+    @Column(precision = 18, scale = 2)
+    private BigDecimal discountPercent;
+
+    @Column(precision = 18, scale = 2)
+    private BigDecimal taxRate;
+
+    @Column(precision = 18, scale = 2)
+    private BigDecimal taxAmount;
+
+    @Column(precision = 18, scale = 2)
     private BigDecimal lineTotal;
 }

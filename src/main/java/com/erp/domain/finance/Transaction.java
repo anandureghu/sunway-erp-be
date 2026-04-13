@@ -38,15 +38,24 @@ public class Transaction {
     @Column(name = "amount", precision = 18, scale = 2)
     private BigDecimal amount;
 
-    // GL Account
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "credit_account")
+    /** Nullable when transaction is debit-only (single-sided). */
+    @ManyToOne
+    @JoinColumn(name = "credit_account", nullable = true)
     private ChartOfAccounts creditAccount;
 
-    // GL Account
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "debit_account")
+    /** Nullable when transaction is credit-only (single-sided). */
+    @ManyToOne
+    @JoinColumn(name = "debit_account", nullable = true)
     private ChartOfAccounts debitAccount;
+
+    /** e.g. UNKNOWN, CASH, or user-defined label after one-time edit. */
+    @Column(name = "source", length = 64)
+    private String source;
+
+    /** After source is set to a value other than UNKNOWN, edits are blocked. */
+    @Column(name = "source_locked", nullable = false)
+    @Builder.Default
+    private Boolean sourceLocked = false;
 
 //    @Column(name = "item_code", length = 64)
 //    private String itemCode;

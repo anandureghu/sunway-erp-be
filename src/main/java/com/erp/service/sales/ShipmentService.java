@@ -1,5 +1,6 @@
 package com.erp.service.sales;
 
+import com.erp.domain.InvoiceType;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
@@ -10,6 +11,7 @@ import com.erp.dto.sales.ShipmentCreateDTO;
 import com.erp.dto.sales.ShipmentItemDTO;
 import com.erp.dto.sales.ShipmentResponseDTO;
 import com.erp.repo.UserRepository;
+import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.sales.PicklistRepository;
 import com.erp.repo.sales.ShipmentRepository;
@@ -26,6 +28,7 @@ public class ShipmentService {
 
     private final ShipmentRepository repo;
     private final PicklistRepository picklistRepo;
+    private final InvoiceRepository invoiceRepo;
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
     private final AuthContext auth;
@@ -33,12 +36,14 @@ public class ShipmentService {
     public ShipmentService(
             ShipmentRepository repo,
             PicklistRepository picklistRepo,
+            InvoiceRepository invoiceRepo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
             AuthContext auth
     ) {
         this.repo = repo;
         this.picklistRepo = picklistRepo;
+        this.invoiceRepo = invoiceRepo;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
         this.auth = auth;
@@ -55,6 +60,11 @@ public class ShipmentService {
 
         if (!"PICKED".equals(picklist.getStatus())) {
             throw new RuntimeException("Shipment can be created only from PICKED picklist");
+        }
+        var invoice = invoiceRepo.findByOrderIdAndType(picklist.getSalesOrder().getId(), InvoiceType.SALES)
+                .orElseThrow(() -> new RuntimeException("Invoice not found for this sales order"));
+        if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
+            throw new RuntimeException("Shipment can be created only after full customer payment");
         }
 
         if (repo.findByPicklistId(picklist.getId()).isPresent()) {

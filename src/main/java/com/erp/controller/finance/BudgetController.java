@@ -34,8 +34,9 @@ public class BudgetController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<BudgetResponseDTO> revise(@PathVariable("id") Long id, @RequestBody BudgetUpdateDTO dto) {
-        return ResponseEntity.ok(service.revise(id, dto));
+    public ResponseEntity<BudgetResponseDTO> updateBudget(
+            @PathVariable("id") Long id, @RequestBody BudgetUpdateDTO dto) {
+        return ResponseEntity.ok(service.updateBudget(id, dto));
     }
 
     @PostMapping("/{id}/activate")

@@ -1,6 +1,7 @@
 package com.erp.dto.finance;
 
 import com.erp.domain.InvoiceType;
+import com.erp.domain.finance.InvoiceDocumentSource;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.sales.SalesOrderResponseDTO;
 import lombok.Builder;
@@ -28,6 +29,9 @@ public class InvoiceResponse {
     private LocalDate paidDate;
 
     private BigDecimal amount;
+    private BigDecimal subtotalAmount;
+    private BigDecimal discountAmount;
+    private BigDecimal taxAmount;
     private BigDecimal openAmount;
     private BigDecimal outstanding;
 
@@ -39,6 +43,9 @@ public class InvoiceResponse {
 
     private String partyClassification;
     private String pdfUrl;
+    private String supplierInvoiceNumber;
+    private InvoiceDocumentSource documentSource;
+    private String externalDocumentUrl;
 
     private InvoiceType type;
     private Long orderId;
@@ -48,6 +55,11 @@ public class InvoiceResponse {
 
     private String creditAccountName;
     private String debitAccountName;
+    private Long bankAccountId;
+    private String bankAccountName;
+    private String bankAccountNumber;
+    private String bankIfscCode;
+    private String bankBranchName;
 
     private Instant createdAt;
 

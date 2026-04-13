@@ -35,4 +35,7 @@ public class TransactionResponseDTO {
 
     private Long relatedId;
     private Long relatedSubId;
+
+    private String source;
+    private Boolean sourceLocked;
 }

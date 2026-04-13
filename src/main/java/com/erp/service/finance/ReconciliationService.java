@@ -32,6 +32,7 @@ public class ReconciliationService {
     private final ChartOfAccountsRepository accountRepo;
     private final UserRepository userRepo;
     private final CompanyRepository companyRepo;
+    private final TransactionService transactionService;
     
     public Page<ReconciliationResponse> getAll(Pageable pageable) {
 
@@ -86,17 +87,18 @@ public class ReconciliationService {
             throw new RuntimeException("Only draft reconciliations can be confirmed");
         }
 
-        ChartOfAccounts account = rec.getAccount();
-
-        // Apply balance update
-        account.setBalance(rec.getNewBalance());
-
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (rec.getAmount().compareTo(BigDecimal.ZERO) != 0) {
+            transactionService.recordReconciliationConfirmation(rec);
+        }
 
         rec.setStatus(ReconciliationStatus.CONFIRMED);
         rec.setConfirmedBy(user);
         rec.setConfirmedAt(LocalDateTime.now());
+
+        reconciliationRepo.save(rec);
 
         return map(rec);
     }
