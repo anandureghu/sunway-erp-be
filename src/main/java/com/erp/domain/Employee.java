@@ -78,6 +78,14 @@ public class Employee {
     @Column(name = "image_url")
     private String imageUrl;
 
+    /**
+     * Employee's security role (synchronized with user.role)
+     * ✅ Used for leave policy lookups (instead of deriving from user)
+     * Examples: USER, ADMIN, MANAGER
+     */
+    @Column(name = "role", length = 50)
+    private String role;
+
     /* ================= RELATIONS ================= */
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -141,13 +149,26 @@ public class Employee {
     }
 
     /**
-     * 🔹 Security Role (ENUM)
-     * Example: USER, ADMIN
+     * ✅ Get role from the role field (for leave policies)
+     * Falls back to user.role if role field is null
      */
     public String getRole() {
+        // First try the explicit role field
+        if (this.role != null && !this.role.isBlank()) {
+            return this.role;
+        }
+        // Fall back to user's role
         return user != null && user.getRole() != null
                 ? user.getRole().name()
                 : null;
+    }
+
+    /**
+     * ✅ Set role on the role field
+     * This allows leave policies to use the role for lookups
+     */
+    public void setRole(String name) {
+        this.role = name;
     }
 
     /**

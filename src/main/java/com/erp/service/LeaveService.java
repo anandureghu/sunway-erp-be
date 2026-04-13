@@ -11,16 +11,20 @@ import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.EmployeeLeaveBalanceRepository;
 import com.erp.repo.EmployeeLeaveRepository;
 import com.erp.repo.EmployeeRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class LeaveService {
 
     private final EmployeeRepository employeeRepo;
@@ -28,38 +32,35 @@ public class LeaveService {
     private final EmployeeLeaveBalanceRepository balanceRepo;
     private final EmployeeLeaveRepository leaveRepo;
 
-    /* =====================================================
-       GET AVAILABLE LEAVE TYPES (ROLE + GENDER BASED)
-    ===================================================== */
-
     public List<String> getAvailableLeaveTypes(Long employeeId) {
-
         Employee emp = getEmployee(employeeId);
 
-        if (emp.getRole() == null) return List.of();
+        String role = getLeaveRole(emp);
+        if (role == null) {
+            log.warn("Employee {} has no leave role configured", employeeId);
+            return List.of();
+        }
 
-        return policyRepo.findByCompanyAndRole(
-                        emp.getCompany(),
-                        emp.getRole()
-                ).stream()
+        return policyRepo.findByCompany(emp.getCompany())
+                .stream()
+                .filter(policy -> same(policy.getRole(), role))
                 .filter(policy -> {
-
-                    // Gender restriction check
                     if (Boolean.TRUE.equals(policy.getGenderRestricted())) {
-                        return emp.getGender() != null &&
-                                emp.getGender()
-                                        .equalsIgnoreCase(policy.getAllowedGender());
+                        String employeeGender = clean(emp.getGender());
+                        return employeeGender != null && same(employeeGender, policy.getAllowedGender());
                     }
-
                     return true;
                 })
                 .map(CompanyLeavePolicy::getLeaveType)
+                .distinct()
                 .toList();
     }
 
-    /* =====================================================
-       PREVIEW LEAVE
-    ===================================================== */
+    public CompanyLeavePolicy getLeavePolicyDetails(Long employeeId, String leaveType) {
+        Employee emp = getEmployee(employeeId);
+
+        return getPolicy(emp, leaveType);
+    }
 
     public LeavePreviewDTO previewLeave(
             Long employeeId,
@@ -70,84 +71,52 @@ public class LeaveService {
         validateDates(leaveType, startDate, endDate);
 
         Employee emp = getEmployee(employeeId);
-
         int totalDays = calculateDays(startDate, endDate);
 
         CompanyLeavePolicy policy = getPolicy(emp, leaveType);
-
         validateGender(policy, emp);
 
-        // UNPAID LEAVE → no balance required
         if (!Boolean.TRUE.equals(policy.getPaid())) {
-            return new LeavePreviewDTO(
-                    totalDays,
-                    0,
-                    0
-            );
+            return new LeavePreviewDTO(totalDays, 0, 0);
         }
 
-        EmployeeLeaveBalance balance =
-                getOrCreateBalance(emp, policy);
+        EmployeeLeaveBalance balance = getOrFetchBalance(emp, policy);
 
-        int remainingAfter =
-                balance.getRemainingLeaves() - totalDays;
+        int remainingBefore = balance.getRemainingLeaves();
+        int remainingAfter = remainingBefore - totalDays;
 
         if (remainingAfter < 0) {
             throw new RuntimeException("Insufficient leave balance");
         }
 
-        return new LeavePreviewDTO(
-                totalDays,
-                balance.getRemainingLeaves(),
-                remainingAfter
-        );
+        return new LeavePreviewDTO(totalDays, remainingBefore, remainingAfter);
     }
 
-    /* =====================================================
-       APPLY LEAVE
-    ===================================================== */
-
     @Transactional
-    public LeaveHistoryDTO applyLeave(Long employeeId,
-                                      LeaveRequestDTO dto) {
-
-        validateDates(
-                dto.getLeaveType(),
-                dto.getStartDate(),
-                dto.getEndDate());
+    public LeaveHistoryDTO applyLeave(Long employeeId, LeaveRequestDTO dto) {
+        validateDates(dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
 
         Employee emp = getEmployee(employeeId);
+        int totalDays = calculateDays(dto.getStartDate(), dto.getEndDate());
 
-        int totalDays =
-                calculateDays(dto.getStartDate(),
-                        dto.getEndDate());
-
-        CompanyLeavePolicy policy =
-                getPolicy(emp, dto.getLeaveType());
-
+        CompanyLeavePolicy policy = getPolicy(emp, dto.getLeaveType());
         validateGender(policy, emp);
 
-        // Paid Leave → Deduct Balance
         if (Boolean.TRUE.equals(policy.getPaid())) {
-
-            EmployeeLeaveBalance balance =
-                    getOrCreateBalance(emp, policy);
+            EmployeeLeaveBalance balance = getOrFetchBalance(emp, policy);
 
             if (balance.getRemainingLeaves() < totalDays) {
                 throw new RuntimeException("Insufficient leave balance");
             }
 
-            balance.setRemainingLeaves(
-                    balance.getRemainingLeaves() - totalDays);
-
+            balance.setRemainingLeaves(balance.getRemainingLeaves() - totalDays);
             balanceRepo.save(balance);
         }
 
-        // Save Leave Record
         EmployeeLeave leave = new EmployeeLeave();
         leave.setEmployee(emp);
         leave.setLeaveCode("L" + System.currentTimeMillis());
-        leave.setLeaveType(dto.getLeaveType());
+        leave.setLeaveType(policy.getLeaveType());
         leave.setStartDate(dto.getStartDate());
         leave.setEndDate(dto.getEndDate());
         leave.setDateReported(LocalDate.now());
@@ -159,24 +128,12 @@ public class LeaveService {
         return mapToHistoryDTO(leave);
     }
 
-    /* =====================================================
-       HISTORY
-    ===================================================== */
-
     public List<LeaveHistoryDTO> history(Long employeeId) {
-
-        getEmployee(employeeId);
-
-        return leaveRepo
-                .findByEmployeeIdOrderByDateReportedDesc(employeeId)
+        return leaveRepo.findByEmployeeIdOrderByDateReportedDesc(employeeId)
                 .stream()
                 .map(this::mapToHistoryDTO)
                 .toList();
     }
-
-    /* =====================================================
-       PRIVATE HELPERS
-    ===================================================== */
 
     private Employee getEmployee(Long id) {
         return employeeRepo.findById(id)
@@ -187,11 +144,8 @@ public class LeaveService {
         return (int) ChronoUnit.DAYS.between(start, end) + 1;
     }
 
-    private void validateDates(String leaveType,
-                               LocalDate start,
-                               LocalDate end) {
-
-        if (leaveType == null || start == null || end == null) {
+    private void validateDates(String leaveType, LocalDate start, LocalDate end) {
+        if (clean(leaveType) == null || start == null || end == null) {
             throw new IllegalArgumentException("Leave type and dates are required");
         }
 
@@ -200,64 +154,89 @@ public class LeaveService {
         }
     }
 
-    private CompanyLeavePolicy getPolicy(Employee emp,
-                                         String leaveType) {
+    private CompanyLeavePolicy getPolicy(Employee emp, String leaveType) {
+        String role = getLeaveRole(emp);
 
-        return policyRepo
-                .findByCompanyAndRoleAndLeaveType(
-                        emp.getCompany(),
-                        emp.getRole(),
-                        leaveType)
+        if (role == null) {
+            throw new RuntimeException("Employee company role not configured");
+        }
+
+        return policyRepo.findByCompany(emp.getCompany())
+                .stream()
+                .filter(policy -> same(policy.getRole(), role))
+                .filter(policy -> same(policy.getLeaveType(), leaveType))
+                .findFirst()
                 .orElseThrow(() ->
-                        new RuntimeException("Leave policy not configured for your role"));
+                        new RuntimeException("Leave policy not configured for your role and leave type"));
     }
 
-    private void validateGender(CompanyLeavePolicy policy,
-                                Employee emp) {
+    private void validateGender(CompanyLeavePolicy policy, Employee emp) {
+        if (!Boolean.TRUE.equals(policy.getGenderRestricted())) {
+            return;
+        }
 
-        if (Boolean.TRUE.equals(policy.getGenderRestricted())) {
+        String employeeGender = clean(emp.getGender());
 
-            if (emp.getGender() == null ||
-                    !emp.getGender()
-                            .equalsIgnoreCase(policy.getAllowedGender())) {
-
-                throw new RuntimeException(
-                        "This leave type is not allowed for your gender");
-            }
+        if (employeeGender == null || !same(employeeGender, policy.getAllowedGender())) {
+            throw new RuntimeException("This leave type is not allowed for your gender");
         }
     }
 
-    /*
-        AUTO CREATE BALANCE IF MISSING
-    */
-    private EmployeeLeaveBalance getOrCreateBalance(
-            Employee emp,
-            CompanyLeavePolicy policy) {
+    private EmployeeLeaveBalance getOrFetchBalance(Employee emp, CompanyLeavePolicy policy) {
+        Optional<EmployeeLeaveBalance> balanceOpt = findBalance(emp, policy.getLeaveType());
 
-        return balanceRepo
-                .findByEmployeeAndLeaveType(
-                        emp,
-                        policy.getLeaveType())
-                .orElseGet(() -> {
+        if (balanceOpt.isPresent()) {
+            return balanceOpt.get();
+        }
 
-                    EmployeeLeaveBalance newBalance =
-                            new EmployeeLeaveBalance();
+        EmployeeLeaveBalance newBalance = new EmployeeLeaveBalance();
+        newBalance.setEmployee(emp);
+        newBalance.setLeaveType(balanceKey(policy.getLeaveType()));
+        newBalance.setTotalLeaves(policy.getDefaultDays());
+        newBalance.setRemainingLeaves(policy.getDefaultDays());
 
-                    newBalance.setEmployee(emp);
-                    newBalance.setLeaveType(policy.getLeaveType());
-                    newBalance.setTotalLeaves(policy.getDefaultDays());
-                    newBalance.setRemainingLeaves(policy.getDefaultDays());
-
-                    return balanceRepo.save(newBalance);
-                });
+        return balanceRepo.save(newBalance);
     }
 
-    private LeaveHistoryDTO mapToHistoryDTO(Employee leave) {
-        return null;
+    private Optional<EmployeeLeaveBalance> findBalance(Employee employee, String leaveType) {
+        String canonical = balanceKey(leaveType);
+        String raw = clean(leaveType);
+
+        Optional<EmployeeLeaveBalance> balance =
+                balanceRepo.findByEmployeeIdAndLeaveType(employee.getId(), canonical);
+
+        if (balance.isEmpty()) {
+            balance = balanceRepo.findByEmployeeAndLeaveType(employee, canonical);
+        }
+
+        if (balance.isPresent()) {
+            EmployeeLeaveBalance found = balance.get();
+            if (!canonical.equals(found.getLeaveType())) {
+                found.setLeaveType(canonical);
+                balanceRepo.save(found);
+            }
+            return Optional.of(found);
+        }
+
+        if (raw != null && !raw.equals(canonical)) {
+            balance = balanceRepo.findByEmployeeIdAndLeaveType(employee.getId(), raw);
+
+            if (balance.isEmpty()) {
+                balance = balanceRepo.findByEmployeeAndLeaveType(employee, raw);
+            }
+
+            if (balance.isPresent()) {
+                EmployeeLeaveBalance found = balance.get();
+                found.setLeaveType(canonical);
+                balanceRepo.save(found);
+                return Optional.of(found);
+            }
+        }
+
+        return Optional.empty();
     }
 
     private LeaveHistoryDTO mapToHistoryDTO(EmployeeLeave leave) {
-
         LeaveHistoryDTO dto = new LeaveHistoryDTO();
         dto.setLeaveCode(leave.getLeaveCode());
         dto.setLeaveType(leave.getLeaveType());
@@ -266,7 +245,41 @@ public class LeaveService {
         dto.setDateReported(leave.getDateReported());
         dto.setTotalDays(leave.getTotalDays());
         dto.setLeaveStatus(leave.getLeaveStatus());
-
         return dto;
+    }
+
+    private String getLeaveRole(Employee employee) {
+        if (employee.getCompanyRole() != null && employee.getCompanyRole() != null) {
+            String companyRoleName = clean(employee.getCompanyRole());
+            if (companyRoleName != null && !companyRoleName.isBlank()) {
+                return companyRoleName;
+            }
+        }
+
+        return clean(employee.getRole());
+    }
+
+    private String balanceKey(String value) {
+        return key(value);
+    }
+
+    private boolean same(String left, String right) {
+        String leftKey = key(left);
+        String rightKey = key(right);
+        return leftKey != null && leftKey.equals(rightKey);
+    }
+
+    private String clean(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String cleaned = value.trim();
+        return cleaned.isEmpty() ? null : cleaned;
+    }
+
+    private String key(String value) {
+        String cleaned = clean(value);
+        return cleaned == null ? null : cleaned.toUpperCase(Locale.ROOT);
     }
 }

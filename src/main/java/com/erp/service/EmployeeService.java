@@ -154,9 +154,26 @@ public class EmployeeService {
                 .updatedAt(Instant.now())
                 .build();
 
-        employeeRepository.save(employee);
+        // ✅ Set the role from user (needed for leave policy lookup)
+        employee.setRole(role.name());
 
-        leavePolicyService.initializeLeaveBalancesForEmployee(employee);
+        // ✅ SAVE EMPLOYEE FIRST (must be persisted before leave initialization)
+        employee = employeeRepository.save(employee);
+
+        // ✅ Verify employee was saved with ID
+        if (employee.getId() == null) {
+            throw new RuntimeException("Employee save failed - no ID generated");
+        }
+
+        // ✅ NOW initialize leave balances (after employee is persisted)
+        try {
+            leavePolicyService.initializeLeaveBalancesForEmployee(employee);
+            log.info("✅ Leave balances initialized for employee: {}", employee.getId());
+        } catch (Exception e) {
+            log.warn("⚠️  Failed to initialize leave balances for employee {}: {}",
+                    employee.getId(), e.getMessage());
+            // Don't fail the entire employee creation if leave initialization fails
+        }
 
         return toDTO(employee);
     }
@@ -209,6 +226,9 @@ public class EmployeeService {
                     throw new RuntimeException("Only admins can change the security role");
                 }
                 employee.getUser().setRole(dto.getRole());
+
+                // ✅ Also update role on employee for leave policy lookup
+                employee.setRole(dto.getRole().name());
             }
 
             userRepository.save(employee.getUser());
@@ -405,10 +425,11 @@ public class EmployeeService {
 
     public EmployeeResponseDTO getCompanyAdmin(Long companyId) {
         List<Role> roles = List.of(Role.ADMIN, Role.SUPER_ADMIN);
-        Employee admin = employeeRepository
+
+        return employeeRepository
                 .findFirstByCompany_IdAndUserRoleIn(companyId, roles)
-                .orElseThrow(() -> new RuntimeException("Admin not found"));
-        return toDTO(admin);
+                .map(this::toDTO)
+                .orElse(null);
     }
 
     // ======================================================
