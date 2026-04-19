@@ -26,6 +26,15 @@ public class PurchaseOrderItem {
     @Column(nullable = false)
     private Integer quantity;
 
+    /** Snapshot of item master cost price at save time (null on legacy rows). */
+    @Column(name = "actual_item_price", precision = 18, scale = 2)
+    private BigDecimal actualItemPrice;
+
+    /** Optional negotiated / other unit cost override. */
+    @Column(name = "other_unit_cost", precision = 18, scale = 2)
+    private BigDecimal otherUnitCost;
+
+    /** Applied unit cost used for line_total. */
     @Column(precision = 18, scale = 2, nullable = false)
     private BigDecimal unitCost;
 

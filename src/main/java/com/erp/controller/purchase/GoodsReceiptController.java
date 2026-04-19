@@ -26,4 +26,14 @@ public class GoodsReceiptController {
     public List<GoodsReceiptResponseDTO> list(@PathVariable("poId") Long poId) {
         return service.listByPO(poId);
     }
+
+    @GetMapping("/{id}")
+    public GoodsReceiptResponseDTO get(@PathVariable("id") Long id) {
+        return service.get(id);
+    }
+
+    @GetMapping("/{id}/pdf")
+    public String getReceiptPdfUrl(@PathVariable("id") Long id) {
+        return service.getOrCreateReceiptPdfUrl(id);
+    }
 }

@@ -279,15 +279,17 @@
             <tr>
                 <td>
                     <div class="company-name" th:text="${company.companyName}">MyWeb Systems QFZ LLC</div>
-                    <!--                    <div class="company-sub">-->
-                    <!--                        Digital Solutions &amp; Technology Services<br/>-->
-                    <!--                        Doha, Qatar-->
-                    <!--                    </div>-->
+                    <div class="company-sub" th:if="${type.name() == 'PURCHASE'}"
+                         style="margin-top:8px;font-size:12px;color:#D1D5DB;line-height:16px;">
+                        Internal purchase confirmation — cross-check line items and totals before supplier release.
+                    </div>
                 </td>
                 <td style="text-align:right;">
                     <div class="badge">
                         <div class="badge-title"
-                             th:text="${invoice.status == 'PAID' ? 'RECEIPT' : 'INVOICE'}">INVOICE</div>
+                             th:text="${invoice.status == 'PAID'
+                             ? (type.name() == 'PURCHASE' ? 'PAID' : 'RECEIPT')
+                             : (type.name() == 'PURCHASE' ? 'PURCHASE' : 'INVOICE')}">INVOICE</div>
                         <div class="badge-id"
                              th:text="${invoice.invoiceId}">
                             INV-0000
@@ -458,7 +460,8 @@
             </table>
         </div>
 
-        <div class="terms" th:if="${invoice.bankAccount != null and invoice.status != 'PAID'}">
+        <div class="terms"
+             th:if="${type.name() == 'SALES' and invoice.bankAccount != null and invoice.status != 'PAID'}">
             <h4>Payment Information</h4>
             <p><strong>Bank Name:</strong> <span th:text="${invoice.bankAccount.bankName}">Bank</span></p>
             <p><strong>Account Holder:</strong> <span th:text="${invoice.bankAccount.accountHolderName}">Holder</span></p>
@@ -470,23 +473,38 @@
 
         <div class="notes">
             <h4>Notes</h4>
-            <p th:if="${invoice.status != 'PAID'}">
-                <strong th:text="${company.companyName}">Company</strong>
-                has issued this invoice on
-                <strong th:text="${#temporals.format(invoice.invoiceDate, 'dd/MM/yyyy')}">01/01/2026</strong>.
-                Payment is due on
-                <strong th:text="${#temporals.format(invoice.dueDate, 'dd/MM/yyyy')}">15/01/2026</strong>.
-                Please use the bank details listed above and include reference
-                <strong th:text="${invoice.invoiceId}">INV-0000</strong>.
-            </p>
-            <p th:if="${invoice.status == 'PAID'}">
-                <strong th:text="${company.companyName}">Company</strong>
-                confirms receipt of payment for reference
-                <strong th:text="${invoice.invoiceId}">INV-0000</strong>
-                on
-                <strong th:text="${invoice.paidDate != null ? #temporals.format(invoice.paidDate, 'dd/MM/yyyy') : 'N/A'}">N/A</strong>.
-                Thank you for your payment.
-            </p>
+            <th:block th:if="${type.name() == 'PURCHASE'}">
+                <p th:if="${invoice.status != 'PAID'}">
+                    This document is for internal cross-check of line items and totals against purchase order
+                    <strong th:text="${purchaseOrder != null ? purchaseOrder.orderNumber : '—'}">PO-000</strong>.
+                    Vendor payment and accounts payable are handled in Finance.
+                </p>
+                <p th:if="${invoice.status == 'PAID'}">
+                    Purchase record
+                    <strong th:text="${invoice.invoiceId}">INV-0000</strong>
+                    marked paid on
+                    <strong th:text="${invoice.paidDate != null ? #temporals.format(invoice.paidDate, 'dd/MM/yyyy') : 'N/A'}">N/A</strong>.
+                </p>
+            </th:block>
+            <th:block th:if="${type.name() == 'SALES'}">
+                <p th:if="${invoice.status != 'PAID'}">
+                    <strong th:text="${company.companyName}">Company</strong>
+                    has issued this invoice on
+                    <strong th:text="${#temporals.format(invoice.invoiceDate, 'dd/MM/yyyy')}">01/01/2026</strong>.
+                    Payment is due on
+                    <strong th:text="${#temporals.format(invoice.dueDate, 'dd/MM/yyyy')}">15/01/2026</strong>.
+                    Please use the bank details listed above and include reference
+                    <strong th:text="${invoice.invoiceId}">INV-0000</strong>.
+                </p>
+                <p th:if="${invoice.status == 'PAID'}">
+                    <strong th:text="${company.companyName}">Company</strong>
+                    confirms receipt of payment for reference
+                    <strong th:text="${invoice.invoiceId}">INV-0000</strong>
+                    on
+                    <strong th:text="${invoice.paidDate != null ? #temporals.format(invoice.paidDate, 'dd/MM/yyyy') : 'N/A'}">N/A</strong>.
+                    Thank you for your payment.
+                </p>
+            </th:block>
             <p th:if="${company.street != null or company.city != null or company.country != null}">
                 Company Address:
                 <span th:text="|${company.street != null ? company.street : ''} ${company.city != null ? company.city : ''} ${company.country != null ? company.country : ''}|">Address</span>
@@ -497,7 +515,7 @@
             </p>
         </div>
 
-        <div class="terms">
+        <div class="terms" th:if="${type.name() == 'SALES'}">
             <h4>⚖ Terms &amp; Conditions</h4>
 
             <ol>

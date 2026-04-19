@@ -22,6 +22,7 @@ import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CoaBalanceRules;
+import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
 import com.erp.service.finance.VendorPayableService;
 import com.erp.service.finance.TransactionService;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,7 @@ public class PurchaseRequisitionService {
     private final ChartOfAccountsRepository coaRepo;
     private final TransactionService transactionService;
     private final VendorPayableService vendorPayableService;
+    private final PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler;
     private final AuthContext auth;
 
     public PurchaseRequisitionService(
@@ -60,7 +62,8 @@ public class PurchaseRequisitionService {
             PurchaseOrderRepository purchaseOrderRepo,
             ChartOfAccountsRepository coaRepo,
             TransactionService transactionService,
-            VendorPayableService vendorPayableService
+            VendorPayableService vendorPayableService,
+            PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler
     ) {
         this.repo = repo;
         this.itemRepo = itemRepo;
@@ -73,6 +76,7 @@ public class PurchaseRequisitionService {
         this.coaRepo = coaRepo;
         this.transactionService = transactionService;
         this.vendorPayableService = vendorPayableService;
+        this.purchaseInvoiceGenerationScheduler = purchaseInvoiceGenerationScheduler;
     }
 
     public PurchaseRequisitionResponseDTO create(PurchaseRequisitionCreateDTO dto) {
@@ -121,10 +125,15 @@ public class PurchaseRequisitionService {
             Item item = itemRepo.findById(i.getItemId())
                     .orElseThrow(() -> new RuntimeException("Item not found"));
 
+            PurchaseLinePricing.Resolved r = PurchaseLinePricing.resolveRequisitionLine(
+                    item, i.getOtherUnitCost(), i.getEstimatedUnitCost());
+
             return PurchaseRequisitionItem.builder()
                     .item(item)
                     .requestedQty(i.getRequestedQty())
-                    .estimatedUnitCost(i.getEstimatedUnitCost())
+                    .actualItemPrice(r.actualItemPrice())
+                    .otherUnitCost(r.otherUnitCost())
+                    .estimatedUnitCost(r.appliedUnitCost())
                     .remarks(i.getRemarks())
                     .build();
         }).toList();
@@ -252,14 +261,10 @@ public class PurchaseRequisitionService {
         for (PurchaseRequisitionItemDTO i : lines) {
             Item item = itemRepo.findById(i.getItemId())
                     .orElseThrow(() -> new RuntimeException("Item not found"));
-            BigDecimal unit = i.getEstimatedUnitCost() != null
-                    ? i.getEstimatedUnitCost()
-                    : (item.getCostPrice() != null ? item.getCostPrice() : null);
-            if (unit == null) {
-                throw new RuntimeException(
-                        "Estimated unit cost or item cost price is required for item " + item.getId());
-            }
-            total = total.add(unit.multiply(BigDecimal.valueOf(i.getRequestedQty())));
+            PurchaseLinePricing.Resolved r = PurchaseLinePricing.resolveRequisitionLine(
+                    item, i.getOtherUnitCost(), i.getEstimatedUnitCost());
+            total = total.add(
+                    r.appliedUnitCost().multiply(BigDecimal.valueOf(i.getRequestedQty())));
         }
         return total.setScale(2, RoundingMode.HALF_UP);
     }
@@ -267,7 +272,12 @@ public class PurchaseRequisitionService {
     private BigDecimal computeTotalForRequisition(PurchaseRequisition pr) {
         BigDecimal total = BigDecimal.ZERO;
         for (PurchaseRequisitionItem pri : pr.getItems()) {
-            BigDecimal unit = resolveUnitCost(pri, pri.getItem());
+            BigDecimal unit = pri.getEstimatedUnitCost();
+            if (unit == null) {
+                unit = PurchaseLinePricing.resolveRequisitionLine(
+                                pri.getItem(), pri.getOtherUnitCost(), null)
+                        .appliedUnitCost();
+            }
             total = total.add(unit.multiply(BigDecimal.valueOf(pri.getRequestedQty())));
         }
         return total.setScale(2, RoundingMode.HALF_UP);
@@ -285,13 +295,25 @@ public class PurchaseRequisitionService {
 
         List<PurchaseOrderItem> poItems = pr.getItems().stream().map(pri -> {
             Item item = pri.getItem();
-            BigDecimal unitCost = resolveUnitCost(pri, item);
-            BigDecimal lineTotal = unitCost.multiply(BigDecimal.valueOf(pri.getRequestedQty()));
+            BigDecimal applied = pri.getEstimatedUnitCost();
+            BigDecimal actualSnap = pri.getActualItemPrice();
+            BigDecimal other = pri.getOtherUnitCost();
+            if (applied == null || actualSnap == null) {
+                PurchaseLinePricing.Resolved r =
+                        PurchaseLinePricing.resolveRequisitionLine(item, other, applied);
+                applied = r.appliedUnitCost();
+                if (actualSnap == null) {
+                    actualSnap = r.actualItemPrice();
+                }
+            }
+            BigDecimal lineTotal = applied.multiply(BigDecimal.valueOf(pri.getRequestedQty()));
 
             return PurchaseOrderItem.builder()
                     .item(item)
                     .quantity(pri.getRequestedQty())
-                    .unitCost(unitCost)
+                    .actualItemPrice(actualSnap)
+                    .otherUnitCost(other)
+                    .unitCost(applied)
                     .lineTotal(lineTotal)
                     .build();
         }).toList();
@@ -314,20 +336,10 @@ public class PurchaseRequisitionService {
                 .build();
 
         PurchaseOrder saved = purchaseOrderRepo.save(po);
+        purchaseOrderRepo.flush();
         vendorPayableService.createVendorPayableForPurchaseOrder(saved);
+        purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(saved.getId());
         return saved;
-    }
-
-    private BigDecimal resolveUnitCost(PurchaseRequisitionItem pri, Item item) {
-        if (pri.getEstimatedUnitCost() != null) {
-            return pri.getEstimatedUnitCost();
-        }
-        if (item.getCostPrice() != null) {
-            return item.getCostPrice();
-        }
-        throw new RuntimeException(
-                "Unit cost is required for item " + item.getId()
-                        + ": set estimated unit cost on the requisition line or item cost price.");
     }
 
     private PurchaseRequisitionResponseDTO toDTO(PurchaseRequisition pr, Long createdPurchaseOrderId) {
@@ -345,6 +357,8 @@ public class PurchaseRequisitionService {
                                         .map(i -> new PurchaseRequisitionItemDTO(
                                                 i.getItem().getId(),
                                                 i.getRequestedQty(),
+                                                i.getActualItemPrice(),
+                                                i.getOtherUnitCost(),
                                                 i.getEstimatedUnitCost(),
                                                 i.getRemarks()))
                                         .toList()

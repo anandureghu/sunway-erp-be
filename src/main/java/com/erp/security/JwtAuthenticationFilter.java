@@ -3,6 +3,7 @@ package com.erp.security;
 import com.erp.domain.security.Role;
 import com.erp.service.security.CustomUserPrincipal;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -82,26 +83,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Collection<SimpleGrantedAuthority> authorities = extractAuthorities(claims);
 
             if (authorities.isEmpty()) {
-                log.warn("JWT has no authorities for user '{}'", username);
+                log.warn(
+                        "JWT has no role/authorities for user '{}' — use the access token from login, not the refresh token.",
+                        username);
                 chain.doFilter(request, response);
                 return;
             }
 
             // ─────────────────────────────────────────────
-            // 🔹 Extract enum Role
+            // 🔹 Map first matching authority to enum Role
             // ─────────────────────────────────────────────
-            String roleName = authorities.stream()
-                    .map(SimpleGrantedAuthority::getAuthority)
-                    .findFirst()
-                    .map(r -> r.replace("ROLE_", ""))
-                    .orElse(null);
-
-            if (roleName == null) {
+            Role role = resolveRoleFromAuthorities(authorities);
+            if (role == null) {
+                log.warn(
+                        "JWT authorities do not match any Role enum for user '{}': {}",
+                        username,
+                        authorities);
                 chain.doFilter(request, response);
                 return;
             }
-
-            Role role = Role.valueOf(roleName);
 
             // ─────────────────────────────────────────────
             // 🔹 Extract companyRole
@@ -152,11 +152,37 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.debug("JWT authenticated: user='{}', id={}, role={}, companyRole={}, companyId={}",
                     username, userId, role, companyRole, companyId);
 
+        } catch (ExpiredJwtException ex) {
+            log.warn("JWT expired — login again or use refresh to obtain a new access token");
         } catch (Exception ex) {
-            log.debug("JWT parse failed: {}", ex.getMessage());
+            log.debug("JWT validation failed: {}", ex.getMessage());
         }
 
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Tries each granted authority until one matches {@link Role}; avoids 401 when the first
+     * authority is not an enum constant (e.g. scope-derived strings) or has stray whitespace.
+     */
+    private static Role resolveRoleFromAuthorities(Collection<SimpleGrantedAuthority> authorities) {
+        for (SimpleGrantedAuthority a : authorities) {
+            String raw = a.getAuthority();
+            if (raw == null) {
+                continue;
+            }
+            String rn = raw.startsWith("ROLE_") ? raw.substring(5) : raw;
+            rn = rn.trim();
+            if (rn.isEmpty()) {
+                continue;
+            }
+            try {
+                return Role.valueOf(rn);
+            } catch (IllegalArgumentException ignored) {
+                // try next
+            }
+        }
+        return null;
     }
 
     // ─────────────────────────────────────────────
@@ -189,14 +215,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // role: "ADMIN"
         String singleRole = safeString(claims.get("role"));
-        if (!isBlank(singleRole)) roles.add(singleRole);
+        if (!isBlank(singleRole)) {
+            roles.add(singleRole.trim());
+        }
 
         // roles: ["ADMIN", "HR"]
         Object arr = claims.get("roles");
         if (arr instanceof Collection<?> c) {
             c.forEach(x -> {
                 String s = safeString(x);
-                if (!isBlank(s)) roles.add(s);
+                if (!isBlank(s)) {
+                    roles.add(s.trim());
+                }
             });
         }
 

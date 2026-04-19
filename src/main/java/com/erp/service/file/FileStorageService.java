@@ -128,7 +128,7 @@ public class FileStorageService {
                 }
             }
 
-            case INVOICE_PDF -> {
+            case INVOICE_PDF, GOODS_RECEIPT_PDF -> {
                 if (!Objects.equals(
                         file.getContentType(), "application/pdf")) {
                     throw new IllegalArgumentException("Only PDF allowed");
@@ -153,6 +153,9 @@ public class FileStorageService {
                     + UUID.randomUUID() + "." + extension;
 
             case INVOICE_PDF -> "invoices/" + entityId + "/"
+                    + UUID.randomUUID() + ".pdf";
+
+            case GOODS_RECEIPT_PDF -> "goods-receipts/" + entityId + "/"
                     + UUID.randomUUID() + ".pdf";
         };
     }

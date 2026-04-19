@@ -14,11 +14,13 @@ import com.erp.dto.finance.InvoiceRequest;
 import com.erp.dto.finance.InvoiceResponse;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.sales.SalesOrderResponseDTO;
+import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
@@ -29,12 +31,15 @@ import com.erp.service.sales.SalesOrderService;
 import com.erp.util.InMemoryMultipartFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -52,6 +57,7 @@ public class InvoiceService {
     private final AuthContext auth;
     private final SalesOrderService salesOrderService;
     private final PurchaseOrderService purchaseOrderService;
+    private final PurchaseOrderRepository purchaseOrderRepo;
     private final CustomerEmailService customerEmailService;
 
     // ============================================================
@@ -108,7 +114,8 @@ public class InvoiceService {
                 .orElseThrow(() -> new RuntimeException("Credit Account not found"));
 
         Long bankId = req.getBankAccountId();
-        if (bankId == null && company.getDefaultBankAccountId() != null) {
+        if (bankId == null && company.getDefaultBankAccountId() != null
+                && req.getType() != InvoiceType.PURCHASE) {
             bankId = company.getDefaultBankAccountId();
         }
         BankAccount bankAccount = bankId == null
@@ -185,24 +192,20 @@ public class InvoiceService {
     }
 
     private void assertNoDuplicateInvoice(Company company, InvoiceRequest req) {
-        if (req.getType() == InvoiceType.SALES && req.getOrderId() != null) {
-            if (repo.findByOrderIdAndType(req.getOrderId(), InvoiceType.SALES).isPresent()) {
+        if (req.getOrderId() == null) {
+            return;
+        }
+        Long orderId = req.getOrderId();
+        if (req.getType() == InvoiceType.SALES) {
+            if (repo.findByOrderIdAndType(orderId, InvoiceType.SALES).isPresent()) {
                 throw new RuntimeException("Invoice already exists for selected order");
             }
             return;
         }
-        if (req.getType() == InvoiceType.PURCHASE
-                && req.getOrderId() != null
-                && req.getSupplierInvoiceNumber() != null
-                && !req.getSupplierInvoiceNumber().isBlank()) {
-            if (repo.findByCompany_IdAndOrderIdAndTypeAndSupplierInvoiceNumber(
-                    company.getId(),
-                    req.getOrderId(),
-                    InvoiceType.PURCHASE,
-                    req.getSupplierInvoiceNumber().trim()
-            ).isPresent()) {
-                throw new RuntimeException(
-                        "A purchase invoice with this supplier invoice number already exists for this order");
+        if (req.getType() == InvoiceType.PURCHASE) {
+            Optional<Invoice> dup = repo.findByOrderIdAndType(orderId, InvoiceType.PURCHASE);
+            if (dup.isPresent() && dup.get().getCompany().getId().equals(company.getId())) {
+                throw new RuntimeException("Invoice already exists for this purchase order");
             }
         }
     }
@@ -336,6 +339,60 @@ public class InvoiceService {
         return toDTO(repo.save(saved));
     }
 
+    /**
+     * Creates a generated purchase (AP) cross-check invoice for a purchase order in {@code DRAFT} or any
+     * status, using company default purchase accounts. Called when the PO is first created (including
+     * when created from an approved PR). Idempotent: returns the existing invoice if one already exists.
+     * Runs in a new transaction when invoked after PO commit so PDF generation sees a persisted PO.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public InvoiceResponse createOrGetGeneratedPurchaseInvoiceForPurchaseOrder(Long purchaseOrderId) {
+        Optional<Invoice> existing = repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
+        if (existing.isPresent()) {
+            return toDTO(existing.get());
+        }
+
+        PurchaseOrder po = purchaseOrderRepo.findById(purchaseOrderId)
+                .filter(p -> p.getCompany().getId().equals(auth.getCurrentCompanyId()))
+                .orElseThrow(() -> new RuntimeException("Purchase order not found"));
+
+        Company company = po.getCompany();
+        if (company.getDefaultPurchaseDebitAccountId() == null
+                || company.getDefaultPurchaseCreditAccountId() == null) {
+            throw new RuntimeException("Company is missing default purchase debit or credit account");
+        }
+
+        BigDecimal total = po.getTotalAmount() != null ? po.getTotalAmount() : BigDecimal.ZERO;
+
+        InvoiceRequest req = new InvoiceRequest();
+        req.setType(InvoiceType.PURCHASE);
+        req.setOrderId(po.getId());
+        req.setToParty(po.getSupplier().getVendorName());
+        req.setInvoiceDate(LocalDate.now());
+        LocalDate baseDate = po.getOrderDate() != null ? po.getOrderDate() : LocalDate.now();
+        req.setDueDate(baseDate.plusDays(30));
+        req.setAmount(total);
+        req.setSubtotalAmount(total);
+        req.setDiscountAmount(BigDecimal.ZERO);
+        req.setTaxAmount(BigDecimal.ZERO);
+        req.setDebitAccount(company.getDefaultPurchaseDebitAccountId());
+        req.setCreditAccount(company.getDefaultPurchaseCreditAccountId());
+        req.setItemDescription("Auto-generated from purchase order " + po.getOrderNumber());
+        req.setNotesRemarks("Auto-generated when purchase order was created (internal cross-check).");
+        req.setDocumentSource(InvoiceDocumentSource.GENERATED);
+
+        InvoiceResponse response = createInvoice(req);
+        Invoice saved = repo.findById(response.getId())
+                .orElseThrow(() -> new RuntimeException("Invoice not found after creation"));
+        saved.setSubtotalAmount(total);
+        saved.setDiscountAmount(BigDecimal.ZERO);
+        saved.setTaxAmount(BigDecimal.ZERO);
+        saved.setAmount(total);
+        saved.setOpenAmount(total);
+        saved.setOutstanding(total);
+        return toDTO(repo.save(saved));
+    }
+
     // ============================================================
     // APPLY PAYMENT
     // ============================================================
@@ -358,6 +415,20 @@ public class InvoiceService {
         }
 
         return repo.save(inv);
+    }
+
+    /**
+     * When a vendor payable for a PO is confirmed, mark the linked purchase invoice paid (or partially paid)
+     * if one exists. No-op when there is no PURCHASE invoice for the PO (legacy data).
+     */
+    public void applyPurchaseInvoicePaymentForPurchaseOrder(Long purchaseOrderId, BigDecimal amount) {
+        if (purchaseOrderId == null || amount == null) {
+            return;
+        }
+        repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
+                .map(Invoice::getInvoiceId)
+                .filter(id -> id != null && !id.isBlank())
+                .ifPresent(invoiceCode -> applyPayment(invoiceCode, amount));
     }
 
     // ============================================================

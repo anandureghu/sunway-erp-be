@@ -5,9 +5,11 @@ import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemStockAdjustDTO;
 import com.erp.dto.inventory.ItemStockReceiveDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
+import com.erp.dto.inventory.ItemWarehouseStockRowDTO;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.inventory.ItemService;
+import com.erp.service.inventory.ItemWarehouseStockService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,10 +21,17 @@ import java.util.List;
 public class ItemController {
 
     private final ItemService service;
+    private final ItemWarehouseStockService itemWarehouseStockService;
     private final AuthContext auth;
 
-    public ItemController(ItemService service, FileStorageService fileStorageService, AuthContext auth) {
+    public ItemController(
+            ItemService service,
+            FileStorageService fileStorageService,
+            ItemWarehouseStockService itemWarehouseStockService,
+            AuthContext auth
+    ) {
         this.service = service;
+        this.itemWarehouseStockService = itemWarehouseStockService;
         this.auth = auth;
     }
 
@@ -67,6 +76,11 @@ public class ItemController {
     @GetMapping("/{id}")
     public ItemResponseDTO get(@PathVariable("id") Long id) {
         return service.getItem(id);
+    }
+
+    @GetMapping("/{id}/warehouse-stock")
+    public List<ItemWarehouseStockRowDTO> listWarehouseStock(@PathVariable("id") Long id) {
+        return itemWarehouseStockService.listStockForItem(id, auth.getCurrentCompanyId());
     }
 
     @PostMapping("/{id}/stock/receive")

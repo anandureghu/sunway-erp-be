@@ -16,6 +16,11 @@ import java.math.BigDecimal;
 public class PurchaseRequisitionItemDTO {
     private Long itemId;
     private Integer requestedQty;
+    /** Snapshot of item cost price (populated on read). */
+    private BigDecimal actualItemPrice;
+    /** Optional other / negotiated unit cost. */
+    private BigDecimal otherUnitCost;
+    /** Applied estimated unit cost. */
     private BigDecimal estimatedUnitCost;
     private String remarks;
 }

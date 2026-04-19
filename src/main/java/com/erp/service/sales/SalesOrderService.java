@@ -7,6 +7,7 @@ import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Customer;
 import com.erp.domain.inventory.Item;
+import com.erp.domain.inventory.Warehouse;
 import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.sales.SalesOrderItem;
 import com.erp.dto.sales.SalesOrderCreateDTO;
@@ -20,9 +21,11 @@ import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.CustomerRepository;
 import com.erp.repo.inventory.ItemRepository;
+import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CoaBalanceRules;
+import com.erp.service.inventory.ItemWarehouseStockService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +40,8 @@ public class SalesOrderService {
     private final SalesOrderRepository repo;
     private final CustomerRepository customerRepo;
     private final ItemRepository itemRepo;
+    private final WarehouseRepository warehouseRepo;
+    private final ItemWarehouseStockService itemWarehouseStockService;
     private final CompanyRepository companyRepo;
     private final BankAccountRepository bankAccountRepo;
     private final ChartOfAccountsRepository coaRepo;
@@ -48,6 +53,8 @@ public class SalesOrderService {
             SalesOrderRepository repo,
             CustomerRepository customerRepo,
             ItemRepository itemRepo,
+            WarehouseRepository warehouseRepo,
+            ItemWarehouseStockService itemWarehouseStockService,
             CompanyRepository companyRepo,
             BankAccountRepository bankAccountRepo,
             ChartOfAccountsRepository coaRepo,
@@ -58,6 +65,8 @@ public class SalesOrderService {
         this.repo = repo;
         this.customerRepo = customerRepo;
         this.itemRepo = itemRepo;
+        this.warehouseRepo = warehouseRepo;
+        this.itemWarehouseStockService = itemWarehouseStockService;
         this.companyRepo = companyRepo;
         this.bankAccountRepo = bankAccountRepo;
         this.coaRepo = coaRepo;
@@ -99,6 +108,10 @@ public class SalesOrderService {
             Item item = itemRepo.findById(i.getItemId())
                     .orElseThrow(() -> new RuntimeException("Item not found"));
 
+            Warehouse lineWh = resolveLineWarehouse(i.getWarehouseId(), companyId);
+            itemWarehouseStockService.assertAvailableForSale(
+                    item.getId(), lineWh.getId(), i.getQuantity(), companyId);
+
             BigDecimal qty = BigDecimal.valueOf(i.getQuantity());
             BigDecimal unitPrice = BigDecimal.valueOf(i.getUnitPrice());
             BigDecimal gross = unitPrice.multiply(qty);
@@ -115,6 +128,7 @@ public class SalesOrderService {
 
             return SalesOrderItem.builder()
                     .item(item)
+                    .warehouse(lineWh)
                     .quantity(i.getQuantity())
                     .unitPrice(unitPrice)
                     .lineSubtotal(lineSubtotal)
@@ -167,12 +181,13 @@ public class SalesOrderService {
         }
 
         order.setStatus("CONFIRMED");
+        Long companyId = auth.getCurrentCompanyId();
         order.getItems().forEach(i -> {
-            Item item = i.getItem();
-            item.setReserved(i.getQuantity());
-            item.setAvailable(item.getAvailable() - i.getQuantity());
+            Warehouse wh = i.getWarehouse() != null ? i.getWarehouse() : i.getItem().getWarehouse();
+            itemWarehouseStockService.decreaseForConfirmedSale(
+                    i.getItem().getId(), wh.getId(), i.getQuantity(), companyId);
         });
-        
+
         return toDTO(repo.save(order));
     }
 
@@ -211,9 +226,15 @@ public class SalesOrderService {
         // Clear existing items (aggregate root rule)
         order.getItems().clear();
 
+        Long companyId = auth.getCurrentCompanyId();
+
         List<SalesOrderItem> updatedItems = dto.getItems().stream().map(i -> {
             Item item = itemRepo.findById(i.getItemId())
                     .orElseThrow(() -> new RuntimeException("Item not found"));
+
+            Warehouse lineWh = resolveLineWarehouse(i.getWarehouseId(), companyId);
+            itemWarehouseStockService.assertAvailableForSale(
+                    item.getId(), lineWh.getId(), i.getQuantity(), companyId);
 
             BigDecimal qty = BigDecimal.valueOf(i.getQuantity());
             BigDecimal unitPrice = BigDecimal.valueOf(i.getUnitPrice());
@@ -231,6 +252,7 @@ public class SalesOrderService {
 
             return SalesOrderItem.builder()
                     .item(item)
+                    .warehouse(lineWh)
                     .quantity(i.getQuantity())
                     .unitPrice(unitPrice)
                     .lineSubtotal(lineSubtotal)
@@ -278,6 +300,29 @@ public class SalesOrderService {
     // --------------------------
     // Helpers
     // --------------------------
+    private Warehouse resolveLineWarehouse(Long warehouseId, Long companyId) {
+        if (warehouseId == null) {
+            throw new RuntimeException("warehouseId is required for each order line");
+        }
+        return warehouseRepo.findById(warehouseId)
+                .filter(w -> w.getCompany().getId().equals(companyId))
+                .orElseThrow(() -> new RuntimeException("Warehouse not found"));
+    }
+
+    private Long resolveLineWarehouseId(SalesOrderItem i) {
+        if (i.getWarehouse() != null) {
+            return i.getWarehouse().getId();
+        }
+        return i.getItem().getWarehouse().getId();
+    }
+
+    private String resolveLineWarehouseName(SalesOrderItem i) {
+        if (i.getWarehouse() != null) {
+            return i.getWarehouse().getName();
+        }
+        return i.getItem().getWarehouse().getName();
+    }
+
     private SalesOrder getEntity(Long id) {
         return repo.findById(id)
                 .filter(o -> o.getCompany().getId().equals(auth.getCurrentCompanyId()))
@@ -324,8 +369,8 @@ public class SalesOrderService {
                                         .taxRate(i.getTaxRate() == null ? BigDecimal.ZERO : i.getTaxRate())
                                         .taxAmount(i.getTaxAmount() == null ? BigDecimal.ZERO : i.getTaxAmount())
                                         .lineTotal(i.getLineTotal())
-                                        .warehouseId(i.getItem().getWarehouse().getId())
-                                        .warehouseName(i.getItem().getWarehouse().getName())
+                                        .warehouseId(resolveLineWarehouseId(i))
+                                        .warehouseName(resolveLineWarehouseName(i))
                                         .build()
                         ).toList()
                 )
