@@ -3,6 +3,7 @@ package com.erp.service.inventory;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
+import com.erp.domain.inventory.ItemWarehouseStock;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -36,14 +37,16 @@ public class ItemService {
     private final WarehouseRepository warehouseRepo;
     private final AuthContext auth;
     private final FileStorageService fileStorageService;
-
+    private final ItemWarehouseStockService itemWarehouseStockService;
 
     public ItemService(
             ItemRepository itemRepo,
             UserRepository userRepo,
             CompanyRepository companyRepo,
             AuthContext auth,
-            WarehouseRepository warehouseRepo, FileStorageService fileStorageService
+            WarehouseRepository warehouseRepo,
+            FileStorageService fileStorageService,
+            ItemWarehouseStockService itemWarehouseStockService
     ) {
         this.itemRepo = itemRepo;
         this.userRepo = userRepo;
@@ -51,6 +54,7 @@ public class ItemService {
         this.auth = auth;
         this.warehouseRepo = warehouseRepo;
         this.fileStorageService = fileStorageService;
+        this.itemWarehouseStockService = itemWarehouseStockService;
     }
 
     // --------------------------
@@ -101,6 +105,7 @@ public class ItemService {
                 .build();
 
         Item saved = itemRepo.save(item);
+        itemWarehouseStockService.ensureInitialRowForNewItem(saved);
 
         // 2️⃣ Upload image AFTER item exists
         if (image != null && !image.isEmpty()) {
@@ -133,6 +138,8 @@ public class ItemService {
         Warehouse warehouse = warehouseRepo.findById(dto.getWarehouse())
                 .orElseThrow(() -> new RuntimeException("Warehouse not found"));
 
+        int oldTotalQty = item.getQuantity() == null ? 0 : item.getQuantity();
+
         item.setName(dto.getName());
         item.setCategory(dto.getCategory());
         item.setSubCategory(dto.getSubCategory());
@@ -151,6 +158,15 @@ public class ItemService {
         item.setUpdatedAt(Instant.now());
 
         Item saved = itemRepo.save(item);
+
+        if (dto.getQuantity() != null) {
+            int newTotal = dto.getQuantity();
+            int delta = newTotal - oldTotalQty;
+            if (delta != 0) {
+                itemWarehouseStockService.applyDeltaToDefaultWarehouse(saved, delta);
+            }
+        }
+        itemWarehouseStockService.syncItemAggregates(saved);
 
         if (image != null && !image.isEmpty()) {
             FileUploadResult upload = fileStorageService.upload(
@@ -216,16 +232,14 @@ public class ItemService {
             throw new IllegalArgumentException("quantityReceived must be positive");
         }
 
-        if (dto.getWarehouseId() != null
-                && !dto.getWarehouseId().equals(item.getWarehouse().getId())) {
-            throw new IllegalArgumentException("Warehouse does not match this item");
-        }
+        Long whId = dto.getWarehouseId() != null ? dto.getWarehouseId() : item.getWarehouse().getId();
+        itemWarehouseStockService.addIncomingStock(
+                item.getId(),
+                whId,
+                dto.getQuantityReceived(),
+                auth.getCurrentCompanyId());
 
-        int add = dto.getQuantityReceived();
-        int q = item.getQuantity() == null ? 0 : item.getQuantity();
-        int a = item.getAvailable() == null ? 0 : item.getAvailable();
-        item.setQuantity(q + add);
-        item.setAvailable(a + add);
+        item = itemRepo.findById(item.getId()).orElseThrow();
 
         if (dto.getCostPrice() != null) {
             item.setCostPrice(dto.getCostPrice());
@@ -245,24 +259,27 @@ public class ItemService {
         User user = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (dto.getWarehouseId() != null
-                && !dto.getWarehouseId().equals(item.getWarehouse().getId())) {
-            throw new IllegalArgumentException("Warehouse does not match this item");
+        Long whId = dto.getWarehouseId() != null ? dto.getWarehouseId() : item.getWarehouse().getId();
+
+        Warehouse targetWh = warehouseRepo.findById(whId)
+                .orElseThrow(() -> new RuntimeException("Warehouse not found"));
+        if (!targetWh.getCompany().getId().equals(item.getCompany().getId())) {
+            throw new IllegalArgumentException("Warehouse does not belong to this company");
         }
 
-        int currentQty = item.getQuantity() == null ? 0 : item.getQuantity();
-        int reserved = item.getReserved() == null ? 0 : item.getReserved();
+        ItemWarehouseStock stockRow = itemWarehouseStockService.getOrCreateStockRow(item, targetWh);
+        int currentOnHand = stockRow.getQuantityOnHand() == null ? 0 : stockRow.getQuantityOnHand();
 
-        int newQty;
+        int newRowQty;
         if (dto.getNewQuantity() != null) {
-            newQty = dto.getNewQuantity();
+            newRowQty = dto.getNewQuantity();
         } else if (dto.getAdjustmentQuantity() != null) {
-            newQty = currentQty + dto.getAdjustmentQuantity();
+            newRowQty = currentOnHand + dto.getAdjustmentQuantity();
         } else {
             throw new IllegalArgumentException("Either newQuantity or adjustmentQuantity is required");
         }
 
-        if (newQty < 0) {
+        if (newRowQty < 0) {
             throw new IllegalArgumentException("Resulting quantity cannot be negative");
         }
 
@@ -270,8 +287,13 @@ public class ItemService {
             throw new IllegalArgumentException("Reason is required");
         }
 
-        item.setQuantity(newQty);
-        item.setAvailable(Math.max(0, newQty - reserved));
+        itemWarehouseStockService.adjustRowToAbsoluteQuantity(
+                item.getId(),
+                whId,
+                newRowQty,
+                auth.getCurrentCompanyId());
+
+        item = itemRepo.findById(item.getId()).orElseThrow();
         item.setUpdatedBy(user);
         item.setUpdatedAt(Instant.now());
 

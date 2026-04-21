@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GoodsReceiptItemDTO {
     private Long itemId;
+    private Long warehouseId;
     private Integer receivedQty;
     private Integer acceptedQty;
     private Integer rejectedQty;

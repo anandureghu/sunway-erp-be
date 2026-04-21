@@ -17,7 +17,9 @@ import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
 import com.erp.service.finance.VendorPayableService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +36,7 @@ public class PurchaseOrderService {
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
     private final VendorPayableService vendorPayableService;
+    private final PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler;
     private final AuthContext auth;
 
     public PurchaseOrderService(
@@ -43,6 +46,7 @@ public class PurchaseOrderService {
             CompanyRepository companyRepo,
             UserRepository userRepo,
             VendorPayableService vendorPayableService,
+            @Lazy PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler,
             AuthContext auth
     ) {
         this.repo = repo;
@@ -51,6 +55,7 @@ public class PurchaseOrderService {
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
         this.vendorPayableService = vendorPayableService;
+        this.purchaseInvoiceGenerationScheduler = purchaseInvoiceGenerationScheduler;
         this.auth = auth;
     }
 
@@ -70,13 +75,17 @@ public class PurchaseOrderService {
             Item item = itemRepo.findById(i.getItemId())
                     .orElseThrow(() -> new RuntimeException("Item not found"));
 
-            BigDecimal lineTotal = i.getUnitCost()
+            PurchaseLinePricing.Resolved r = PurchaseLinePricing.resolveOrderLine(
+                    item, i.getOtherUnitCost(), i.getUnitCost());
+            BigDecimal lineTotal = r.appliedUnitCost()
                     .multiply(BigDecimal.valueOf(i.getQuantity()));
 
             return PurchaseOrderItem.builder()
                     .item(item)
                     .quantity(i.getQuantity())
-                    .unitCost(i.getUnitCost())
+                    .actualItemPrice(r.actualItemPrice())
+                    .otherUnitCost(r.otherUnitCost())
+                    .unitCost(r.appliedUnitCost())
                     .lineTotal(lineTotal)
                     .build();
         }).toList();
@@ -97,7 +106,9 @@ public class PurchaseOrderService {
                 .build();
 
         PurchaseOrder saved = repo.save(po);
+        repo.flush();
         vendorPayableService.createVendorPayableForPurchaseOrder(saved);
+        purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(saved.getId());
         return toDTO(saved);
     }
 
@@ -142,13 +153,17 @@ public class PurchaseOrderService {
             Item item = itemRepo.findById(i.getItemId())
                     .orElseThrow();
 
-            BigDecimal lineTotal = i.getUnitCost()
+            PurchaseLinePricing.Resolved r = PurchaseLinePricing.resolveOrderLine(
+                    item, i.getOtherUnitCost(), i.getUnitCost());
+            BigDecimal lineTotal = r.appliedUnitCost()
                     .multiply(BigDecimal.valueOf(i.getQuantity()));
 
             return PurchaseOrderItem.builder()
                     .item(item)
                     .quantity(i.getQuantity())
-                    .unitCost(i.getUnitCost())
+                    .actualItemPrice(r.actualItemPrice())
+                    .otherUnitCost(r.otherUnitCost())
+                    .unitCost(r.appliedUnitCost())
                     .lineTotal(lineTotal)
                     .build();
         }).toList();
@@ -201,8 +216,13 @@ public class PurchaseOrderService {
                         po.getItems().stream().map(i ->
                                 PurchaseOrderItemDTO.builder()
                                         .itemId(i.getItem().getId())
+                                        .itemName(i.getItem().getName())
+                                        .itemDescription(i.getItem().getDescription())
                                         .quantity(i.getQuantity())
+                                        .actualItemPrice(i.getActualItemPrice())
+                                        .otherUnitCost(i.getOtherUnitCost())
                                         .unitCost(i.getUnitCost())
+                                        .unitPrice(i.getUnitCost())
                                         .lineTotal(i.getLineTotal())
                                         .build()
                         ).toList()

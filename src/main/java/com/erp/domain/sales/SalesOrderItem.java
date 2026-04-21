@@ -1,6 +1,7 @@
 package com.erp.domain.sales;
 
 import com.erp.domain.inventory.Item;
+import com.erp.domain.inventory.Warehouse;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -22,6 +23,11 @@ public class SalesOrderItem {
     @ManyToOne(optional = false)
     @JoinColumn(name = "item_id")
     private Item item;
+
+    /** Fulfillment warehouse; legacy rows may be null. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "warehouse_id")
+    private Warehouse warehouse;
 
     private Integer quantity;
 

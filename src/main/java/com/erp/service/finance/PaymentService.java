@@ -254,6 +254,8 @@ public class PaymentService {
         );
         Payment saved = paymentRepo.save(payment);
         postVendorPaymentToAccounting(saved);
+        invoiceService.applyPurchaseInvoicePaymentForPurchaseOrder(
+                saved.getPurchaseOrderId(), saved.getAmount());
         return toDTO(saved);
     }
 

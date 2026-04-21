@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Goods Receipt</title>
+    <style type="text/css">
+        @page { size: A4; margin: 24px; }
+        body { font-family: Helvetica, Arial, sans-serif; color: #1F2937; font-size: 12px; }
+        h1 { font-size: 20px; margin: 0 0 8px 0; }
+        .muted { color: #6B7280; font-size: 11px; }
+        table.meta { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
+        table.meta td { padding: 4px 8px 4px 0; vertical-align: top; }
+        table.lines { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        table.lines th, table.lines td {
+            border: 1px solid #E5E7EB; padding: 8px; text-align: left;
+        }
+        table.lines th { background: #F3F4F6; font-size: 11px; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+<div>
+    <h1>Goods receipt</h1>
+    <p class="muted" th:text="${company?.companyName}">Company</p>
+</div>
+
+<table class="meta">
+    <tr>
+        <td><strong>Receipt #</strong></td>
+        <td th:text="'GR-' + ${receipt.id}">GR-1</td>
+    </tr>
+    <tr>
+        <td><strong>Received at</strong></td>
+        <td th:text="${receipt.receivedAt}">—</td>
+    </tr>
+    <tr th:if="${purchaseOrder != null}">
+        <td><strong>Purchase order</strong></td>
+        <td th:text="${purchaseOrder.orderNumber}">PO-1</td>
+    </tr>
+    <tr th:if="${purchaseOrder != null && purchaseOrder.supplier != null}">
+        <td><strong>Supplier</strong></td>
+        <td th:text="${purchaseOrder.supplier.vendorName}">Supplier</td>
+    </tr>
+    <tr th:if="${receipt.receivedBy != null}">
+        <td><strong>Received by</strong></td>
+        <td th:text="${receipt.receivedBy.fullName}">User</td>
+    </tr>
+</table>
+
+<table class="lines">
+    <thead>
+    <tr>
+        <th>SKU</th>
+        <th>Item</th>
+        <th>Received</th>
+        <th>Accepted</th>
+        <th>Rejected</th>
+        <th>Remarks</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="line : ${items}">
+        <td th:text="${line.item?.sku}">—</td>
+        <td th:text="${line.item?.name}">—</td>
+        <td th:text="${line.receivedQty}">0</td>
+        <td th:text="${line.acceptedQty}">0</td>
+        <td th:text="${line.rejectedQty}">0</td>
+        <td th:text="${line.remarks}">—</td>
+    </tr>
+    </tbody>
+</table>
+</body>
+</html>

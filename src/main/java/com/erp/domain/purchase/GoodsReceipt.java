@@ -39,6 +39,10 @@ public class GoodsReceipt {
     @JoinColumn(name = "goods_receipt_id")
     private List<GoodsReceiptItem> items;
 
+    /** Public URL of generated goods receipt PDF (stored after receiving). */
+    @Column(name = "document_pdf_url", length = 1024)
+    private String documentPdfUrl;
+
     @PrePersist
     void onCreate() {
         receivedAt = Instant.now();

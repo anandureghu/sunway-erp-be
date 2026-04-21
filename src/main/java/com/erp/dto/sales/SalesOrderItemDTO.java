@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 @Builder
 public class SalesOrderItemDTO {
     private Long itemId;
+    /** Required for new orders: ship from this warehouse. */
+    private Long warehouseId;
     private Integer quantity;
     private Double unitPrice;
     private Double discountPercent;
