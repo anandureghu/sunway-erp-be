@@ -172,10 +172,22 @@ public class InvoiceService {
     // CREATE MANUAL INVOICE
     // ============================================================
     public InvoiceResponse createInvoice(InvoiceRequest req) {
-        return createInvoice(req, null);
+        return createInvoice(req, null, false);
     }
 
     public InvoiceResponse createInvoice(InvoiceRequest req, MultipartFile supplierDocument) {
+        return createInvoice(req, supplierDocument, false);
+    }
+
+    private InvoiceResponse createInvoice(
+            InvoiceRequest req,
+            MultipartFile supplierDocument,
+            boolean allowSystemSalesInvoiceCreation
+    ) {
+        if (req.getType() == InvoiceType.SALES && !allowSystemSalesInvoiceCreation) {
+            throw new RuntimeException(
+                    "Manual SALES invoice creation is disabled. Sales invoices are auto-created from order confirmation.");
+        }
 
         Company company = companyRepo.findById(auth.getCurrentCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
@@ -411,7 +423,7 @@ public class InvoiceService {
         req.setBankAccountId(order.getBankAccount().getId());
         req.setItemDescription("Auto-generated from sales order " + order.getOrderNumber());
         req.setNotesRemarks("Invoice created on sales order confirmation.");
-        InvoiceResponse response = createInvoice(req);
+        InvoiceResponse response = createInvoice(req, null, true);
         Invoice saved = repo.findById(response.getId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found after creation"));
         saved.setSubtotalAmount(order.getSubtotalAmount() == null ? BigDecimal.ZERO : order.getSubtotalAmount());
@@ -465,7 +477,7 @@ public class InvoiceService {
         req.setNotesRemarks("Auto-generated when purchase order was created (internal cross-check).");
         req.setDocumentSource(InvoiceDocumentSource.GENERATED);
 
-        InvoiceResponse response = createInvoice(req);
+        InvoiceResponse response = createInvoice(req, null, false);
         Invoice saved = repo.findById(response.getId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found after creation"));
         saved.setSubtotalAmount(total);
