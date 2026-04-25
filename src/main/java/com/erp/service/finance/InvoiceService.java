@@ -5,6 +5,7 @@ import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.finance.InvoiceDocumentSource;
 import com.erp.domain.finance.Payment;
+import com.erp.domain.finance.Transaction;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Customer;
@@ -18,6 +19,7 @@ import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
+import com.erp.repo.finance.TransactionRepository;
 import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
@@ -33,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
@@ -52,6 +55,7 @@ public class InvoiceService {
     private final BankAccountRepository bankAccountRepo;
     private final SalesOrderRepository salesOrderRepo;
     private final PaymentRepository paymentRepo;
+    private final TransactionRepository transactionRepo;
     private final InvoicePDFService pdfService;
     private final FileStorageService fileStorageService;
     private final AuthContext auth;
@@ -59,6 +63,86 @@ public class InvoiceService {
     private final PurchaseOrderService purchaseOrderService;
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final CustomerEmailService customerEmailService;
+    private final TransactionService transactionService;
+
+    @Transactional
+    public void handleSalesOrderCancellation(Long salesOrderId) {
+        if (salesOrderId == null) {
+            return;
+        }
+
+        Optional<Invoice> invoiceOpt = repo.findByOrderIdAndType(salesOrderId, InvoiceType.SALES);
+        if (invoiceOpt.isEmpty()) {
+            return;
+        }
+
+        Invoice invoice = invoiceOpt.get();
+        if ("CANCELLED".equalsIgnoreCase(invoice.getStatus())) {
+            return;
+        }
+
+        List<Payment> payments = paymentRepo.findByInvoiceId(invoice.getInvoiceId());
+        for (Payment payment : payments) {
+            String paymentId = payment.getId() != null ? String.valueOf(payment.getId()) : null;
+            if (paymentId != null) {
+                List<Transaction> reversals =
+                        transactionRepo.findByPaymentIdAndTransactionType(paymentId, "PAYMENT_REVERSAL");
+                if (reversals.isEmpty()) {
+                    List<Transaction> originalTxns = transactionRepo.findByPaymentId(paymentId);
+                    for (Transaction tx : originalTxns) {
+                        if ("PAYMENT_REVERSAL".equalsIgnoreCase(tx.getTransactionType())) {
+                            continue;
+                        }
+                        if (tx.getDebitAccount() == null || tx.getCreditAccount() == null) {
+                            continue;
+                        }
+                        transactionService.createTransactionForPayment(
+                                payment.getId(),
+                                payment.getCompany().getId(),
+                                tx.getAmount(),
+                                tx.getCreditAccount().getId(),
+                                tx.getDebitAccount().getId(),
+                                LocalDate.now(),
+                                "PAYMENT_REVERSAL");
+                    }
+                }
+            }
+
+            if ("PENDING_REQUEST".equalsIgnoreCase(payment.getPaymentMethod())) {
+                payment.setPaymentMethod("CANCELLED");
+            }
+            payment.setNotes(
+                    (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
+                            + "Sales order cancelled; accounting reversed where applicable");
+            paymentRepo.save(payment);
+        }
+
+        // Ensure cancellation is reflected in transactions/COA even when no payment transaction exists yet.
+        if (invoice.getDebitAccount() != null
+                && invoice.getCreditAccount() != null
+                && invoice.getAmount() != null
+                && invoice.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+            try {
+                transactionService.createSalesOrderCancelReversal(
+                        invoice.getCompany().getId(),
+                        salesOrderId,
+                        invoice.getAmount(),
+                        invoice.getDebitAccount().getId(),
+                        invoice.getCreditAccount().getId()
+                );
+            } catch (ResponseStatusException ignored) {
+                // If reversal already exists, keep cancellation idempotent.
+            }
+        }
+
+        invoice.setStatus("CANCELLED");
+        invoice.setOpenAmount(BigDecimal.ZERO);
+        invoice.setOutstanding(BigDecimal.ZERO);
+        invoice.setNotesRemarks(
+                (invoice.getNotesRemarks() == null ? "" : invoice.getNotesRemarks() + " | ")
+                        + "Cancelled from sales order cancellation");
+        repo.save(invoice);
+    }
 
     // ============================================================
     // GET OR CREATE PDF (IDEMPOTENT)

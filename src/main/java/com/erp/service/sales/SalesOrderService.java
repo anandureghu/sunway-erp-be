@@ -292,6 +292,19 @@ public class SalesOrderService {
             throw new RuntimeException("Sales order is already cancelled");
         }
 
+        if (!"DRAFT".equals(order.getStatus()) && !"CONFIRMED".equals(order.getStatus())) {
+            throw new RuntimeException("Only DRAFT or CONFIRMED orders can be cancelled");
+        }
+
+        if ("CONFIRMED".equals(order.getStatus())) {
+            Long companyId = auth.getCurrentCompanyId();
+            order.getItems().forEach(i -> {
+                Warehouse wh = i.getWarehouse() != null ? i.getWarehouse() : i.getItem().getWarehouse();
+                itemWarehouseStockService.restoreForCancelledSale(
+                        i.getItem().getId(), wh.getId(), i.getQuantity(), companyId);
+            });
+        }
+
         order.setStatus("CANCELLED");
         return toDTO(repo.save(order));
     }

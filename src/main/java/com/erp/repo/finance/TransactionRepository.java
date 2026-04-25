@@ -6,7 +6,10 @@ import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
     List<Transaction> findByCompanyId(Long companyId);
+    List<Transaction> findByPaymentId(String paymentId);
+    List<Transaction> findByPaymentIdAndTransactionType(String paymentId, String transactionType);
     boolean existsByPaymentId(String paymentId);
+    boolean existsByRelatedIdAndTransactionType(Long relatedId, String transactionType);
 
     boolean existsByRelatedSubIdAndTransactionType(Long relatedSubId, String transactionType);
 //    List<Transaction> findByTransactionCode(String code);

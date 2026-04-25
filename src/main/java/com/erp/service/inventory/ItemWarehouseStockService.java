@@ -180,6 +180,18 @@ public class ItemWarehouseStockService {
         syncItemAggregates(item);
     }
 
+    public void restoreForCancelledSale(Long itemId, Long warehouseId, int quantity, Long companyId) {
+        if (quantity <= 0) {
+            return;
+        }
+        Item item = loadItemForCompany(itemId, companyId);
+        Warehouse wh = loadWarehouseForCompany(warehouseId, companyId);
+        ItemWarehouseStock row = getOrCreateStockRow(item, wh);
+        row.setQuantityOnHand(nz(row.getQuantityOnHand()) + quantity);
+        stockRepo.save(row);
+        syncItemAggregates(item);
+    }
+
     @Transactional(readOnly = true)
     public List<ItemWarehouseStockRowDTO> listStockForItem(Long itemId, Long companyId) {
         Item item = loadItemForCompany(itemId, companyId);

@@ -54,6 +54,8 @@ public class SalesOrderController {
 
     @PostMapping("/{id}/cancel")
     public SalesOrderResponseDTO cancel(@PathVariable Long id) {
-        return service.cancel(id);
+        SalesOrderResponseDTO cancelled = service.cancel(id);
+        invoiceService.handleSalesOrderCancellation(id);
+        return cancelled;
     }
 }
