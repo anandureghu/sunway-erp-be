@@ -151,7 +151,10 @@ public class ItemService {
         item.setCostPrice(dto.getCostPrice());
         item.setSellingPrice(dto.getSellingPrice());
         item.setStatus(dto.getStatus());
-        item.setImageUrl(dto.getImageUrl());
+        // Preserve existing image on normal updates unless an explicit value is provided.
+        if (dto.getImageUrl() != null) {
+            item.setImageUrl(dto.getImageUrl());
+        }
         item.setDescription(dto.getDescription());
         item.setUpdatedBy(user);
         item.setWarehouse(warehouse);
