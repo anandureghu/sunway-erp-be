@@ -37,4 +37,6 @@ public class SalaryResponseDTO {
     /* ================= CURRENCY (NEW) ================= */
     private String currencyCode;
     private String currencySymbol;
+    private Boolean currencyConfigured;
+    private String currencyWarning;
 }

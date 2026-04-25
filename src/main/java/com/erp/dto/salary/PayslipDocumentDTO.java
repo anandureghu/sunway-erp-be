@@ -21,6 +21,8 @@ public class PayslipDocumentDTO {
     // ── Currency ───────────────────────────────────
     private String currencyCode;
     private String currencySymbol;
+    private Boolean currencyConfigured;
+    private String currencyWarning;
 
     // ── Payroll ────────────────────────────────────
     private String payrollCode;
