@@ -173,7 +173,9 @@ public class PurchaseOrderService {
         }
 
         po.setOrderDate(dto.getOrderDate());
-        po.setItems(items);
+        // Keep the same managed collection instance for orphanRemoval/all-delete-orphan.
+        po.getItems().clear();
+        po.getItems().addAll(items);
         po.setTotalAmount(total);
 
         return toDTO(repo.save(po));

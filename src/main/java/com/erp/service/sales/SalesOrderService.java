@@ -272,7 +272,9 @@ public class SalesOrderService {
         }
 
         order.setOrderDate(dto.getOrderDate());
-        order.setItems(updatedItems);
+        // Keep the same managed collection instance for orphanRemoval/all-delete-orphan.
+        order.getItems().clear();
+        order.getItems().addAll(updatedItems);
         order.setSubtotalAmount(subtotal.setScale(2, RoundingMode.HALF_UP));
         order.setDiscountAmount(discountTotal.setScale(2, RoundingMode.HALF_UP));
         order.setTaxAmount(taxTotal.setScale(2, RoundingMode.HALF_UP));
