@@ -30,8 +30,24 @@ public class SalesOrderController {
     @PostMapping("/{id}/confirm")
     public SalesOrderResponseDTO confirm(@PathVariable("id") Long id) {
         SalesOrderResponseDTO confirmed = service.confirm(id);
-        invoiceService.createInvoiceForConfirmedSalesOrder(id);
-        return confirmed;
+        try {
+            invoiceService.createInvoiceForConfirmedSalesOrder(id);
+            return confirmed;
+        } catch (RuntimeException ex) {
+            try {
+                service.cancel(id);
+                invoiceService.handleSalesOrderCancellation(id);
+            } catch (RuntimeException rollbackEx) {
+                throw new RuntimeException(
+                        "Sales order confirmation failed during invoice creation and rollback also failed",
+                        rollbackEx
+                );
+            }
+            throw new RuntimeException(
+                    "Sales order confirmation failed during invoice creation and has been rolled back",
+                    ex
+            );
+        }
     }
 
     @GetMapping("/{id}")
@@ -47,7 +63,7 @@ public class SalesOrderController {
     @PutMapping("/{id}")
     public SalesOrderResponseDTO update(
             @PathVariable Long id,
-            @RequestBody SalesOrderUpdateDTO dto
+            @Valid @RequestBody SalesOrderUpdateDTO dto
     ) {
         return service.update(id, dto);
     }

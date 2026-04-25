@@ -216,6 +216,9 @@ public class SalesOrderService {
         if (!"DRAFT".equals(order.getStatus())) {
             throw new RuntimeException("Only DRAFT sales orders can be updated");
         }
+        if (dto.getItems() == null || dto.getItems().isEmpty()) {
+            throw new RuntimeException("Sales order must have at least one item");
+        }
 
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal discountTotal = BigDecimal.ZERO;
