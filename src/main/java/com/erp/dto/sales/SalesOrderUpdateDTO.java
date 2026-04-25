@@ -15,6 +15,8 @@ import java.util.List;
 public class SalesOrderUpdateDTO {
 
     private LocalDate orderDate;
+    private LocalDate invoiceDueDate;
+    private String shippingAddress;
     @NotEmpty(message = "Sales order must have at least one item")
     @Valid
     private List<SalesOrderItemDTO> items;

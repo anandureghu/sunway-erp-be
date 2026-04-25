@@ -39,6 +39,9 @@ public class SalesOrder {
     @Column(nullable = false)
     private LocalDate invoiceDueDate;
 
+    @Column(length = 1000)
+    private String shippingAddress;
+
     @Column(nullable = false)
     private String status; // DRAFT, CONFIRMED, CANCELLED
 

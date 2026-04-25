@@ -37,9 +37,18 @@ public class Shipment {
 
     private String carrierName;
     private String trackingNumber;
+    private String vehicleNumber;
+    private String driverName;
+    private String driverPhone;
+    private String estimatedDeliveryDate;
+    private String deliveryAddress;
+    private String notes;
 
     private Instant dispatchedAt;
+    private Instant inTransitAt;
+    private Instant outForDeliveryAt;
     private Instant deliveredAt;
+    private Instant failedDeliveryAt;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")
@@ -54,6 +63,10 @@ public class Shipment {
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "shipment_id")
     private List<ShipmentItem> items;
+
+    @OneToMany(mappedBy = "shipment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("eventAt ASC, id ASC")
+    private List<ShipmentTrackingEvent> trackingEvents;
 
     @PrePersist
     void onCreate() {

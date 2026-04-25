@@ -2,6 +2,7 @@ package com.erp.controller.sales;
 
 import com.erp.dto.sales.ShipmentCreateDTO;
 import com.erp.dto.sales.ShipmentResponseDTO;
+import com.erp.dto.sales.ShipmentTrackingEventCreateDTO;
 import com.erp.service.sales.ShipmentService;
 import org.springframework.web.bind.annotation.*;
 
@@ -40,9 +41,38 @@ public class ShipmentController {
         return service.markDelivered(id);
     }
 
+    @PostMapping("/{id}/out-for-delivery")
+    public ShipmentResponseDTO markOutForDelivery(@PathVariable("id") Long id) {
+        return service.markOutForDelivery(id);
+    }
+
+    @PostMapping("/{id}/failed-delivery")
+    public ShipmentResponseDTO markFailedDelivery(
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) ShipmentTrackingEventCreateDTO dto
+    ) {
+        return service.markFailedDelivery(id, dto == null ? null : dto.getNotes());
+    }
+
     @PostMapping("/{id}/cancel")
     public ShipmentResponseDTO cancel(@PathVariable("id") Long id) {
         return service.cancel(id);
+    }
+
+    @PostMapping("/{id}/tracking-events")
+    public ShipmentResponseDTO addTrackingEvent(
+            @PathVariable("id") Long id,
+            @RequestBody ShipmentTrackingEventCreateDTO dto
+    ) {
+        return service.addTrackingUpdate(id, dto);
+    }
+
+    @PutMapping("/{id}")
+    public ShipmentResponseDTO updateDetails(
+            @PathVariable("id") Long id,
+            @RequestBody ShipmentCreateDTO dto
+    ) {
+        return service.updateDetails(id, dto);
     }
 
     @GetMapping("/{id}")

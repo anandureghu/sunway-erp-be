@@ -7,20 +7,26 @@ import com.erp.domain.inventory.Item;
 import com.erp.domain.sales.Picklist;
 import com.erp.domain.sales.Shipment;
 import com.erp.domain.sales.ShipmentItem;
+import com.erp.domain.sales.ShipmentTrackingEvent;
 import com.erp.dto.sales.ShipmentCreateDTO;
 import com.erp.dto.sales.ShipmentItemDTO;
 import com.erp.dto.sales.ShipmentResponseDTO;
+import com.erp.dto.sales.ShipmentTrackingEventCreateDTO;
+import com.erp.dto.sales.ShipmentTrackingEventDTO;
 import com.erp.repo.UserRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.sales.PicklistRepository;
 import com.erp.repo.sales.ShipmentRepository;
+import com.erp.repo.sales.ShipmentTrackingEventRepository;
 import com.erp.security.context.AuthContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @Transactional
@@ -31,6 +37,7 @@ public class ShipmentService {
     private final InvoiceRepository invoiceRepo;
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
+    private final ShipmentTrackingEventRepository trackingEventRepo;
     private final AuthContext auth;
 
     public ShipmentService(
@@ -39,6 +46,7 @@ public class ShipmentService {
             InvoiceRepository invoiceRepo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
+            ShipmentTrackingEventRepository trackingEventRepo,
             AuthContext auth
     ) {
         this.repo = repo;
@@ -46,6 +54,7 @@ public class ShipmentService {
         this.invoiceRepo = invoiceRepo;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
+        this.trackingEventRepo = trackingEventRepo;
         this.auth = auth;
     }
 
@@ -88,12 +97,21 @@ public class ShipmentService {
                 .status("CREATED")
                 .carrierName(dto.getCarrierName())
                 .trackingNumber(dto.getTrackingNumber())
+                .vehicleNumber(dto.getVehicleNumber())
+                .driverName(dto.getDriverName())
+                .driverPhone(dto.getDriverPhone())
+                .estimatedDeliveryDate(dto.getEstimatedDeliveryDate())
+                .deliveryAddress(resolveDeliveryAddress(dto.getDeliveryAddress(), picklist))
+                .notes(dto.getNotes())
                 .company(company)
                 .createdByUser(user)
                 .items(items)
+                .trackingEvents(new ArrayList<>())
                 .build();
 
-        return toDTO(repo.save(shipment));
+        Shipment saved = repo.save(shipment);
+        appendTrackingEvent(saved, "CREATED", "Origin", "Shipment created", Instant.now());
+        return toDTO(saved);
     }
 
     // --------------------------
@@ -108,16 +126,16 @@ public class ShipmentService {
         }
 
         s.setStatus("DISPATCHED");
-        s.setDispatchedAt(Instant.now());
+        Instant now = Instant.now();
+        s.setDispatchedAt(now);
         s.getItems().forEach(i -> {
             Item item = i.getItem();
             item.setReserved(0);
             item.setQuantity(item.getAvailable());
         });
 
-        // 🔥 Stock OUT will be added here later
-
-        return toDTO(repo.save(s));
+        appendTrackingEvent(s, "DISPATCHED", "Origin Dispatch Center", "Shipment dispatched", now);
+        return toDTO(s);
     }
 
     // --------------------------
@@ -132,7 +150,24 @@ public class ShipmentService {
         }
 
         s.setStatus("IN_TRANSIT");
-        return toDTO(repo.save(s));
+        Instant now = Instant.now();
+        s.setInTransitAt(now);
+        appendTrackingEvent(s, "IN_TRANSIT", "In transit", "Shipment is in transit", now);
+        return toDTO(s);
+    }
+
+    public ShipmentResponseDTO markOutForDelivery(Long id) {
+        Shipment s = getEntity(id);
+
+        if (!"IN_TRANSIT".equals(s.getStatus())) {
+            throw new RuntimeException("Shipment must be IN_TRANSIT first");
+        }
+
+        s.setStatus("OUT_FOR_DELIVERY");
+        Instant now = Instant.now();
+        s.setOutForDeliveryAt(now);
+        appendTrackingEvent(s, "OUT_FOR_DELIVERY", resolveEventLocation(s), "Shipment is out for delivery", now);
+        return toDTO(s);
     }
 
     // --------------------------
@@ -142,14 +177,60 @@ public class ShipmentService {
 
         Shipment s = getEntity(id);
 
-        if (!List.of("DISPATCHED", "IN_TRANSIT").contains(s.getStatus())) {
+        if (!List.of("DISPATCHED", "IN_TRANSIT", "OUT_FOR_DELIVERY").contains(s.getStatus())) {
             throw new RuntimeException("Shipment cannot be delivered in current state");
         }
 
         s.setStatus("DELIVERED");
-        s.setDeliveredAt(Instant.now());
+        Instant now = Instant.now();
+        s.setDeliveredAt(now);
+        appendTrackingEvent(s, "DELIVERED", resolveEventLocation(s), "Shipment delivered", now);
+        return toDTO(s);
+    }
 
-        return toDTO(repo.save(s));
+    public ShipmentResponseDTO markFailedDelivery(Long id, String notes) {
+        Shipment s = getEntity(id);
+
+        if (!List.of("DISPATCHED", "IN_TRANSIT", "OUT_FOR_DELIVERY").contains(s.getStatus())) {
+            throw new RuntimeException("Shipment cannot be marked failed in current state");
+        }
+
+        s.setStatus("FAILED_DELIVERY");
+        Instant now = Instant.now();
+        s.setFailedDeliveryAt(now);
+        appendTrackingEvent(s, "FAILED_DELIVERY", resolveEventLocation(s), notes, now);
+        return toDTO(s);
+    }
+
+    public ShipmentResponseDTO addTrackingUpdate(Long id, ShipmentTrackingEventCreateDTO dto) {
+        Shipment s = getEntity(id);
+        String status = normalizeStatus(dto.getStatus());
+        if (status != null && !status.isBlank() && !status.equals(s.getStatus())) {
+            throw new RuntimeException("Tracking update status must match current shipment status");
+        }
+        appendTrackingEvent(
+                s,
+                s.getStatus(),
+                dto.getLocation(),
+                dto.getNotes(),
+                dto.getEventAt() == null ? Instant.now() : dto.getEventAt()
+        );
+        return toDTO(s);
+    }
+
+    public ShipmentResponseDTO updateDetails(Long id, ShipmentCreateDTO dto) {
+        Shipment s = getEntity(id);
+
+        if (dto.getCarrierName() != null) s.setCarrierName(blankToNull(dto.getCarrierName()));
+        if (dto.getTrackingNumber() != null) s.setTrackingNumber(blankToNull(dto.getTrackingNumber()));
+        if (dto.getVehicleNumber() != null) s.setVehicleNumber(blankToNull(dto.getVehicleNumber()));
+        if (dto.getDriverName() != null) s.setDriverName(blankToNull(dto.getDriverName()));
+        if (dto.getDriverPhone() != null) s.setDriverPhone(blankToNull(dto.getDriverPhone()));
+        if (dto.getEstimatedDeliveryDate() != null) s.setEstimatedDeliveryDate(blankToNull(dto.getEstimatedDeliveryDate()));
+        if (dto.getDeliveryAddress() != null) s.setDeliveryAddress(blankToNull(dto.getDeliveryAddress()));
+        if (dto.getNotes() != null) s.setNotes(blankToNull(dto.getNotes()));
+
+        return toDTO(s);
     }
 
     // --------------------------
@@ -159,12 +240,13 @@ public class ShipmentService {
 
         Shipment s = getEntity(id);
 
-        if (!"CREATED".equals(s.getStatus())) {
-            throw new RuntimeException("Only CREATED shipments can be cancelled");
+        if (List.of("DELIVERED", "CANCELLED").contains(s.getStatus())) {
+            throw new RuntimeException("Delivered/cancelled shipments cannot be cancelled");
         }
 
         s.setStatus("CANCELLED");
-        return toDTO(repo.save(s));
+        appendTrackingEvent(s, "CANCELLED", resolveEventLocation(s), "Shipment cancelled", Instant.now());
+        return toDTO(s);
     }
 
     // --------------------------
@@ -192,7 +274,26 @@ public class ShipmentService {
         return "SH-" + System.currentTimeMillis();
     }
 
+    private String resolveDeliveryAddress(String dtoAddress, Picklist picklist) {
+        if (dtoAddress != null && !dtoAddress.isBlank()) {
+            return dtoAddress.trim();
+        }
+        String orderAddress = picklist.getSalesOrder().getShippingAddress();
+        if (orderAddress != null && !orderAddress.isBlank()) {
+            return orderAddress.trim();
+        }
+        return null;
+    }
+
+    private String resolveEventLocation(Shipment shipment) {
+        if (shipment.getDeliveryAddress() != null && !shipment.getDeliveryAddress().isBlank()) {
+            return shipment.getDeliveryAddress();
+        }
+        return "Unknown";
+    }
+
     private ShipmentResponseDTO toDTO(Shipment s) {
+        List<ShipmentTrackingEvent> events = trackingEventRepo.findByShipmentIdOrderByEventAtAscIdAsc(s.getId());
         return ShipmentResponseDTO.builder()
                 .id(s.getId())
                 .shipmentNumber(s.getShipmentNumber())
@@ -201,8 +302,18 @@ public class ShipmentService {
                 .status(s.getStatus())
                 .carrierName(s.getCarrierName())
                 .trackingNumber(s.getTrackingNumber())
+                .vehicleNumber(s.getVehicleNumber())
+                .driverName(s.getDriverName())
+                .driverPhone(s.getDriverPhone())
+                .estimatedDeliveryDate(s.getEstimatedDeliveryDate())
+                .deliveryAddress(s.getDeliveryAddress())
+                .notes(s.getNotes())
+                .createdAt(s.getCreatedAt())
                 .dispatchedAt(s.getDispatchedAt())
+                .inTransitAt(s.getInTransitAt())
+                .outForDeliveryAt(s.getOutForDeliveryAt())
                 .deliveredAt(s.getDeliveredAt())
+                .failedDeliveryAt(s.getFailedDeliveryAt())
                 .items(
                         s.getItems().stream()
                                 .map(i -> ShipmentItemDTO.builder()
@@ -211,6 +322,41 @@ public class ShipmentService {
                                         .build())
                                 .toList()
                 )
+                .trackingEvents(events.stream().map(this::toEventDTO).toList())
                 .build();
+    }
+
+    private void appendTrackingEvent(Shipment shipment, String status, String location, String notes, Instant eventAt) {
+        User user = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
+        trackingEventRepo.save(ShipmentTrackingEvent.builder()
+                .shipment(shipment)
+                .status(status)
+                .location(location)
+                .notes(notes)
+                .eventAt(eventAt)
+                .createdByUser(user)
+                .build());
+    }
+
+    private ShipmentTrackingEventDTO toEventDTO(ShipmentTrackingEvent event) {
+        return ShipmentTrackingEventDTO.builder()
+                .id(event.getId())
+                .status(event.getStatus())
+                .location(event.getLocation())
+                .notes(event.getNotes())
+                .eventAt(event.getEventAt())
+                .createdByUserId(event.getCreatedByUser() != null ? event.getCreatedByUser().getId() : null)
+                .build();
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null) return null;
+        return status.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String blankToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

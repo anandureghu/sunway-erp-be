@@ -153,6 +153,7 @@ public class SalesOrderService {
                 .customer(customer)
                 .orderDate(dto.getOrderDate())
                 .invoiceDueDate(dto.getInvoiceDueDate())
+                .shippingAddress(dto.getShippingAddress())
                 .status("DRAFT")
                 .subtotalAmount(subtotal.setScale(2, RoundingMode.HALF_UP))
                 .discountAmount(discountTotal.setScale(2, RoundingMode.HALF_UP))
@@ -274,7 +275,13 @@ public class SalesOrderService {
             total = total.add(li.getLineTotal());
         }
 
-        order.setOrderDate(dto.getOrderDate());
+        if (dto.getOrderDate() != null) {
+            order.setOrderDate(dto.getOrderDate());
+        }
+        if (dto.getInvoiceDueDate() != null) {
+            order.setInvoiceDueDate(dto.getInvoiceDueDate());
+        }
+        order.setShippingAddress(dto.getShippingAddress());
         // Keep the same managed collection instance for orphanRemoval/all-delete-orphan.
         order.getItems().clear();
         order.getItems().addAll(updatedItems);
@@ -361,6 +368,7 @@ public class SalesOrderService {
                 .customerPhone(so.getCustomer().getPhoneNo())
                 .orderDate(so.getOrderDate())
                 .invoiceDueDate(so.getInvoiceDueDate())
+                .shippingAddress(so.getShippingAddress())
                 .status(so.getStatus())
                 .paymentStatus(invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
                         .map(inv -> inv.getStatus())

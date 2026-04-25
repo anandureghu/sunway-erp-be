@@ -23,6 +23,7 @@ public class SalesOrderResponseDTO {
     private String customerPhone;
     private LocalDate orderDate;
     private LocalDate invoiceDueDate;
+    private String shippingAddress;
     private String status;
     private String paymentStatus;
     private BigDecimal subtotalAmount;

@@ -25,6 +25,8 @@ public class SalesOrderCreateDTO {
     @NotNull(message = "Invoice due date is required")
     private LocalDate invoiceDueDate;
 
+    private String shippingAddress;
+
     @NotNull(message = "Bank account is required")
     private Long bankAccountId;
 

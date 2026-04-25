@@ -10,4 +10,10 @@ import lombok.NoArgsConstructor;
 public class ShipmentCreateDTO {
     private String carrierName;
     private String trackingNumber;
+    private String vehicleNumber;
+    private String driverName;
+    private String driverPhone;
+    private String estimatedDeliveryDate;
+    private String deliveryAddress;
+    private String notes;
 }
