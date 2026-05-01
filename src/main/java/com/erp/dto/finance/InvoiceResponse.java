@@ -20,6 +20,14 @@ public class InvoiceResponse {
 
     private Long companyId;
     private String companyName;
+    private String companyStreet;
+    private String companyCity;
+    private String companyState;
+    private String companyCountry;
+    private String companyPhone;
+    private String companyEmail;
+    private String billingEmail;
+    private String companyWebsiteUrl;
 
     private String toParty;
     private String status;
@@ -60,6 +68,17 @@ public class InvoiceResponse {
     private String bankAccountNumber;
     private String bankIfscCode;
     private String bankBranchName;
+    private String invoiceHeaderSubtitle;
+    private String invoiceNotesUnpaid;
+    private String invoiceNotesPaid;
+    private String invoiceTerms;
+    private String invoiceFooterCompanyLine;
+    private String invoiceFooterTaxLine;
+    private String invoiceFooterSignatureNote;
+    private String invoiceFooterSupportEmail;
+    private String invoiceFooterBillingEmail;
+    private boolean invoiceQrEnabled;
+    private String publicInvoiceUrl;
 
     private Instant createdAt;
 

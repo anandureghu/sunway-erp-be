@@ -153,6 +153,7 @@ public class SalesOrderService {
                 .customer(customer)
                 .orderDate(dto.getOrderDate())
                 .invoiceDueDate(dto.getInvoiceDueDate())
+                .shippingAddress(dto.getShippingAddress())
                 .status("DRAFT")
                 .subtotalAmount(subtotal.setScale(2, RoundingMode.HALF_UP))
                 .discountAmount(discountTotal.setScale(2, RoundingMode.HALF_UP))
@@ -216,6 +217,9 @@ public class SalesOrderService {
         if (!"DRAFT".equals(order.getStatus())) {
             throw new RuntimeException("Only DRAFT sales orders can be updated");
         }
+        if (dto.getItems() == null || dto.getItems().isEmpty()) {
+            throw new RuntimeException("Sales order must have at least one item");
+        }
 
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal discountTotal = BigDecimal.ZERO;
@@ -271,8 +275,16 @@ public class SalesOrderService {
             total = total.add(li.getLineTotal());
         }
 
-        order.setOrderDate(dto.getOrderDate());
-        order.setItems(updatedItems);
+        if (dto.getOrderDate() != null) {
+            order.setOrderDate(dto.getOrderDate());
+        }
+        if (dto.getInvoiceDueDate() != null) {
+            order.setInvoiceDueDate(dto.getInvoiceDueDate());
+        }
+        order.setShippingAddress(dto.getShippingAddress());
+        // Keep the same managed collection instance for orphanRemoval/all-delete-orphan.
+        order.getItems().clear();
+        order.getItems().addAll(updatedItems);
         order.setSubtotalAmount(subtotal.setScale(2, RoundingMode.HALF_UP));
         order.setDiscountAmount(discountTotal.setScale(2, RoundingMode.HALF_UP));
         order.setTaxAmount(taxTotal.setScale(2, RoundingMode.HALF_UP));
@@ -290,6 +302,19 @@ public class SalesOrderService {
 
         if ("CANCELLED".equals(order.getStatus())) {
             throw new RuntimeException("Sales order is already cancelled");
+        }
+
+        if (!"DRAFT".equals(order.getStatus()) && !"CONFIRMED".equals(order.getStatus())) {
+            throw new RuntimeException("Only DRAFT or CONFIRMED orders can be cancelled");
+        }
+
+        if ("CONFIRMED".equals(order.getStatus())) {
+            Long companyId = auth.getCurrentCompanyId();
+            order.getItems().forEach(i -> {
+                Warehouse wh = i.getWarehouse() != null ? i.getWarehouse() : i.getItem().getWarehouse();
+                itemWarehouseStockService.restoreForCancelledSale(
+                        i.getItem().getId(), wh.getId(), i.getQuantity(), companyId);
+            });
         }
 
         order.setStatus("CANCELLED");
@@ -343,6 +368,7 @@ public class SalesOrderService {
                 .customerPhone(so.getCustomer().getPhoneNo())
                 .orderDate(so.getOrderDate())
                 .invoiceDueDate(so.getInvoiceDueDate())
+                .shippingAddress(so.getShippingAddress())
                 .status(so.getStatus())
                 .paymentStatus(invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
                         .map(inv -> inv.getStatus())

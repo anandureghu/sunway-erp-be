@@ -3,6 +3,7 @@ package com.erp.controller.hr;
 import com.erp.domain.hr.Company;
 import com.erp.dto.hr.AccountingDefaultsDTO;
 import com.erp.dto.hr.CompanyDTO;
+import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
 import com.erp.service.hr.CompanyService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -47,6 +48,13 @@ public class CompanyController {
             @PathVariable("id") Long id,
             @RequestBody AccountingDefaultsDTO body) {
         return companyService.updateAccountingDefaults(id, body);
+    }
+
+    @PutMapping("/{id}/invoice-branding")
+    public Company updateInvoiceBranding(
+            @PathVariable("id") Long id,
+            @RequestBody InvoiceBrandingSettingsDTO body) {
+        return companyService.updateInvoiceBrandingSettings(id, body);
     }
 
     @DeleteMapping("/{id}")

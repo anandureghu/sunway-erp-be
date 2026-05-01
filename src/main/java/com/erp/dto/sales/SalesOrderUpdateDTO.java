@@ -1,5 +1,7 @@
 package com.erp.dto.sales;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,5 +15,9 @@ import java.util.List;
 public class SalesOrderUpdateDTO {
 
     private LocalDate orderDate;
+    private LocalDate invoiceDueDate;
+    private String shippingAddress;
+    @NotEmpty(message = "Sales order must have at least one item")
+    @Valid
     private List<SalesOrderItemDTO> items;
 }

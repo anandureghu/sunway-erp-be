@@ -5,8 +5,10 @@ import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.finance.InvoiceDocumentSource;
 import com.erp.domain.finance.Payment;
+import com.erp.domain.finance.Transaction;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
+import com.erp.domain.hr.CompanyInvoiceSettings;
 import com.erp.domain.inventory.Customer;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -18,8 +20,10 @@ import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
+import com.erp.repo.finance.TransactionRepository;
 import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.hr.CompanyInvoiceSettingsRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
@@ -28,11 +32,14 @@ import com.erp.service.notification.CustomerEmailService;
 import com.erp.service.pdf.InvoicePDFService;
 import com.erp.service.purchase.PurchaseOrderService;
 import com.erp.service.sales.SalesOrderService;
+import com.erp.service.hr.InvoiceSettingsDefaults;
 import com.erp.util.InMemoryMultipartFile;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
@@ -45,13 +52,17 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class InvoiceService {
+    @Value("${app.public-base-url:http://localhost:5173}")
+    private String publicBaseUrl;
 
     private final InvoiceRepository repo;
     private final CompanyRepository companyRepo;
+    private final CompanyInvoiceSettingsRepository invoiceSettingsRepo;
     private final ChartOfAccountsRepository coaRepo;
     private final BankAccountRepository bankAccountRepo;
     private final SalesOrderRepository salesOrderRepo;
     private final PaymentRepository paymentRepo;
+    private final TransactionRepository transactionRepo;
     private final InvoicePDFService pdfService;
     private final FileStorageService fileStorageService;
     private final AuthContext auth;
@@ -59,6 +70,86 @@ public class InvoiceService {
     private final PurchaseOrderService purchaseOrderService;
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final CustomerEmailService customerEmailService;
+    private final TransactionService transactionService;
+
+    @Transactional
+    public void handleSalesOrderCancellation(Long salesOrderId) {
+        if (salesOrderId == null) {
+            return;
+        }
+
+        Optional<Invoice> invoiceOpt = repo.findByOrderIdAndType(salesOrderId, InvoiceType.SALES);
+        if (invoiceOpt.isEmpty()) {
+            return;
+        }
+
+        Invoice invoice = invoiceOpt.get();
+        if ("CANCELLED".equalsIgnoreCase(invoice.getStatus())) {
+            return;
+        }
+
+        List<Payment> payments = paymentRepo.findByInvoiceId(invoice.getInvoiceId());
+        for (Payment payment : payments) {
+            String paymentId = payment.getId() != null ? String.valueOf(payment.getId()) : null;
+            if (paymentId != null) {
+                List<Transaction> reversals =
+                        transactionRepo.findByPaymentIdAndTransactionType(paymentId, "PAYMENT_REVERSAL");
+                if (reversals.isEmpty()) {
+                    List<Transaction> originalTxns = transactionRepo.findByPaymentId(paymentId);
+                    for (Transaction tx : originalTxns) {
+                        if ("PAYMENT_REVERSAL".equalsIgnoreCase(tx.getTransactionType())) {
+                            continue;
+                        }
+                        if (tx.getDebitAccount() == null || tx.getCreditAccount() == null) {
+                            continue;
+                        }
+                        transactionService.createTransactionForPayment(
+                                payment.getId(),
+                                payment.getCompany().getId(),
+                                tx.getAmount(),
+                                tx.getCreditAccount().getId(),
+                                tx.getDebitAccount().getId(),
+                                LocalDate.now(),
+                                "PAYMENT_REVERSAL");
+                    }
+                }
+            }
+
+            if ("PENDING_REQUEST".equalsIgnoreCase(payment.getPaymentMethod())) {
+                payment.setPaymentMethod("CANCELLED");
+            }
+            payment.setNotes(
+                    (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
+                            + "Sales order cancelled; accounting reversed where applicable");
+            paymentRepo.save(payment);
+        }
+
+        // Ensure cancellation is reflected in transactions/COA even when no payment transaction exists yet.
+        if (invoice.getDebitAccount() != null
+                && invoice.getCreditAccount() != null
+                && invoice.getAmount() != null
+                && invoice.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+            try {
+                transactionService.createSalesOrderCancelReversal(
+                        invoice.getCompany().getId(),
+                        salesOrderId,
+                        invoice.getAmount(),
+                        invoice.getDebitAccount().getId(),
+                        invoice.getCreditAccount().getId()
+                );
+            } catch (ResponseStatusException ignored) {
+                // If reversal already exists, keep cancellation idempotent.
+            }
+        }
+
+        invoice.setStatus("CANCELLED");
+        invoice.setOpenAmount(BigDecimal.ZERO);
+        invoice.setOutstanding(BigDecimal.ZERO);
+        invoice.setNotesRemarks(
+                (invoice.getNotesRemarks() == null ? "" : invoice.getNotesRemarks() + " | ")
+                        + "Cancelled from sales order cancellation");
+        repo.save(invoice);
+    }
 
     // ============================================================
     // GET OR CREATE PDF (IDEMPOTENT)
@@ -88,10 +179,22 @@ public class InvoiceService {
     // CREATE MANUAL INVOICE
     // ============================================================
     public InvoiceResponse createInvoice(InvoiceRequest req) {
-        return createInvoice(req, null);
+        return createInvoice(req, null, false);
     }
 
     public InvoiceResponse createInvoice(InvoiceRequest req, MultipartFile supplierDocument) {
+        return createInvoice(req, supplierDocument, false);
+    }
+
+    private InvoiceResponse createInvoice(
+            InvoiceRequest req,
+            MultipartFile supplierDocument,
+            boolean allowSystemSalesInvoiceCreation
+    ) {
+        if (req.getType() == InvoiceType.SALES && !allowSystemSalesInvoiceCreation) {
+            throw new RuntimeException(
+                    "Manual SALES invoice creation is disabled. Sales invoices are auto-created from order confirmation.");
+        }
 
         Company company = companyRepo.findById(auth.getCurrentCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
@@ -327,7 +430,7 @@ public class InvoiceService {
         req.setBankAccountId(order.getBankAccount().getId());
         req.setItemDescription("Auto-generated from sales order " + order.getOrderNumber());
         req.setNotesRemarks("Invoice created on sales order confirmation.");
-        InvoiceResponse response = createInvoice(req);
+        InvoiceResponse response = createInvoice(req, null, true);
         Invoice saved = repo.findById(response.getId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found after creation"));
         saved.setSubtotalAmount(order.getSubtotalAmount() == null ? BigDecimal.ZERO : order.getSubtotalAmount());
@@ -381,7 +484,7 @@ public class InvoiceService {
         req.setNotesRemarks("Auto-generated when purchase order was created (internal cross-check).");
         req.setDocumentSource(InvoiceDocumentSource.GENERATED);
 
-        InvoiceResponse response = createInvoice(req);
+        InvoiceResponse response = createInvoice(req, null, false);
         Invoice saved = repo.findById(response.getId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found after creation"));
         saved.setSubtotalAmount(total);
@@ -604,11 +707,21 @@ public class InvoiceService {
             purchaseOrder = purchaseOrderService.get(i.getOrderId());
         }
 
+        CompanyInvoiceSettings invoiceSettings = getOrCreateInvoiceSettings(i.getCompany());
+
         return InvoiceResponse.builder()
                 .id(i.getId())
                 .invoiceId(i.getInvoiceId())
                 .companyId(i.getCompany().getId())
                 .companyName(i.getCompany().getCompanyName())
+                .companyStreet(i.getCompany().getStreet())
+                .companyCity(i.getCompany().getCity())
+                .companyState(i.getCompany().getState())
+                .companyCountry(i.getCompany().getCountry())
+                .companyPhone(i.getCompany().getPhoneNo())
+                .companyEmail(i.getCompany().getCompanyEmail())
+                .billingEmail(i.getCompany().getBillingEmail())
+                .companyWebsiteUrl(i.getCompany().getWebsiteUrl())
                 .toParty(i.getToParty())
                 .status(i.getStatus())
                 .invoiceDate(i.getInvoiceDate())
@@ -643,6 +756,40 @@ public class InvoiceService {
                 .bankAccountNumber(i.getBankAccount() != null ? i.getBankAccount().getAccountNumber() : null)
                 .bankIfscCode(i.getBankAccount() != null ? i.getBankAccount().getIfscCode() : null)
                 .bankBranchName(i.getBankAccount() != null ? i.getBankAccount().getBranchName() : null)
+                .invoiceHeaderSubtitle(invoiceSettings.getInvoiceHeaderSubtitle())
+                .invoiceNotesUnpaid(invoiceSettings.getInvoiceNotesUnpaid())
+                .invoiceNotesPaid(invoiceSettings.getInvoiceNotesPaid())
+                .invoiceTerms(invoiceSettings.getInvoiceTerms())
+                .invoiceFooterCompanyLine(invoiceSettings.getInvoiceFooterCompanyLine())
+                .invoiceFooterTaxLine(invoiceSettings.getInvoiceFooterTaxLine())
+                .invoiceFooterSignatureNote(invoiceSettings.getInvoiceFooterSignatureNote())
+                .invoiceFooterSupportEmail(i.getCompany().getCompanyEmail() != null
+                        ? i.getCompany().getCompanyEmail()
+                        : invoiceSettings.getInvoiceFooterSupportEmail())
+                .invoiceFooterBillingEmail(i.getCompany().getBillingEmail() != null
+                        ? i.getCompany().getBillingEmail()
+                        : invoiceSettings.getInvoiceFooterBillingEmail())
+                .invoiceQrEnabled(invoiceSettings.isInvoiceQrEnabled())
+                .publicInvoiceUrl(buildPublicInvoiceUrl(i))
                 .build();
+    }
+
+    private String buildPublicInvoiceUrl(Invoice invoice) {
+        CompanyInvoiceSettings invoiceSettings = getOrCreateInvoiceSettings(invoice.getCompany());
+        if (!invoiceSettings.isInvoiceQrEnabled()) {
+            return null;
+        }
+        if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
+            return null;
+        }
+        String normalized = publicBaseUrl.endsWith("/")
+                ? publicBaseUrl.substring(0, publicBaseUrl.length() - 1)
+                : publicBaseUrl;
+        return normalized + "/public/invoices/" + invoice.getInvoiceId();
+    }
+
+    private CompanyInvoiceSettings getOrCreateInvoiceSettings(Company company) {
+        return invoiceSettingsRepo.findByCompanyId(company.getId())
+                .orElseGet(() -> invoiceSettingsRepo.save(InvoiceSettingsDefaults.buildDefaults(company)));
     }
 }

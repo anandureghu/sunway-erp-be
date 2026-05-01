@@ -31,6 +31,8 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class PayslipDocumentService {
+    private static final String CURRENCY_WARNING =
+            "Set currency from company profile to enable currency display.";
 
     private final EmployeeRepository             employeeRepo;
     private final PayrollRepository              payrollRepo;
@@ -108,10 +110,13 @@ public class PayslipDocumentService {
         if (employee.getCompany() != null && employee.getCompany().getCurrency() != null) {
             dto.setCurrencyCode(employee.getCompany().getCurrency().getCurrencyCode());
             dto.setCurrencySymbol(employee.getCompany().getCurrency().getCurrencySymbol());
+            dto.setCurrencyConfigured(true);
+            dto.setCurrencyWarning(null);
         } else {
-            // Set default values if company or currency is null
-            dto.setCurrencyCode("USD");
-            dto.setCurrencySymbol("$");
+            dto.setCurrencyCode(null);
+            dto.setCurrencySymbol(null);
+            dto.setCurrencyConfigured(false);
+            dto.setCurrencyWarning(CURRENCY_WARNING);
         }
 
         // ── Payroll ─────────────────────────────────

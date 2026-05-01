@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class EmployeeCompensationService {
+    private static final String CURRENCY_WARNING =
+            "Set currency from company profile to enable currency display.";
 
     private final EmployeeRepository employeeRepo;
     private final EmployeeCompensationRepository compensationRepo;
@@ -86,10 +88,13 @@ public class EmployeeCompensationService {
 
             dto.setCurrencySymbol(
                     employee.getCompany().getCurrency().getCurrencySymbol());
+            dto.setCurrencyConfigured(true);
+            dto.setCurrencyWarning(null);
         } else {
-            // Set default values if company or currency is null
-            dto.setCurrencyCode("USD");
-            dto.setCurrencySymbol("$");
+            dto.setCurrencyCode(null);
+            dto.setCurrencySymbol(null);
+            dto.setCurrencyConfigured(false);
+            dto.setCurrencyWarning(CURRENCY_WARNING);
         }
 
         dto.setBasicSalary(c.getBasicSalary());

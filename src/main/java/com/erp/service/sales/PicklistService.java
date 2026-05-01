@@ -50,9 +50,10 @@ public class PicklistService {
     // Generate Picklist
     // --------------------------
     public PicklistResponseDTO generate(Long salesOrderId) {
+        Long companyId = auth.getCurrentCompanyId();
 
         SalesOrder so = soRepo.findById(salesOrderId)
-                .filter(o -> o.getCompany().getId().equals(auth.getCurrentCompanyId()))
+                .filter(o -> o.getCompany().getId().equals(companyId))
                 .orElseThrow(() -> new RuntimeException("Sales order not found"));
 
         if (!"CONFIRMED".equals(so.getStatus())) {
@@ -64,11 +65,15 @@ public class PicklistService {
             throw new RuntimeException("Picklist can be generated only after full customer payment");
         }
 
-        if (repo.findBySalesOrderId(so.getId()).isPresent()) {
+        if (repo.findByCompanyIdAndSalesOrderId(companyId, so.getId()).isPresent()) {
             throw new RuntimeException("Picklist already exists for this sales order");
         }
 
-        Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
+        if (so.getItems() == null || so.getItems().isEmpty()) {
+            throw new RuntimeException("Cannot generate picklist: sales order has no items");
+        }
+
+        Company company = companyRepo.findById(companyId).orElseThrow();
         User user = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
 
         List<PicklistItem> items = so.getItems().stream()

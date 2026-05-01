@@ -42,6 +42,7 @@ public class TransactionService {
     public static final String TYPE_PURCHASE_REQUISITION = "PURCHASE_REQUISITION";
     /** Vendor payment confirmed in AP: reduces AP and cash (custom posting, not {@link #applyPostingToCoa}). */
     public static final String TYPE_VENDOR_PAYMENT = "VENDOR_PAYMENT";
+    public static final String TYPE_SALES_ORDER_CANCEL_REVERSAL = "SALES_ORDER_CANCEL_REVERSAL";
 
     private final TransactionRepository repo;
     private final CompanyRepository companyRepo;
@@ -512,6 +513,54 @@ public class TransactionService {
         Transaction saved = repo.save(tx);
         applyPostingToCoa(saved);
         return saved;
+    }
+
+    @Transactional
+    public TransactionResponseDTO createSalesOrderCancelReversal(
+            Long companyId,
+            Long relatedSalesOrderId,
+            BigDecimal amount,
+            Long originalDebitAccountId,
+            Long originalCreditAccountId
+    ) {
+        if (relatedSalesOrderId == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid sales order id and amount are required");
+        }
+        if (originalDebitAccountId == null || originalCreditAccountId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sales order accounts are required");
+        }
+        if (repo.existsByRelatedIdAndTransactionType(relatedSalesOrderId, TYPE_SALES_ORDER_CANCEL_REVERSAL)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Sales order cancellation reversal already exists");
+        }
+
+        Company company = companyRepo.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        // Reverse the original accounting direction by swapping debit/credit legs.
+        ChartOfAccounts debitAccount = coaRepo.findById(originalCreditAccountId)
+                .orElseThrow(() -> new RuntimeException("Reverse debit account not found"));
+        ChartOfAccounts creditAccount = coaRepo.findById(originalDebitAccountId)
+                .orElseThrow(() -> new RuntimeException("Reverse credit account not found"));
+
+        Transaction tx = Transaction.builder()
+                .transactionCode("TX-SO-CAN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .transactionType(TYPE_SALES_ORDER_CANCEL_REVERSAL)
+                .company(company)
+                .transactionDate(LocalDate.now())
+                .amount(amount)
+                .debitAccount(debitAccount)
+                .creditAccount(creditAccount)
+                .transactionDescription("Sales order cancellation reversal")
+                .relatedId(relatedSalesOrderId)
+                .source(null)
+                .sourceLocked(false)
+                .createdAt(Instant.now())
+                .createdBy(auth.getCurrentUserId())
+                .build();
+
+        Transaction saved = repo.save(tx);
+        applyPostingToCoa(saved);
+        return toDTO(saved);
     }
 
     /**

@@ -165,6 +165,9 @@ public class FileStorageService {
     }
 
     public String getPublicUrl(String blobPath) {
+        if (blobPath == null || blobPath.isBlank()) {
+            return null;
+        }
         BlobContainerClient container =
                 blobServiceClient.getBlobContainerClient(publicContainer);
         return container.getBlobContainerUrl() + "/" + blobPath;
