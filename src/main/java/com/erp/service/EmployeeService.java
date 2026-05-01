@@ -2,6 +2,7 @@ package com.erp.service;
 
 import com.erp.domain.*;
 import com.erp.domain.hr.Company;
+import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.hr.Department;
 import com.erp.domain.security.HrAction;
 import com.erp.domain.security.HrModule;
@@ -18,6 +19,7 @@ import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.repo.contact.EmployeeContactInfoRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
@@ -45,6 +47,7 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
+    private final CompanyRoleRepository companyRoleRepository;
     private final DepartmentRepository departmentRepository;
     private final EmployeeContactInfoRepository contactInfoRepository;
     private final CompanyLeavePolicyRepository policyRepo;
@@ -59,6 +62,7 @@ public class EmployeeService {
             EmployeeRepository employeeRepository,
             UserRepository userRepository,
             CompanyRepository companyRepository,
+            CompanyRoleRepository companyRoleRepository,
             DepartmentRepository departmentRepository,
             EmployeeContactInfoRepository contactInfoRepository,
             CompanyLeavePolicyRepository policyRepo,
@@ -72,6 +76,7 @@ public class EmployeeService {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;
+        this.companyRoleRepository = companyRoleRepository;
         this.departmentRepository = departmentRepository;
         this.contactInfoRepository = contactInfoRepository;
         this.policyRepo = policyRepo;
@@ -104,6 +109,7 @@ public class EmployeeService {
                 : null;
 
         Role role = dto.getRole() == null ? Role.USER : dto.getRole();
+        CompanyRole companyRole = resolveCompanyRole(company, dto.getCompanyRoleId(), dto.getCompanyRole());
 
         // ✅ Generate values
         employeeRepository.incrementEmployeeNo();
@@ -120,7 +126,7 @@ public class EmployeeService {
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(rawPassword));
         user.setRole(role);
-        user.setCompanyRole(dto.getCompanyRole());
+        user.setCompanyRoleRef(companyRole);
         user.setCompany(company);
         user.setForcePasswordReset(true);
 
@@ -213,8 +219,12 @@ public class EmployeeService {
         if (employee.getUser() != null) {
 
             // HR-managed display role — any editor can update
-            if (dto.getCompanyRole() != null) {
-                employee.getUser().setCompanyRole(dto.getCompanyRole());
+            if (dto.getCompanyRoleId() != null || dto.getCompanyRole() != null) {
+                employee.getUser().setCompanyRoleRef(resolveCompanyRole(
+                        employee.getCompany(),
+                        dto.getCompanyRoleId(),
+                        dto.getCompanyRole()
+                ));
             }
 
             // ✅ Spring Security role — ADMIN/SUPER_ADMIN only
@@ -494,6 +504,7 @@ public class EmployeeService {
                 .username(e.getUser()    != null ? e.getUser().getUsername()        : null)
                 .userId(e.getUser()      != null ? e.getUser().getId()              : null)
                 .role(e.getUser()        != null ? e.getUser().getRole()            : null)
+                .companyRoleId(e.getUser() != null ? e.getUser().getCompanyRoleId() : null)
                 .companyRole(e.getUser() != null ? e.getUser().getCompanyRole()     : null)
                 .forcePasswordReset(e.getUser() != null ? e.getUser().getForcePasswordReset() : null)
                 .companyId(c   != null ? c.getId()          : null)
@@ -513,5 +524,21 @@ public class EmployeeService {
         if (userId == null) throw new RuntimeException("Unauthorized");
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    private CompanyRole resolveCompanyRole(Company company, Long companyRoleId, String companyRoleName) {
+        if (companyRoleId != null) {
+            return companyRoleRepository.findByIdAndCompanyId(companyRoleId, company.getId())
+                    .filter(CompanyRole::getActive)
+                    .orElseThrow(() -> new RuntimeException("Company role not found or inactive"));
+        }
+
+        if (companyRoleName != null && !companyRoleName.isBlank()) {
+            return companyRoleRepository.findByCompanyIdAndNameIgnoreCase(company.getId(), companyRoleName.trim())
+                    .filter(CompanyRole::getActive)
+                    .orElseThrow(() -> new RuntimeException("Company role not found or inactive"));
+        }
+
+        return null;
     }
 }

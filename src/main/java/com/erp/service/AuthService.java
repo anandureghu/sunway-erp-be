@@ -66,9 +66,12 @@ public class AuthService {
         // ✅ fixed — clean HashMap, userId now included
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId",    u.getId());
+        claims.put("employeeId", emp.getId());
         claims.put("username",  u.getUsername());
         claims.put("companyId", emp.getCompany().getId());
         claims.put("role",      u.getRole().name());
+        claims.put("companyRoleId", u.getCompanyRoleId());
+        claims.put("companyRole", u.getCompanyRole());
 
         String access  = jwt.generateAccessToken(u.getUsername(), claims);
         String refresh = jwt.generateRefreshToken(u.getUsername());
@@ -90,9 +93,12 @@ public class AuthService {
 
         Map<String, Object> newClaims = new HashMap<>();
         newClaims.put("userId",    u.getId());
+        newClaims.put("employeeId", emp.getId());
         newClaims.put("username",  u.getUsername());
         newClaims.put("companyId", emp.getCompany().getId());
         newClaims.put("role",      u.getRole().name());
+        newClaims.put("companyRoleId", u.getCompanyRoleId());
+        newClaims.put("companyRole", u.getCompanyRole());
 
         String access = jwt.generateAccessToken(u.getUsername(), newClaims);
         return Map.of("accessToken", access, "refreshToken", refreshToken);

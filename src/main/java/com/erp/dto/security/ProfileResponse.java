@@ -16,6 +16,7 @@ public class ProfileResponse {
     private String  username;
     private String  email;
     private String  role;
+    private Long    companyRoleId;
     private String  companyRole;
     private Instant createdAt;
 
@@ -41,6 +42,7 @@ public class ProfileResponse {
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole().name())
+                .companyRoleId(user.getCompanyRoleId())
                 .companyRole(user.getCompanyRole())
                 .createdAt(user.getCreatedAt())
                 .employeeId(emp != null ? emp.getId() : null)

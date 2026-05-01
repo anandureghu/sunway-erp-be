@@ -9,4 +9,5 @@ public class LeaveRequestDTO {
     private String leaveType;
     private LocalDate startDate;
     private LocalDate endDate;
+    private Boolean includeWeekends;
 }

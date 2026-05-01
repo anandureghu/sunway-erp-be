@@ -1,6 +1,7 @@
 package com.erp.domain;
 
 import com.erp.domain.hr.Company;
+import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.security.Role;
 import jakarta.persistence.*;
 import lombok.*;
@@ -17,7 +18,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = "company")
+@ToString(exclude = {"company", "companyRoleRef"})
 public class User {
 
     @Id
@@ -41,8 +42,9 @@ public class User {
     private Role role = Role.USER;
 
     // 🔹 Company role (Team Lead, HR Manager, etc.)
-    @Column(name = "company_role", length = 100)
-    private String companyRole;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_role_id")
+    private CompanyRole companyRoleRef;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
@@ -58,5 +60,13 @@ public class User {
     // ✅ FIXED METHOD
     public Long getCompanyId() {
         return company != null ? company.getId() : null;
+    }
+
+    public Long getCompanyRoleId() {
+        return companyRoleRef != null ? companyRoleRef.getId() : null;
+    }
+
+    public String getCompanyRole() {
+        return companyRoleRef != null ? companyRoleRef.getName() : null;
     }
 }

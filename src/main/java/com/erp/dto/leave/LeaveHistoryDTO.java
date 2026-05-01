@@ -8,11 +8,17 @@ import java.time.LocalDate;
 @Getter
 
 public class LeaveHistoryDTO {
+    private Long id;
+    private Long leaveId;
+    private Long employeeId;
+    private String employeeName;
     private String leaveCode;
     private String leaveType;
     private LocalDate startDate;
     private LocalDate endDate;
     private LocalDate dateReported;
     private Integer totalDays;
+    private Boolean includeWeekends;
+    private String supportingDocumentUrl;
     private String leaveStatus;
 }

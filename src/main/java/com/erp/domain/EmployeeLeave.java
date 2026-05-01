@@ -27,6 +27,8 @@ public class EmployeeLeave {
     private LocalDate dateReported;
 
     private Integer totalDays;
+    private Boolean includeWeekends;
+    private String supportingDocumentPath;
 
     private String leaveStatus; // APPROVED
 

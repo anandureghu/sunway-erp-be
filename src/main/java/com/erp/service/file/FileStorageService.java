@@ -137,6 +137,19 @@ public class FileStorageService {
                     throw new IllegalArgumentException("PDF size > 15MB");
                 }
             }
+
+            case LEAVE_SUPPORTING_DOCUMENT -> {
+                String contentType = Objects.requireNonNull(file.getContentType());
+                boolean isPdf = Objects.equals(contentType, "application/pdf");
+                boolean isImage = contentType.startsWith("image/");
+
+                if (!isPdf && !isImage) {
+                    throw new IllegalArgumentException("Only PDF, JPG, JPEG, or PNG allowed");
+                }
+                if (file.getSize() > 5 * 1024 * 1024) {
+                    throw new IllegalArgumentException("Supporting document size > 5MB");
+                }
+            }
         }
     }
 
@@ -157,6 +170,8 @@ public class FileStorageService {
 
             case GOODS_RECEIPT_PDF -> "goods-receipts/" + entityId + "/"
                     + UUID.randomUUID() + ".pdf";
+
+            case LEAVE_SUPPORTING_DOCUMENT -> "leaves/" + entityId + "/supporting-document." + extension;
         };
     }
 
