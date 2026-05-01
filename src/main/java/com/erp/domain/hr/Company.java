@@ -49,6 +49,15 @@ public class Company {
     @Column(name = "phone_no", length = 20)
     private String phoneNo;
 
+    @Column(name = "company_email", length = 120)
+    private String companyEmail;
+
+    @Column(name = "billing_email", length = 120)
+    private String billingEmail;
+
+    @Column(name = "website_url", length = 255)
+    private String websiteUrl;
+
 
     @Column(name = "company_code", length = 3)
     private String companyCode;
@@ -91,4 +100,35 @@ public class Company {
     /** Default bank for sales orders and sales invoices. */
     @Column(name = "default_bank_account_id")
     private Long defaultBankAccountId;
+
+    @Transient
+    private String invoiceHeaderSubtitle;
+
+    @Transient
+    private String invoiceNotesUnpaid;
+
+    @Transient
+    private String invoiceNotesPaid;
+
+    @Transient
+    private String invoiceTerms;
+
+    @Transient
+    private String invoiceFooterCompanyLine;
+
+    @Transient
+    private String invoiceFooterTaxLine;
+
+    @Transient
+    private String invoiceFooterSignatureNote;
+
+    @Transient
+    private String invoiceFooterSupportEmail;
+
+    @Transient
+    private String invoiceFooterBillingEmail;
+
+    @Transient
+    private boolean invoiceQrEnabled;
+
 }

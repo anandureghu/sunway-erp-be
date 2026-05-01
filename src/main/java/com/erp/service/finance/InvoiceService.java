@@ -8,6 +8,7 @@ import com.erp.domain.finance.Payment;
 import com.erp.domain.finance.Transaction;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
+import com.erp.domain.hr.CompanyInvoiceSettings;
 import com.erp.domain.inventory.Customer;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -22,6 +23,7 @@ import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.finance.TransactionRepository;
 import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.hr.CompanyInvoiceSettingsRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
@@ -30,8 +32,10 @@ import com.erp.service.notification.CustomerEmailService;
 import com.erp.service.pdf.InvoicePDFService;
 import com.erp.service.purchase.PurchaseOrderService;
 import com.erp.service.sales.SalesOrderService;
+import com.erp.service.hr.InvoiceSettingsDefaults;
 import com.erp.util.InMemoryMultipartFile;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,9 +52,12 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class InvoiceService {
+    @Value("${app.public-base-url:http://localhost:5173}")
+    private String publicBaseUrl;
 
     private final InvoiceRepository repo;
     private final CompanyRepository companyRepo;
+    private final CompanyInvoiceSettingsRepository invoiceSettingsRepo;
     private final ChartOfAccountsRepository coaRepo;
     private final BankAccountRepository bankAccountRepo;
     private final SalesOrderRepository salesOrderRepo;
@@ -700,11 +707,21 @@ public class InvoiceService {
             purchaseOrder = purchaseOrderService.get(i.getOrderId());
         }
 
+        CompanyInvoiceSettings invoiceSettings = getOrCreateInvoiceSettings(i.getCompany());
+
         return InvoiceResponse.builder()
                 .id(i.getId())
                 .invoiceId(i.getInvoiceId())
                 .companyId(i.getCompany().getId())
                 .companyName(i.getCompany().getCompanyName())
+                .companyStreet(i.getCompany().getStreet())
+                .companyCity(i.getCompany().getCity())
+                .companyState(i.getCompany().getState())
+                .companyCountry(i.getCompany().getCountry())
+                .companyPhone(i.getCompany().getPhoneNo())
+                .companyEmail(i.getCompany().getCompanyEmail())
+                .billingEmail(i.getCompany().getBillingEmail())
+                .companyWebsiteUrl(i.getCompany().getWebsiteUrl())
                 .toParty(i.getToParty())
                 .status(i.getStatus())
                 .invoiceDate(i.getInvoiceDate())
@@ -739,6 +756,40 @@ public class InvoiceService {
                 .bankAccountNumber(i.getBankAccount() != null ? i.getBankAccount().getAccountNumber() : null)
                 .bankIfscCode(i.getBankAccount() != null ? i.getBankAccount().getIfscCode() : null)
                 .bankBranchName(i.getBankAccount() != null ? i.getBankAccount().getBranchName() : null)
+                .invoiceHeaderSubtitle(invoiceSettings.getInvoiceHeaderSubtitle())
+                .invoiceNotesUnpaid(invoiceSettings.getInvoiceNotesUnpaid())
+                .invoiceNotesPaid(invoiceSettings.getInvoiceNotesPaid())
+                .invoiceTerms(invoiceSettings.getInvoiceTerms())
+                .invoiceFooterCompanyLine(invoiceSettings.getInvoiceFooterCompanyLine())
+                .invoiceFooterTaxLine(invoiceSettings.getInvoiceFooterTaxLine())
+                .invoiceFooterSignatureNote(invoiceSettings.getInvoiceFooterSignatureNote())
+                .invoiceFooterSupportEmail(i.getCompany().getCompanyEmail() != null
+                        ? i.getCompany().getCompanyEmail()
+                        : invoiceSettings.getInvoiceFooterSupportEmail())
+                .invoiceFooterBillingEmail(i.getCompany().getBillingEmail() != null
+                        ? i.getCompany().getBillingEmail()
+                        : invoiceSettings.getInvoiceFooterBillingEmail())
+                .invoiceQrEnabled(invoiceSettings.isInvoiceQrEnabled())
+                .publicInvoiceUrl(buildPublicInvoiceUrl(i))
                 .build();
+    }
+
+    private String buildPublicInvoiceUrl(Invoice invoice) {
+        CompanyInvoiceSettings invoiceSettings = getOrCreateInvoiceSettings(invoice.getCompany());
+        if (!invoiceSettings.isInvoiceQrEnabled()) {
+            return null;
+        }
+        if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
+            return null;
+        }
+        String normalized = publicBaseUrl.endsWith("/")
+                ? publicBaseUrl.substring(0, publicBaseUrl.length() - 1)
+                : publicBaseUrl;
+        return normalized + "/public/invoices/" + invoice.getInvoiceId();
+    }
+
+    private CompanyInvoiceSettings getOrCreateInvoiceSettings(Company company) {
+        return invoiceSettingsRepo.findByCompanyId(company.getId())
+                .orElseGet(() -> invoiceSettingsRepo.save(InvoiceSettingsDefaults.buildDefaults(company)));
     }
 }
