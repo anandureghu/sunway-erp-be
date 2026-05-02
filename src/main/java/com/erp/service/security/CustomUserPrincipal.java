@@ -2,71 +2,143 @@ package com.erp.service.security;
 
 import com.erp.domain.security.Role;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.CredentialsContainer;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.util.Collection;
-import java.util.List;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Set;
 
-public class CustomUserPrincipal implements UserDetails {
+public class CustomUserPrincipal implements UserDetails, CredentialsContainer, Serializable {
 
-    private final Long   id;
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private final Long userId;
+    private final Long employeeId;
     private final String username;
-    private final String password;
-    private final Role   role;         // Spring Security role (ADMIN, USER, etc.)
-    private final String companyRole;  // Company role (Team Lead, HR Manager, etc.)
-    private final Long   companyId;    // ✅ REQUIRED for multi-company support
+    private String password;
+    private final Role role;
+    private final Long companyRoleId;
+    private final String companyRoleName;
+    private final Long companyId;
+    private final Set<GrantedAuthority> authorities;
 
-    public CustomUserPrincipal(Long id,
-                               String username,
-                               String password,
-                               Role role,
-                               String companyRole,
-                               Long companyId) {
-        this.id          = id;
-        this.username    = username;
-        this.password    = password;
-        this.role        = role;
-        this.companyRole = companyRole;
-        this.companyId   = companyId;
+    public CustomUserPrincipal(
+            Long userId,
+            Long employeeId,
+            String username,
+            String password,
+            Role role,
+            Long companyRoleId,
+            String companyRoleName,
+            Long companyId
+    ) {
+        this.userId = userId;
+        this.employeeId = employeeId;
+        this.username = username;
+        this.password = password;
+        this.role = role;
+        this.companyRoleId = companyRoleId;
+        this.companyRoleName = companyRoleName;
+        this.companyId = companyId;
+        this.authorities = Collections.unmodifiableSet(buildAuthorities(role, companyRoleName));
     }
 
-    // ─────────────────────────────────────────────
-    // 🔹 Getters
-    // ─────────────────────────────────────────────
+    public static CustomUserPrincipal of(
+            Long userId,
+            Long employeeId,
+            String username,
+            String password,
+            Role role,
+            Long companyRoleId,
+            String companyRoleName,
+            Long companyId
+    ) {
+        return new CustomUserPrincipal(
+                userId,
+                employeeId,
+                username,
+                password,
+                role,
+                companyRoleId,
+                companyRoleName,
+                companyId
+        );
+    }
+
+    private Set<GrantedAuthority> buildAuthorities(Role role, String companyRoleName) {
+        Set<GrantedAuthority> values = new LinkedHashSet<>();
+
+        if (role != null) {
+            values.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        }
+
+        if (companyRoleName != null && !companyRoleName.isBlank()) {
+            String normalizedCompanyRole = companyRoleName
+                    .trim()
+                    .toUpperCase()
+                    .replace(' ', '_')
+                    .replace('-', '_');
+
+            values.add(new SimpleGrantedAuthority("COMPANY_ROLE_" + normalizedCompanyRole));
+        }
+
+        return values;
+    }
 
     public Long getId() {
-        return id;
+        return userId;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public Long getEmployeeId() {
+        return employeeId;
     }
 
     public Role getRole() {
         return role;
     }
 
+    public Long getCompanyRoleId() {
+        return companyRoleId;
+    }
+
     public String getCompanyRole() {
-        return companyRole;
+        return companyRoleName;
+    }
+
+    public String getCompanyRoleName() {
+        return companyRoleName;
     }
 
     public Long getCompanyId() {
         return companyId;
     }
 
-    /**
-     * ✅ Effective role used for permission lookup
-     * Priority: companyRole → fallback to enum role
-     */
-    public String getEffectiveRole() {
-        return (companyRole != null && !companyRole.isBlank())
-                ? companyRole.trim()
-                : role.name();
+    public boolean hasCompanyRole() {
+        return companyRoleId != null && companyRoleId > 0;
     }
 
-    // ─────────────────────────────────────────────
-    // 🔹 Spring Security
-    // ─────────────────────────────────────────────
+    public boolean hasEmployee() {
+        return employeeId != null && employeeId > 0;
+    }
+
+    public boolean isAdmin() {
+        return role == Role.ADMIN || role == Role.SUPER_ADMIN;
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(() -> "ROLE_" + role.name());
+        return authorities;
     }
 
     @Override
@@ -97,5 +169,35 @@ public class CustomUserPrincipal implements UserDetails {
     @Override
     public boolean isEnabled() {
         return true;
+    }
+
+    @Override
+    public void eraseCredentials() {
+        this.password = null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof CustomUserPrincipal that)) return false;
+        return Objects.equals(userId, that.userId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(userId);
+    }
+
+    @Override
+    public String toString() {
+        return "CustomUserPrincipal{" +
+                "userId=" + userId +
+                ", employeeId=" + employeeId +
+                ", username='" + username + '\'' +
+                ", role=" + role +
+                ", companyRoleId=" + companyRoleId +
+                ", companyRoleName='" + companyRoleName + '\'' +
+                ", companyId=" + companyId +
+                '}';
     }
 }

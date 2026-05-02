@@ -45,6 +45,7 @@ public class EmployeeResponseDTO {
     private Role   role;         // Spring Security enum → serializes as "USER", "ADMIN" etc.
     private String companyRole;  // ✅ lowercase c — was "CompanyRole" which Jackson serialized wrongly
 
+    private Long companyRoleId;
     private Boolean forcePasswordReset;
     private String  imageUrl;
 }

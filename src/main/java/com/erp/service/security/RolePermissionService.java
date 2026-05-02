@@ -1,10 +1,20 @@
 package com.erp.service.security;
 
 import com.erp.domain.Employee;
-import com.erp.domain.security.*;
+import com.erp.domain.hr.CompanyRole;
+import com.erp.domain.security.CompanyRolePermission;
+import com.erp.domain.security.EmployeePermission;
+import com.erp.domain.security.EnumRolePermission;
+import com.erp.domain.security.HrModule;
+import com.erp.domain.security.Role;
 import com.erp.dto.security.ModulePermissionDTO;
+import com.erp.dto.security.PermissionRecordDTO;
 import com.erp.repo.EmployeeRepository;
-import com.erp.repo.security.RolePermissionRepository;
+import com.erp.repo.hr.CompanyRoleRepository;
+import com.erp.repo.security.CompanyRolePermissionRepository;
+import com.erp.repo.security.EmployeePermissionRepository;
+import com.erp.repo.security.EnumRolePermissionRepository;
+import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,159 +28,376 @@ import java.util.*;
 @Slf4j
 public class RolePermissionService {
 
-    private final RolePermissionRepository repository;
+    private final EnumRolePermissionRepository enumRolePermissionRepository;
+    private final CompanyRolePermissionRepository companyRolePermissionRepository;
+    private final EmployeePermissionRepository employeePermissionRepository;
+    private final CompanyRoleRepository companyRoleRepository;
     private final EmployeeRepository employeeRepository;
+    private final AuthContext authContext;
 
-    // ======================================================
-    // GET BY ROLE
-    // ======================================================
-
-    public List<RolePermission> getByRole(String role) {
-        role = normalizeRole(role);
-        return repository.findByRoleIgnoreCaseAndEmployeeIsNull(role);
-    }
-
-    // ======================================================
-    // GET PERMISSIONS FOR USER (🔥 FIXED MERGE LOGIC)
-    // ======================================================
-
-    public List<RolePermission> getPermissionsForUser(Long employeeId, String role) {
-
-        role = normalizeRole(role);
-
-        List<RolePermission> rolePermissions =
-                repository.findByRoleIgnoreCaseAndEmployeeIsNull(role);
-
-        List<RolePermission> employeePermissions =
-                employeeId != null
-                        ? repository.findByEmployee_Id(employeeId)
-                        : Collections.emptyList();
-
-        // 🔥 MERGE LOGIC (Employee overrides role)
-        Map<HrModule, RolePermission> finalPermissions = new HashMap<>();
-
-        for (RolePermission rp : rolePermissions) {
-            finalPermissions.put(rp.getModule(), rp);
-        }
-
-        for (RolePermission ep : employeePermissions) {
-            finalPermissions.put(ep.getModule(), ep); // override
-        }
-
-        return finalPermissions.values().stream()
+    @Transactional(readOnly = true)
+    public List<PermissionRecordDTO> getEnumRolePermissions(Role role) {
+        log.debug("Fetching enum role permissions for role: {}", role);
+        return enumRolePermissionRepository.findByRole(role).stream()
                 .filter(this::hasAnyPermission)
+                .map(this::toDto)
                 .toList();
     }
 
-    // ======================================================
-    // ASSIGN PERMISSIONS (🔥 FIXED UPSERT + DELETE SAFETY)
-    // ======================================================
+    @Transactional(readOnly = true)
+    public List<PermissionRecordDTO> getCompanyRolePermissions(Long companyRoleId) {
+        log.debug("Fetching company role permissions for companyRoleId: {}", companyRoleId);
+        requireCompanyRoleAccess(companyRoleId);
 
-    public void assignPermissions(String role, Long employeeId, List<ModulePermissionDTO> dtos) {
+        List<CompanyRolePermission> permissions = companyRolePermissionRepository
+                .findByCompanyRoleId(companyRoleId);  // ✅ FIX: Use correct method name
 
-        role = normalizeRole(role);
+        log.debug("Found {} company role permissions", permissions.size());
 
-        if (role == null) {
-            throw new IllegalArgumentException("Role cannot be null");
+        return permissions.stream()
+                .filter(this::hasAnyPermission)
+                .map(this::toDto)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PermissionRecordDTO> getEmployeePermissions(Long employeeId) {
+        log.debug("Fetching employee permissions for employeeId: {}", employeeId);
+        requireEmployeeAccess(employeeId);
+
+        List<EmployeePermission> permissions = employeePermissionRepository
+                .findByEmployeeId(employeeId);  // ✅ FIX: Use correct method name
+
+        log.debug("Found {} employee permissions", permissions.size());
+
+        return permissions.stream()
+                .filter(this::hasAnyPermission)
+                .map(this::toDto)
+                .toList();
+    }
+
+    /**
+     * Get permissions for logged-in user
+     * Merges permissions from: EnumRole → CompanyRole → Employee (highest priority wins)
+     */
+    @Transactional(readOnly = true)
+    public List<PermissionRecordDTO> getPermissionsForUser(
+            Long employeeId,
+            Long companyRoleId,
+            Role enumRole
+    ) {
+        log.info("🔐 getPermissionsForUser called:");
+        log.info("   - employeeId: {}", employeeId);
+        log.info("   - companyRoleId: {}", companyRoleId);
+        log.info("   - enumRole: {}", enumRole);
+
+        Map<HrModule, PermissionRecordDTO> merged = new EnumMap<>(HrModule.class);
+
+        // Priority 1: Start with enum role permissions (lowest priority)
+        log.debug("📋 Priority 1: Fetching enum role permissions for role: {}", enumRole);
+        List<EnumRolePermission> enumPerms = enumRolePermissionRepository.findByRole(enumRole);
+        log.debug("   Found {} enum role permissions", enumPerms.size());
+
+        enumPerms.stream()
+                .filter(this::hasAnyPermission)
+                .map(this::toDto)
+                .forEach(permission -> {
+                    log.debug("   + Adding {}: viewOwn={}, viewAll={}",
+                            permission.getModule(),
+                            permission.isViewOwn(),
+                            permission.isViewAll());
+                    merged.put(permission.getModule(), permission);
+                });
+
+        // Priority 2: Company role permissions (override enum role)
+        if (companyRoleId != null && companyRoleId > 0) {
+            log.debug("📋 Priority 2: Fetching company role permissions for companyRoleId: {}", companyRoleId);
+
+            List<CompanyRolePermission> companyPerms = companyRolePermissionRepository
+                    .findByCompanyRoleId(companyRoleId);  // ✅ FIX: Correct method name
+
+            log.debug("   Found {} company role permissions", companyPerms.size());
+
+            companyPerms.stream()
+                    .filter(permission -> permission.getCompanyRole().getActive())  // Only if role is active
+                    .filter(this::hasAnyPermission)
+                    .map(this::toDto)
+                    .forEach(permission -> {
+                        log.debug("   + Overriding {}: viewOwn={}, viewAll={}",
+                                permission.getModule(),
+                                permission.isViewOwn(),
+                                permission.isViewAll());
+                        merged.put(permission.getModule(), permission);
+                    });
+        } else {
+            log.debug("   Skipped (no companyRoleId provided)");
         }
 
-        Employee employee = null;
-        if (employeeId != null) {
-            employee = employeeRepository.findById(employeeId)
-                    .orElseThrow(() -> new RuntimeException("Employee not found"));
+        // Priority 3: Employee-specific permissions (highest priority - overrides all)
+        if (employeeId != null && employeeId > 0) {
+            log.debug("📋 Priority 3: Fetching employee-specific permissions for employeeId: {}", employeeId);
+
+            List<EmployeePermission> empPerms = employeePermissionRepository
+                    .findByEmployeeId(employeeId);  // ✅ FIX: Correct method name
+
+            log.debug("   Found {} employee-specific permissions", empPerms.size());
+
+            empPerms.stream()
+                    .filter(this::hasAnyPermission)
+                    .map(this::toDto)
+                    .forEach(permission -> {
+                        log.debug("   + Overriding (employee-specific) {}: viewOwn={}, viewAll={}",
+                                permission.getModule(),
+                                permission.isViewOwn(),
+                                permission.isViewAll());
+                        merged.put(permission.getModule(), permission);
+                    });
+        } else {
+            log.debug("   Skipped (no employeeId provided)");
         }
 
-        Set<HrModule> incomingModules = new HashSet<>();
+        List<PermissionRecordDTO> result = merged.values().stream().toList();
+        log.info("✅ Total permissions for user: {}", result.size());
+        result.forEach(p -> log.debug("   * {}: viewOwn={}, viewAll={}",
+                p.getModule(), p.isViewOwn(), p.isViewAll()));
+
+        return result;
+    }
+
+    public void assignEnumRolePermissions(Role role, List<ModulePermissionDTO> dtos) {
+        Set<HrModule> incomingModules = incomingModules(dtos);
+        deleteMissing(enumRolePermissionRepository.findByRole(role), incomingModules, enumRolePermissionRepository::delete);
+
+        for (ModulePermissionDTO dto : dtos) {
+            if (dto.getModule() == null || dto.getPermission() == null) {
+                continue;
+            }
+
+            EnumRolePermission permission = enumRolePermissionRepository
+                    .findByRoleAndModule(role, dto.getModule())
+                    .orElseGet(() -> EnumRolePermission.builder()
+                            .role(role)
+                            .module(dto.getModule())
+                            .build());
+
+            apply(permission, dto.getPermission());
+            enumRolePermissionRepository.save(permission);
+        }
+    }
+
+    public void assignCompanyRolePermissions(Long companyRoleId, List<ModulePermissionDTO> dtos) {
+        CompanyRole companyRole = companyRoleRepository.findById(companyRoleId)
+                .orElseThrow(() -> new IllegalArgumentException("Company role not found: " + companyRoleId));
+        requireCurrentCompany(companyRole.getCompany().getId());
+
+        Set<HrModule> incomingModules = incomingModules(dtos);
+        deleteMissing(
+                companyRolePermissionRepository.findByCompanyRoleId(companyRoleId),  // ✅ FIX
+                incomingModules,
+                companyRolePermissionRepository::delete
+        );
+
+        for (ModulePermissionDTO dto : dtos) {
+            if (dto.getModule() == null || dto.getPermission() == null) {
+                continue;
+            }
+
+            CompanyRolePermission permission = companyRolePermissionRepository
+                    .findByCompanyRoleIdAndModule(companyRoleId, dto.getModule())  // ✅ FIX
+                    .orElseGet(() -> CompanyRolePermission.builder()
+                            .companyRole(companyRole)
+                            .module(dto.getModule())
+                            .build());
+
+            apply(permission, dto.getPermission());
+            companyRolePermissionRepository.save(permission);
+        }
+    }
+
+    public void assignEmployeePermissions(Long employeeId, List<ModulePermissionDTO> dtos) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
+        requireCurrentCompany(employee.getCompany().getId());
+
+        Set<HrModule> incomingModules = incomingModules(dtos);
+        deleteMissing(
+                employeePermissionRepository.findByEmployeeId(employeeId),  // ✅ FIX
+                incomingModules,
+                employeePermissionRepository::delete
+        );
+
+        for (ModulePermissionDTO dto : dtos) {
+            if (dto.getModule() == null || dto.getPermission() == null) {
+                continue;
+            }
+
+            EmployeePermission permission = employeePermissionRepository
+                    .findByEmployeeIdAndModule(employeeId, dto.getModule())  // ✅ FIX
+                    .orElseGet(() -> EmployeePermission.builder()
+                            .employee(employee)
+                            .module(dto.getModule())
+                            .build());
+
+            apply(permission, dto.getPermission());
+            employeePermissionRepository.save(permission);
+        }
+    }
+
+    public void removeEnumRolePermissions(Role role) {
+        enumRolePermissionRepository.deleteByRole(role);
+    }
+
+    public void removeCompanyRolePermissions(Long companyRoleId) {
+        requireCompanyRoleAccess(companyRoleId);
+        companyRolePermissionRepository.deleteByCompanyRoleId(companyRoleId);  // ✅ FIX
+    }
+
+    public void removeEmployeePermissions(Long employeeId) {
+        requireEmployeeAccess(employeeId);
+        employeePermissionRepository.deleteByEmployeeId(employeeId);  // ✅ FIX
+    }
+
+    private void requireCompanyRoleAccess(Long companyRoleId) {
+        CompanyRole companyRole = companyRoleRepository.findById(companyRoleId)
+                .orElseThrow(() -> new IllegalArgumentException("Company role not found: " + companyRoleId));
+        requireCurrentCompany(companyRole.getCompany().getId());
+    }
+
+    private void requireEmployeeAccess(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
+        requireCurrentCompany(employee.getCompany().getId());
+    }
+
+    private void requireCurrentCompany(Long companyId) {
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        if (currentCompanyId != null && !currentCompanyId.equals(companyId)) {
+            throw new IllegalStateException("Not allowed to manage permissions for another company");
+        }
+    }
+
+    private Set<HrModule> incomingModules(List<ModulePermissionDTO> dtos) {
+        Set<HrModule> modules = EnumSet.noneOf(HrModule.class);
         for (ModulePermissionDTO dto : dtos) {
             if (dto.getModule() != null) {
-                incomingModules.add(dto.getModule());
+                modules.add(dto.getModule());
             }
         }
+        return modules;
+    }
 
-        // ✅ SAFE DELETE (no cross-delete)
-        List<RolePermission> existingPermissions =
-                employeeId != null
-                        ? repository.findByEmployee_Id(employeeId)
-                        : repository.findByRoleIgnoreCaseAndEmployeeIsNull(role);
-
-        for (RolePermission existing : existingPermissions) {
-            if (!incomingModules.contains(existing.getModule())) {
-                repository.delete(existing);
+    private <T> void deleteMissing(List<T> existingPermissions, Set<HrModule> incomingModules, java.util.function.Consumer<T> deleteFn) {
+        for (T existing : existingPermissions) {
+            HrModule module = extractModule(existing);
+            if (!incomingModules.contains(module)) {
+                deleteFn.accept(existing);
             }
-        }
-
-        // ✅ UPSERT
-        for (ModulePermissionDTO dto : dtos) {
-
-            if (dto.getModule() == null || dto.getPermission() == null) continue;
-
-            HrModule module = dto.getModule();
-            ModulePermissionDTO.PermissionDTO p = dto.getPermission();
-
-            RolePermission permission;
-
-            if (employeeId != null) {
-                permission = repository
-                        .findByEmployee_IdAndModule(employeeId, module)
-                        .orElse(null);
-
-                if (permission == null) {
-                    permission = RolePermission.builder()
-                            .role(role)
-                            .module(module)
-                            .employee(employee)
-                            .build();
-                }
-
-            } else {
-                permission = repository
-                        .findByRoleIgnoreCaseAndModule(role, module)
-                        .orElse(null);
-
-                if (permission == null) {
-                    permission = RolePermission.builder()
-                            .role(role)
-                            .module(module)
-                            .build();
-                }
-            }
-
-            permission.setViewOwn(p.isViewOwn());
-            permission.setViewAll(p.isViewAll());
-            permission.setCreatePermission(p.isCreate());
-            permission.setEditPermission(p.isEdit());
-            permission.setDeletePermission(p.isDeletePermission());
-            permission.setApprove(p.isApprove());
-
-            repository.save(permission);
         }
     }
 
-    // ======================================================
-    // REMOVE ALL
-    // ======================================================
-
-    public void removeAll(String role) {
-        role = normalizeRole(role);
-        repository.deleteAllByRoleIgnoreCase(role);
+    private HrModule extractModule(Object permission) {
+        if (permission instanceof EnumRolePermission value) {
+            return value.getModule();
+        }
+        if (permission instanceof CompanyRolePermission value) {
+            return value.getModule();
+        }
+        if (permission instanceof EmployeePermission value) {
+            return value.getModule();
+        }
+        throw new IllegalArgumentException("Unsupported permission type: " + permission.getClass());
     }
 
-    // ======================================================
-    // HELPERS
-    // ======================================================
-
-    private String normalizeRole(String role) {
-        return (role == null || role.isBlank())
-                ? null
-                : role.trim().toUpperCase(); // ✅ SYSTEM STANDARD
+    private void apply(EnumRolePermission permission, ModulePermissionDTO.PermissionDTO dto) {
+        permission.setViewOwn(dto.isViewOwn());
+        permission.setViewAll(dto.isViewAll());
+        permission.setCreatePermission(dto.isCreate());
+        permission.setEditPermission(dto.isEdit());
+        permission.setDeletePermission(dto.isDeletePermission());
+        permission.setApprove(dto.isApprove());
     }
 
-    private boolean hasAnyPermission(RolePermission p) {
-        return p.isViewOwn()
-                || p.isViewAll()
-                || p.isCreatePermission()
-                || p.isEditPermission()
-                || p.isDeletePermission()
-                || p.isApprove();
+    private void apply(CompanyRolePermission permission, ModulePermissionDTO.PermissionDTO dto) {
+        permission.setViewOwn(dto.isViewOwn());
+        permission.setViewAll(dto.isViewAll());
+        permission.setCreatePermission(dto.isCreate());
+        permission.setEditPermission(dto.isEdit());
+        permission.setDeletePermission(dto.isDeletePermission());
+        permission.setApprove(dto.isApprove());
+    }
+
+    private void apply(EmployeePermission permission, ModulePermissionDTO.PermissionDTO dto) {
+        permission.setViewOwn(dto.isViewOwn());
+        permission.setViewAll(dto.isViewAll());
+        permission.setCreatePermission(dto.isCreate());
+        permission.setEditPermission(dto.isEdit());
+        permission.setDeletePermission(dto.isDeletePermission());
+        permission.setApprove(dto.isApprove());
+    }
+
+    private boolean hasAnyPermission(EnumRolePermission permission) {
+        return permission.isViewOwn()
+                || permission.isViewAll()
+                || permission.isCreatePermission()
+                || permission.isEditPermission()
+                || permission.isDeletePermission()
+                || permission.isApprove();
+    }
+
+    private boolean hasAnyPermission(CompanyRolePermission permission) {
+        return permission.isViewOwn()
+                || permission.isViewAll()
+                || permission.isCreatePermission()
+                || permission.isEditPermission()
+                || permission.isDeletePermission()
+                || permission.isApprove();
+    }
+
+    private boolean hasAnyPermission(EmployeePermission permission) {
+        return permission.isViewOwn()
+                || permission.isViewAll()
+                || permission.isCreatePermission()
+                || permission.isEditPermission()
+                || permission.isDeletePermission()
+                || permission.isApprove();
+    }
+
+    private PermissionRecordDTO toDto(EnumRolePermission permission) {
+        return PermissionRecordDTO.builder()
+                .id(permission.getId())
+                .module(permission.getModule())
+                .viewOwn(permission.isViewOwn())
+                .viewAll(permission.isViewAll())
+                .createPermission(permission.isCreatePermission())
+                .editPermission(permission.isEditPermission())
+                .deletePermission(permission.isDeletePermission())
+                .approve(permission.isApprove())
+                .build();
+    }
+
+    private PermissionRecordDTO toDto(CompanyRolePermission permission) {
+        return PermissionRecordDTO.builder()
+                .id(permission.getId())
+                .module(permission.getModule())
+                .viewOwn(permission.isViewOwn())
+                .viewAll(permission.isViewAll())
+                .createPermission(permission.isCreatePermission())
+                .editPermission(permission.isEditPermission())
+                .deletePermission(permission.isDeletePermission())
+                .approve(permission.isApprove())
+                .build();
+    }
+
+    private PermissionRecordDTO toDto(EmployeePermission permission) {
+        return PermissionRecordDTO.builder()
+                .id(permission.getId())
+                .module(permission.getModule())
+                .viewOwn(permission.isViewOwn())
+                .viewAll(permission.isViewAll())
+                .createPermission(permission.isCreatePermission())
+                .editPermission(permission.isEditPermission())
+                .deletePermission(permission.isDeletePermission())
+                .approve(permission.isApprove())
+                .build();
     }
 }

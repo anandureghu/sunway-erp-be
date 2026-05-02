@@ -3,11 +3,13 @@ package com.erp.controller.security;
 import com.erp.domain.CompanyLeavePolicy;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLeaveBalance;
-import com.erp.domain.security.Role;
 import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.EmployeeLeaveBalanceRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.service.LeavePolicyService;
+import com.erp.service.security.annotation.HrPermission;
+import com.erp.domain.security.HrAction;
+import com.erp.domain.security.HrModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +33,7 @@ public class LeaveAdminController {
        DIAGNOSTIC: Check leave setup for an employee
     ═══════════════════════════════════════════════ */
 
+    @HrPermission(module = HrModule.LEAVES, action = {HrAction.VIEW_ALL})
     @GetMapping("/diagnose/{employeeId}")
     public ResponseEntity<?> diagnoseEmployee(@PathVariable Long employeeId) {
 
@@ -106,6 +109,7 @@ public class LeaveAdminController {
        INITIALIZE: Create missing leave balances
     ═══════════════════════════════════════════════ */
 
+    @HrPermission(module = HrModule.LEAVES, action = {HrAction.EDIT})
     @PostMapping("/initialize/{employeeId}")
     public ResponseEntity<?> initializeLeaveBalances(@PathVariable Long employeeId) {
 
@@ -143,6 +147,7 @@ public class LeaveAdminController {
        BULK FIX: Initialize for all employees missing balances
     ═══════════════════════════════════════════════ */
 
+    @HrPermission(module = HrModule.LEAVES, action = {HrAction.EDIT})
     @PostMapping("/initialize-all")
     public ResponseEntity<?> initializeAllMissingBalances(
             @RequestParam(defaultValue = "false") boolean fixRoles) {
@@ -193,6 +198,7 @@ public class LeaveAdminController {
        FIX ROLES: Sync employee.role from user.role
     ═══════════════════════════════════════════════ */
 
+    @HrPermission(module = HrModule.LEAVES, action = {HrAction.EDIT})
     @PostMapping("/fix-roles")
     public ResponseEntity<?> fixMissingRoles() {
 
@@ -240,6 +246,7 @@ public class LeaveAdminController {
        GET ALL LEAVE POLICIES
     ═══════════════════════════════════════════════ */
 
+    @HrPermission(module = HrModule.LEAVES, action = {HrAction.VIEW_ALL})
     @GetMapping("/policies")
     public ResponseEntity<?> getAllPolicies(
             @RequestParam(required = false) Long companyId) {

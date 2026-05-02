@@ -1,7 +1,8 @@
 package com.erp.controller.security;
 
-import com.erp.domain.security.RolePermission;
-import com.erp.service.security.CustomUserPrincipal;
+import com.erp.domain.security.Role;
+import com.erp.dto.security.ModulePermissionDTO;
+import com.erp.dto.security.PermissionRecordDTO;
 import com.erp.service.security.PermissionCheckService;
 import com.erp.service.security.RolePermissionService;
 import lombok.RequiredArgsConstructor;
@@ -19,40 +20,40 @@ public class RolePermissionController {
     private final RolePermissionService service;
     private final PermissionCheckService permissionCheckService;
 
-    // ======================================================
-    // MY PERMISSIONS
-    // ======================================================
-
-    @PreAuthorize("""
-        @permissionChecker.hasAny(
-            authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).VIEW_OWN,
-            T(com.erp.domain.security.HrAction).VIEW_ALL
-        )
-    """)
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/my-permissions")
-    public List<RolePermission> getMyPermissions(Authentication authentication) {
+    public List<PermissionRecordDTO> getMyPermissions(Authentication authentication) {
+        Long employeeId = permissionCheckService.getLoggedEmployeeId(authentication);
+        Long companyRoleId = permissionCheckService.getLoggedCompanyRoleId(authentication);
+        Role role = permissionCheckService.getLoggedRole(authentication);
 
-        if (!(authentication.getPrincipal() instanceof CustomUserPrincipal user)) {
-            throw new RuntimeException("Invalid principal");
+        if (role == null) {
+            throw new IllegalStateException("Unable to resolve logged-in user role");
         }
 
-        Long employeeId = permissionCheckService.getLoggedUserId(authentication);
-
-        // Use companyRole first
-        String roleName = normalizeRole(user.getCompanyRole());
-
-        if (roleName == null) {
-            roleName = user.getRole().name();
-        }
-
-        return service.getPermissionsForUser(employeeId, roleName);
+        return service.getPermissionsForUser(employeeId, companyRoleId, role);
     }
 
-    // ======================================================
-    // GET PERMISSIONS BY ROLE
-    // ======================================================
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @GetMapping("/enum-roles/{role}")
+    public List<PermissionRecordDTO> getEnumRolePermissions(@PathVariable Role role) {
+        return service.getEnumRolePermissions(role);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PostMapping("/enum-roles/{role}")
+    public void assignEnumRolePermissions(
+            @PathVariable Role role,
+            @RequestBody List<ModulePermissionDTO> dtos
+    ) {
+        service.assignEnumRolePermissions(role, dtos);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @DeleteMapping("/enum-roles/{role}")
+    public void removeEnumRolePermissions(@PathVariable Role role) {
+        service.removeEnumRolePermissions(role);
+    }
 
     @PreAuthorize("""
         @permissionChecker.has(
@@ -61,16 +62,10 @@ public class RolePermissionController {
             T(com.erp.domain.security.HrAction).VIEW_ALL
         )
     """)
-    @GetMapping("/{role}")
-    public List<RolePermission> getPermissions(
-            @PathVariable("role") String role
-    ) {
-        return service.getByRole(role);
+    @GetMapping("/company-roles/{companyRoleId}")
+    public List<PermissionRecordDTO> getCompanyRolePermissions(@PathVariable Long companyRoleId) {
+        return service.getCompanyRolePermissions(companyRoleId);
     }
-
-    // ======================================================
-    // ASSIGN PERMISSIONS
-    // ======================================================
 
     @PreAuthorize("""
         @permissionChecker.has(
@@ -79,18 +74,13 @@ public class RolePermissionController {
             T(com.erp.domain.security.HrAction).EDIT
         )
     """)
-    @PostMapping("/{role}")
-    public void assignPermissions(
-            @PathVariable("role") String role,
-            @RequestParam(value = "employeeId", required = false) Long employeeId,
-            @RequestBody List<com.erp.dto.security.ModulePermissionDTO> dtos
+    @PostMapping("/company-roles/{companyRoleId}")
+    public void assignCompanyRolePermissions(
+            @PathVariable Long companyRoleId,
+            @RequestBody List<ModulePermissionDTO> dtos
     ) {
-        service.assignPermissions(role, employeeId, dtos);
+        service.assignCompanyRolePermissions(companyRoleId, dtos);
     }
-
-    // ======================================================
-    // DELETE PERMISSIONS
-    // ======================================================
 
     @PreAuthorize("""
         @permissionChecker.has(
@@ -99,16 +89,47 @@ public class RolePermissionController {
             T(com.erp.domain.security.HrAction).DELETE
         )
     """)
-    @DeleteMapping("/{role}")
-    public void removeAll(@PathVariable("role") String role) {
-        service.removeAll(role);
+    @DeleteMapping("/company-roles/{companyRoleId}")
+    public void removeCompanyRolePermissions(@PathVariable Long companyRoleId) {
+        service.removeCompanyRolePermissions(companyRoleId);
     }
 
-    // ======================================================
-    // HELPER
-    // ======================================================
+    @PreAuthorize("""
+        @permissionChecker.has(
+            authentication,
+            T(com.erp.domain.security.HrModule).HR_SETTINGS,
+            T(com.erp.domain.security.HrAction).VIEW_ALL
+        )
+    """)
+    @GetMapping("/employees/{employeeId}")
+    public List<PermissionRecordDTO> getEmployeePermissions(@PathVariable Long employeeId) {
+        return service.getEmployeePermissions(employeeId);
+    }
 
-    private String normalizeRole(String role) {
-        return (role == null || role.isBlank()) ? null : role.trim();
+    @PreAuthorize("""
+        @permissionChecker.has(
+            authentication,
+            T(com.erp.domain.security.HrModule).HR_SETTINGS,
+            T(com.erp.domain.security.HrAction).EDIT
+        )
+    """)
+    @PostMapping("/employees/{employeeId}")
+    public void assignEmployeePermissions(
+            @PathVariable Long employeeId,
+            @RequestBody List<ModulePermissionDTO> dtos
+    ) {
+        service.assignEmployeePermissions(employeeId, dtos);
+    }
+
+    @PreAuthorize("""
+        @permissionChecker.has(
+            authentication,
+            T(com.erp.domain.security.HrModule).HR_SETTINGS,
+            T(com.erp.domain.security.HrAction).DELETE
+        )
+    """)
+    @DeleteMapping("/employees/{employeeId}")
+    public void removeEmployeePermissions(@PathVariable Long employeeId) {
+        service.removeEmployeePermissions(employeeId);
     }
 }

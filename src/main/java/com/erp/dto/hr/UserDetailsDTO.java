@@ -19,6 +19,7 @@ public class UserDetailsDTO {
     private Role   role;
 
     /** HR-managed dynamic role — use for appraisals, org chart, display, filtering */
+    private Long companyRoleId;
     private String companyRole;
 
     // ── Employee info (optional — null if user has no employee record) ────────

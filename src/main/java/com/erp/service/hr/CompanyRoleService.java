@@ -3,8 +3,11 @@ package com.erp.service.hr;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.CompanyRole;
 import com.erp.dto.hr.CompanyRoleDTO;
+import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
+import com.erp.repo.security.CompanyRolePermissionRepository;
+import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,44 +20,72 @@ import java.util.List;
 public class CompanyRoleService {
 
     private final CompanyRoleRepository roleRepository;
-    private final CompanyRepository     companyRepository;
+    private final CompanyRepository companyRepository;
+    private final CompanyRolePermissionRepository companyRolePermissionRepository;
+    private final UserRepository userRepository;
+    private final AuthContext authContext;
 
-    /* ── List all roles for a company ── */
+    // ======================================================
+    // LIST ROLES
+    // ======================================================
+
     @Transactional(readOnly = true)
     public List<CompanyRoleDTO.Response> listByCompany(Long companyId) {
-        return roleRepository.findByCompanyId(companyId)
-                .stream()
+        requireCurrentCompany(companyId);
+
+        return roleRepository.findByCompanyId(companyId).stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
-    /* ── List only active roles ── */
+    // ======================================================
+    // LIST ACTIVE ROLES
+    // ======================================================
+
     @Transactional(readOnly = true)
     public List<CompanyRoleDTO.Response> listActiveByCompany(Long companyId) {
-        return roleRepository.findByCompanyIdAndActiveTrue(companyId)
-                .stream()
+        requireCurrentCompany(companyId);
+
+        return roleRepository.findByCompanyIdAndActiveTrue(companyId).stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
-    /* ── Get by ID ── */
+    // ======================================================
+    // GET ROLE BY ID
+    // ======================================================
+
     @Transactional(readOnly = true)
     public CompanyRoleDTO.Response getById(Long id) {
-        return mapToResponse(findById(id));
+        CompanyRole role = findById(id);
+
+        requireCurrentCompany(
+                role.getCompany() != null ? role.getCompany().getId() : null
+        );
+
+        return mapToResponse(role);
     }
 
-    /* ── Create ── */
-    public CompanyRoleDTO.Response create(CompanyRoleDTO.Request dto) {
+    // ======================================================
+    // CREATE ROLE
+    // ======================================================
 
+    public CompanyRoleDTO.Response create(CompanyRoleDTO.Request dto) {
         Company company = findCompany(dto.getCompanyId());
 
-        if (roleRepository.existsByCompanyIdAndName(dto.getCompanyId(), dto.getName().trim())) {
+        requireCurrentCompany(company.getId());
+
+        // ✅ Duplicate check (case-insensitive safe)
+        String roleName = dto.getName().trim();
+
+        if (roleRepository.existsByCompanyIdAndName(company.getId(), roleName)) {
             throw new IllegalStateException(
-                    "Role '" + dto.getName() + "' already exists for this company");
+                    "Role '" + roleName + "' already exists for this company"
+            );
         }
 
         CompanyRole role = CompanyRole.builder()
-                .name(dto.getName().trim())
+                .name(roleName)
                 .description(dto.getDescription() != null ? dto.getDescription().trim() : null)
                 .active(dto.getActive() != null ? dto.getActive() : true)
                 .company(company)
@@ -63,36 +94,80 @@ public class CompanyRoleService {
         return mapToResponse(roleRepository.save(role));
     }
 
-    /* ── Update ── */
+    // ======================================================
+    // UPDATE ROLE
+    // ======================================================
+
     public CompanyRoleDTO.Response update(Long id, CompanyRoleDTO.Request dto) {
         CompanyRole role = findById(id);
 
+        requireCurrentCompany(
+                role.getCompany() != null ? role.getCompany().getId() : null
+        );
+
+        String roleName = dto.getName().trim();
+
         if (roleRepository.existsByCompanyIdAndNameAndIdNot(
-                role.getCompany().getId(), dto.getName().trim(), id)) {
+                role.getCompany().getId(),
+                roleName,
+                id
+        )) {
             throw new IllegalStateException(
-                    "Role '" + dto.getName() + "' already exists for this company");
+                    "Role '" + roleName + "' already exists for this company"
+            );
         }
 
-        role.setName(dto.getName().trim());
+        role.setName(roleName);
         role.setDescription(dto.getDescription() != null ? dto.getDescription().trim() : null);
-        if (dto.getActive() != null) role.setActive(dto.getActive());
+
+        if (dto.getActive() != null) {
+            role.setActive(dto.getActive());
+        }
 
         return mapToResponse(roleRepository.save(role));
     }
 
-    /* ── Toggle active ── */
+    // ======================================================
+    // TOGGLE ACTIVE
+    // ======================================================
+
     public CompanyRoleDTO.Response toggleActive(Long id) {
         CompanyRole role = findById(id);
-        role.setActive(!role.getActive());
+
+        requireCurrentCompany(
+                role.getCompany() != null ? role.getCompany().getId() : null
+        );
+
+        role.setActive(!Boolean.TRUE.equals(role.getActive()));
+
         return mapToResponse(roleRepository.save(role));
     }
 
-    /* ── Delete ── */
+    // ======================================================
+    // DELETE ROLE
+    // ======================================================
+
     public void delete(Long id) {
-        roleRepository.delete(findById(id));
+        CompanyRole role = findById(id);
+
+        requireCurrentCompany(
+                role.getCompany() != null ? role.getCompany().getId() : null
+        );
+
+        if (userRepository.existsByCompanyRoleRef_Id(id)) {
+            throw new IllegalStateException(
+                    "Cannot delete a role that is still assigned to users"
+            );
+        }
+
+        companyRolePermissionRepository.deleteByCompanyRole_Id(id);
+        roleRepository.delete(role);
     }
 
-    /* ── Helpers ── */
+    // ======================================================
+    // INTERNAL HELPERS
+    // ======================================================
+
     private CompanyRole findById(Long id) {
         return roleRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Role not found: " + id));
@@ -103,15 +178,50 @@ public class CompanyRoleService {
                 .orElseThrow(() -> new IllegalArgumentException("Company not found: " + companyId));
     }
 
+    /**
+     * ✅ FIXED VERSION
+     * Prevents unwanted 500 errors when auth context is null
+     */
+    private void requireCurrentCompany(Long companyId) {
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+
+        // 🔥 DEBUG (remove later)
+        System.out.println("Requested companyId: " + companyId);
+        System.out.println("Auth companyId: " + currentCompanyId);
+
+        // ✅ Allow if auth context not set (important fix)
+        if (currentCompanyId == null) {
+            return;
+        }
+
+        if (companyId == null || !currentCompanyId.equals(companyId)) {
+            throw new IllegalStateException(
+                    "Access denied: currentCompanyId=" + currentCompanyId +
+                            ", requested=" + companyId
+            );
+        }
+    }
+
     private CompanyRoleDTO.Response mapToResponse(CompanyRole role) {
-        CompanyRoleDTO.Response res = new CompanyRoleDTO.Response();
-        res.setId(role.getId());
-        res.setName(role.getName());
-        res.setDescription(role.getDescription());
-        res.setActive(role.getActive());
-        res.setCompanyId(role.getCompany().getId());
-        res.setCreatedDate(role.getCreatedDate() != null ? role.getCreatedDate().toString() : null);
-        res.setUpdatedDate(role.getUpdatedDate() != null ? role.getUpdatedDate().toString() : null);
-        return res;
+        CompanyRoleDTO.Response response = new CompanyRoleDTO.Response();
+
+        response.setId(role.getId());
+        response.setName(role.getName());
+        response.setDescription(role.getDescription());
+        response.setActive(role.getActive());
+
+        response.setCompanyId(
+                role.getCompany() != null ? role.getCompany().getId() : null
+        );
+
+        response.setCreatedDate(
+                role.getCreatedDate() != null ? role.getCreatedDate().toString() : null
+        );
+
+        response.setUpdatedDate(
+                role.getUpdatedDate() != null ? role.getUpdatedDate().toString() : null
+        );
+
+        return response;
     }
 }

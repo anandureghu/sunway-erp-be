@@ -1,7 +1,14 @@
 package com.erp.service.security;
 
-import com.erp.domain.security.*;
-import com.erp.repo.security.RolePermissionRepository;
+import com.erp.domain.security.CompanyRolePermission;
+import com.erp.domain.security.EmployeePermission;
+import com.erp.domain.security.EnumRolePermission;
+import com.erp.domain.security.HrAction;
+import com.erp.domain.security.HrModule;
+import com.erp.domain.security.Role;
+import com.erp.repo.security.CompanyRolePermissionRepository;
+import com.erp.repo.security.EmployeePermissionRepository;
+import com.erp.repo.security.EnumRolePermissionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -14,10 +21,12 @@ import java.util.Optional;
 @Slf4j
 public class PermissionCheckService {
 
-    private final RolePermissionRepository repository;
+    private final EmployeePermissionRepository employeePermissionRepository;
+    private final CompanyRolePermissionRepository companyRolePermissionRepository;
+    private final EnumRolePermissionRepository enumRolePermissionRepository;
 
     // ======================================================
-    // PUBLIC METHODS
+    // ENTRY METHODS
     // ======================================================
 
     public boolean has(Authentication auth, HrModule module, HrAction action) {
@@ -25,6 +34,8 @@ public class PermissionCheckService {
     }
 
     public boolean hasAny(Authentication auth, HrModule module, HrAction... actions) {
+        if (actions == null || actions.length == 0) return false;
+
         for (HrAction action : actions) {
             if (hasAccess(auth, module, action)) return true;
         }
@@ -32,110 +43,220 @@ public class PermissionCheckService {
     }
 
     // ======================================================
-    // CORE LOGIC (FIXED)
+    // CORE LOGIC (🔥 FIXED)
     // ======================================================
 
     public boolean hasAccess(Authentication auth, HrModule module, HrAction action) {
 
         if (auth == null || !auth.isAuthenticated()) {
-            log.debug("Permission denied: unauthenticated");
+            log.debug("Access denied: unauthenticated");
             return false;
         }
 
-        if (!(auth.getPrincipal() instanceof CustomUserPrincipal user)) {
-            log.warn("Permission denied: invalid principal");
+        CustomUserPrincipal user = extractUser(auth);
+        if (user == null) {
+            log.warn("Access denied: invalid principal");
             return false;
         }
 
-        // ✅ ADMIN / SUPER_ADMIN bypass
+        if (module == null || action == null) {
+            log.warn("Access denied: module/action null");
+            return false;
+        }
+
+        // 🔥 1. ADMIN BYPASS (CRITICAL FIX)
         if (isAdmin(user)) {
-            log.debug("Admin bypass granted for user {}", user.getUsername());
+            log.debug("Admin bypass granted for user={}", user.getUsername());
             return true;
         }
 
-        Long userId = user.getId();
-
-        // 🔥 USE EFFECTIVE ROLE (CRITICAL FIX)
-        String role = normalizeRole(user.getEffectiveRole());
-
-        RolePermission permission = null;
-
-        // ======================================================
-        // 1. Employee override (highest priority)
-        // ======================================================
-        if (userId != null) {
-            Optional<RolePermission> empPerm =
-                    repository.findByEmployee_IdAndModule(userId, module);
-
-            if (empPerm.isPresent()) {
-                permission = empPerm.get();
-                log.debug("Using EMPLOYEE override for user {} module {}", userId, module);
-            }
+        // 🔥 2. EMPLOYEE PERMISSION
+        Optional<EmployeePermission> employeePermission = resolveEmployeePermission(user, module);
+        if (employeePermission.isPresent()) {
+            boolean allowed = evaluate(employeePermission.get(), action);
+            log.debug("Employee permission: user={} allowed={}", user.getUsername(), allowed);
+            return allowed;
         }
 
-        // ======================================================
-        // 2. Role-based permission (companyRole or enum fallback)
-        // ======================================================
-        if (permission == null && role != null) {
-
-            Optional<RolePermission> rolePerm =
-                    repository.findByRoleIgnoreCaseAndModule(role, module);
-
-            if (rolePerm.isPresent()) {
-                permission = rolePerm.get();
-                log.debug("Using ROLE '{}' for module {}", role, module);
-            } else {
-                log.warn("No permission found for role='{}' module='{}'", role, module);
-                return false;
-            }
+        // 🔥 3. COMPANY ROLE PERMISSION (FIXED NULL SAFE)
+        Optional<CompanyRolePermission> companyRolePermission = resolveCompanyRolePermission(user, module);
+        if (companyRolePermission.isPresent()) {
+            boolean allowed = evaluate(companyRolePermission.get(), action);
+            log.debug("CompanyRole permission: user={} allowed={}", user.getUsername(), allowed);
+            return allowed;
         }
 
-        // ======================================================
-        // FINAL CHECK
-        // ======================================================
-        if (permission == null) {
-            log.warn("Permission NOT FOUND for user={}, module={}",
-                    user.getUsername(), module);
-            return false;
+        // 🔥 4. ENUM ROLE PERMISSION (fallback)
+        Optional<EnumRolePermission> enumRolePermission = resolveEnumRolePermission(user, module);
+        if (enumRolePermission.isPresent()) {
+            boolean allowed = evaluate(enumRolePermission.get(), action);
+            log.debug("EnumRole permission: user={} allowed={}", user.getUsername(), allowed);
+            return allowed;
         }
 
-        boolean allowed = evaluate(permission, action);
+        // ❌ FINAL DENY
+        log.warn("Access denied: no permission found for user={} module={} action={}",
+                user.getUsername(), module, action);
 
-        log.debug("Permission check: user={}, role={}, module={}, action={}, allowed={}",
-                user.getUsername(), role, module, action, allowed);
-
-        return allowed;
+        return false;
     }
 
     // ======================================================
     // HELPERS
     // ======================================================
 
+    private CustomUserPrincipal extractUser(Authentication auth) {
+        if (auth == null) return null;
+
+        Object principal = auth.getPrincipal();
+
+        if (principal instanceof CustomUserPrincipal user) {
+            return user;
+        }
+
+        return null;
+    }
+
     private boolean isAdmin(CustomUserPrincipal user) {
         return user.getRole() == Role.ADMIN || user.getRole() == Role.SUPER_ADMIN;
     }
 
-    private boolean evaluate(RolePermission permission, HrAction action) {
+    // ======================================================
+    // PERMISSION RESOLVERS (🔥 FIXED)
+    // ======================================================
+
+    private Optional<EmployeePermission> resolveEmployeePermission(CustomUserPrincipal user, HrModule module) {
+
+        if (user.getEmployeeId() == null || user.getEmployeeId() <= 0) {
+            return Optional.empty();
+        }
+
+        return employeePermissionRepository
+                .findByEmployeeIdAndModule(user.getEmployeeId(), module);
+    }
+
+    private Optional<CompanyRolePermission> resolveCompanyRolePermission(CustomUserPrincipal user, HrModule module) {
+
+        if (user.getCompanyRoleId() == null || user.getCompanyRoleId() <= 0) {
+            return Optional.empty();
+        }
+
+        Optional<CompanyRolePermission> permission =
+                companyRolePermissionRepository
+                        .findByCompanyRoleIdAndModule(user.getCompanyRoleId(), module);
+
+        // 🔥 CRITICAL FIX (NULL SAFE)
+        if (permission.isPresent()) {
+            CompanyRolePermission p = permission.get();
+
+            if (p == null) return Optional.empty();
+
+            if (p.getCompanyRole() == null) {
+                log.warn("CompanyRole is NULL for permissionId={}", p.getId());
+                return Optional.empty();
+            }
+
+            if (!Boolean.TRUE.equals(p.getCompanyRole().getActive())) {
+                log.warn("CompanyRole inactive for permissionId={}", p.getId());
+                return Optional.empty();
+            }
+
+            return permission;
+        }
+
+        return Optional.empty();
+    }
+
+    private Optional<EnumRolePermission> resolveEnumRolePermission(CustomUserPrincipal user, HrModule module) {
+
+        if (user.getRole() == null) {
+            return Optional.empty();
+        }
+
+        return enumRolePermissionRepository
+                .findByRoleAndModule(user.getRole(), module);
+    }
+
+    // ======================================================
+    // EVALUATION
+    // ======================================================
+
+    private boolean evaluate(EmployeePermission permission, HrAction action) {
+        return evaluate(
+                permission.isViewOwn(),
+                permission.isViewAll(),
+                permission.isCreatePermission(),
+                permission.isEditPermission(),
+                permission.isDeletePermission(),
+                permission.isApprove(),
+                action
+        );
+    }
+
+    private boolean evaluate(CompanyRolePermission permission, HrAction action) {
+        return evaluate(
+                permission.isViewOwn(),
+                permission.isViewAll(),
+                permission.isCreatePermission(),
+                permission.isEditPermission(),
+                permission.isDeletePermission(),
+                permission.isApprove(),
+                action
+        );
+    }
+
+    private boolean evaluate(EnumRolePermission permission, HrAction action) {
+        return evaluate(
+                permission.isViewOwn(),
+                permission.isViewAll(),
+                permission.isCreatePermission(),
+                permission.isEditPermission(),
+                permission.isDeletePermission(),
+                permission.isApprove(),
+                action
+        );
+    }
+
+    private boolean evaluate(
+            boolean viewOwn,
+            boolean viewAll,
+            boolean create,
+            boolean edit,
+            boolean deletePermission,
+            boolean approve,
+            HrAction action
+    ) {
         return switch (action) {
-            case VIEW_OWN -> permission.isViewOwn();
-            case VIEW_ALL -> permission.isViewAll();
-            case CREATE   -> permission.isCreatePermission();
-            case EDIT     -> permission.isEditPermission();
-            case DELETE   -> permission.isDeletePermission();
-            case APPROVE  -> permission.isApprove();
+            case VIEW_OWN -> viewOwn;
+            case VIEW_ALL -> viewAll;
+            case CREATE -> create;
+            case EDIT -> edit;
+            case DELETE -> deletePermission;
+            case APPROVE -> approve;
         };
     }
 
-    private String normalizeRole(String role) {
-        return (role == null || role.isBlank())
-                ? null
-                : role.trim().toUpperCase();
-    }
+    // ======================================================
+    // OPTIONAL HELPERS (UNCHANGED)
+    // ======================================================
 
     public Long getLoggedUserId(Authentication auth) {
-        if (auth != null && auth.getPrincipal() instanceof CustomUserPrincipal user) {
-            return user.getId();
-        }
-        return null;
+        CustomUserPrincipal user = extractUser(auth);
+        return user != null ? user.getId() : null;
+    }
+
+    public Long getLoggedEmployeeId(Authentication auth) {
+        CustomUserPrincipal user = extractUser(auth);
+        return user != null ? user.getEmployeeId() : null;
+    }
+
+    public Long getLoggedCompanyRoleId(Authentication auth) {
+        CustomUserPrincipal user = extractUser(auth);
+        return user != null ? user.getCompanyRoleId() : null;
+    }
+
+    public Role getLoggedRole(Authentication auth) {
+        CustomUserPrincipal user = extractUser(auth);
+        return user != null ? user.getRole() : null;
     }
 }

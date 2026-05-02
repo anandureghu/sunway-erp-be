@@ -2,6 +2,7 @@ package com.erp.dto.hr;
 
 import com.erp.domain.EmployeeStatus;
 import com.erp.domain.security.Role;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -51,6 +52,8 @@ public class CreateEmployeeDTO {
     // ROLE
     // =======================
     private Role role;
+    private Long companyRoleId;
 
-    private String CompanyRole;
+    @JsonAlias("CompanyRole")
+    private String companyRole;
 }

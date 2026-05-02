@@ -18,6 +18,9 @@ public interface CompanyRoleRepository extends JpaRepository<CompanyRole, Long> 
 
     // Find by company + name (for duplicate check on create)
     Optional<CompanyRole> findByCompanyIdAndName(Long companyId, String name);
+    Optional<CompanyRole> findByCompanyIdAndNameIgnoreCase(Long companyId, String name);
+
+    Optional<CompanyRole> findByIdAndCompanyId(Long id, Long companyId);
 
     // Duplicate check on create
     boolean existsByCompanyIdAndName(Long companyId, String name);

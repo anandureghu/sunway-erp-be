@@ -58,7 +58,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     // BUSINESS ROLE (companyRole - STRING) ✅ ALREADY CORRECT
     // ======================================================
 
-    List<Employee> findByCompany_IdAndUserCompanyRoleIgnoreCase(
+    List<Employee> findByCompany_IdAndUser_CompanyRoleRef_NameIgnoreCase(
             Long companyId,
             String roleName
     );

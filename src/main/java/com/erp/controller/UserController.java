@@ -1,5 +1,6 @@
 package com.erp.controller;
 
+import com.erp.dto.security.AdminResetPasswordRequest;
 import com.erp.dto.security.ChangePasswordRequest;
 import com.erp.dto.security.ProfileResponse;
 import com.erp.dto.hr.UserDetailsDTO;
@@ -41,6 +42,14 @@ public class UserController {
             @PathVariable("id") Long id,
             @Valid @RequestBody ChangePasswordRequest request) {
         userService.changePassword(id, request);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/{id}/admin-reset-password")
+    public ResponseEntity<Void> adminResetPassword(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody AdminResetPasswordRequest request) {
+        userService.adminResetPassword(id, request);
         return ResponseEntity.ok().build();
     }
 }

@@ -25,8 +25,7 @@ import java.util.stream.Collectors;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final Logger log =
-            LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtService jwtService;
 
@@ -35,25 +34,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain chain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain chain
+    ) throws ServletException, IOException {
 
-        // ✅ Allow preflight
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             chain.doFilter(request, response);
             return;
         }
 
-        // ✅ Skip if already authenticated
         if (SecurityContextHolder.getContext().getAuthentication() != null) {
             chain.doFilter(request, response);
             return;
         }
 
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-
         if (header == null || !header.startsWith("Bearer ")) {
             chain.doFilter(request, response);
             return;
@@ -64,78 +61,48 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             Claims claims = jwtService.parse(token).getBody();
 
-            // ─────────────────────────────────────────────
-            // 🔹 Extract username
-            // ─────────────────────────────────────────────
             String username = safeString(claims.get("username"));
-            if (isBlank(username)) username = safeString(claims.get("preferred_username"));
-            if (isBlank(username)) username = claims.getSubject();
-
+            if (isBlank(username)) {
+                username = safeString(claims.get("preferred_username"));
+            }
+            if (isBlank(username)) {
+                username = claims.getSubject();
+            }
             if (isBlank(username)) {
                 log.warn("JWT missing username");
                 chain.doFilter(request, response);
                 return;
             }
 
-            // ─────────────────────────────────────────────
-            // 🔹 Extract authorities
-            // ─────────────────────────────────────────────
             Collection<SimpleGrantedAuthority> authorities = extractAuthorities(claims);
-
             if (authorities.isEmpty()) {
-                log.warn(
-                        "JWT has no role/authorities for user '{}' — use the access token from login, not the refresh token.",
-                        username);
+                log.warn("JWT has no authorities for user '{}'", username);
                 chain.doFilter(request, response);
                 return;
             }
 
-            // ─────────────────────────────────────────────
-            // 🔹 Map first matching authority to enum Role
-            // ─────────────────────────────────────────────
             Role role = resolveRoleFromAuthorities(authorities);
             if (role == null) {
-                log.warn(
-                        "JWT authorities do not match any Role enum for user '{}': {}",
-                        username,
-                        authorities);
+                log.warn("JWT authorities do not match any Role enum for user '{}': {}", username, authorities);
                 chain.doFilter(request, response);
                 return;
             }
 
-            // ─────────────────────────────────────────────
-            // 🔹 Extract companyRole
-            // ─────────────────────────────────────────────
+            Long userId = parseLong(claims.get("userId"));
+            Long employeeId = parseLong(claims.get("employeeId"));
+            Long companyId = parseLong(claims.get("companyId"));
+            Long companyRoleId = parseLong(claims.get("companyRoleId"));
             String companyRole = safeString(claims.get("companyRole"));
 
-            // ─────────────────────────────────────────────
-            // 🔹 Extract userId
-            // ─────────────────────────────────────────────
-            Long userId = parseLong(claims.get("userId"));
-
-            // ─────────────────────────────────────────────
-            // 🔹 Extract companyId ✅ NEW FIX
-            // ─────────────────────────────────────────────
-            Long companyId = parseLong(claims.get("companyId"));
-
-            if (userId == null) {
-                log.warn("JWT missing userId for '{}'", username);
-            }
-
-            if (companyId == null) {
-                log.warn("JWT missing companyId for '{}'", username);
-            }
-
-            // ─────────────────────────────────────────────
-            // 🔹 Build principal
-            // ─────────────────────────────────────────────
             CustomUserPrincipal principal = new CustomUserPrincipal(
                     userId,
+                    employeeId,
                     username,
                     "",
                     role,
+                    companyRoleId,
                     companyRole,
-                    companyId   // ✅ IMPORTANT
+                    companyId
             );
 
             UsernamePasswordAuthenticationToken auth =
@@ -144,16 +111,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Map<String, Object> details = new HashMap<>();
             details.put("web", new WebAuthenticationDetailsSource().buildDetails(request));
             details.put("claims", claims);
-
             auth.setDetails(details);
 
             SecurityContextHolder.getContext().setAuthentication(auth);
-
-            log.debug("JWT authenticated: user='{}', id={}, role={}, companyRole={}, companyId={}",
-                    username, userId, role, companyRole, companyId);
-
         } catch (ExpiredJwtException ex) {
-            log.warn("JWT expired — login again or use refresh to obtain a new access token");
+            log.warn("JWT expired");
         } catch (Exception ex) {
             log.debug("JWT validation failed: {}", ex.getMessage());
         }
@@ -161,96 +123,95 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    /**
-     * Tries each granted authority until one matches {@link Role}; avoids 401 when the first
-     * authority is not an enum constant (e.g. scope-derived strings) or has stray whitespace.
-     */
     private static Role resolveRoleFromAuthorities(Collection<SimpleGrantedAuthority> authorities) {
-        for (SimpleGrantedAuthority a : authorities) {
-            String raw = a.getAuthority();
+        for (SimpleGrantedAuthority authority : authorities) {
+            String raw = authority.getAuthority();
             if (raw == null) {
                 continue;
             }
-            String rn = raw.startsWith("ROLE_") ? raw.substring(5) : raw;
-            rn = rn.trim();
-            if (rn.isEmpty()) {
+
+            String roleName = raw.startsWith("ROLE_") ? raw.substring(5) : raw;
+            roleName = roleName.trim();
+            if (roleName.isEmpty()) {
                 continue;
             }
+
             try {
-                return Role.valueOf(rn);
+                return Role.valueOf(roleName);
             } catch (IllegalArgumentException ignored) {
-                // try next
+                // Try the next authority.
             }
-        }
-        return null;
-    }
-
-    // ─────────────────────────────────────────────
-    // 🔧 Helpers
-    // ─────────────────────────────────────────────
-
-    private static boolean isBlank(String s) {
-        return s == null || s.isBlank();
-    }
-
-    private static String safeString(Object v) {
-        return v == null ? null : String.valueOf(v);
-    }
-
-    private static Long parseLong(Object value) {
-        if (value instanceof Integer i) return i.longValue();
-        if (value instanceof Long l) return l;
-        if (value != null) {
-            try {
-                return Long.parseLong(String.valueOf(value));
-            } catch (NumberFormatException ignored) {}
         }
         return null;
     }
 
     @SuppressWarnings("unchecked")
     private static Collection<SimpleGrantedAuthority> extractAuthorities(Claims claims) {
-
         Set<String> roles = new LinkedHashSet<>();
 
-        // role: "ADMIN"
         String singleRole = safeString(claims.get("role"));
         if (!isBlank(singleRole)) {
             roles.add(singleRole.trim());
         }
 
-        // roles: ["ADMIN", "HR"]
-        Object arr = claims.get("roles");
-        if (arr instanceof Collection<?> c) {
-            c.forEach(x -> {
-                String s = safeString(x);
-                if (!isBlank(s)) {
-                    roles.add(s.trim());
+        Object roleArray = claims.get("roles");
+        if (roleArray instanceof Collection<?> collection) {
+            collection.forEach(item -> {
+                String value = safeString(item);
+                if (!isBlank(value)) {
+                    roles.add(value.trim());
                 }
             });
         }
 
-        // authorities: ["ROLE_ADMIN"]
-        Object auths = claims.get("authorities");
-        if (auths instanceof Collection<?> c) {
-            c.forEach(x -> {
-                String s = safeString(x);
-                if (!isBlank(s)) roles.add(s.replaceFirst("^ROLE_", ""));
+        Object authorities = claims.get("authorities");
+        if (authorities instanceof Collection<?> collection) {
+            collection.forEach(item -> {
+                String value = safeString(item);
+                if (!isBlank(value)) {
+                    roles.add(value.replaceFirst("^ROLE_", ""));
+                }
             });
         }
 
-        // scope: "admin user"
         String scope = safeString(claims.get("scope"));
         if (!isBlank(scope)) {
-            for (String s : scope.split("\\s+")) {
-                if (!isBlank(s)) roles.add(s.toUpperCase(Locale.ROOT));
+            for (String item : scope.split("\\s+")) {
+                if (!isBlank(item)) {
+                    roles.add(item.toUpperCase(Locale.ROOT));
+                }
             }
         }
 
         return roles.stream()
-                .filter(r -> !isBlank(r))
-                .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+                .filter(value -> !isBlank(value))
+                .map(value -> value.startsWith("ROLE_") ? value : "ROLE_" + value)
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static String safeString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private static Long parseLong(Object value) {
+        if (value instanceof Integer integer) {
+            return integer.longValue();
+        }
+        if (value instanceof Long longValue) {
+            return longValue;
+        }
+        if (value != null) {
+            try {
+                return Long.parseLong(String.valueOf(value));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 }

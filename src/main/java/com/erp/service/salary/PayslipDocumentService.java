@@ -101,8 +101,7 @@ public class PayslipDocumentService {
                         : "—"
         );
 
-        // designation comes from User role
-        dto.setDesignation(employee.getRole() != null ? employee.getRole() : "—");
+        dto.setDesignation(resolveDesignation(employee));
 
         dto.setDateOfJoining(employee.getJoinDate());
 
@@ -298,5 +297,20 @@ public class PayslipDocumentService {
         if (clean.length() < 8) return clean;
         return clean.substring(0, 4) + " •••• "
                 + clean.substring(clean.length() - 4);
+    }
+    private String resolveDesignation(Employee employee) {
+        if (employee == null) return "â€”";
+
+        String companyRole = employee.getCompanyRole();
+        if (companyRole != null && !companyRole.isBlank()) {
+            return companyRole.trim();
+        }
+
+        String role = employee.getRole();
+        if (role != null && !role.isBlank()) {
+            return role.trim();
+        }
+
+        return "â€”";
     }
 }
