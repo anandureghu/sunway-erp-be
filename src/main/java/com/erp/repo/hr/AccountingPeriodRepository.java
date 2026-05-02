@@ -18,7 +18,7 @@ public interface AccountingPeriodRepository extends JpaRepository<AccountingPeri
             LocalDate date2
     );
 
-    List<AccountingPeriod> findByCompanyId(Long companyId);
+    List<AccountingPeriod> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     boolean existsByCompanyIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
             Long companyId,

@@ -112,7 +112,7 @@ public class CategoryService {
     // List top-level categories
     // --------------------------
     public List<CategoryResponseDTO> listCategories() {
-        return repo.findByCompanyIdAndParentIdIsNull(auth.getCurrentCompanyId())
+        return repo.findByCompanyIdAndParentIdIsNullOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream()
                 .map(this::toDTO)
                 .toList();
@@ -125,7 +125,7 @@ public class CategoryService {
 
         Category parent = getEntity(parentId);
 
-        return repo.findByCompanyIdAndParentId(
+        return repo.findByCompanyIdAndParentIdOrderByCreatedAtDesc(
                         auth.getCurrentCompanyId(),
                         parent.getId()
                 )
@@ -141,7 +141,7 @@ public class CategoryService {
 
         Category category = getEntity(id);
 
-        boolean hasChildren = !repo.findByCompanyIdAndParentId(
+        boolean hasChildren = !repo.findByCompanyIdAndParentIdOrderByCreatedAtDesc(
                 auth.getCurrentCompanyId(),
                 id
         ).isEmpty();

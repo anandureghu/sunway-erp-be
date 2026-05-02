@@ -10,5 +10,5 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     Optional<Shipment> findByPicklistId(Long picklistId);
 
-    List<Shipment> findByCompanyId(Long companyId);
+    List<Shipment> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 }

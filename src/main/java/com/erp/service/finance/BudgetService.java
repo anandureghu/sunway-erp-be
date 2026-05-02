@@ -112,7 +112,7 @@ public class BudgetService {
     public List<BudgetResponseDTO> listBudgets() {
         Long companyId = auth.getCurrentCompanyId();
 
-        return headerRepo.findByCompanyId(companyId).stream()
+        return headerRepo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                 .map(this::toDTO)
                 .toList();
     }
@@ -235,7 +235,7 @@ public class BudgetService {
     }
 
     private List<BudgetLine> copyLinesOntoHeader(BudgetHeader source, BudgetHeader target) {
-        List<BudgetLine> src = lineRepo.findByBudgetHeader_Id(source.getId());
+        List<BudgetLine> src = lineRepo.findByBudgetHeader_IdOrderByCreatedAtDesc(source.getId());
         if (src.isEmpty()) {
             return new ArrayList<>();
         }
@@ -281,8 +281,7 @@ public class BudgetService {
     }
 
     public BudgetResponseDTO close(Long id) {
-        BudgetHeader header = headerRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Budget not found"));
+        BudgetHeader header = getBHEntity(id);
 
         header.setStatus(BudgetStatus.REJECTED);
         header.setIsActive(false);
@@ -291,8 +290,7 @@ public class BudgetService {
     }
 
     public BudgetResponseDTO hold(Long id) {
-        BudgetHeader header = headerRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Budget not found"));
+        BudgetHeader header = getBHEntity(id);
 
         header.setStatus(BudgetStatus.HOLD);
 

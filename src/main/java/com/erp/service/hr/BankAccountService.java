@@ -43,7 +43,7 @@ public class BankAccountService {
     }
 
     public List<BankAccountResponse> getByCompany(Long companyId) {
-        return bankAccountRepository.findByCompanyId(companyId)
+        return bankAccountRepository.findByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream()
                 .map(this::map)
                 .toList();
@@ -81,7 +81,7 @@ public class BankAccountService {
     }
 
     private void unsetPrimaryAccount(Long companyId) {
-        List<BankAccount> accounts = bankAccountRepository.findByCompanyId(companyId);
+        List<BankAccount> accounts = bankAccountRepository.findByCompanyIdOrderByCreatedAtDesc(companyId);
         accounts.stream()
                 .filter(BankAccount::getPrimaryAccount)
                 .forEach(acc -> acc.setPrimaryAccount(false));

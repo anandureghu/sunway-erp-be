@@ -55,6 +55,8 @@ public class ReconciliationService {
         ChartOfAccounts account = accountRepo.findById(request.getAccountId())
                 .orElseThrow(() -> new RuntimeException("Account not found"));
 
+        assertCoaBelongsToCompany(account, companyId);
+
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -103,6 +105,13 @@ public class ReconciliationService {
         return map(rec);
     }
 
+    private void assertCoaBelongsToCompany(ChartOfAccounts coa, Long companyId) {
+        if (coa.getCompany() == null || companyId == null
+                || !coa.getCompany().getId().equals(companyId)) {
+            throw new RuntimeException("Account does not belong to your company");
+        }
+    }
+
     private Reconciliation get(Long id) {
         Long companyId = authContext.getCurrentCompanyId();
 
@@ -127,6 +136,9 @@ public class ReconciliationService {
 
         ChartOfAccounts account = accountRepo.findById(request.getAccountId())
                 .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        Long companyId = authContext.getCurrentCompanyId();
+        assertCoaBelongsToCompany(account, companyId);
 
         BigDecimal initialBalance = account.getBalance();
         BigDecimal newBalance = initialBalance.add(request.getAmount());

@@ -33,7 +33,7 @@ public class VendorService {
     // ---------------- LIST ----------------
     public List<VendorResponseDTO> getAllVendors() {
         Long companyId = authContext.getCurrentCompanyId();
-        return vendorRepo.findByCompanyId(companyId)
+        return vendorRepo.findByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream()
                 .map(this::toDTO)
                 .toList();

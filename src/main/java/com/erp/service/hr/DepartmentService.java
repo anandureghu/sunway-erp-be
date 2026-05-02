@@ -87,7 +87,7 @@ public class DepartmentService {
     // ── Get All ───────────────────────────────────────────────────────────────
 
     public List<DepartmentResponseDTO> getDepartmentsByCompanyId(Long companyId) {
-        return departmentRepository.findAllByCompanyId(resolveCompany(companyId).getId())
+        return departmentRepository.findAllByCompanyIdOrderByCreatedAtDesc(resolveCompany(companyId).getId())
                 .stream().map(this::toDTO).toList();
     }
 

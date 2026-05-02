@@ -5,9 +5,12 @@ import com.erp.domain.inventory.Vendor;
 import com.erp.dto.inventory.OrderRequest;
 import com.erp.repo.inventory.OrderRepository;
 import com.erp.repo.inventory.VendorRepository;
+import com.erp.security.context.AuthContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -16,24 +19,41 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final VendorRepository vendorRepository;
+    private final AuthContext authContext;
 
-    public OrderService(OrderRepository orderRepository, VendorRepository vendorRepository) {
+    public OrderService(
+            OrderRepository orderRepository,
+            VendorRepository vendorRepository,
+            AuthContext authContext) {
         this.orderRepository = orderRepository;
         this.vendorRepository = vendorRepository;
+        this.authContext = authContext;
     }
 
     public List<Orders> getAllOrders() {
-        return orderRepository.findAll();
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            return Collections.emptyList();
+        }
+        return orderRepository.findBySupplier_Company_IdOrderByCreatedAtDesc(companyId);
     }
 
     public Orders getOrderById(Long id) {
-        return orderRepository.findById(id)
+        Orders order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
+        assertOrderInTenant(order);
+        return order;
     }
 
     public Orders createOrder(OrderRequest req) {
         Vendor supplier = vendorRepository.findById(req.getSupplierId())
                 .orElseThrow(() -> new RuntimeException("Supplier not found"));
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null
+                || supplier.getCompany() == null
+                || !companyId.equals(supplier.getCompany().getId())) {
+            throw new RuntimeException("Supplier not found");
+        }
 
         Orders order = Orders.builder()
                 .orderId(req.getOrderId())
@@ -64,6 +84,19 @@ public class OrderService {
     }
 
     public void deleteOrder(Long id) {
-        orderRepository.deleteById(id);
+        Orders existing = getOrderById(id);
+        orderRepository.delete(existing);
+    }
+
+    private void assertOrderInTenant(Orders order) {
+        Long cid = authContext.getCurrentCompanyId();
+        if (cid == null) {
+            throw new RuntimeException("Company context required");
+        }
+        if (order.getSupplier() == null
+                || order.getSupplier().getCompany() == null
+                || !cid.equals(order.getSupplier().getCompany().getId())) {
+            throw new RuntimeException("Order not found or access denied");
+        }
     }
 }

@@ -11,5 +11,5 @@ public interface PicklistRepository extends JpaRepository<Picklist, Long> {
     Optional<Picklist> findBySalesOrderId(Long salesOrderId);
     Optional<Picklist> findByCompanyIdAndSalesOrderId(Long companyId, Long salesOrderId);
 
-    List<Picklist> findByCompanyId(Long companyId);
+    List<Picklist> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 }

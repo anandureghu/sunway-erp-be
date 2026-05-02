@@ -22,6 +22,10 @@ public class EmployeeBankDetails {
     @Column(nullable = false)
     private String bankName;
 
+    /** Bank short code for SIF file (e.g. QIB, CBQ). */
+    @Column(name = "bank_short_name", length = 32)
+    private String bankShortName;
+
     @Column(nullable = false)
     private String bankBranch;
 

@@ -7,6 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface CreditNoteRepository extends JpaRepository<CreditNote, Long> {
-    List<CreditNote> findByCompanyId(Long companyId);
+    List<CreditNote> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 }
-

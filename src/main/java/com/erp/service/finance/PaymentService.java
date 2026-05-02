@@ -10,11 +10,15 @@ import com.erp.domain.purchase.PurchaseRequisition;
 import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.hr.Company;
 import com.erp.dto.finance.CreatePaymentDTO;
+import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
+import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
+import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
+import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.notification.CustomerEmailService;
@@ -36,7 +40,9 @@ public class PaymentService {
     private final CustomerEmailService customerEmailService;
     private final CompanyRepository companyRepo;
     private final PurchaseOrderRepository purchaseOrderRepo;
+    private final PurchaseRequisitionRepository purchaseRequisitionRepo;
     private final ChartOfAccountsRepository coaRepo;
+    private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
 
     public PaymentService(PaymentRepository paymentRepo,
@@ -46,7 +52,9 @@ public class PaymentService {
                           CustomerEmailService customerEmailService,
                           CompanyRepository companyRepo,
                           PurchaseOrderRepository purchaseOrderRepo,
+                          PurchaseRequisitionRepository purchaseRequisitionRepo,
                           ChartOfAccountsRepository coaRepo,
+                          InvoiceRepository invoiceRepo,
                           AuthContext auth) {
 
         this.paymentRepo = paymentRepo;
@@ -56,7 +64,9 @@ public class PaymentService {
         this.customerEmailService = customerEmailService;
         this.companyRepo = companyRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
+        this.purchaseRequisitionRepo = purchaseRequisitionRepo;
         this.coaRepo = coaRepo;
+        this.invoiceRepo = invoiceRepo;
         this.auth = auth;
     }
 
@@ -148,34 +158,48 @@ public class PaymentService {
     public PaymentResponseDTO getPaymentById(Long id) {
         Payment p = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
-
+        assertPaymentInTenant(p);
         return toDTO(p);
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsForCompany(Long companyId) {
-        return paymentRepo.findByCompanyId(companyId).stream()
+        assertTenantCompanyPath(companyId);
+        return paymentRepo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                 .map(this::toDTO)
                 .toList();
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsForCompany(Long companyId, PaymentDirection direction) {
+        assertTenantCompanyPath(companyId);
         if (direction == null) {
             return getPaymentsForCompany(companyId);
         }
         if (direction == PaymentDirection.CUSTOMER) {
-            return paymentRepo.findByCompanyId(companyId).stream()
+            return paymentRepo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                     .filter(p -> p.getPaymentDirection() == null
                             || p.getPaymentDirection() == PaymentDirection.CUSTOMER)
                     .map(this::toDTO)
                     .toList();
         }
-        return paymentRepo.findByCompany_IdAndPaymentDirection(companyId, PaymentDirection.VENDOR).stream()
+        return paymentRepo.findByCompany_IdAndPaymentDirectionOrderByCreatedAtDesc(companyId, PaymentDirection.VENDOR).stream()
                 .map(this::toDTO)
                 .toList();
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsByInvoice(String invoiceId) {
-        return paymentRepo.findByInvoiceId(invoiceId).stream()
+        if (invoiceId == null || invoiceId.isBlank()) {
+            return List.of();
+        }
+        Invoice inv = invoiceRepo.findByInvoiceId(invoiceId).orElse(null);
+        if (inv == null) {
+            return List.of();
+        }
+        assertInvoiceCompany(inv);
+        return paymentRepo.findByInvoiceIdOrderByCreatedAtDesc(invoiceId).stream()
+                .filter(p -> isSuperAdmin()
+                        || (auth.getCurrentCompanyId() != null
+                        && p.getCompany() != null
+                        && auth.getCurrentCompanyId().equals(p.getCompany().getId())))
                 .map(this::toDTO)
                 .toList();
     }
@@ -184,6 +208,7 @@ public class PaymentService {
     public PaymentResponseDTO updatePayment(Long id, CreatePaymentDTO dto) {
         Payment payment = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
+        assertPaymentInTenant(payment);
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Payment amount must be greater than zero");
         }
@@ -204,6 +229,7 @@ public class PaymentService {
     public PaymentResponseDTO confirmPayment(Long id) {
         Payment payment = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
+        assertPaymentInTenant(payment);
 
         PaymentDirection dir = payment.getPaymentDirection() != null
                 ? payment.getPaymentDirection()
@@ -260,7 +286,7 @@ public class PaymentService {
     }
 
     /**
-     * Posts AP and cash reductions using the PR's credit (AP) account and a company CASH/ASSET account.
+     * Posts the purchase to the GL when vendor payment is confirmed: debit (expense/inventory from PR), credit cash.
      */
     private void postVendorPaymentToAccounting(Payment payment) {
         if (payment.getPurchaseOrderId() == null) {
@@ -269,24 +295,39 @@ public class PaymentService {
         PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
                 .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
         PurchaseRequisition pr = po.getSourceRequisition();
-        if (pr == null || pr.getCreditAccount() == null) {
+        if (pr == null || pr.getDebitAccount() == null) {
             throw new RuntimeException(
                     "Cannot post vendor payment to the chart of accounts: this purchase order has no source "
-                            + "requisition with an accounts payable (credit) account. Create the PO from an approved PR.");
+                            + "requisition with a debit (expense/inventory) account. Create the PO from an approved PR.");
         }
         Long cashAccountId = resolveDefaultCashAccountId(payment.getCompany().getId());
-        transactionService.createVendorPaymentSettlement(
-                payment.getId(),
-                payment.getCompany().getId(),
-                payment.getAmount(),
-                pr.getCreditAccount().getId(),
+        Long companyId = payment.getCompany().getId();
+        transactionService.validateTwoSidedPostingBalances(
+                pr.getDebitAccount().getId(),
                 cashAccountId,
-                payment.getEffectiveDate(),
-                po.getId());
+                payment.getAmount(),
+                companyId);
+
+        TransactionResponseDTO tx = transactionService.create(CreateTransactionDTO.builder()
+                .companyId(companyId)
+                .transactionType(TransactionService.TYPE_VENDOR_PAYMENT)
+                .transactionDate(payment.getEffectiveDate())
+                .amount(payment.getAmount())
+                .debitAccount(pr.getDebitAccount().getId())
+                .creditAccount(cashAccountId)
+                .paymentId(String.valueOf(payment.getId()))
+                .relatedId(po.getId())
+                .transactionDescription("Vendor payment (AP) — PO " + po.getOrderNumber())
+                .build());
+
+        purchaseRequisitionRepo.findById(pr.getId()).ifPresent(managed -> {
+            managed.setFinanceTransactionId(tx.getId());
+            purchaseRequisitionRepo.save(managed);
+        });
     }
 
     private Long resolveDefaultCashAccountId(Long companyId) {
-        List<ChartOfAccounts> list = coaRepo.findByCompanyId(companyId);
+        List<ChartOfAccounts> list = coaRepo.findByCompanyIdOrderByCreatedAtDesc(companyId);
         return list.stream()
                 .filter(a -> a.getType() == COAType.CASH)
                 .findFirst()
@@ -328,6 +369,47 @@ public class PaymentService {
     }
 
     public void deletePayment(Long id) {
-        paymentRepo.deleteById(id);
+        Payment p = paymentRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Payment not found"));
+        assertPaymentInTenant(p);
+        paymentRepo.delete(p);
+    }
+
+    private boolean isSuperAdmin() {
+        String r = auth.getCurrentUserRole();
+        return r != null && "SUPER_ADMIN".equalsIgnoreCase(r);
+    }
+
+    private void assertTenantCompanyPath(Long requestedCompanyId) {
+        if (requestedCompanyId == null) {
+            throw new RuntimeException("Company is required");
+        }
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long current = auth.getCurrentCompanyId();
+        if (current == null || !current.equals(requestedCompanyId)) {
+            throw new RuntimeException("Access denied for this company");
+        }
+    }
+
+    private void assertPaymentInTenant(Payment p) {
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long cid = auth.getCurrentCompanyId();
+        if (cid == null || p.getCompany() == null || !cid.equals(p.getCompany().getId())) {
+            throw new RuntimeException("Payment not found or access denied");
+        }
+    }
+
+    private void assertInvoiceCompany(Invoice inv) {
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long cid = auth.getCurrentCompanyId();
+        if (cid == null || inv.getCompany() == null || !cid.equals(inv.getCompany().getId())) {
+            throw new RuntimeException("Invoice not found or access denied");
+        }
     }
 }

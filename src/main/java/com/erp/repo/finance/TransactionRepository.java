@@ -5,9 +5,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
-    List<Transaction> findByCompanyId(Long companyId);
-    List<Transaction> findByPaymentId(String paymentId);
-    List<Transaction> findByPaymentIdAndTransactionType(String paymentId, String transactionType);
+    List<Transaction> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
+    List<Transaction> findByPaymentIdOrderByCreatedAtDesc(String paymentId);
+    List<Transaction> findByPaymentIdAndTransactionTypeOrderByCreatedAtDesc(String paymentId, String transactionType);
     boolean existsByPaymentId(String paymentId);
     boolean existsByRelatedIdAndTransactionType(Long relatedId, String transactionType);
 

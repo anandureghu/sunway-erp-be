@@ -38,9 +38,9 @@ public class TransactionService {
     public static final String TYPE_JOURNAL = "JOURNAL";
     public static final String TYPE_RECONCILIATION = "RECONCILIATION";
     public static final String TYPE_BUDGET = "BUDGET";
-    /** Two-sided COA posting when a purchase requisition is approved to a PO. */
+    /** Legacy / historical rows: two-sided posting when a PR was approved (accrual); new flows post at vendor payment. */
     public static final String TYPE_PURCHASE_REQUISITION = "PURCHASE_REQUISITION";
-    /** Vendor payment confirmed in AP: reduces AP and cash (custom posting, not {@link #applyPostingToCoa}). */
+    /** Vendor payment confirmed in AP: expense/inventory debit and cash credit via {@link #applyPostingToCoa}. */
     public static final String TYPE_VENDOR_PAYMENT = "VENDOR_PAYMENT";
     public static final String TYPE_SALES_ORDER_CANCEL_REVERSAL = "SALES_ORDER_CANCEL_REVERSAL";
 
@@ -253,7 +253,15 @@ public class TransactionService {
         Long creditId = dto.getCreditAccount();
         validateDebitCreditLegs(debitId, creditId);
 
-        Company company = companyRepo.findById(dto.getCompanyId())
+        Long requestedCompanyId = dto.getCompanyId();
+        if (!isSuperAdmin()) {
+            Long cid = auth.getCurrentCompanyId();
+            if (cid == null || requestedCompanyId == null || !cid.equals(requestedCompanyId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Company mismatch");
+            }
+        }
+
+        Company company = companyRepo.findById(requestedCompanyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
         ChartOfAccounts creditAccount = creditId != null
@@ -262,6 +270,13 @@ public class TransactionService {
         ChartOfAccounts debitAccount = debitId != null
                 ? coaRepo.findById(debitId).orElseThrow(() -> new RuntimeException("Invalid debit account"))
                 : null;
+
+        if (debitAccount != null && !debitAccount.getCompany().getId().equals(requestedCompanyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Debit account does not belong to this company");
+        }
+        if (creditAccount != null && !creditAccount.getCompany().getId().equals(requestedCompanyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Credit account does not belong to this company");
+        }
 
         boolean singleSided = isSingleSided(debitAccount, creditAccount);
 
@@ -338,6 +353,36 @@ public class TransactionService {
         }
     }
 
+    /**
+     * Validates that posting {@code amount} with the same deltas as {@link #applyPostingToCoa} would not violate
+     * {@link CoaBalanceRules}.
+     */
+    public void validateTwoSidedPostingBalances(
+            Long debitAccountId,
+            Long creditAccountId,
+            BigDecimal amount,
+            Long companyId) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount must be positive for posting validation");
+        }
+        if (debitAccountId == null || creditAccountId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debit and credit accounts are required");
+        }
+        if (debitAccountId.equals(creditAccountId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debit and credit accounts cannot be the same");
+        }
+        ChartOfAccounts debit = coaRepo.findById(debitAccountId)
+                .orElseThrow(() -> new RuntimeException("Debit account not found"));
+        ChartOfAccounts credit = coaRepo.findById(creditAccountId)
+                .orElseThrow(() -> new RuntimeException("Credit account not found"));
+        if (!debit.getCompany().getId().equals(companyId)
+                || !credit.getCompany().getId().equals(companyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account does not belong to this company");
+        }
+        CoaBalanceRules.assertSufficientBalance(debit, amount.negate());
+        CoaBalanceRules.assertSufficientBalance(credit, amount);
+    }
+
     private void coaAdjust(ChartOfAccounts coa, BigDecimal delta) {
         CoaBalanceRules.assertSufficientBalance(coa, delta);
         BigDecimal current = coa.getBalance() == null ? BigDecimal.ZERO : coa.getBalance();
@@ -345,14 +390,34 @@ public class TransactionService {
         coaRepo.save(coa);
     }
 
+    private boolean isSuperAdmin() {
+        String r = auth.getCurrentUserRole();
+        return r != null && "SUPER_ADMIN".equalsIgnoreCase(r);
+    }
+
+    private void assertTransactionCompany(Transaction tx) {
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long companyId = auth.getCurrentCompanyId();
+        if (tx.getCompany() == null || companyId == null || !tx.getCompany().getId().equals(companyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Transaction not in your company");
+        }
+    }
+
     public TransactionResponseDTO get(Long id) {
         Transaction tx = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        assertTransactionCompany(tx);
         return toDTO(tx);
     }
 
     public List<TransactionResponseDTO> listByCompany(Long companyId) {
-        return repo.findByCompanyId(companyId).stream()
+        Long effectiveCompanyId = isSuperAdmin() ? companyId : auth.getCurrentCompanyId();
+        if (effectiveCompanyId == null) {
+            return List.of();
+        }
+        return repo.findByCompanyIdOrderByCreatedAtDesc(effectiveCompanyId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
@@ -361,6 +426,7 @@ public class TransactionService {
     public TransactionResponseDTO postTransaction(Long id, String fiscalYear) {
         Transaction tx = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        assertTransactionCompany(tx);
 
         if (tx.getCreditAccount() != null) {
             updateBalance(tx.getCreditAccount().getId(), fiscalYear, tx.getAmount(), false);
@@ -560,50 +626,6 @@ public class TransactionService {
 
         Transaction saved = repo.save(tx);
         applyPostingToCoa(saved);
-        return toDTO(saved);
-    }
-
-    /**
-     * Records vendor payment settlement: decreases accounts payable and cash.
-     * Does not use {@link #applyPostingToCoa} (that moves one account down and one up); both legs must decrease.
-     */
-    @Transactional
-    public TransactionResponseDTO createVendorPaymentSettlement(
-            Long paymentId,
-            Long companyId,
-            BigDecimal amount,
-            Long accountsPayableAccountId,
-            Long cashAccountId,
-            LocalDate txDate,
-            Long relatedPurchaseOrderId) {
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount must be positive");
-        }
-        Company company = companyRepo.findById(companyId)
-                .orElseThrow(() -> new RuntimeException("Company not found"));
-        ChartOfAccounts ap = coaRepo.findById(accountsPayableAccountId)
-                .orElseThrow(() -> new RuntimeException("Accounts payable account not found"));
-        ChartOfAccounts cash = coaRepo.findById(cashAccountId)
-                .orElseThrow(() -> new RuntimeException("Cash account not found"));
-
-        Transaction tx = Transaction.builder()
-                .transactionCode("TX-VP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
-                .transactionType(TYPE_VENDOR_PAYMENT)
-                .company(company)
-                .transactionDate(txDate == null ? LocalDate.now() : txDate)
-                .amount(amount)
-                .debitAccount(ap)
-                .creditAccount(cash)
-                .paymentId(paymentId != null ? String.valueOf(paymentId) : null)
-                .transactionDescription("Vendor payment — AP and cash")
-                .relatedId(relatedPurchaseOrderId)
-                .createdAt(Instant.now())
-                .createdBy(auth.getCurrentUserId())
-                .build();
-
-        Transaction saved = repo.save(tx);
-        coaAdjust(ap, amount.negate());
-        coaAdjust(cash, amount.negate());
         return toDTO(saved);
     }
 }

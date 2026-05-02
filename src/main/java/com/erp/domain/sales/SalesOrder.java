@@ -43,7 +43,7 @@ public class SalesOrder {
     private String shippingAddress;
 
     @Column(nullable = false)
-    private String status; // DRAFT, CONFIRMED, CANCELLED
+    private String status; // DRAFT, CONFIRMED, COMPLETED, CANCELLED
 
     @Column(precision = 18, scale = 2)
     private BigDecimal totalAmount;

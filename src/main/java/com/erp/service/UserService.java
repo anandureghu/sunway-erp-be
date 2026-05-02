@@ -8,8 +8,10 @@ import com.erp.dto.security.AdminResetPasswordRequest;
 import com.erp.dto.security.ChangePasswordRequest;
 import com.erp.dto.security.ProfileResponse;
 import com.erp.dto.hr.UserDetailsDTO;
+import com.erp.domain.security.Role;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
+import com.erp.security.context.AuthContext;
 import com.erp.service.security.CustomUserPrincipal;
 import com.erp.service.security.PermissionCheckService;
 import org.springframework.security.access.AccessDeniedException;
@@ -26,15 +28,18 @@ public class UserService {
     private final EmployeeRepository employeeRepo;
     private final PasswordEncoder passwordEncoder;
     private final PermissionCheckService permissionCheckService;
+    private final AuthContext authContext;
 
     public UserService(UserRepository userRepo,
                        EmployeeRepository employeeRepo,
                        PasswordEncoder passwordEncoder,
-                       PermissionCheckService permissionCheckService) {
+                       PermissionCheckService permissionCheckService,
+                       AuthContext authContext) {
         this.userRepo = userRepo;
         this.employeeRepo = employeeRepo;
         this.passwordEncoder = passwordEncoder;
         this.permissionCheckService = permissionCheckService;
+        this.authContext = authContext;
     }
 
     // ======================================================
@@ -44,6 +49,17 @@ public class UserService {
     public UserDetailsDTO getUserDetails(Long id) {
         User user = userRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found: " + id));
+
+        User current = userRepo.findById(authContext.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (current.getRole() != Role.SUPER_ADMIN) {
+            Long targetCompanyId = resolveTargetUserCompanyId(user);
+            Long jwtCompanyId = authContext.getCurrentCompanyId();
+            if (jwtCompanyId == null || targetCompanyId == null
+                    || !jwtCompanyId.equals(targetCompanyId)) {
+                throw new AccessDeniedException("Access denied");
+            }
+        }
 
         Employee emp = employeeRepo.findByUser_Id(id).orElse(null);
 
@@ -90,6 +106,14 @@ public class UserService {
                                 : null
                 )
                 .build();
+    }
+
+    private Long resolveTargetUserCompanyId(User user) {
+        Employee emp = employeeRepo.findByUser_Id(user.getId()).orElse(null);
+        if (emp != null && emp.getCompany() != null) {
+            return emp.getCompany().getId();
+        }
+        return user.getCompanyId();
     }
 
     // ======================================================

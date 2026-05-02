@@ -9,6 +9,7 @@ import com.erp.domain.hr.Currency;
 import com.erp.dto.hr.AccountingDefaultsDTO;
 import com.erp.dto.hr.CompanyDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
+import com.erp.dto.hr.PayrollExportSettingsDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
@@ -16,10 +17,12 @@ import com.erp.repo.hr.CompanyInvoiceSettingsRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -56,9 +59,18 @@ public class CompanyService {
     public List<Company> getAllCompanies() {
         Long userId = authContext.getCurrentUserId();
         if (userId == null) throw new RuntimeException("User not authenticated");
-        return companyRepository.findAll().stream()
-                .map(this::hydrateInvoiceBrandingView)
-                .toList();
+        if (isSuperAdmin()) {
+            return companyRepository.findAll().stream()
+                    .map(this::hydrateInvoiceBrandingView)
+                    .toList();
+        }
+        Long cid = authContext.getCurrentCompanyId();
+        if (cid == null) {
+            return Collections.emptyList();
+        }
+        return companyRepository.findById(cid)
+                .map(c -> List.of(hydrateInvoiceBrandingView(c)))
+                .orElse(Collections.emptyList());
     }
 
     // ======================================================
@@ -67,7 +79,18 @@ public class CompanyService {
     public Company getCompanyById(Long id) {
         Company company = companyRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
+        if (!isSuperAdmin()) {
+            Long current = authContext.getCurrentCompanyId();
+            if (current == null || !current.equals(id)) {
+                throw new AccessDeniedException("Access denied for this company");
+            }
+        }
         return hydrateInvoiceBrandingView(company);
+    }
+
+    private boolean isSuperAdmin() {
+        String role = authContext.getCurrentUserRole();
+        return role != null && "SUPER_ADMIN".equalsIgnoreCase(role);
     }
 
     // ======================================================
@@ -244,9 +267,44 @@ public class CompanyService {
     }
 
     // ======================================================
+    // PAYROLL BANK FILE (SIF) EXPORT SETTINGS
+    // ======================================================
+    public PayrollExportSettingsDTO getPayrollExportSettings(Long companyId) {
+        Company company = getCompanyById(companyId);
+        return toPayrollExportSettingsDto(company);
+    }
+
+    @Transactional
+    public PayrollExportSettingsDTO updatePayrollExportSettings(Long companyId, PayrollExportSettingsDTO dto) {
+        Company company = getCompanyById(companyId);
+        company.setPayrollEmployerEid(trimToNull(dto.getPayrollEmployerEid()));
+        company.setPayrollPayerEid(trimToNull(dto.getPayrollPayerEid()));
+        company.setPayrollPayerQid(trimToNull(dto.getPayrollPayerQid()));
+        company.setPayrollPayerBankShortName(trimToNull(dto.getPayrollPayerBankShortName()));
+        company.setPayrollPayerIban(trimToNull(dto.getPayrollPayerIban()));
+        String sif = trimToNull(dto.getPayrollSifVersion());
+        company.setPayrollSifVersion(sif != null ? sif : "1");
+        companyRepository.save(company);
+        return toPayrollExportSettingsDto(company);
+    }
+
+    private PayrollExportSettingsDTO toPayrollExportSettingsDto(Company company) {
+        return PayrollExportSettingsDTO.builder()
+                .payrollEmployerEid(company.getPayrollEmployerEid())
+                .payrollPayerEid(company.getPayrollPayerEid())
+                .payrollPayerQid(company.getPayrollPayerQid())
+                .payrollPayerBankShortName(company.getPayrollPayerBankShortName())
+                .payrollPayerIban(company.getPayrollPayerIban())
+                .payrollSifVersion(
+                        company.getPayrollSifVersion() != null ? company.getPayrollSifVersion() : "1")
+                .build();
+    }
+
+    // ======================================================
     // DELETE COMPANY
     // ======================================================
     public void deleteCompany(Long id) {
+        getCompanyById(id);
         companyRepository.deleteById(id);
     }
 

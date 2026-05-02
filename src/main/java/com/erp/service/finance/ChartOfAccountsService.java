@@ -3,6 +3,7 @@ package com.erp.service.finance;
 import com.erp.domain.User;
 import com.erp.domain.finance.COAType;
 import com.erp.domain.finance.ChartOfAccounts;
+import com.erp.domain.finance.GLAccountBalance;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.Department;
 import com.erp.dto.finance.ChartOfAccountResponseDTO;
@@ -10,6 +11,7 @@ import com.erp.dto.finance.CreateAccountDTO;
 import com.erp.dto.finance.UpdateAccountDTO;
 import com.erp.repo.UserRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
+import com.erp.repo.finance.GLAccountBalanceRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
@@ -32,6 +34,7 @@ public class ChartOfAccountsService {
     private final DepartmentRepository departmentRepository;
     private final AuthContext auth;
     private final TransactionService transactionService;
+    private final GLAccountBalanceRepository glAccountBalanceRepository;
 
     public ChartOfAccountsService(
             ChartOfAccountsRepository repo,
@@ -39,7 +42,8 @@ public class ChartOfAccountsService {
             UserRepository userRepository,
             DepartmentRepository departmentRepository,
             AuthContext auth,
-            TransactionService transactionService
+            TransactionService transactionService,
+            GLAccountBalanceRepository glAccountBalanceRepository
     ) {
         this.repo = repo;
         this.companyRepo = companyRepo;
@@ -47,6 +51,7 @@ public class ChartOfAccountsService {
         this.departmentRepository = departmentRepository;
         this.auth = auth;
         this.transactionService = transactionService;
+        this.glAccountBalanceRepository = glAccountBalanceRepository;
     }
 
     // =============================================================
@@ -74,6 +79,9 @@ public class ChartOfAccountsService {
         if (dto.getParentId() != null) {
             parent = repo.findById(dto.getParentId())
                     .orElseThrow(() -> new RuntimeException("Parent account not found"));
+            if (!parent.getCompany().getId().equals(companyId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Parent account does not belong to your company");
+            }
         }
 
 //        TODO: check with ali, that multiple account can exist with the same type, or a single type parent account?
@@ -121,6 +129,7 @@ public class ChartOfAccountsService {
 
         ChartOfAccounts acc = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Account not found"));
+        assertCoaInTenant(acc);
 
         acc.setAccountName(dto.getAccountName());
         acc.setDescription(dto.getDescription());
@@ -168,7 +177,7 @@ public class ChartOfAccountsService {
     // =============================================================
     public List<ChartOfAccountResponseDTO> listAll() {
         Long companyId = auth.getCurrentCompanyId();
-        return repo.findByCompanyId(companyId).stream()
+        return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
@@ -177,9 +186,20 @@ public class ChartOfAccountsService {
     // GET
     // =============================================================
     public ChartOfAccountResponseDTO getById(Long id) {
-        return repo.findById(id)
-                .map(this::toDTO)
+        ChartOfAccounts acc = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Account not found"));
+        assertCoaInTenant(acc);
+        return toDTO(acc);
+    }
+
+    /**
+     * GL balance for fiscal year; account must belong to the current company (or SUPER_ADMIN).
+     */
+    public GLAccountBalance getGlBalanceForAccount(Long accountId, String fiscalYear) {
+        ChartOfAccounts acc = repo.findById(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+        assertCoaInTenant(acc);
+        return glAccountBalanceRepository.findByAccountIdAndFiscalYear(accountId, fiscalYear).orElse(null);
     }
 
     // =============================================================
@@ -188,6 +208,7 @@ public class ChartOfAccountsService {
     public void delete(Long id) {
         ChartOfAccounts account = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Account not found"));
+        assertCoaInTenant(account);
         if (account.getBalance().compareTo(BigDecimal.ZERO) > 0) {
             throw new RuntimeException("Cannot delete account, balance is greater than 0");
         }
@@ -195,6 +216,21 @@ public class ChartOfAccountsService {
         repo.save(account);
     }
 
+
+    private boolean isSuperAdmin() {
+        String r = auth.getCurrentUserRole();
+        return r != null && "SUPER_ADMIN".equalsIgnoreCase(r);
+    }
+
+    private void assertCoaInTenant(ChartOfAccounts acc) {
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long cid = auth.getCurrentCompanyId();
+        if (cid == null || acc.getCompany() == null || !cid.equals(acc.getCompany().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account not found or access denied");
+        }
+    }
 
     // =============================================================
     // DTO MAPPER

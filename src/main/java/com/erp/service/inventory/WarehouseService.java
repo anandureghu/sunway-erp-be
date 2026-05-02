@@ -114,7 +114,7 @@ public class WarehouseService {
     // List
     // --------------------------
     public List<WarehouseResponseDTO> list() {
-        return repo.findByCompanyId(auth.getCurrentCompanyId())
+        return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream()
                 .map(this::toDTO)
                 .toList();

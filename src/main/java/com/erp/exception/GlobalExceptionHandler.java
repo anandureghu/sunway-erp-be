@@ -72,4 +72,13 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
+
+    @ExceptionHandler(PayrollExportException.class)
+    public ResponseEntity<Map<String, Object>> handlePayrollExport(PayrollExportException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "Payroll export failed");
+        body.put("message", ex.getMessage());
+        body.put("details", ex.getDetails());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
 }

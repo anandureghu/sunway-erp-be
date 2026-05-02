@@ -89,8 +89,8 @@ public class EmployeeAppraisal {
     /* ================= AUDIT ================= */
 
     @CreationTimestamp
-    @Column(updatable = false)
-    private LocalDateTime createdDate;
+    @Column(name = "created_date", updatable = false)
+    private LocalDateTime createdAt;
 
     @UpdateTimestamp
     private LocalDateTime updatedDate;

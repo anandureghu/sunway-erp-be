@@ -59,7 +59,7 @@ public class DivisionService {
 
     public List<DivisionResponseDTO> getDivisionsForCurrentUser() {
         Long companyId = authContext.getCurrentCompanyId();
-        return divisionRepository.findAllByCompanyId(companyId)
+        return divisionRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream().map(this::toDTO).toList();
     }
 
@@ -97,7 +97,7 @@ public class DivisionService {
     }
 
     public List<DivisionResponseDTO> getDivisionsByCompanyId(Long companyId) {
-        return divisionRepository.findAllByCompanyId(companyId)
+        return divisionRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream().map(this::toDTO).toList();
     }
 

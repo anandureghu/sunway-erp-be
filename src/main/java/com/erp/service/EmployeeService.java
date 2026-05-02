@@ -30,6 +30,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -339,7 +341,7 @@ public class EmployeeService {
         if (canViewAll) {
             log.info("✅ User has VIEW_ALL permission - loading all employees");
             return employeeRepository
-                    .findByCompany_Id(authUser.getCompany().getId())
+                    .findByCompany_IdOrderByCreatedAtDesc(authUser.getCompany().getId())
                     .stream()
                     .map(this::toDTO)
                     .toList();
@@ -363,7 +365,8 @@ public class EmployeeService {
     // ======================================================
 
     public List<EmployeeResponseDTO> getEmployeesByCompany(Long companyId) {
-        return employeeRepository.findByCompany_Id(companyId)
+        assertTenantCompanyScope(companyId);
+        return employeeRepository.findByCompany_IdOrderByCreatedAtDesc(companyId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -372,7 +375,10 @@ public class EmployeeService {
     // ======================================================
 
     public List<EmployeeResponseDTO> getEmployeesByDepartment(Long departmentId) {
-        return employeeRepository.findByDepartmentId(departmentId)
+        Department dept = departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new RuntimeException("Department not found"));
+        assertTenantCompanyScope(dept.getCompany().getId());
+        return employeeRepository.findByDepartmentIdOrderByCreatedAtDesc(departmentId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -415,10 +421,15 @@ public class EmployeeService {
             throw new RuntimeException("Access denied: no permission to view employees");
         }
 
-        // ✅ VIEW ALL - Return paginated list of all employees
+        if (authUser.getCompany() == null) {
+            throw new RuntimeException("User not linked to any company");
+        }
+
+        // ✅ VIEW ALL - Return paginated employees for current company only
         log.info("✅ User has VIEW_ALL permission - loading paginated employees");
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Employee> empPage = employeeRepository.findAll(pageable);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Employee> empPage = employeeRepository.findByCompany_Id(
+                authUser.getCompany().getId(), pageable);
 
         return PageResponse.of(
                 empPage.getContent().stream().map(this::toDTO).toList(),
@@ -434,6 +445,7 @@ public class EmployeeService {
     // ======================================================
 
     public EmployeeResponseDTO getCompanyAdmin(Long companyId) {
+        assertTenantCompanyScope(companyId);
         List<Role> roles = List.of(Role.ADMIN, Role.SUPER_ADMIN);
 
         return employeeRepository
@@ -448,7 +460,8 @@ public class EmployeeService {
     // ======================================================
 
     public List<EmployeeResponseDTO> getManagersByCompany(Long companyId) {
-        return employeeRepository.findByCompany_Id(companyId)
+        assertTenantCompanyScope(companyId);
+        return employeeRepository.findByCompany_IdOrderByCreatedAtDesc(companyId)
                 .stream()
                 .map(this::toDTO)
                 .toList();
@@ -524,6 +537,21 @@ public class EmployeeService {
         if (userId == null) throw new RuntimeException("Unauthorized");
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    /** Ensures {@code requestedCompanyId} matches the JWT tenant unless caller is {@link Role#SUPER_ADMIN}. */
+    private void assertTenantCompanyScope(Long requestedCompanyId) {
+        if (requestedCompanyId == null) {
+            throw new AccessDeniedException("Company is required");
+        }
+        User authUser = getAuthUser();
+        if (authUser.getRole() == Role.SUPER_ADMIN) {
+            return;
+        }
+        Long current = authContext.getCurrentCompanyId();
+        if (current == null || !current.equals(requestedCompanyId)) {
+            throw new AccessDeniedException("Access denied for this company");
+        }
     }
 
     private CompanyRole resolveCompanyRole(Company company, Long companyRoleId, String companyRoleName) {

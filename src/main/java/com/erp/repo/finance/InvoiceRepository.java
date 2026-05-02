@@ -11,9 +11,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     Optional<Invoice> findByInvoiceId(String invoiceId);
 
-    List<Invoice> findByCompanyId(Long companyId);
+    List<Invoice> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
-    List<Invoice> findByCompany_IdAndType(Long companyId, InvoiceType type);
+    List<Invoice> findByCompany_IdAndTypeOrderByCreatedAtDesc(Long companyId, InvoiceType type);
 
     Invoice findByOrderId(Long orderId);
     Optional<Invoice> findByOrderIdAndType(Long orderId, InvoiceType type);
@@ -25,7 +25,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             String supplierInvoiceNumber
     );
 
-    List<Invoice> findByCompanyIdAndStatus(Long companyId, String status);
+    List<Invoice> findByCompanyIdAndStatusOrderByCreatedAtDesc(Long companyId, String status);
 
-    List<Invoice> findByToParty(String toParty); // customer name/id
+    List<Invoice> findByToPartyOrderByCreatedAtDesc(String toParty); // customer name/id
+
+    List<Invoice> findByCompany_IdAndToPartyOrderByCreatedAtDesc(Long companyId, String toParty);
 }

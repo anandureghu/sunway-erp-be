@@ -33,7 +33,7 @@ public class CompanyRoleService {
     public List<CompanyRoleDTO.Response> listByCompany(Long companyId) {
         requireCurrentCompany(companyId);
 
-        return roleRepository.findByCompanyId(companyId).stream()
+        return roleRepository.findByCompanyIdOrderByCreatedDateDesc(companyId).stream()
                 .map(this::mapToResponse)
                 .toList();
     }
@@ -46,7 +46,7 @@ public class CompanyRoleService {
     public List<CompanyRoleDTO.Response> listActiveByCompany(Long companyId) {
         requireCurrentCompany(companyId);
 
-        return roleRepository.findByCompanyIdAndActiveTrue(companyId).stream()
+        return roleRepository.findByCompanyIdAndActiveTrueOrderByCreatedDateDesc(companyId).stream()
                 .map(this::mapToResponse)
                 .toList();
     }

@@ -133,7 +133,7 @@ public class PurchaseOrderService {
     }
 
     public List<PurchaseOrderResponseDTO> list() {
-        return repo.findByCompanyId(auth.getCurrentCompanyId())
+        return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream().map(this::toDTO).toList();
     }
 

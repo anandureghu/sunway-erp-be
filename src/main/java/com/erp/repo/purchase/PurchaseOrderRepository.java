@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Long> {
-    List<PurchaseOrder> findByCompanyId(Long companyId);
+    List<PurchaseOrder> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     Optional<PurchaseOrder> findBySourceRequisition_Id(Long requisitionId);
 }

@@ -79,6 +79,7 @@ public class EmployeeBankDetailsService {
                          BankDetailsRequestDTO dto) {
 
         bank.setBankName(dto.getBankName());
+        bank.setBankShortName(dto.getBankShortName() != null ? dto.getBankShortName().trim() : null);
         bank.setBankBranch(dto.getBankBranch());
         bank.setAccountType(dto.getAccountType());
         bank.setAccountNo(dto.getAccountNo());
@@ -93,6 +94,7 @@ public class EmployeeBankDetailsService {
 
         BankDetailsResponseDTO dto = new BankDetailsResponseDTO();
         dto.setBankName(bank.getBankName());
+        dto.setBankShortName(bank.getBankShortName());
         dto.setBankBranch(bank.getBankBranch());
         dto.setAccountType(bank.getAccountType());
         dto.setAccountNo(bank.getAccountNo());
