@@ -42,6 +42,10 @@ import static com.erp.domain.security.HrModule.LEAVES;
 @Slf4j
 public class LeaveService {
 
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_APPROVED = "APPROVED";
+    private static final String STATUS_CANCELLED = "CANCELLED";
+
     private final EmployeeRepository employeeRepo;
     private final CompanyLeavePolicyRepository policyRepo;
     private final EmployeeLeaveBalanceRepository balanceRepo;
@@ -110,6 +114,8 @@ public class LeaveService {
         validateDates(dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
 
         Employee employee = getEmployee(employeeId);
+        validateEmployeeOwnership(employeeId, employee);
+
         boolean includeWeekends = Boolean.TRUE.equals(dto.getIncludeWeekends());
         int totalDays = calculateDays(dto.getStartDate(), dto.getEndDate(), includeWeekends);
 
@@ -133,7 +139,7 @@ public class LeaveService {
         leave.setDateReported(LocalDate.now());
         leave.setTotalDays(totalDays);
         leave.setIncludeWeekends(includeWeekends);
-        leave.setLeaveStatus("PENDING");
+        leave.setLeaveStatus(STATUS_PENDING);
 
         leave = leaveRepo.save(leave);
 
@@ -165,7 +171,7 @@ public class LeaveService {
             throw new AccessDeniedException("Access denied: no permission to view pending leave approvals");
         }
 
-        return leaveRepo.findByLeaveStatusOrderByDateReportedDesc("PENDING")
+        return leaveRepo.findByLeaveStatusOrderByDateReportedDesc(STATUS_PENDING)
                 .stream()
                 .filter(leave -> leave.getEmployee() != null)
                 .filter(leave -> leave.getEmployee().getId() != null)
@@ -190,7 +196,7 @@ public class LeaveService {
             throw new RuntimeException("Leave request employee not found");
         }
 
-        if (!"PENDING".equalsIgnoreCase(leave.getLeaveStatus())) {
+        if (!STATUS_PENDING.equalsIgnoreCase(leave.getLeaveStatus())) {
             throw new IllegalArgumentException("Only pending leave requests can be approved");
         }
 
@@ -213,7 +219,74 @@ public class LeaveService {
             balanceRepo.save(balance);
         }
 
-        leave.setLeaveStatus("APPROVED");
+        leave.setLeaveStatus(STATUS_APPROVED);
+        leave = leaveRepo.save(leave);
+
+        return mapToHistoryDTO(leave);
+    }
+
+    @Transactional
+    public LeaveHistoryDTO cancelLeave(Long employeeId, Long leaveId) {
+        EmployeeLeave leave = leaveRepo.findById(leaveId)
+                .orElseThrow(() -> new RuntimeException("Leave not found"));
+
+        if (leave.getEmployee() == null || leave.getEmployee().getId() == null) {
+            throw new RuntimeException("Leave employee not found");
+        }
+
+        if (!leave.getEmployee().getId().equals(employeeId)) {
+            throw new AccessDeniedException("You can only cancel your own leave");
+        }
+
+        if (!STATUS_PENDING.equalsIgnoreCase(leave.getLeaveStatus())) {
+            throw new IllegalArgumentException("Only pending leaves can be cancelled");
+        }
+
+        leave.setLeaveStatus(STATUS_CANCELLED);
+        leave = leaveRepo.save(leave);
+
+        return mapToHistoryDTO(leave);
+    }
+
+    @Transactional
+    public LeaveHistoryDTO updateLeave(Long employeeId, Long leaveId, LeaveRequestDTO dto) {
+        validateDates(dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
+
+        EmployeeLeave leave = leaveRepo.findById(leaveId)
+                .orElseThrow(() -> new RuntimeException("Leave not found"));
+
+        if (leave.getEmployee() == null || leave.getEmployee().getId() == null) {
+            throw new RuntimeException("Leave employee not found");
+        }
+
+        if (!leave.getEmployee().getId().equals(employeeId)) {
+            throw new AccessDeniedException("You can only update your own leave");
+        }
+
+        if (!STATUS_PENDING.equalsIgnoreCase(leave.getLeaveStatus())) {
+            throw new IllegalArgumentException("Only pending leaves can be updated");
+        }
+
+        Employee employee = leave.getEmployee();
+        boolean includeWeekends = Boolean.TRUE.equals(dto.getIncludeWeekends());
+        int newDays = calculateDays(dto.getStartDate(), dto.getEndDate(), includeWeekends);
+
+        CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
+        validateGender(policy, employee);
+
+        if (Boolean.TRUE.equals(policy.getPaid())) {
+            EmployeeLeaveBalance balance = getOrCreateBalance(employee, policy);
+            if (balance.getRemainingLeaves() < newDays) {
+                throw new RuntimeException("Insufficient leave balance");
+            }
+        }
+
+        leave.setLeaveType(policy.getLeaveType());
+        leave.setStartDate(dto.getStartDate());
+        leave.setEndDate(dto.getEndDate());
+        leave.setTotalDays(newDays);
+        leave.setIncludeWeekends(includeWeekends);
+
         leave = leaveRepo.save(leave);
 
         return mapToHistoryDTO(leave);
@@ -235,6 +308,12 @@ public class LeaveService {
 
         return employeeRepo.findByUser_Id(currentUser.getId())
                 .orElseThrow(() -> new RuntimeException("Employee record not found"));
+    }
+
+    private void validateEmployeeOwnership(Long employeeId, Employee employee) {
+        if (employee == null || employee.getId() == null || !employee.getId().equals(employeeId)) {
+            throw new AccessDeniedException("You can apply leave only for your own employee record");
+        }
     }
 
     private boolean canActAsApprover(Employee approver) {
