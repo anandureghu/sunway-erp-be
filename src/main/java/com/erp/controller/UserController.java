@@ -1,30 +1,41 @@
 package com.erp.controller;
 
+import com.erp.domain.User;
 import com.erp.dto.security.AdminResetPasswordRequest;
 import com.erp.dto.security.ChangePasswordRequest;
 import com.erp.dto.security.ProfileResponse;
 import com.erp.dto.hr.UserDetailsDTO;
 import com.erp.repo.UserRepository;
+import com.erp.security.context.AuthContext;
 import com.erp.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Collections;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
 
     private final UserRepository repo;
-    private final UserService    userService;
+    private final UserService userService;
+    private final AuthContext authContext;
 
-    public UserController(UserRepository repo, UserService userService) {
-        this.repo        = repo;
+    public UserController(UserRepository repo, UserService userService, AuthContext authContext) {
+        this.repo = repo;
         this.userService = userService;
+        this.authContext = authContext;
     }
 
     @GetMapping
-    public ResponseEntity<?> list() {
-        return ResponseEntity.ok(repo.findAll());
+    public ResponseEntity<List<User>> list() {
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            return ResponseEntity.ok(Collections.emptyList());
+        }
+        return ResponseEntity.ok(repo.findByCompany_Id(companyId));
     }
 
     @GetMapping("/{id}")

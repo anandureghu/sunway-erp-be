@@ -74,7 +74,7 @@ public class PurchaseRequisition {
     @JoinColumn(name = "credit_account_id")
     private ChartOfAccounts creditAccount;
 
-    /** Finance {@code transactions.id} created when this PR is approved. */
+    /** Finance {@code transactions.id} created when vendor payment is confirmed in AP (GL posting). */
     @Column(name = "finance_transaction_id")
     private Long financeTransactionId;
 

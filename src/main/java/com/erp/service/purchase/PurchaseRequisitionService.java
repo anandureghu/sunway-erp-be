@@ -7,8 +7,6 @@ import com.erp.domain.hr.Department;
 import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.Vendor;
 import com.erp.domain.purchase.*;
-import com.erp.dto.finance.CreateTransactionDTO;
-import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.dto.purchase.PurchaseRequisitionCreateDTO;
 import com.erp.dto.purchase.PurchaseRequisitionItemDTO;
 import com.erp.dto.purchase.PurchaseRequisitionResponseDTO;
@@ -24,7 +22,6 @@ import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
 import com.erp.service.finance.VendorPayableService;
-import com.erp.service.finance.TransactionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,7 +43,6 @@ public class PurchaseRequisitionService {
     private final DepartmentRepository departmentRepo;
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final ChartOfAccountsRepository coaRepo;
-    private final TransactionService transactionService;
     private final VendorPayableService vendorPayableService;
     private final PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler;
     private final AuthContext auth;
@@ -61,7 +57,6 @@ public class PurchaseRequisitionService {
             DepartmentRepository departmentRepo,
             PurchaseOrderRepository purchaseOrderRepo,
             ChartOfAccountsRepository coaRepo,
-            TransactionService transactionService,
             VendorPayableService vendorPayableService,
             PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler
     ) {
@@ -74,7 +69,6 @@ public class PurchaseRequisitionService {
         this.departmentRepo = departmentRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
         this.coaRepo = coaRepo;
-        this.transactionService = transactionService;
         this.vendorPayableService = vendorPayableService;
         this.purchaseInvoiceGenerationScheduler = purchaseInvoiceGenerationScheduler;
     }
@@ -188,9 +182,6 @@ public class PurchaseRequisitionService {
         if (pr.getDebitAccount() == null || pr.getCreditAccount() == null) {
             throw new RuntimeException("Debit and credit accounts are required");
         }
-        if (pr.getFinanceTransactionId() != null) {
-            throw new RuntimeException("This requisition already has a posted finance transaction");
-        }
 
         User approver = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
         pr.setApprovedBy(approver);
@@ -199,19 +190,6 @@ public class PurchaseRequisitionService {
         PurchaseOrder po = createPurchaseOrderFromRequisition(pr, approver);
 
         validatePostingBalances(pr.getDebitAccount(), pr.getCreditAccount(), po.getTotalAmount());
-
-        CreateTransactionDTO txDto = CreateTransactionDTO.builder()
-                .companyId(pr.getCompany().getId())
-                .transactionType(TransactionService.TYPE_PURCHASE_REQUISITION)
-                .transactionDate(LocalDate.now())
-                .amount(po.getTotalAmount())
-                .debitAccount(pr.getDebitAccount().getId())
-                .creditAccount(pr.getCreditAccount().getId())
-                .relatedId(pr.getId())
-                .transactionDescription("PR " + pr.getRequisitionNumber() + " → PO " + po.getOrderNumber())
-                .build();
-        TransactionResponseDTO tx = transactionService.create(txDto);
-        pr.setFinanceTransactionId(tx.getId());
 
         pr.setStatus(PurchaseRequisitionStatus.CONVERTED);
         pr.setConvertedAt(Instant.now());

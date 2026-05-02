@@ -10,11 +10,14 @@ import com.erp.domain.purchase.PurchaseRequisition;
 import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.hr.Company;
 import com.erp.dto.finance.CreatePaymentDTO;
+import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
+import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
+import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.notification.CustomerEmailService;
@@ -36,6 +39,7 @@ public class PaymentService {
     private final CustomerEmailService customerEmailService;
     private final CompanyRepository companyRepo;
     private final PurchaseOrderRepository purchaseOrderRepo;
+    private final PurchaseRequisitionRepository purchaseRequisitionRepo;
     private final ChartOfAccountsRepository coaRepo;
     private final AuthContext auth;
 
@@ -46,6 +50,7 @@ public class PaymentService {
                           CustomerEmailService customerEmailService,
                           CompanyRepository companyRepo,
                           PurchaseOrderRepository purchaseOrderRepo,
+                          PurchaseRequisitionRepository purchaseRequisitionRepo,
                           ChartOfAccountsRepository coaRepo,
                           AuthContext auth) {
 
@@ -56,6 +61,7 @@ public class PaymentService {
         this.customerEmailService = customerEmailService;
         this.companyRepo = companyRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
+        this.purchaseRequisitionRepo = purchaseRequisitionRepo;
         this.coaRepo = coaRepo;
         this.auth = auth;
     }
@@ -260,7 +266,7 @@ public class PaymentService {
     }
 
     /**
-     * Posts AP and cash reductions using the PR's credit (AP) account and a company CASH/ASSET account.
+     * Posts the purchase to the GL when vendor payment is confirmed: debit (expense/inventory from PR), credit cash.
      */
     private void postVendorPaymentToAccounting(Payment payment) {
         if (payment.getPurchaseOrderId() == null) {
@@ -269,20 +275,35 @@ public class PaymentService {
         PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
                 .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
         PurchaseRequisition pr = po.getSourceRequisition();
-        if (pr == null || pr.getCreditAccount() == null) {
+        if (pr == null || pr.getDebitAccount() == null) {
             throw new RuntimeException(
                     "Cannot post vendor payment to the chart of accounts: this purchase order has no source "
-                            + "requisition with an accounts payable (credit) account. Create the PO from an approved PR.");
+                            + "requisition with a debit (expense/inventory) account. Create the PO from an approved PR.");
         }
         Long cashAccountId = resolveDefaultCashAccountId(payment.getCompany().getId());
-        transactionService.createVendorPaymentSettlement(
-                payment.getId(),
-                payment.getCompany().getId(),
-                payment.getAmount(),
-                pr.getCreditAccount().getId(),
+        Long companyId = payment.getCompany().getId();
+        transactionService.validateTwoSidedPostingBalances(
+                pr.getDebitAccount().getId(),
                 cashAccountId,
-                payment.getEffectiveDate(),
-                po.getId());
+                payment.getAmount(),
+                companyId);
+
+        TransactionResponseDTO tx = transactionService.create(CreateTransactionDTO.builder()
+                .companyId(companyId)
+                .transactionType(TransactionService.TYPE_VENDOR_PAYMENT)
+                .transactionDate(payment.getEffectiveDate())
+                .amount(payment.getAmount())
+                .debitAccount(pr.getDebitAccount().getId())
+                .creditAccount(cashAccountId)
+                .paymentId(String.valueOf(payment.getId()))
+                .relatedId(po.getId())
+                .transactionDescription("Vendor payment (AP) — PO " + po.getOrderNumber())
+                .build());
+
+        purchaseRequisitionRepo.findById(pr.getId()).ifPresent(managed -> {
+            managed.setFinanceTransactionId(tx.getId());
+            purchaseRequisitionRepo.save(managed);
+        });
     }
 
     private Long resolveDefaultCashAccountId(Long companyId) {
