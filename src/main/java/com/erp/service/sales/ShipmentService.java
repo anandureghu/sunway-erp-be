@@ -5,6 +5,7 @@ import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
 import com.erp.domain.sales.Picklist;
+import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.sales.Shipment;
 import com.erp.domain.sales.ShipmentItem;
 import com.erp.domain.sales.ShipmentTrackingEvent;
@@ -17,6 +18,7 @@ import com.erp.repo.UserRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.sales.PicklistRepository;
+import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.repo.sales.ShipmentRepository;
 import com.erp.repo.sales.ShipmentTrackingEventRepository;
 import com.erp.security.context.AuthContext;
@@ -34,6 +36,7 @@ public class ShipmentService {
 
     private final ShipmentRepository repo;
     private final PicklistRepository picklistRepo;
+    private final SalesOrderRepository salesOrderRepo;
     private final InvoiceRepository invoiceRepo;
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
@@ -43,6 +46,7 @@ public class ShipmentService {
     public ShipmentService(
             ShipmentRepository repo,
             PicklistRepository picklistRepo,
+            SalesOrderRepository salesOrderRepo,
             InvoiceRepository invoiceRepo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
@@ -51,6 +55,7 @@ public class ShipmentService {
     ) {
         this.repo = repo;
         this.picklistRepo = picklistRepo;
+        this.salesOrderRepo = salesOrderRepo;
         this.invoiceRepo = invoiceRepo;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
@@ -185,6 +190,13 @@ public class ShipmentService {
         Instant now = Instant.now();
         s.setDeliveredAt(now);
         appendTrackingEvent(s, "DELIVERED", resolveEventLocation(s), "Shipment delivered", now);
+
+        SalesOrder linkedOrder = s.getPicklist().getSalesOrder();
+        if (linkedOrder != null && !"CANCELLED".equals(linkedOrder.getStatus())) {
+            linkedOrder.setStatus("COMPLETED");
+            salesOrderRepo.save(linkedOrder);
+        }
+
         return toDTO(s);
     }
 
