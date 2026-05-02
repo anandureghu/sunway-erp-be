@@ -130,6 +130,50 @@ public class EmployeeLeaveController {
         return applyLeaveInternal(employeeId, dto, supportingDocument);
     }
 
+    @PutMapping("/employees/{employeeId}/leaves/{leaveId}")
+    public ResponseEntity<?> updateLeave(
+            @PathVariable Long employeeId,
+            @PathVariable Long leaveId,
+            @Valid @RequestBody LeaveRequestDTO dto) {
+        try {
+            validateSelfAccess(employeeId, HrAction.CREATE);
+
+            LeaveHistoryDTO updatedLeave = leaveService.updateLeave(employeeId, leaveId, dto);
+
+            log.info("Leave updated for employee {}: leaveId={}, leaveType={}, startDate={}, endDate={}",
+                    employeeId, leaveId, dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
+
+            return ResponseEntity.ok(updatedLeave);
+        } catch (IllegalArgumentException e) {
+            return badRequest(e);
+        } catch (AccessDeniedException e) {
+            return forbidden(e);
+        } catch (RuntimeException e) {
+            return badRequest(e);
+        }
+    }
+
+    @DeleteMapping("/employees/{employeeId}/leaves/{leaveId}")
+    public ResponseEntity<?> cancelLeave(
+            @PathVariable Long employeeId,
+            @PathVariable Long leaveId) {
+        try {
+            validateSelfAccess(employeeId, HrAction.CREATE);
+
+            LeaveHistoryDTO cancelledLeave = leaveService.cancelLeave(employeeId, leaveId);
+
+            log.info("Leave cancelled for employee {}: leaveId={}", employeeId, leaveId);
+
+            return ResponseEntity.ok(cancelledLeave);
+        } catch (IllegalArgumentException e) {
+            return badRequest(e);
+        } catch (AccessDeniedException e) {
+            return forbidden(e);
+        } catch (RuntimeException e) {
+            return badRequest(e);
+        }
+    }
+
     @GetMapping("/leaves/approvals/pending")
     public ResponseEntity<?> pendingApprovals() {
         try {
