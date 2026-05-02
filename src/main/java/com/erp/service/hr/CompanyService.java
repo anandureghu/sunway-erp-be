@@ -9,6 +9,7 @@ import com.erp.domain.hr.Currency;
 import com.erp.dto.hr.AccountingDefaultsDTO;
 import com.erp.dto.hr.CompanyDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
+import com.erp.dto.hr.PayrollExportSettingsDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
@@ -263,6 +264,40 @@ public class CompanyService {
             throw new RuntimeException("Default bank account does not belong to this company");
         }
         return bankId;
+    }
+
+    // ======================================================
+    // PAYROLL BANK FILE (SIF) EXPORT SETTINGS
+    // ======================================================
+    public PayrollExportSettingsDTO getPayrollExportSettings(Long companyId) {
+        Company company = getCompanyById(companyId);
+        return toPayrollExportSettingsDto(company);
+    }
+
+    @Transactional
+    public PayrollExportSettingsDTO updatePayrollExportSettings(Long companyId, PayrollExportSettingsDTO dto) {
+        Company company = getCompanyById(companyId);
+        company.setPayrollEmployerEid(trimToNull(dto.getPayrollEmployerEid()));
+        company.setPayrollPayerEid(trimToNull(dto.getPayrollPayerEid()));
+        company.setPayrollPayerQid(trimToNull(dto.getPayrollPayerQid()));
+        company.setPayrollPayerBankShortName(trimToNull(dto.getPayrollPayerBankShortName()));
+        company.setPayrollPayerIban(trimToNull(dto.getPayrollPayerIban()));
+        String sif = trimToNull(dto.getPayrollSifVersion());
+        company.setPayrollSifVersion(sif != null ? sif : "1");
+        companyRepository.save(company);
+        return toPayrollExportSettingsDto(company);
+    }
+
+    private PayrollExportSettingsDTO toPayrollExportSettingsDto(Company company) {
+        return PayrollExportSettingsDTO.builder()
+                .payrollEmployerEid(company.getPayrollEmployerEid())
+                .payrollPayerEid(company.getPayrollPayerEid())
+                .payrollPayerQid(company.getPayrollPayerQid())
+                .payrollPayerBankShortName(company.getPayrollPayerBankShortName())
+                .payrollPayerIban(company.getPayrollPayerIban())
+                .payrollSifVersion(
+                        company.getPayrollSifVersion() != null ? company.getPayrollSifVersion() : "1")
+                .build();
     }
 
     // ======================================================

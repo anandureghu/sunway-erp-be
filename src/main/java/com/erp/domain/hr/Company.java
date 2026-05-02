@@ -101,6 +101,25 @@ public class Company {
     @Column(name = "default_bank_account_id")
     private Long defaultBankAccountId;
 
+    /** Qatar bank payroll file (SIF): employer / payer IDs and payer bank (CSV export). */
+    @Column(name = "payroll_employer_eid", length = 64)
+    private String payrollEmployerEid;
+
+    @Column(name = "payroll_payer_eid", length = 64)
+    private String payrollPayerEid;
+
+    @Column(name = "payroll_payer_qid", length = 64)
+    private String payrollPayerQid;
+
+    @Column(name = "payroll_payer_bank_short_name", length = 32)
+    private String payrollPayerBankShortName;
+
+    @Column(name = "payroll_payer_iban", length = 64)
+    private String payrollPayerIban;
+
+    @Column(name = "payroll_sif_version", length = 16)
+    private String payrollSifVersion;
+
     @Transient
     private String invoiceHeaderSubtitle;
 

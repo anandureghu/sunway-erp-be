@@ -9,6 +9,7 @@ import lombok.Setter;
 public class BankDetailsResponseDTO {
 
     private String bankName;
+    private String bankShortName;
     private String bankBranch;
     private String accountType;
     private String accountNo;

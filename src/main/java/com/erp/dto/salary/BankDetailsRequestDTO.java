@@ -8,6 +8,8 @@ import lombok.Setter;
 public class BankDetailsRequestDTO {
 
     private String bankName;
+    /** E.g. QIB, CBQ — required for bank payroll CSV export */
+    private String bankShortName;
     private String bankBranch;
     private String accountType;
     private String accountNo;

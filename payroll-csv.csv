@@ -1,0 +1,5 @@
+Employer EID,File Creation Date,File Creation Time,Payer EID,Payer QID,Payer Bank Short Name,Payer IBAN,Salary Year and Month,Total Salaries,Total Records,SIF Version,,,,,,,,,,,
+17269261,20260109,1033,17269261,,QIB,QA46QISB000000000155386380014,202512,22000,2,1,,,,,,,,,,,
+Record ID,Employee QID,Employee Visa ID,Employee Name,Employee Bank Short Name,Employee Account,Salary Frequency,Number of Working Days,Net Salary,Basic Salary,Extra hours,Extra Income,Deductions,Payment Type,Notes / Comments,Housing Allowance,Food Allowance,Transportation Allowance,Over Time Allowance,Deduction Reason Code,Extra Field 1,Extra Field 2
+1,2883568xxxx,,mohil sharad bhutkar,CBQ,QA77CBQA000000004700xxxxxxxxx,M,30,10000,10000,0,0,0,Normal,,0,0,0,0,0,,
+2,3007060xxxx,,badri Ahmed,QIB,QA25QISB0000000001xxxxxxxxxxxx,M,30,12000,12000,0,0,0,Normal,,0,0,0,0,0,,

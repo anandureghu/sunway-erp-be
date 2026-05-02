@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
@@ -111,6 +112,56 @@ public class PayrollService {
 
         return savedPayroll;
     }
+
+    /**
+     * Same gross/loan/net rules as {@link #generatePayroll} but does not persist.
+     * Used for bank file export when no payroll row exists for the month.
+     */
+    public Optional<ProjectedPayrollAmounts> computeProjectedAmounts(Employee employee) {
+        Optional<EmployeeCompensation> salaryOpt = compensationRepo.findActiveByEmployee(employee);
+        if (salaryOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        EmployeeCompensation salary = salaryOpt.get();
+
+        List<EmployeeLoan> activeLoans =
+                loanRepo.findByEmployeeAndStatus(employee, "ACTIVE");
+
+        double totalLoanDeduction = activeLoans.stream()
+                .mapToDouble(EmployeeLoan::getMonthlyDeduction)
+                .sum();
+
+        double grossPay = salary.getBasicSalary();
+
+        if (salary.getHousingType() == BenefitType.ALLOWANCE) {
+            grossPay += salary.getHousingAllowance();
+        }
+
+        if (salary.getTransportationType() == BenefitType.ALLOWANCE) {
+            grossPay += salary.getTransportationAllowance();
+        }
+
+        if (salary.getTravelType() == BenefitType.ALLOWANCE) {
+            grossPay += salary.getTravelAllowance();
+        }
+
+        grossPay += salary.getOtherAllowance();
+
+        double netPay = grossPay - totalLoanDeduction;
+        if (netPay < 0) {
+            throw new RuntimeException("Net pay cannot be negative");
+        }
+
+        return Optional.of(new ProjectedPayrollAmounts(
+                grossPay, totalLoanDeduction, totalLoanDeduction, netPay));
+    }
+
+    public record ProjectedPayrollAmounts(
+            double grossPay,
+            double loanDeduction,
+            double deductions,
+            double netPayable
+    ) {}
 
     public List<PayrollHistoryDTO> getPayrollHistory(Long employeeId) {
 
