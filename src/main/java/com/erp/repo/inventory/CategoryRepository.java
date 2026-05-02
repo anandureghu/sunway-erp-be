@@ -10,9 +10,9 @@ import java.util.Optional;
 
 public interface CategoryRepository extends JpaRepository<Category, Long> {
 
-    List<Category> findByCompanyIdAndParentIdIsNull(Long companyId); // categories
+    List<Category> findByCompanyIdAndParentIdIsNullOrderByCreatedAtDesc(Long companyId); // categories
 
-    List<Category> findByCompanyIdAndParentId(Long companyId, Long parentId); // subcategories
+    List<Category> findByCompanyIdAndParentIdOrderByCreatedAtDesc(Long companyId, Long parentId); // subcategories
 
     @Query("""
                 SELECT c

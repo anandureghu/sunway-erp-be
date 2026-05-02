@@ -9,7 +9,7 @@ import java.util.Optional;
 public interface ChartOfAccountsRepository extends JpaRepository<ChartOfAccounts, Long> {
     Optional<ChartOfAccounts> findByAccountCode(String code);
 
-    List<ChartOfAccounts> findByCompanyId(Long companyId);
+    List<ChartOfAccounts> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
 
 }

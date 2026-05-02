@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @Repository
 public interface BudgetLineRepository extends JpaRepository<BudgetLine, Long> {
-    List<BudgetLine> findByBudgetHeader_Id(Long budgetHeaderId);
+    List<BudgetLine> findByBudgetHeader_IdOrderByCreatedAtDesc(Long budgetHeaderId);
 
     Optional<BudgetLine> findByBudgetHeaderAndAccountAndDepartmentAndProjectId(
             BudgetHeader header,

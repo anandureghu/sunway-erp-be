@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @Repository
 public interface BudgetHeaderRepository extends JpaRepository<BudgetHeader, Long> {
-    List<BudgetHeader> findByCompanyId(Long companyId);
+    List<BudgetHeader> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     Optional<BudgetHeader> findByCompanyIdAndFiscalYearAndIsActiveTrue(Long companyId, String fiscalYear);
 

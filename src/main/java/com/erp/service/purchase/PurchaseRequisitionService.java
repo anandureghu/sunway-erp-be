@@ -205,7 +205,7 @@ public class PurchaseRequisitionService {
     }
 
     public List<PurchaseRequisitionResponseDTO> list() {
-        return repo.findByCompanyId(auth.getCurrentCompanyId())
+        return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream()
                 .map(pr -> toDTO(pr, null))
                 .toList();

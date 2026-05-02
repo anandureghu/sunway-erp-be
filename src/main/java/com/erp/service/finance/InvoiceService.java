@@ -89,14 +89,14 @@ public class InvoiceService {
             return;
         }
 
-        List<Payment> payments = paymentRepo.findByInvoiceId(invoice.getInvoiceId());
+        List<Payment> payments = paymentRepo.findByInvoiceIdOrderByCreatedAtDesc(invoice.getInvoiceId());
         for (Payment payment : payments) {
             String paymentId = payment.getId() != null ? String.valueOf(payment.getId()) : null;
             if (paymentId != null) {
                 List<Transaction> reversals =
-                        transactionRepo.findByPaymentIdAndTransactionType(paymentId, "PAYMENT_REVERSAL");
+                        transactionRepo.findByPaymentIdAndTransactionTypeOrderByCreatedAtDesc(paymentId, "PAYMENT_REVERSAL");
                 if (reversals.isEmpty()) {
-                    List<Transaction> originalTxns = transactionRepo.findByPaymentId(paymentId);
+                    List<Transaction> originalTxns = transactionRepo.findByPaymentIdOrderByCreatedAtDesc(paymentId);
                     for (Transaction tx : originalTxns) {
                         if ("PAYMENT_REVERSAL".equalsIgnoreCase(tx.getTransactionType())) {
                             continue;
@@ -385,7 +385,7 @@ public class InvoiceService {
     }
 
     private void createPendingPaymentEntry(Invoice invoice) {
-        if (paymentRepo.findByInvoiceId(invoice.getInvoiceId()).isEmpty()) {
+        if (paymentRepo.findByInvoiceIdOrderByCreatedAtDesc(invoice.getInvoiceId()).isEmpty()) {
             Payment payment = Payment.builder()
                     .paymentCode("PAY-REQ-" + UUID.randomUUID().toString().substring(0, 8))
                     .company(invoice.getCompany())
@@ -553,7 +553,7 @@ public class InvoiceService {
     }
 
     public List<InvoiceResponse> getAllInvoices() {
-        return repo.findByCompanyId(auth.getCurrentCompanyId()).stream()
+        return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId()).stream()
                 .map(this::toDTO)
                 .toList();
     }
@@ -561,9 +561,9 @@ public class InvoiceService {
     public List<InvoiceResponse> listInvoicesForCurrentCompany(InvoiceType type) {
         Long companyId = auth.getCurrentCompanyId();
         if (type == null) {
-            return repo.findByCompanyId(companyId).stream().map(this::toDTO).toList();
+            return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream().map(this::toDTO).toList();
         }
-        return repo.findByCompany_IdAndType(companyId, type).stream().map(this::toDTO).toList();
+        return repo.findByCompany_IdAndTypeOrderByCreatedAtDesc(companyId, type).stream().map(this::toDTO).toList();
     }
 
     public List<InvoiceResponse> getInvoicesByCustomer(String toParty) {
@@ -572,9 +572,9 @@ public class InvoiceService {
             return List.of();
         }
         if (isSuperAdmin()) {
-            return repo.findByToParty(toParty).stream().map(this::toDTO).toList();
+            return repo.findByToPartyOrderByCreatedAtDesc(toParty).stream().map(this::toDTO).toList();
         }
-        return repo.findByCompany_IdAndToParty(companyId, toParty).stream().map(this::toDTO).toList();
+        return repo.findByCompany_IdAndToPartyOrderByCreatedAtDesc(companyId, toParty).stream().map(this::toDTO).toList();
     }
 
     public List<InvoiceResponse> getInvoicesByStatus(Long companyId, String status) {
@@ -582,7 +582,7 @@ public class InvoiceService {
         if (effectiveCompanyId == null) {
             return List.of();
         }
-        return repo.findByCompanyIdAndStatus(effectiveCompanyId, status)
+        return repo.findByCompanyIdAndStatusOrderByCreatedAtDesc(effectiveCompanyId, status)
                 .stream().map(this::toDTO).toList();
     }
 

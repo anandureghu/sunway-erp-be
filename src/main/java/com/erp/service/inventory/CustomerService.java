@@ -27,7 +27,7 @@ public class CustomerService {
     // ---------------- LIST ----------------
     public List<CustomerResponseDTO> getAllCustomers() {
         Long companyId = authContext.getCurrentCompanyId();
-        return customerRepo.findByCompanyId(companyId)
+        return customerRepo.findByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream()
                 .map(this::toDTO)
                 .toList();

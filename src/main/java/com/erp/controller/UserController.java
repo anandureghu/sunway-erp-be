@@ -35,7 +35,7 @@ public class UserController {
         if (companyId == null) {
             return ResponseEntity.ok(Collections.emptyList());
         }
-        return ResponseEntity.ok(repo.findByCompany_Id(companyId));
+        return ResponseEntity.ok(repo.findByCompany_IdOrderByCreatedAtDesc(companyId));
     }
 
     @GetMapping("/{id}")

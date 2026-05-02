@@ -29,11 +29,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     // COMPANY QUERIES (✅ FIXED)
     // ======================================================
 
-    List<Employee> findByCompany_Id(Long companyId);
+    List<Employee> findByCompany_IdOrderByCreatedAtDesc(Long companyId);
 
     Page<Employee> findByCompany_Id(Long companyId, Pageable pageable);
 
-    List<Employee> findByCompany(Company company);
+    List<Employee> findByCompanyOrderByCreatedAtDesc(Company company);
 
     // ======================================================
     // ADMIN (SPRING SECURITY ROLE - ENUM) ✅ FIXED
@@ -44,7 +44,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             List<Role> roles
     );
 
-    List<Employee> findAllByCompany_IdAndUserRoleIn(
+    List<Employee> findAllByCompany_IdAndUserRoleInOrderByCreatedAtDesc(
             Long companyId,
             List<Role> roles
     );
@@ -58,7 +58,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     // BUSINESS ROLE (companyRole - STRING) ✅ ALREADY CORRECT
     // ======================================================
 
-    List<Employee> findByCompany_IdAndUser_CompanyRoleRef_NameIgnoreCase(
+    List<Employee> findByCompany_IdAndUser_CompanyRoleRef_NameIgnoreCaseOrderByCreatedAtDesc(
             Long companyId,
             String roleName
     );
@@ -67,7 +67,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     // DEPARTMENT
     // ======================================================
 
-    List<Employee> findByDepartmentId(Long departmentId);
+    List<Employee> findByDepartmentIdOrderByCreatedAtDesc(Long departmentId);
 
     // ======================================================
     // USER LINK

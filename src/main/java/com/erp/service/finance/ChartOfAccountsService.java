@@ -177,7 +177,7 @@ public class ChartOfAccountsService {
     // =============================================================
     public List<ChartOfAccountResponseDTO> listAll() {
         Long companyId = auth.getCurrentCompanyId();
-        return repo.findByCompanyId(companyId).stream()
+        return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }

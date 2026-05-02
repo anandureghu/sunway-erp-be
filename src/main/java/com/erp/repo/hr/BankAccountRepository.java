@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface BankAccountRepository extends JpaRepository<BankAccount, Long> {
 
-    List<BankAccount> findByCompanyId(Long companyId);
+    List<BankAccount> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     boolean existsByCompanyIdAndPrimaryAccountTrue(Long companyId);
 }

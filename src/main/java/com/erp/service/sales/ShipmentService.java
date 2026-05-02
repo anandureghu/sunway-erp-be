@@ -257,7 +257,7 @@ public class ShipmentService {
     }
 
     public List<ShipmentResponseDTO> list() {
-        return repo.findByCompanyId(auth.getCurrentCompanyId())
+        return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream().map(this::toDTO).toList();
     }
 

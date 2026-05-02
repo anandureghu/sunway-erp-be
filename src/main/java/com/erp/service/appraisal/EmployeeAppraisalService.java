@@ -302,7 +302,7 @@ public class EmployeeAppraisalService {
                 .goals(goals)
                 .employeeComments(a.getEmployeeComments())
                 .managerComments(a.getManagerComments())
-                .createdDate(a.getCreatedDate())
+                .createdDate(a.getCreatedAt())
                 .updatedDate(a.getUpdatedDate())
                 .build();
     }

@@ -164,7 +164,7 @@ public class PaymentService {
 
     public java.util.List<PaymentResponseDTO> getPaymentsForCompany(Long companyId) {
         assertTenantCompanyPath(companyId);
-        return paymentRepo.findByCompanyId(companyId).stream()
+        return paymentRepo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                 .map(this::toDTO)
                 .toList();
     }
@@ -175,13 +175,13 @@ public class PaymentService {
             return getPaymentsForCompany(companyId);
         }
         if (direction == PaymentDirection.CUSTOMER) {
-            return paymentRepo.findByCompanyId(companyId).stream()
+            return paymentRepo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                     .filter(p -> p.getPaymentDirection() == null
                             || p.getPaymentDirection() == PaymentDirection.CUSTOMER)
                     .map(this::toDTO)
                     .toList();
         }
-        return paymentRepo.findByCompany_IdAndPaymentDirection(companyId, PaymentDirection.VENDOR).stream()
+        return paymentRepo.findByCompany_IdAndPaymentDirectionOrderByCreatedAtDesc(companyId, PaymentDirection.VENDOR).stream()
                 .map(this::toDTO)
                 .toList();
     }
@@ -195,7 +195,7 @@ public class PaymentService {
             return List.of();
         }
         assertInvoiceCompany(inv);
-        return paymentRepo.findByInvoiceId(invoiceId).stream()
+        return paymentRepo.findByInvoiceIdOrderByCreatedAtDesc(invoiceId).stream()
                 .filter(p -> isSuperAdmin()
                         || (auth.getCurrentCompanyId() != null
                         && p.getCompany() != null
@@ -327,7 +327,7 @@ public class PaymentService {
     }
 
     private Long resolveDefaultCashAccountId(Long companyId) {
-        List<ChartOfAccounts> list = coaRepo.findByCompanyId(companyId);
+        List<ChartOfAccounts> list = coaRepo.findByCompanyIdOrderByCreatedAtDesc(companyId);
         return list.stream()
                 .filter(a -> a.getType() == COAType.CASH)
                 .findFirst()

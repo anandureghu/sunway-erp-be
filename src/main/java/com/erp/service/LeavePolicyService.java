@@ -33,7 +33,7 @@ public class LeavePolicyService {
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        return policyRepo.findByCompany(company)
+        return policyRepo.findByCompanyOrderByIdDesc(company)
                 .stream()
                 .map(this::toDTO)
                 .toList();
@@ -105,7 +105,7 @@ public class LeavePolicyService {
             return;
         }
 
-        List<Employee> employees = employeeRepo.findByCompany(company);
+        List<Employee> employees = employeeRepo.findByCompanyOrderByCreatedAtDesc(company);
 
         for (Employee employee : employees) {
             String employeeRole = getLeaveRole(employee);
@@ -191,7 +191,7 @@ public class LeavePolicyService {
         CompanyLeavePolicy policy = policyRepo.findById(policyId)
                 .orElseThrow(() -> new RuntimeException("Policy not found"));
 
-        List<Employee> employees = employeeRepo.findByCompany(policy.getCompany());
+        List<Employee> employees = employeeRepo.findByCompanyOrderByCreatedAtDesc(policy.getCompany());
 
         for (Employee employee : employees) {
             String employeeRole = getLeaveRole(employee);
@@ -207,14 +207,14 @@ public class LeavePolicyService {
     }
 
     private List<CompanyLeavePolicy> findPoliciesByRole(Company company, String role) {
-        return policyRepo.findByCompany(company)
+        return policyRepo.findByCompanyOrderByIdDesc(company)
                 .stream()
                 .filter(policy -> same(policy.getRole(), role))
                 .toList();
     }
 
     private Optional<CompanyLeavePolicy> findPolicy(Company company, String role, String leaveType) {
-        return policyRepo.findByCompany(company)
+        return policyRepo.findByCompanyOrderByIdDesc(company)
                 .stream()
                 .filter(policy -> same(policy.getRole(), role))
                 .filter(policy -> same(policy.getLeaveType(), leaveType))

@@ -60,7 +60,7 @@ public class LeaveService {
             return List.of();
         }
 
-        return policyRepo.findByCompany(emp.getCompany())
+        return policyRepo.findByCompanyOrderByIdDesc(emp.getCompany())
                 .stream()
                 .filter(policy -> same(policy.getRole(), role))
                 .filter(policy -> {
@@ -316,7 +316,7 @@ public class LeaveService {
             throw new RuntimeException("Employee company role not configured");
         }
 
-        return policyRepo.findByCompany(employee.getCompany())
+        return policyRepo.findByCompanyOrderByIdDesc(employee.getCompany())
                 .stream()
                 .filter(policy -> same(policy.getRole(), role))
                 .filter(policy -> same(policy.getLeaveType(), leaveType))

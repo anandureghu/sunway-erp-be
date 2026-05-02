@@ -8,9 +8,9 @@ import java.util.List;
 
 @Repository
 public interface DivisionRepository extends JpaRepository<Division, Long> {
-    List<Division> findAllByCompanyCreatedBy(String createdBy);
+    List<Division> findAllByCompanyCreatedByOrderByCreatedAtDesc(String createdBy);
 
-    List<Division> findAllByCompanyId(Long companyId);
+    List<Division> findAllByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
-    List<Division> findAllByDepartmentIdAndCompanyId(Long departmentId, Long companyId);
+    List<Division> findAllByDepartmentIdAndCompanyIdOrderByCreatedAtDesc(Long departmentId, Long companyId);
 }

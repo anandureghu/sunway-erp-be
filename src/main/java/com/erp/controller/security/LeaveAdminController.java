@@ -165,7 +165,7 @@ public class LeaveAdminController {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "Company context required for bulk initialize"));
         }
-        List<Employee> allEmployees = employeeRepository.findByCompany_Id(tenantCompanyId);
+        List<Employee> allEmployees = employeeRepository.findByCompany_IdOrderByCreatedAtDesc(tenantCompanyId);
         Map<String, Object> result = new HashMap<>();
         List<Map<String, Object>> report = new ArrayList<>();
 
@@ -220,7 +220,7 @@ public class LeaveAdminController {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "Company context required"));
         }
-        List<Employee> allEmployees = employeeRepository.findByCompany_Id(tenantCompanyId);
+        List<Employee> allEmployees = employeeRepository.findByCompany_IdOrderByCreatedAtDesc(tenantCompanyId);
         List<Map<String, Object>> report = new ArrayList<>();
 
         for (Employee employee : allEmployees) {
@@ -274,7 +274,7 @@ public class LeaveAdminController {
 
         Company company = companyRepository.findById(resolvedCompanyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
-        List<CompanyLeavePolicy> policies = policyRepository.findByCompany(company);
+        List<CompanyLeavePolicy> policies = policyRepository.findByCompanyOrderByIdDesc(company);
 
         return ResponseEntity.ok(Map.of(
                 "totalPolicies", policies.size(),

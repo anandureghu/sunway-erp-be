@@ -417,7 +417,7 @@ public class TransactionService {
         if (effectiveCompanyId == null) {
             return List.of();
         }
-        return repo.findByCompanyId(effectiveCompanyId).stream()
+        return repo.findByCompanyIdOrderByCreatedAtDesc(effectiveCompanyId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }

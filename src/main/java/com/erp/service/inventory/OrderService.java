@@ -35,7 +35,7 @@ public class OrderService {
         if (companyId == null) {
             return Collections.emptyList();
         }
-        return orderRepository.findBySupplier_Company_Id(companyId);
+        return orderRepository.findBySupplier_Company_IdOrderByCreatedAtDesc(companyId);
     }
 
     public Orders getOrderById(Long id) {

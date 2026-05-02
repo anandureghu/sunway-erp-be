@@ -63,7 +63,7 @@ public class AccountingPeriodService {
 
     public List<AccountingPeriodResponseDTO> getByCompany() {
         Long companyId = authContext.getCurrentCompanyId();
-        return periodRepository.findByCompanyId(companyId)
+        return periodRepository.findByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());

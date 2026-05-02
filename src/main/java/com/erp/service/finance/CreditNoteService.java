@@ -31,7 +31,7 @@ public class CreditNoteService {
         Long companyId = auth.getCurrentCompanyId();
 
         return creditNoteRepository
-                .findByCompanyId(companyId)
+                .findByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();

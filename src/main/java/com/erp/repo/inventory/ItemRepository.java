@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface ItemRepository extends JpaRepository<Item, Long> {
 
-    List<Item> findByCompanyId(Long companyId);
+    List<Item> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     boolean existsBySkuAndCompanyId(String sku, Long companyId);
 }

@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -340,7 +341,7 @@ public class EmployeeService {
         if (canViewAll) {
             log.info("✅ User has VIEW_ALL permission - loading all employees");
             return employeeRepository
-                    .findByCompany_Id(authUser.getCompany().getId())
+                    .findByCompany_IdOrderByCreatedAtDesc(authUser.getCompany().getId())
                     .stream()
                     .map(this::toDTO)
                     .toList();
@@ -365,7 +366,7 @@ public class EmployeeService {
 
     public List<EmployeeResponseDTO> getEmployeesByCompany(Long companyId) {
         assertTenantCompanyScope(companyId);
-        return employeeRepository.findByCompany_Id(companyId)
+        return employeeRepository.findByCompany_IdOrderByCreatedAtDesc(companyId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -377,7 +378,7 @@ public class EmployeeService {
         Department dept = departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new RuntimeException("Department not found"));
         assertTenantCompanyScope(dept.getCompany().getId());
-        return employeeRepository.findByDepartmentId(departmentId)
+        return employeeRepository.findByDepartmentIdOrderByCreatedAtDesc(departmentId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -426,7 +427,7 @@ public class EmployeeService {
 
         // ✅ VIEW ALL - Return paginated employees for current company only
         log.info("✅ User has VIEW_ALL permission - loading paginated employees");
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Employee> empPage = employeeRepository.findByCompany_Id(
                 authUser.getCompany().getId(), pageable);
 
@@ -460,7 +461,7 @@ public class EmployeeService {
 
     public List<EmployeeResponseDTO> getManagersByCompany(Long companyId) {
         assertTenantCompanyScope(companyId);
-        return employeeRepository.findByCompany_Id(companyId)
+        return employeeRepository.findByCompany_IdOrderByCreatedAtDesc(companyId)
                 .stream()
                 .map(this::toDTO)
                 .toList();

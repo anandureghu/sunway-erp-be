@@ -10,7 +10,7 @@ import java.util.List;
 public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     // ✅ Fetch departments by company
-    List<Department> findAllByCompanyId(Long companyId);
+    List<Department> findAllByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     // ✅ Prevent duplicate department codes within same company
     boolean existsByDepartmentCodeAndCompanyId(String departmentCode, Long companyId);

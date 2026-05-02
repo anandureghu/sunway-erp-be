@@ -12,7 +12,7 @@ public interface CompanyLeavePolicyRepository
 
     /* ================= BASIC ================= */
 
-    List<CompanyLeavePolicy> findByCompany(Company company);
+    List<CompanyLeavePolicy> findByCompanyOrderByIdDesc(Company company);
 
     /* ================= ROLE BASED ================= */
 

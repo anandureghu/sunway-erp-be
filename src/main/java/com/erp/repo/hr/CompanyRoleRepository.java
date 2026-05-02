@@ -11,10 +11,10 @@ import java.util.Optional;
 public interface CompanyRoleRepository extends JpaRepository<CompanyRole, Long> {
 
     // All roles for a company
-    List<CompanyRole> findByCompanyId(Long companyId);
+    List<CompanyRole> findByCompanyIdOrderByCreatedDateDesc(Long companyId);
 
     // Only active roles
-    List<CompanyRole> findByCompanyIdAndActiveTrue(Long companyId);
+    List<CompanyRole> findByCompanyIdAndActiveTrueOrderByCreatedDateDesc(Long companyId);
 
     // Find by company + name (for duplicate check on create)
     Optional<CompanyRole> findByCompanyIdAndName(Long companyId, String name);

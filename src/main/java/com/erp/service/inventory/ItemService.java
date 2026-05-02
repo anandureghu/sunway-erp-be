@@ -211,7 +211,7 @@ public class ItemService {
     // List
     // --------------------------
     public List<ItemResponseDTO> listForCompany() {
-        return itemRepo.findByCompanyId(auth.getCurrentCompanyId())
+        return itemRepo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream()
                 .map(this::toDTO)
                 .toList();

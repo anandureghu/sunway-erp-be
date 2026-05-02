@@ -203,7 +203,7 @@ public class SalesOrderService {
     // List
     // --------------------------
     public List<SalesOrderResponseDTO> list() {
-        return repo.findByCompanyId(auth.getCurrentCompanyId())
+        return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream().map(this::toDTO).toList();
     }
 
