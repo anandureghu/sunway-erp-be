@@ -66,6 +66,9 @@ public class JournalEntryService {
         ChartOfAccounts debit = accountRepo.findById(request.getDebitAccountId())
                 .orElseThrow(() -> new RuntimeException("Debit account not found"));
 
+        assertCoaBelongsToCompany(credit, companyId);
+        assertCoaBelongsToCompany(debit, companyId);
+
         User creator = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -169,6 +172,10 @@ public class JournalEntryService {
         ChartOfAccounts debit = accountRepo.findById(request.getDebitAccountId())
                 .orElseThrow(() -> new RuntimeException("Debit account not found"));
 
+        Long companyId = authContext.getCurrentCompanyId();
+        assertCoaBelongsToCompany(credit, companyId);
+        assertCoaBelongsToCompany(debit, companyId);
+
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -191,6 +198,13 @@ public class JournalEntryService {
     // ============================
     // HELPER
     // ============================
+    private void assertCoaBelongsToCompany(ChartOfAccounts coa, Long companyId) {
+        if (coa.getCompany() == null || companyId == null
+                || !coa.getCompany().getId().equals(companyId)) {
+            throw new RuntimeException("Account does not belong to your company");
+        }
+    }
+
     private JournalEntry getEntry(Long id) {
         Long companyId = authContext.getCurrentCompanyId();
 

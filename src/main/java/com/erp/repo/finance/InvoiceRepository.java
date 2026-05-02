@@ -28,4 +28,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Invoice> findByCompanyIdAndStatus(Long companyId, String status);
 
     List<Invoice> findByToParty(String toParty); // customer name/id
+
+    List<Invoice> findByCompany_IdAndToParty(Long companyId, String toParty);
 }

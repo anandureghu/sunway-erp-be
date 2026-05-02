@@ -3,9 +3,12 @@ package com.erp.controller.security;
 import com.erp.domain.CompanyLeavePolicy;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLeaveBalance;
+import com.erp.domain.hr.Company;
 import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.EmployeeLeaveBalanceRepository;
 import com.erp.repo.EmployeeRepository;
+import com.erp.repo.hr.CompanyRepository;
+import com.erp.security.context.AuthContext;
 import com.erp.service.LeavePolicyService;
 import com.erp.service.security.annotation.HrPermission;
 import com.erp.domain.security.HrAction;
@@ -13,6 +16,7 @@ import com.erp.domain.security.HrModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -27,6 +31,8 @@ public class LeaveAdminController {
     private final EmployeeRepository employeeRepository;
     private final EmployeeLeaveBalanceRepository balanceRepository;
     private final CompanyLeavePolicyRepository policyRepository;
+    private final CompanyRepository companyRepository;
+    private final AuthContext authContext;
     private final LeavePolicyService leavePolicyService;
 
     /* ═══════════════════════════════════════════════
@@ -39,6 +45,7 @@ public class LeaveAdminController {
 
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertEmployeeInCallerTenant(employee);
 
         Map<String, Object> diagnosis = new HashMap<>();
         diagnosis.put("employeeId", employeeId);
@@ -115,6 +122,7 @@ public class LeaveAdminController {
 
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertEmployeeInCallerTenant(employee);
 
         // ✅ Check if role is set
         if (employee.getRole() == null || employee.getRole().isBlank()) {
@@ -152,7 +160,12 @@ public class LeaveAdminController {
     public ResponseEntity<?> initializeAllMissingBalances(
             @RequestParam(defaultValue = "false") boolean fixRoles) {
 
-        List<Employee> allEmployees = employeeRepository.findAll();
+        Long tenantCompanyId = authContext.getCurrentCompanyId();
+        if (tenantCompanyId == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Company context required for bulk initialize"));
+        }
+        List<Employee> allEmployees = employeeRepository.findByCompany_Id(tenantCompanyId);
         Map<String, Object> result = new HashMap<>();
         List<Map<String, Object>> report = new ArrayList<>();
 
@@ -202,7 +215,12 @@ public class LeaveAdminController {
     @PostMapping("/fix-roles")
     public ResponseEntity<?> fixMissingRoles() {
 
-        List<Employee> allEmployees = employeeRepository.findAll();
+        Long tenantCompanyId = authContext.getCurrentCompanyId();
+        if (tenantCompanyId == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Company context required"));
+        }
+        List<Employee> allEmployees = employeeRepository.findByCompany_Id(tenantCompanyId);
         List<Map<String, Object>> report = new ArrayList<>();
 
         for (Employee employee : allEmployees) {
@@ -251,15 +269,12 @@ public class LeaveAdminController {
     public ResponseEntity<?> getAllPolicies(
             @RequestParam(required = false) Long companyId) {
 
-        List<CompanyLeavePolicy> policies;
+        Long resolvedCompanyId = companyId != null ? companyId : authContext.getCurrentCompanyId();
+        assertResolvedCompanyAccess(resolvedCompanyId);
 
-        if (companyId != null) {
-            policies = policyRepository.findAll().stream()
-                    .filter(p -> p.getCompany().getId().equals(companyId))
-                    .toList();
-        } else {
-            policies = policyRepository.findAll();
-        }
+        Company company = companyRepository.findById(resolvedCompanyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+        List<CompanyLeavePolicy> policies = policyRepository.findByCompany(company);
 
         return ResponseEntity.ok(Map.of(
                 "totalPolicies", policies.size(),
@@ -272,5 +287,34 @@ public class LeaveAdminController {
                         "paid", p.getPaid()
                 )).toList()
         ));
+    }
+
+    private boolean isSuperAdmin() {
+        String r = authContext.getCurrentUserRole();
+        return r != null && "SUPER_ADMIN".equalsIgnoreCase(r);
+    }
+
+    private void assertEmployeeInCallerTenant(Employee employee) {
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long cid = authContext.getCurrentCompanyId();
+        if (employee.getCompany() == null || cid == null
+                || !cid.equals(employee.getCompany().getId())) {
+            throw new AccessDeniedException("Access denied for this employee");
+        }
+    }
+
+    private void assertResolvedCompanyAccess(Long resolvedCompanyId) {
+        if (resolvedCompanyId == null) {
+            throw new AccessDeniedException("Company context required");
+        }
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long current = authContext.getCurrentCompanyId();
+        if (current == null || !current.equals(resolvedCompanyId)) {
+            throw new AccessDeniedException("Access denied for this company");
+        }
     }
 }

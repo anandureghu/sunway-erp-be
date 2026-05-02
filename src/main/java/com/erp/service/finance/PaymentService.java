@@ -14,6 +14,7 @@ import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
 import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
+import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
@@ -41,6 +42,7 @@ public class PaymentService {
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final PurchaseRequisitionRepository purchaseRequisitionRepo;
     private final ChartOfAccountsRepository coaRepo;
+    private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
 
     public PaymentService(PaymentRepository paymentRepo,
@@ -52,6 +54,7 @@ public class PaymentService {
                           PurchaseOrderRepository purchaseOrderRepo,
                           PurchaseRequisitionRepository purchaseRequisitionRepo,
                           ChartOfAccountsRepository coaRepo,
+                          InvoiceRepository invoiceRepo,
                           AuthContext auth) {
 
         this.paymentRepo = paymentRepo;
@@ -63,6 +66,7 @@ public class PaymentService {
         this.purchaseOrderRepo = purchaseOrderRepo;
         this.purchaseRequisitionRepo = purchaseRequisitionRepo;
         this.coaRepo = coaRepo;
+        this.invoiceRepo = invoiceRepo;
         this.auth = auth;
     }
 
@@ -154,17 +158,19 @@ public class PaymentService {
     public PaymentResponseDTO getPaymentById(Long id) {
         Payment p = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
-
+        assertPaymentInTenant(p);
         return toDTO(p);
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsForCompany(Long companyId) {
+        assertTenantCompanyPath(companyId);
         return paymentRepo.findByCompanyId(companyId).stream()
                 .map(this::toDTO)
                 .toList();
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsForCompany(Long companyId, PaymentDirection direction) {
+        assertTenantCompanyPath(companyId);
         if (direction == null) {
             return getPaymentsForCompany(companyId);
         }
@@ -181,7 +187,19 @@ public class PaymentService {
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsByInvoice(String invoiceId) {
+        if (invoiceId == null || invoiceId.isBlank()) {
+            return List.of();
+        }
+        Invoice inv = invoiceRepo.findByInvoiceId(invoiceId).orElse(null);
+        if (inv == null) {
+            return List.of();
+        }
+        assertInvoiceCompany(inv);
         return paymentRepo.findByInvoiceId(invoiceId).stream()
+                .filter(p -> isSuperAdmin()
+                        || (auth.getCurrentCompanyId() != null
+                        && p.getCompany() != null
+                        && auth.getCurrentCompanyId().equals(p.getCompany().getId())))
                 .map(this::toDTO)
                 .toList();
     }
@@ -190,6 +208,7 @@ public class PaymentService {
     public PaymentResponseDTO updatePayment(Long id, CreatePaymentDTO dto) {
         Payment payment = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
+        assertPaymentInTenant(payment);
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Payment amount must be greater than zero");
         }
@@ -210,6 +229,7 @@ public class PaymentService {
     public PaymentResponseDTO confirmPayment(Long id) {
         Payment payment = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
+        assertPaymentInTenant(payment);
 
         PaymentDirection dir = payment.getPaymentDirection() != null
                 ? payment.getPaymentDirection()
@@ -349,6 +369,47 @@ public class PaymentService {
     }
 
     public void deletePayment(Long id) {
-        paymentRepo.deleteById(id);
+        Payment p = paymentRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Payment not found"));
+        assertPaymentInTenant(p);
+        paymentRepo.delete(p);
+    }
+
+    private boolean isSuperAdmin() {
+        String r = auth.getCurrentUserRole();
+        return r != null && "SUPER_ADMIN".equalsIgnoreCase(r);
+    }
+
+    private void assertTenantCompanyPath(Long requestedCompanyId) {
+        if (requestedCompanyId == null) {
+            throw new RuntimeException("Company is required");
+        }
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long current = auth.getCurrentCompanyId();
+        if (current == null || !current.equals(requestedCompanyId)) {
+            throw new RuntimeException("Access denied for this company");
+        }
+    }
+
+    private void assertPaymentInTenant(Payment p) {
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long cid = auth.getCurrentCompanyId();
+        if (cid == null || p.getCompany() == null || !cid.equals(p.getCompany().getId())) {
+            throw new RuntimeException("Payment not found or access denied");
+        }
+    }
+
+    private void assertInvoiceCompany(Invoice inv) {
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long cid = auth.getCurrentCompanyId();
+        if (cid == null || inv.getCompany() == null || !cid.equals(inv.getCompany().getId())) {
+            throw new RuntimeException("Invoice not found or access denied");
+        }
     }
 }

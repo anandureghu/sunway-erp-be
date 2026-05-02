@@ -36,6 +36,7 @@ import com.erp.service.hr.InvoiceSettingsDefaults;
 import com.erp.util.InMemoryMultipartFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -538,13 +539,17 @@ public class InvoiceService {
     // READ OPERATIONS
     // ============================================================
     public InvoiceResponse getInvoiceById(Long id) {
-        return toDTO(repo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Invoice not found")));
+        Invoice inv = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
+        return toDTO(inv);
     }
 
     public InvoiceResponse getInvoiceByCode(String invoiceCode) {
-        return toDTO(repo.findByInvoiceId(invoiceCode)
-                .orElseThrow(() -> new RuntimeException("Invoice not found")));
+        Invoice inv = repo.findByInvoiceId(invoiceCode)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
+        return toDTO(inv);
     }
 
     public List<InvoiceResponse> getAllInvoices() {
@@ -562,17 +567,29 @@ public class InvoiceService {
     }
 
     public List<InvoiceResponse> getInvoicesByCustomer(String toParty) {
-        return repo.findByToParty(toParty).stream().map(this::toDTO).toList();
+        Long companyId = auth.getCurrentCompanyId();
+        if (companyId == null && !isSuperAdmin()) {
+            return List.of();
+        }
+        if (isSuperAdmin()) {
+            return repo.findByToParty(toParty).stream().map(this::toDTO).toList();
+        }
+        return repo.findByCompany_IdAndToParty(companyId, toParty).stream().map(this::toDTO).toList();
     }
 
     public List<InvoiceResponse> getInvoicesByStatus(Long companyId, String status) {
-        return repo.findByCompanyIdAndStatus(companyId, status)
+        Long effectiveCompanyId = isSuperAdmin() ? companyId : auth.getCurrentCompanyId();
+        if (effectiveCompanyId == null) {
+            return List.of();
+        }
+        return repo.findByCompanyIdAndStatus(effectiveCompanyId, status)
                 .stream().map(this::toDTO).toList();
     }
 
     public void emailInvoice(Long invoiceId) {
         Invoice invoice = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(invoice);
         if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
             return;
         }
@@ -585,6 +602,7 @@ public class InvoiceService {
     public void emailReceipt(Long invoiceId) {
         Invoice invoice = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(invoice);
         if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
             throw new RuntimeException("Receipt can be sent only for paid invoices");
         }
@@ -791,5 +809,20 @@ public class InvoiceService {
     private CompanyInvoiceSettings getOrCreateInvoiceSettings(Company company) {
         return invoiceSettingsRepo.findByCompanyId(company.getId())
                 .orElseGet(() -> invoiceSettingsRepo.save(InvoiceSettingsDefaults.buildDefaults(company)));
+    }
+
+    private boolean isSuperAdmin() {
+        String r = auth.getCurrentUserRole();
+        return r != null && "SUPER_ADMIN".equalsIgnoreCase(r);
+    }
+
+    private void assertInvoiceInTenant(Invoice inv) {
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long cid = auth.getCurrentCompanyId();
+        if (cid == null || inv.getCompany() == null || !cid.equals(inv.getCompany().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invoice not found or access denied");
+        }
     }
 }

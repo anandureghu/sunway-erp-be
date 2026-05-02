@@ -147,6 +147,9 @@ public class GoodsReceiptService {
     }
 
     public List<GoodsReceiptResponseDTO> listByPO(Long purchaseOrderId) {
+        poRepo.findById(purchaseOrderId)
+                .filter(p -> p.getCompany().getId().equals(auth.getCurrentCompanyId()))
+                .orElseThrow(() -> new RuntimeException("Purchase order not found"));
         return repo.findByPurchaseOrderId(purchaseOrderId)
                 .stream().map(this::toDTO).toList();
     }

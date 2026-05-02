@@ -253,7 +253,15 @@ public class TransactionService {
         Long creditId = dto.getCreditAccount();
         validateDebitCreditLegs(debitId, creditId);
 
-        Company company = companyRepo.findById(dto.getCompanyId())
+        Long requestedCompanyId = dto.getCompanyId();
+        if (!isSuperAdmin()) {
+            Long cid = auth.getCurrentCompanyId();
+            if (cid == null || requestedCompanyId == null || !cid.equals(requestedCompanyId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Company mismatch");
+            }
+        }
+
+        Company company = companyRepo.findById(requestedCompanyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
         ChartOfAccounts creditAccount = creditId != null
@@ -262,6 +270,13 @@ public class TransactionService {
         ChartOfAccounts debitAccount = debitId != null
                 ? coaRepo.findById(debitId).orElseThrow(() -> new RuntimeException("Invalid debit account"))
                 : null;
+
+        if (debitAccount != null && !debitAccount.getCompany().getId().equals(requestedCompanyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Debit account does not belong to this company");
+        }
+        if (creditAccount != null && !creditAccount.getCompany().getId().equals(requestedCompanyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Credit account does not belong to this company");
+        }
 
         boolean singleSided = isSingleSided(debitAccount, creditAccount);
 
@@ -375,14 +390,34 @@ public class TransactionService {
         coaRepo.save(coa);
     }
 
+    private boolean isSuperAdmin() {
+        String r = auth.getCurrentUserRole();
+        return r != null && "SUPER_ADMIN".equalsIgnoreCase(r);
+    }
+
+    private void assertTransactionCompany(Transaction tx) {
+        if (isSuperAdmin()) {
+            return;
+        }
+        Long companyId = auth.getCurrentCompanyId();
+        if (tx.getCompany() == null || companyId == null || !tx.getCompany().getId().equals(companyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Transaction not in your company");
+        }
+    }
+
     public TransactionResponseDTO get(Long id) {
         Transaction tx = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        assertTransactionCompany(tx);
         return toDTO(tx);
     }
 
     public List<TransactionResponseDTO> listByCompany(Long companyId) {
-        return repo.findByCompanyId(companyId).stream()
+        Long effectiveCompanyId = isSuperAdmin() ? companyId : auth.getCurrentCompanyId();
+        if (effectiveCompanyId == null) {
+            return List.of();
+        }
+        return repo.findByCompanyId(effectiveCompanyId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
@@ -391,6 +426,7 @@ public class TransactionService {
     public TransactionResponseDTO postTransaction(Long id, String fiscalYear) {
         Transaction tx = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        assertTransactionCompany(tx);
 
         if (tx.getCreditAccount() != null) {
             updateBalance(tx.getCreditAccount().getId(), fiscalYear, tx.getAmount(), false);

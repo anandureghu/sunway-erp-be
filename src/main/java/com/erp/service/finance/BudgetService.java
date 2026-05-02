@@ -281,8 +281,7 @@ public class BudgetService {
     }
 
     public BudgetResponseDTO close(Long id) {
-        BudgetHeader header = headerRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Budget not found"));
+        BudgetHeader header = getBHEntity(id);
 
         header.setStatus(BudgetStatus.REJECTED);
         header.setIsActive(false);
@@ -291,8 +290,7 @@ public class BudgetService {
     }
 
     public BudgetResponseDTO hold(Long id) {
-        BudgetHeader header = headerRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Budget not found"));
+        BudgetHeader header = getBHEntity(id);
 
         header.setStatus(BudgetStatus.HOLD);
 

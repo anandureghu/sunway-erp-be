@@ -45,6 +45,11 @@ public class CreditNoteService {
         Invoice invoice = invoiceRepository.findByInvoiceId(dto.getInvoiceId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
+        if (invoice.getCompany() == null
+                || !companyId.equals(invoice.getCompany().getId())) {
+            throw new RuntimeException("Invoice not found or access denied");
+        }
+
         if (dto.getAmount().compareTo(invoice.getOutstanding()) > 0) {
             throw new RuntimeException("Credit exceeds outstanding amount");
         }
