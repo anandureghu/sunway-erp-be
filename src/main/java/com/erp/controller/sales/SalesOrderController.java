@@ -74,4 +74,9 @@ public class SalesOrderController {
         invoiceService.handleSalesOrderCancellation(id);
         return cancelled;
     }
+
+    @PostMapping("/{id}/archive")
+    public SalesOrderResponseDTO archive(@PathVariable Long id) {
+        return service.archive(id);
+    }
 }

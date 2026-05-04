@@ -45,6 +45,10 @@ public class SalesOrder {
     @Column(nullable = false)
     private String status; // DRAFT, CONFIRMED, COMPLETED, CANCELLED
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean archived = false;
+
     @Column(precision = 18, scale = 2)
     private BigDecimal totalAmount;
 

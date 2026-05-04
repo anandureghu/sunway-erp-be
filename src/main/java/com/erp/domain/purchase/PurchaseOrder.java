@@ -43,6 +43,10 @@ public class PurchaseOrder {
     @Column(nullable = false)
     private PurchaseOrderStatus status;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean archived = false;
+
     @Column(precision = 18, scale = 2)
     private BigDecimal totalAmount;
 

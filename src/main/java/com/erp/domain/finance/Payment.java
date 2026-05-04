@@ -49,6 +49,10 @@ public class Payment {
     @Column(name = "pdf_url", length = 500)
     private String pdfUrl;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean archived = false;
+
     @Column(name = "created_at")
     private Instant createdAt;
 

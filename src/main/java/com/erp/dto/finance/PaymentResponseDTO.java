@@ -18,5 +18,6 @@ public class PaymentResponseDTO {
     private String paymentDirection;
     private Long purchaseOrderId;
     private String pdfUrl;
+    private boolean archived;
     private Instant createdAt;
 }

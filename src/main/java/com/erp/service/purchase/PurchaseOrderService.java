@@ -187,6 +187,19 @@ public class PurchaseOrderService {
         return toDTO(repo.save(po));
     }
 
+    public PurchaseOrderResponseDTO archive(Long id) {
+        PurchaseOrder po = getEntity(id);
+        if (po.isArchived()) {
+            return toDTO(po);
+        }
+        if (po.getStatus() != PurchaseOrderStatus.RECEIVED
+                && po.getStatus() != PurchaseOrderStatus.CANCELLED) {
+            throw new RuntimeException("Only RECEIVED or CANCELLED purchase orders can be archived");
+        }
+        po.setArchived(true);
+        return toDTO(repo.save(po));
+    }
+
     private PurchaseOrder getEntity(Long id) {
         return repo.findById(id)
                 .filter(po -> po.getCompany().getId().equals(auth.getCurrentCompanyId()))
@@ -209,6 +222,7 @@ public class PurchaseOrderService {
                 .supplierName(po.getSupplier().getVendorName())
                 .orderDate(po.getOrderDate())
                 .status(po.getStatus().name())
+                .archived(po.isArchived())
                 .createdAt(po.getCreatedAt().toString())
                 .createdById(po.getCreatedBy().getId())
                 .createdByName(po.getCreatedBy().getFullName())

@@ -25,6 +25,7 @@ public class SalesOrderResponseDTO {
     private LocalDate invoiceDueDate;
     private String shippingAddress;
     private String status;
+    private boolean archived;
     private String paymentStatus;
     private BigDecimal subtotalAmount;
     private BigDecimal discountAmount;
