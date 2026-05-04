@@ -81,4 +81,13 @@ public class GlobalExceptionHandler {
         body.put("details", ex.getDetails());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
+
+    @ExceptionHandler(PayrollGenerationException.class)
+    public ResponseEntity<Map<String, Object>> handlePayrollGeneration(PayrollGenerationException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", "Payroll generation failed");
+        body.put("message", ex.getMessage());
+        body.put("details", ex.getDetails());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
 }

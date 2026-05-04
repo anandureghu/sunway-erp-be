@@ -35,6 +35,8 @@ public class EmployeeBankDetails {
     @Column(nullable = false)
     private String accountNo;
 
+    /** International Bank Account Number (payroll / SIF). */
+    @Column(name = "iban", length = 64)
     private String iban;
 
     private String country;
