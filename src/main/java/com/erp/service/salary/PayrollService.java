@@ -9,7 +9,6 @@ import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.salary.EmployeeBankDetails;
 import com.erp.domain.salary.EmployeeCompensation;
 import com.erp.domain.salary.Payroll;
-import com.erp.dto.salary.PayrollBatchResponseDTO;
 import com.erp.dto.salary.PayrollGenerateRequestDTO;
 import com.erp.dto.salary.PayrollHistoryDTO;
 import com.erp.dto.salary.PayrollPreviewDTO;
@@ -267,6 +266,7 @@ public class PayrollService {
                 unpaidLeaveDays += leaveDays;
             }
         }
+    
 
         double payableDays = Math.min(workedDays + paidLeaveDays, workingDays);
         double lopDays = Math.max(workingDays - payableDays, 0.0);
