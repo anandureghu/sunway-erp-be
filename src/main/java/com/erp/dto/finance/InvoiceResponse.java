@@ -31,6 +31,7 @@ public class InvoiceResponse {
 
     private String toParty;
     private String status;
+    private boolean archived;
 
     private LocalDate invoiceDate;
     private LocalDate dueDate;

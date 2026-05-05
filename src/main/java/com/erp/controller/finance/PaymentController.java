@@ -36,6 +36,11 @@ public class PaymentController {
         return paymentService.confirmPayment(id);
     }
 
+    @PostMapping("/{id}/archive")
+    public PaymentResponseDTO archivePayment(@PathVariable("id") Long id) {
+        return paymentService.archivePayment(id);
+    }
+
     // ----------------------------------------------------------
     // 2️⃣ Get a payment by ID
     // ----------------------------------------------------------

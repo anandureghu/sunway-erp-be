@@ -662,6 +662,21 @@ public class InvoiceService {
         return toDTO(repo.save(inv));
     }
 
+    public InvoiceResponse archiveInvoice(Long id) {
+        Invoice inv = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
+        String status = inv.getStatus() == null ? "" : inv.getStatus().trim().toUpperCase();
+        if (!"PAID".equals(status) && !"CANCELLED".equals(status)) {
+            throw new RuntimeException("Only paid or cancelled invoices can be archived");
+        }
+        if (!inv.isArchived()) {
+            inv.setArchived(true);
+            inv = repo.save(inv);
+        }
+        return toDTO(inv);
+    }
+
     // ============================================================
     // DELETE
     // ============================================================
@@ -742,6 +757,7 @@ public class InvoiceService {
                 .companyWebsiteUrl(i.getCompany().getWebsiteUrl())
                 .toParty(i.getToParty())
                 .status(i.getStatus())
+                .archived(i.isArchived())
                 .invoiceDate(i.getInvoiceDate())
                 .dueDate(i.getDueDate())
                 .paidDate(i.getPaidDate())

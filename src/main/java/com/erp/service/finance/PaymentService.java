@@ -151,8 +151,26 @@ public class PaymentService {
                 .paymentDirection(dir.name())
                 .purchaseOrderId(p.getPurchaseOrderId())
                 .pdfUrl(p.getPdfUrl())
+                .archived(p.isArchived())
                 .createdAt(p.getCreatedAt())
                 .build();
+    }
+
+    @Transactional
+    public PaymentResponseDTO archivePayment(Long id) {
+        Payment payment = paymentRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Payment not found"));
+        assertPaymentInTenant(payment);
+        if (payment.isArchived()) {
+            return toDTO(payment);
+        }
+        String method = payment.getPaymentMethod() == null ? "" : payment.getPaymentMethod().trim();
+        if ("PENDING_REQUEST".equalsIgnoreCase(method)
+                || "PENDING_VENDOR_PAYMENT".equalsIgnoreCase(method)) {
+            throw new RuntimeException("Only confirmed payments can be archived");
+        }
+        payment.setArchived(true);
+        return toDTO(paymentRepo.save(payment));
     }
 
     public PaymentResponseDTO getPaymentById(Long id) {

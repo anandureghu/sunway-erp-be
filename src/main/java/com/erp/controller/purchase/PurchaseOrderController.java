@@ -50,4 +50,9 @@ public class PurchaseOrderController {
     public PurchaseOrderResponseDTO cancel(@PathVariable("id") Long id) {
         return service.cancel(id);
     }
+
+    @PostMapping("/{id}/archive")
+    public PurchaseOrderResponseDTO archive(@PathVariable("id") Long id) {
+        return service.archive(id);
+    }
 }

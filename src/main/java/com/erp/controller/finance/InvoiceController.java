@@ -107,6 +107,11 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.updateInvoice(id, request));
     }
 
+    @PostMapping("/{id}/archive")
+    public ResponseEntity<InvoiceResponse> archiveInvoice(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(invoiceService.archiveInvoice(id));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteInvoice(@PathVariable("id") Long id) {
         invoiceService.deleteInvoice(id);

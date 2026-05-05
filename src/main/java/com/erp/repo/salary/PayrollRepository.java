@@ -23,4 +23,7 @@ public interface PayrollRepository
 
     // ── added for PayslipDocumentService ──────────────
     Optional<Payroll> findByEmployeeAndPayrollCode(Employee employee, String payrollCode);
+
+    /** True if this employee already has a payroll whose pay date falls in the inclusive range (e.g. one calendar month). */
+    boolean existsByEmployee_IdAndPayDateBetween(Long employeeId, LocalDate startInclusive, LocalDate endInclusive);
 }

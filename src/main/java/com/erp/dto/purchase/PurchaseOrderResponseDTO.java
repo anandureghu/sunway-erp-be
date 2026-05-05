@@ -21,6 +21,7 @@ public class PurchaseOrderResponseDTO {
     private String supplierName;
     private LocalDate orderDate;
     private String status;
+    private boolean archived;
     private BigDecimal totalAmount;
     private List<PurchaseOrderItemDTO> items;
     private String createdAt;

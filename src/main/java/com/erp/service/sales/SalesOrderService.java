@@ -321,6 +321,21 @@ public class SalesOrderService {
         return toDTO(repo.save(order));
     }
 
+    // --------------------------
+    // Archive Sales Order
+    // --------------------------
+    public SalesOrderResponseDTO archive(Long id) {
+        SalesOrder order = getEntity(id);
+        if (order.isArchived()) {
+            return toDTO(order);
+        }
+        if (!"COMPLETED".equals(order.getStatus()) && !"CANCELLED".equals(order.getStatus())) {
+            throw new RuntimeException("Only COMPLETED or CANCELLED orders can be archived");
+        }
+        order.setArchived(true);
+        return toDTO(repo.save(order));
+    }
+
 
     // --------------------------
     // Helpers
@@ -370,6 +385,7 @@ public class SalesOrderService {
                 .invoiceDueDate(so.getInvoiceDueDate())
                 .shippingAddress(so.getShippingAddress())
                 .status(so.getStatus())
+                .archived(so.isArchived())
                 .paymentStatus(invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
                         .map(inv -> inv.getStatus())
                         .orElse("UNPAID"))

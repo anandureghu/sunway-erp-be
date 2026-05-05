@@ -38,6 +38,10 @@ public class Invoice {
     private String toParty;
     private String status;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean archived = false;
+
     private LocalDate invoiceDate;
     private LocalDate dueDate;
     private LocalDate paidDate;

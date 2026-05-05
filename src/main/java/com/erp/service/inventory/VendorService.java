@@ -126,7 +126,6 @@ public class VendorService {
         if (dto.getCountry() != null) v.setCountry(dto.getCountry());
         if (dto.getPhoneNo() != null) v.setPhoneNo(dto.getPhoneNo());
         if (dto.getEmail() != null) v.setEmail(dto.getEmail());
-        if (dto.getEmail() != null) v.setEmail(dto.getEmail());
         if (dto.getRemarks() != null) v.setRemarks(dto.getRemarks());
 
         if (dto.getContactPersonName() != null) v.setContactPersonName(dto.getContactPersonName());
