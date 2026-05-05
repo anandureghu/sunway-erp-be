@@ -4,6 +4,7 @@ import com.erp.domain.CompanyLeavePolicy;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLeave;
 import com.erp.domain.EmployeeLoan;
+import com.erp.domain.EmployeeStatus;
 import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.salary.EmployeeBankDetails;
 import com.erp.domain.salary.EmployeeCompensation;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -82,34 +84,49 @@ public class PayrollService {
                 dto.getPayPeriodEnd()
         );
 
-        Payroll payroll = new Payroll();
-        payroll.setEmployee(employee);
-        payroll.setPayrollCode(generatePayrollCode(employeeId));
-        payroll.setPayPeriodStart(dto.getPayPeriodStart());
-        payroll.setPayPeriodEnd(dto.getPayPeriodEnd());
-        payroll.setPayDate(dto.getPayDate());
-
-        payroll.setGrossPay(computation.earnedGrossPay());
-        payroll.setLoanDeduction(computation.loanDeduction());
-        payroll.setDeductions(computation.totalDeductions());
-        payroll.setNetPayable(computation.netPayable());
-
-        payroll.setWorkedHours(computation.workedHours());
-        payroll.setWorkedDays(computation.workedDays());
-        payroll.setPaidLeaveDays(computation.paidLeaveDays());
-        payroll.setUnpaidLeaveDays(computation.unpaidLeaveDays());
-        payroll.setPayableDays(computation.payableDays());
-        payroll.setLopDays(computation.lopDays());
-        payroll.setLopAmount(computation.lopAmount());
-
-        payroll.setBankName(bankDetails.getBankName());
-        payroll.setBankAccount(bankDetails.getAccountNo());
-
+        Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
         Payroll saved = payrollRepo.save(payroll);
 
         applyLoanRecovery(employee);
 
         return saved;
+    }
+
+    @Transactional
+    public PayrollBatchResponseDTO generatePayrollBatch(Long companyId, PayrollGenerateRequestDTO dto) {
+        validateRequest(dto);
+
+        List<Employee> employees = getActiveEmployeesByCompany(companyId);
+
+        int generatedCount = 0;
+
+        for (Employee employee : employees) {
+            EmployeeCompensation compensation = getActiveCompensation(employee);
+            EmployeeBankDetails bankDetails = getBankDetails(employee);
+
+            validateDuplicatePayroll(employee, dto.getPayPeriodStart(), dto.getPayPeriodEnd());
+            validateNoPendingLeaves(employee.getId(), dto.getPayPeriodStart(), dto.getPayPeriodEnd());
+
+            PayrollComputation computation = computePayroll(
+                    employee,
+                    compensation,
+                    dto.getPayPeriodStart(),
+                    dto.getPayPeriodEnd()
+            );
+
+            Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
+            payrollRepo.save(payroll);
+
+            applyLoanRecovery(employee);
+            generatedCount++;
+        }
+
+        String payrollMonth = dto.getPayDate().format(DateTimeFormatter.ofPattern("yyyy-MM"));
+
+        return PayrollBatchResponseDTO.builder()
+                .generatedCount(generatedCount)
+                .payrollMonth(payrollMonth)
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -153,6 +170,48 @@ public class PayrollService {
                 computation.totalDeductions(),
                 computation.netPayable()
         ));
+    }
+
+    private Payroll buildPayroll(
+            Employee employee,
+            EmployeeBankDetails bankDetails,
+            PayrollGenerateRequestDTO dto,
+            PayrollComputation computation
+    ) {
+        Payroll payroll = new Payroll();
+        payroll.setEmployee(employee);
+        payroll.setPayrollCode(generatePayrollCode(employee.getId()));
+        payroll.setPayPeriodStart(dto.getPayPeriodStart());
+        payroll.setPayPeriodEnd(dto.getPayPeriodEnd());
+        payroll.setPayDate(dto.getPayDate());
+
+        payroll.setGrossPay(computation.earnedGrossPay());
+        payroll.setLoanDeduction(computation.loanDeduction());
+        payroll.setDeductions(computation.totalDeductions());
+        payroll.setNetPayable(computation.netPayable());
+
+        payroll.setWorkedHours(computation.workedHours());
+        payroll.setWorkedDays(computation.workedDays());
+        payroll.setPaidLeaveDays(computation.paidLeaveDays());
+        payroll.setUnpaidLeaveDays(computation.unpaidLeaveDays());
+        payroll.setPayableDays(computation.payableDays());
+        payroll.setLopDays(computation.lopDays());
+        payroll.setLopAmount(computation.lopAmount());
+
+        payroll.setBankName(bankDetails.getBankName());
+        payroll.setBankAccount(bankDetails.getAccountNo());
+
+        return payroll;
+    }
+
+    private List<Employee> getActiveEmployeesByCompany(Long companyId) {
+        List<Employee> employees = employeeRepo.findByCompanyIdAndStatus(companyId, EmployeeStatus.ACTIVE);
+
+        if (employees == null || employees.isEmpty()) {
+            throw new RuntimeException("No active employees found for company id: " + companyId);
+        }
+
+        return employees;
     }
 
     private PayrollComputation computePayroll(
@@ -207,6 +266,7 @@ public class PayrollService {
                 unpaidLeaveDays += leaveDays;
             }
         }
+    
 
         double payableDays = Math.min(workedDays + paidLeaveDays, workingDays);
         double lopDays = Math.max(workingDays - payableDays, 0.0);
@@ -314,7 +374,7 @@ public class PayrollService {
         );
 
         if (exists) {
-            throw new RuntimeException("Payroll already generated for this employee and pay period");
+            throw new RuntimeException("Payroll already generated for employee: " + employee.getEmployeeNo());
         }
     }
 

@@ -1,6 +1,7 @@
 package com.erp.repo;
 
 import com.erp.domain.Employee;
+import com.erp.domain.EmployeeStatus;
 import com.erp.domain.hr.Company;
 import com.erp.domain.security.Role;
 import org.springframework.data.domain.Page;
@@ -74,4 +75,6 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     // ======================================================
 
     Optional<Employee> findByUser_Id(Long userId);
+
+    List<Employee> findByCompanyIdAndStatus(Long companyId, EmployeeStatus employeeStatus);
 }
