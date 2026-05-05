@@ -5,7 +5,6 @@
 <head>
   <meta charset="UTF-8"/>
   <title>Payslip</title>
-
   <style type="text/css">
     @page {
       size: A4;
@@ -22,10 +21,14 @@
       --text-secondary: #5A6178;
       --text-muted: #8B91A8;
       --border-light: #E8EAF0;
+      --border-soft: #F1F3F6;
       --bg-cream: #FAFAF7;
       --bg-subtle: #F4F4F0;
+      --bg-blue-soft: #F6F8FC;
       --earnings-green: #2D8A56;
       --deductions-red: #C0392B;
+      --info-blue: #3459A5;
+      --warning-amber: #B7791F;
       --white: #FFFFFF;
     }
 
@@ -62,15 +65,26 @@
       background: linear-gradient(90deg, var(--sunway-gold), var(--sunway-gold-light), var(--sunway-gold));
     }
 
-    .header-table {
+    .header-table,
+    .info-columns,
+    .info-grid,
+    .payslip-table,
+    .bank-table,
+    .footer-table,
+    .attendance-grid {
       width: 100%;
       border-collapse: collapse;
     }
 
-    .header-table td {
-      vertical-align: top;
+    .header-table td,
+    .info-columns td,
+    .info-grid td,
+    .bank-table td,
+    .footer-table td,
+    .attendance-grid td {
       border: 0;
       padding: 0;
+      vertical-align: top;
     }
 
     .header-right {
@@ -145,27 +159,12 @@
       padding: 24px 32px;
     }
 
-    .info-columns {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
     .info-columns td {
       width: 50%;
-      vertical-align: top;
-      border: 0;
-      padding: 0;
-    }
-
-    .info-grid {
-      width: 100%;
-      border-collapse: collapse;
     }
 
     .info-grid td {
       width: 50%;
-      vertical-align: top;
-      border: 0;
       padding: 0 18px 14px 0;
     }
 
@@ -199,6 +198,11 @@
       border-top: 1px solid var(--border-light);
     }
 
+    .section-title.attendance {
+      background: var(--bg-blue-soft);
+      color: var(--info-blue);
+    }
+
     .section-title.earnings {
       background: #F6FBF8;
       color: var(--earnings-green);
@@ -207,6 +211,76 @@
     .section-title.deductions {
       background: #FDF7F6;
       color: var(--deductions-red);
+    }
+
+    .attendance-section {
+      padding: 18px 32px 10px;
+      background: #FCFCFE;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .attendance-grid td {
+      width: 33.33%;
+      padding: 0 14px 14px 0;
+    }
+
+    .attendance-card {
+      min-height: 88px;
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      background: var(--white);
+      padding: 14px 16px;
+    }
+
+    .attendance-card.primary {
+      background: #F7FAFF;
+      border-color: #DCE6F7;
+    }
+
+    .attendance-card.success {
+      background: #F4FBF7;
+      border-color: #D7ECDD;
+    }
+
+    .attendance-card.warning {
+      background: #FFFBF3;
+      border-color: #F2E3BD;
+    }
+
+    .attendance-card.danger {
+      background: #FDF7F6;
+      border-color: #F0D5D1;
+    }
+
+    .attendance-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .attendance-value {
+      font-family: "Courier New", monospace;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.1;
+    }
+
+    .attendance-sub {
+      margin-top: 6px;
+      font-size: 10px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .attendance-breakdown {
+      margin-top: 8px;
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      overflow: hidden;
     }
 
     .payslip-table {
@@ -227,6 +301,10 @@
       text-align: left;
     }
 
+    .payslip-table.attendance-table th {
+      background: #F9FAFD;
+    }
+
     .payslip-table th:last-child,
     .payslip-table td:last-child {
       text-align: right;
@@ -234,7 +312,7 @@
 
     .payslip-table td {
       padding: 11px 32px;
-      border-bottom: 1px solid #F1F3F6;
+      border-bottom: 1px solid var(--border-soft);
       font-size: 12px;
       color: var(--text-primary);
     }
@@ -251,6 +329,18 @@
 
     .amount-negative {
       color: var(--deductions-red);
+      font-family: "Courier New", monospace;
+      font-weight: 700;
+    }
+
+    .amount-info {
+      color: var(--info-blue);
+      font-family: "Courier New", monospace;
+      font-weight: 700;
+    }
+
+    .amount-warning {
+      color: var(--warning-amber);
       font-family: "Courier New", monospace;
       font-weight: 700;
     }
@@ -347,15 +437,8 @@
       border-top: 1px solid var(--border-light);
     }
 
-    .bank-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
     .bank-table td {
       width: 25%;
-      vertical-align: top;
-      border: 0;
       padding: 0 16px 10px 0;
     }
 
@@ -376,16 +459,8 @@
       padding: 18px 32px;
     }
 
-    .footer-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
     .footer-table td {
       width: 50%;
-      vertical-align: top;
-      border: 0;
-      padding: 0;
     }
 
     .footer-note {
@@ -413,7 +488,6 @@
     }
   </style>
 </head>
-
 <body>
 <div class="payslip-container">
   <div class="payslip-header">
@@ -477,24 +551,129 @@
             </tr>
             <tr>
               <td>
-                <div class="info-label">Working Days</div>
-                <div class="info-value mono">
-                  <span th:text="${workingDays != null ? workingDays : '-'}">22</span>
-                  /
-                  <span th:text="${totalDays != null ? totalDays : '-'}">22</span>
-                </div>
+                <div class="info-label">Pay Period</div>
+                <div class="info-value mono" th:text="${payPeriod}">March 2026</div>
               </td>
               <td>
-                <div class="info-label">Leave Taken</div>
-                <div class="info-value mono">
-                  <span th:text="${leaveTaken != null ? leaveTaken : 0}">0</span> days
-                </div>
+                <div class="info-label">Payment Method</div>
+                <div class="info-value">Bank Transfer</div>
               </td>
             </tr>
           </table>
         </td>
       </tr>
     </table>
+  </div>
+
+  <div class="section-title attendance">Attendance &amp; Leave Summary</div>
+  <div class="attendance-section">
+    <table class="attendance-grid">
+      <tr>
+        <td>
+          <div class="attendance-card primary">
+            <div class="attendance-label">Total Working Days</div>
+            <div class="attendance-value" th:text="${workingDays != null ? workingDays : 0}">22</div>
+            <div class="attendance-sub">Eligible working days in this payroll period</div>
+          </div>
+        </td>
+        <td>
+          <div class="attendance-card success">
+            <div class="attendance-label">Present / Worked Days</div>
+            <div class="attendance-value" th:text="${workedDays != null ? #numbers.formatDecimal(workedDays,1,'COMMA',2,'POINT') : '0.00'}">20.00</div>
+            <div class="attendance-sub">
+              Worked Hours:
+              <span class="mono" th:text="${workedHours != null ? #numbers.formatDecimal(workedHours,1,'COMMA',2,'POINT') : '0.00'}">160.00</span>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="attendance-card primary">
+            <div class="attendance-label">Payable Days</div>
+            <div class="attendance-value" th:text="${payableDays != null ? #numbers.formatDecimal(payableDays,1,'COMMA',2,'POINT') : '0.00'}">21.00</div>
+            <div class="attendance-sub">Worked days + approved paid leave days</div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <div class="attendance-card success">
+            <div class="attendance-label">Paid Leave Days</div>
+            <div class="attendance-value" th:text="${paidLeaveDays != null ? #numbers.formatDecimal(paidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div>
+            <div class="attendance-sub">Included in salary calculation</div>
+          </div>
+        </td>
+        <td>
+          <div class="attendance-card warning">
+            <div class="attendance-label">Unpaid Leave Days</div>
+            <div class="attendance-value" th:text="${unpaidLeaveDays != null ? #numbers.formatDecimal(unpaidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div>
+            <div class="attendance-sub">Excluded from payable days</div>
+          </div>
+        </td>
+        <td>
+          <div class="attendance-card danger">
+            <div class="attendance-label">LOP Days</div>
+            <div class="attendance-value" th:text="${lopDays != null ? #numbers.formatDecimal(lopDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div>
+            <div class="attendance-sub">
+              LOP Amount:
+              <span class="mono" th:text="${currencyCode + ' ' + #numbers.formatDecimal(lopAmount != null ? lopAmount : 0,1,'COMMA',2,'POINT')}">USD 0.00</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <div class="attendance-breakdown">
+      <table class="payslip-table attendance-table">
+        <thead>
+        <tr>
+          <th style="width:55%">Attendance Component</th>
+          <th style="width:45%">Value</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td>Total Calendar Days</td>
+          <td class="amount-info mono" th:text="${totalDays != null ? totalDays : 0}">31</td>
+        </tr>
+        <tr>
+          <td>Total Working Days in Period</td>
+          <td class="amount-info mono" th:text="${workingDays != null ? workingDays : 0}">22</td>
+        </tr>
+        <tr>
+          <td>Worked Days</td>
+          <td class="amount-info mono" th:text="${workedDays != null ? #numbers.formatDecimal(workedDays,1,'COMMA',2,'POINT') : '0.00'}">20.00</td>
+        </tr>
+        <tr>
+          <td>Worked Hours</td>
+          <td class="amount-info mono" th:text="${workedHours != null ? #numbers.formatDecimal(workedHours,1,'COMMA',2,'POINT') : '0.00'}">160.00</td>
+        </tr>
+        <tr>
+          <td>Paid Leave Days</td>
+          <td class="amount-positive mono" th:text="${paidLeaveDays != null ? #numbers.formatDecimal(paidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</td>
+        </tr>
+        <tr>
+          <td>Unpaid Leave Days</td>
+          <td class="amount-warning mono" th:text="${unpaidLeaveDays != null ? #numbers.formatDecimal(unpaidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</td>
+        </tr>
+        <tr>
+          <td>Total Leave Taken</td>
+          <td class="amount-info mono" th:text="${leaveTaken != null ? leaveTaken : 0}">2</td>
+        </tr>
+        <tr>
+          <td>Payable Days</td>
+          <td class="amount-positive mono" th:text="${payableDays != null ? #numbers.formatDecimal(payableDays,1,'COMMA',2,'POINT') : '0.00'}">21.00</td>
+        </tr>
+        <tr>
+          <td>Loss of Pay (LOP) Days</td>
+          <td class="amount-negative mono" th:text="${lopDays != null ? #numbers.formatDecimal(lopDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</td>
+        </tr>
+        <tr>
+          <td>Loss of Pay (LOP) Amount</td>
+          <td class="amount-negative mono" th:text="${#numbers.formatDecimal(lopAmount != null ? lopAmount : 0,1,'COMMA',2,'POINT')}">0.00</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="section-title earnings">Earnings</div>
@@ -508,8 +687,7 @@
     <tbody>
     <tr th:each="e : ${earnings}">
       <td th:text="${e.label}">Basic Salary</td>
-      <td class="amount-positive"
-          th:text="${#numbers.formatDecimal(e.amount,1,'COMMA',2,'POINT')}">0.00</td>
+      <td class="amount-positive" th:text="${#numbers.formatDecimal(e.amount,1,'COMMA',2,'POINT')}">0.00</td>
     </tr>
     <tr th:if="${#lists.isEmpty(earnings)}">
       <td>No earnings items</td>
@@ -529,8 +707,7 @@
     <tbody>
     <tr th:each="d : ${deductions}">
       <td th:text="${d.label}">Loan</td>
-      <td class="amount-negative"
-          th:text="${#numbers.formatDecimal(d.amount,1,'COMMA',2,'POINT')}">0.00</td>
+      <td class="amount-negative" th:text="${#numbers.formatDecimal(d.amount,1,'COMMA',2,'POINT')}">0.00</td>
     </tr>
     <tr th:if="${#lists.isEmpty(deductions)}">
       <td>No deductions</td>
@@ -547,7 +724,7 @@
           <div class="summary-label">Gross Earnings</div>
           <div class="summary-amount">
             <span class="summary-currency" th:text="${currencyCode}">USD</span>
-            <span th:text="${#numbers.formatDecimal(grossPay,1,'COMMA',2,'POINT')}">0.00</span>
+            <span th:text="${#numbers.formatDecimal(grossPay != null ? grossPay : 0,1,'COMMA',2,'POINT')}">0.00</span>
           </div>
         </div>
       </td>
@@ -556,7 +733,7 @@
           <div class="summary-label">Total Deductions</div>
           <div class="summary-amount">
             <span class="summary-currency" th:text="${currencyCode}">USD</span>
-            <span th:text="${#numbers.formatDecimal(totalDeductions,1,'COMMA',2,'POINT')}">0.00</span>
+            <span th:text="${#numbers.formatDecimal(totalDeductions != null ? totalDeductions : 0,1,'COMMA',2,'POINT')}">0.00</span>
           </div>
         </div>
       </td>
@@ -565,7 +742,7 @@
           <div class="summary-label">Net Pay</div>
           <div class="summary-amount">
             <span class="summary-currency" th:text="${currencyCode}">USD</span>
-            <span th:text="${#numbers.formatDecimal(netPayable,1,'COMMA',2,'POINT')}">0.00</span>
+            <span th:text="${#numbers.formatDecimal(netPayable != null ? netPayable : 0,1,'COMMA',2,'POINT')}">0.00</span>
           </div>
         </div>
       </td>
@@ -600,7 +777,8 @@
       <tr>
         <td>
           <div class="footer-note">
-            This is a system-generated payslip from Sunway ERP and does not require a signature.
+            This is a system-generated payslip and does not require a signature.
+            The attendance and leave summary above explains the payable days used for salary calculation.
             For any discrepancy, contact HR within 7 working days of issuance.
           </div>
         </td>

@@ -29,10 +29,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/**
- * Qatar-style bank payroll CSV (two-row summary header + detail rows).
- * File creation timestamps use {@link #QATAR_ZONE}.
- */
 @Service
 @RequiredArgsConstructor
 public class PayrollBankFileExportService {
@@ -83,7 +79,8 @@ public class PayrollBankFileExportService {
                 continue;
             }
             EmployeeCompensation comp = compOpt.get();
-            String name = (emp.getFirstName() + " " + emp.getLastName()).trim();
+            String name = ((emp.getFirstName() == null ? "" : emp.getFirstName()) + " " +
+                    (emp.getLastName() == null ? "" : emp.getLastName())).trim();
 
             Optional<EmployeeBankDetails> bankOpt = bankRepository.findByEmployee(emp);
             if (bankOpt.isEmpty()) {
@@ -110,21 +107,20 @@ public class PayrollBankFileExportService {
                 continue;
             }
 
-            Optional<Payroll> payrollOpt = payrollRepository
-                    .findTopByEmployeeAndPayDateBetweenOrderByPayDateDesc(emp, monthStart, monthEnd);
+            Payroll payroll = payrollRepository
+                    .findTopByEmployeeAndPayDateBetweenOrderByPayDateDesc(emp, monthStart, monthEnd)
+                    .orElse(null);
 
             double net;
             double deductions;
 
-            if (payrollOpt.isPresent()) {
-                Payroll p = payrollOpt.get();
-                deductions = p.getDeductions() != null ? nz(p.getDeductions()) : nz(p.getLoanDeduction());
-                net = nz(p.getNetPayable());
+            if (payroll != null) {
+                deductions = payroll.getDeductions() != null ? nz(payroll.getDeductions()) : nz(payroll.getLoanDeduction());
+                net = nz(payroll.getNetPayable());
             } else {
                 PayrollService.ProjectedPayrollAmounts proj;
                 try {
-                    Optional<PayrollService.ProjectedPayrollAmounts> po =
-                            payrollService.computeProjectedAmounts(emp);
+                    Optional<PayrollService.ProjectedPayrollAmounts> po = payrollService.computeProjectedAmounts(emp);
                     if (po.isEmpty()) {
                         validationErrors.add(name + ": could not compute payroll amounts");
                         continue;
@@ -145,14 +141,11 @@ public class PayrollBankFileExportService {
                     .orElse("");
 
             double basic = nz(comp.getBasicSalary());
-            double housing = comp.getHousingType() == BenefitType.ALLOWANCE
-                    ? nz(comp.getHousingAllowance()) : 0d;
+            double housing = comp.getHousingType() == BenefitType.ALLOWANCE ? nz(comp.getHousingAllowance()) : 0d;
             double food = 0d;
-            double transport = comp.getTransportationType() == BenefitType.ALLOWANCE
-                    ? nz(comp.getTransportationAllowance()) : 0d;
+            double transport = comp.getTransportationType() == BenefitType.ALLOWANCE ? nz(comp.getTransportationAllowance()) : 0d;
             double overtime = 0d;
-            double travelAllow = comp.getTravelType() == BenefitType.ALLOWANCE
-                    ? nz(comp.getTravelAllowance()) : 0d;
+            double travelAllow = comp.getTravelType() == BenefitType.ALLOWANCE ? nz(comp.getTravelAllowance()) : 0d;
             double otherAllow = nz(comp.getOtherAllowance());
 
             detailRows.add(new DetailRow(
@@ -411,9 +404,7 @@ public class PayrollBankFileExportService {
             double transport,
             double overtime,
             double deductions,
-            /** Travel allowance when ALLOWANCE — mapped to Extra Field 1 */
             double travelAllow,
-            /** Other allowance — mapped to Extra Field 2; food column stays 0 (no separate field in HR). */
             double otherAllow
     ) {}
 }

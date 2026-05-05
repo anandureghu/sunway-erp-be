@@ -1,320 +1,496 @@
 package com.erp.service.salary;
 
+import com.erp.domain.CompanyLeavePolicy;
 import com.erp.domain.Employee;
+import com.erp.domain.EmployeeLeave;
 import com.erp.domain.EmployeeLoan;
-import com.erp.domain.EmployeeStatus;
-import com.erp.domain.enums.BenefitType;
+import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.salary.EmployeeBankDetails;
 import com.erp.domain.salary.EmployeeCompensation;
 import com.erp.domain.salary.Payroll;
-import com.erp.dto.salary.PayrollBatchResponseDTO;
 import com.erp.dto.salary.PayrollGenerateRequestDTO;
 import com.erp.dto.salary.PayrollHistoryDTO;
-import com.erp.exception.PayrollGenerationException;
+import com.erp.dto.salary.PayrollPreviewDTO;
+import com.erp.repo.CompanyLeavePolicyRepository;
+import com.erp.repo.EmployeeLeaveRepository;
 import com.erp.repo.EmployeeLoanRepository;
 import com.erp.repo.EmployeeRepository;
+import com.erp.repo.EmployeeTimesheetRepository;
 import com.erp.repo.salary.EmployeeBankDetailsRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
 import com.erp.repo.salary.PayrollRepository;
-import com.erp.service.hr.CompanyService;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
-import java.time.YearMonth;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class PayrollService {
 
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String STATUS_CLOSED = "CLOSED";
+    private static final double STANDARD_HOURS_PER_DAY = 8.0;
+
     private final EmployeeRepository employeeRepo;
     private final EmployeeCompensationRepository compensationRepo;
-    private final EmployeeLoanRepository loanRepo;
     private final EmployeeBankDetailsRepository bankRepo;
+    private final EmployeeLoanRepository loanRepo;
+    private final EmployeeTimesheetRepository timesheetRepo;
+    private final EmployeeLeaveRepository leaveRepo;
+    private final CompanyLeavePolicyRepository leavePolicyRepo;
     private final PayrollRepository payrollRepo;
-    private final CompanyService companyService;
+
+    @Transactional(readOnly = true)
+    public PayrollPreviewDTO previewPayroll(Long employeeId, PayrollGenerateRequestDTO dto) {
+        validateRequest(dto);
+
+        Employee employee = getEmployee(employeeId);
+        EmployeeCompensation compensation = getActiveCompensation(employee);
+
+        PayrollComputation computation = computePayroll(
+                employee,
+                compensation,
+                dto.getPayPeriodStart(),
+                dto.getPayPeriodEnd()
+        );
+
+        return toPreviewDTO(computation);
+    }
 
     @Transactional
     public Payroll generatePayroll(Long employeeId, PayrollGenerateRequestDTO dto) {
-        Employee employee = employeeRepo.findById(employeeId)
-                .orElseThrow(() -> new PayrollGenerationException("Employee not found"));
+        validateRequest(dto);
 
-        assertPayDatePresent(dto);
-        YearMonth ym = YearMonth.from(dto.getPayDate());
-        LocalDate monthStart = ym.atDay(1);
-        LocalDate monthEnd = ym.atEndOfMonth();
+        Employee employee = getEmployee(employeeId);
+        EmployeeCompensation compensation = getActiveCompensation(employee);
+        EmployeeBankDetails bankDetails = getBankDetails(employee);
 
-        if (payrollRepo.existsByEmployee_IdAndPayDateBetween(employeeId, monthStart, monthEnd)) {
-            throw new PayrollGenerationException(
-                    "Payroll for " + ym + " already exists for " + formatEmployee(employee) + ".",
-                    List.of(
-                            "Each employee can only have one payroll per calendar month (based on pay date). "
-                                    + "Use payroll history or contact HR if this is a mistake."));
-        }
+        validateDuplicatePayroll(employee, dto.getPayPeriodStart(), dto.getPayPeriodEnd());
+        validateNoPendingLeaves(employeeId, dto.getPayPeriodStart(), dto.getPayPeriodEnd());
 
-        List<String> readiness = new ArrayList<>();
-        collectReadinessErrors(employee, readiness);
-        if (!readiness.isEmpty()) {
-            throw new PayrollGenerationException(
-                    "Cannot generate payroll for " + formatEmployee(employee) + ".",
-                    readiness);
-        }
-
-        return persistPayrollForEmployee(employee, dto);
-    }
-
-    /**
-     * Generates payroll for every {@link EmployeeStatus#ACTIVE} employee in the company in a single transaction.
-     * Validates all employees first; if anyone is missing required data or already has payroll for the pay month,
-     * nothing is persisted and {@link PayrollGenerationException} lists every issue.
-     */
-    @Transactional
-    public PayrollBatchResponseDTO generatePayrollBatch(Long companyId, PayrollGenerateRequestDTO dto) {
-        companyService.getCompanyById(companyId);
-        assertPayDatePresent(dto);
-
-        YearMonth ym = YearMonth.from(dto.getPayDate());
-        LocalDate monthStart = ym.atDay(1);
-        LocalDate monthEnd = ym.atEndOfMonth();
-
-        List<Employee> active = employeeRepo.findByCompany_IdOrderByCreatedAtDesc(companyId).stream()
-                .filter(e -> e.getStatus() == EmployeeStatus.ACTIVE)
-                .sorted(Comparator
-                        .comparing(Employee::getLastName, Comparator.nullsLast(String::compareToIgnoreCase))
-                        .thenComparing(Employee::getFirstName, Comparator.nullsLast(String::compareToIgnoreCase))
-                        .thenComparing(Employee::getId))
-                .toList();
-
-        if (active.isEmpty()) {
-            throw new PayrollGenerationException(
-                    "No active employees found for this company.",
-                    List.of());
-        }
-
-        List<String> blocking = new ArrayList<>();
-
-        for (Employee e : active) {
-            if (payrollRepo.existsByEmployee_IdAndPayDateBetween(e.getId(), monthStart, monthEnd)) {
-                blocking.add(formatEmployee(e) + ": payroll for " + ym + " already exists (pay date in that month)");
-            }
-        }
-
-        for (Employee e : active) {
-            List<String> row = new ArrayList<>();
-            collectReadinessErrors(e, row);
-            for (String msg : row) {
-                blocking.add(formatEmployee(e) + ": " + msg);
-            }
-        }
-
-        if (!blocking.isEmpty()) {
-            throw new PayrollGenerationException(
-                    "Cannot generate payroll for " + ym + ". Fix every issue below; no payroll was saved.",
-                    blocking);
-        }
-
-        for (Employee e : active) {
-            persistPayrollForEmployee(e, dto);
-        }
-
-        return PayrollBatchResponseDTO.builder()
-                .generatedCount(active.size())
-                .payrollMonth(ym.toString())
-                .build();
-    }
-
-    private static void assertPayDatePresent(PayrollGenerateRequestDTO dto) {
-        if (dto.getPayDate() == null) {
-            throw new PayrollGenerationException("Pay date is required.", List.of());
-        }
-    }
-
-    private static String formatEmployee(Employee e) {
-        String name = ((e.getFirstName() != null ? e.getFirstName() : "") + " "
-                + (e.getLastName() != null ? e.getLastName() : "")).trim();
-        if (name.isEmpty()) {
-            name = "Employee";
-        }
-        String no = e.getEmployeeNo() != null ? e.getEmployeeNo() : "?";
-        return name + " (" + no + ")";
-    }
-
-    private static boolean isBlank(String s) {
-        return s == null || s.trim().isEmpty();
-    }
-
-    private static String firstNonBlank(String a, String b) {
-        if (!isBlank(a)) {
-            return a.trim();
-        }
-        if (!isBlank(b)) {
-            return b.trim();
-        }
-        return null;
-    }
-
-    /**
-     * Appends human-readable readiness issues (without employee prefix).
-     */
-    private void collectReadinessErrors(Employee employee, List<String> errors) {
-        Optional<EmployeeCompensation> salaryOpt = compensationRepo.findActiveByEmployee(employee);
-        if (salaryOpt.isEmpty()) {
-            errors.add("no active salary");
-            return;
-        }
-        EmployeeCompensation salary = salaryOpt.get();
-
-        Optional<EmployeeBankDetails> bankOpt = bankRepo.findByEmployee(employee);
-        if (bankOpt.isEmpty()) {
-            errors.add("bank details missing");
-            return;
-        }
-        EmployeeBankDetails bank = bankOpt.get();
-        if (isBlank(bank.getBankShortName())) {
-            errors.add("bank short name is missing (e.g. QIB, CBQ — required for bank payroll file)");
-        }
-        if (isBlank(firstNonBlank(bank.getAccountNo(), bank.getIban()))) {
-            errors.add("account number or IBAN is required");
-        }
-
-        List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, "ACTIVE");
-        double totalLoanDeduction = activeLoans.stream()
-                .mapToDouble(EmployeeLoan::getMonthlyDeduction)
-                .sum();
-
-        double grossPay = computeGrossPay(salary);
-        double netPay = grossPay - totalLoanDeduction;
-        if (netPay < 0) {
-            errors.add("net pay would be negative with current loan deductions");
-        }
-    }
-
-    private static double computeGrossPay(EmployeeCompensation salary) {
-        double grossPay = salary.getBasicSalary();
-
-        if (salary.getHousingType() == BenefitType.ALLOWANCE) {
-            grossPay += salary.getHousingAllowance();
-        }
-
-        if (salary.getTransportationType() == BenefitType.ALLOWANCE) {
-            grossPay += salary.getTransportationAllowance();
-        }
-
-        if (salary.getTravelType() == BenefitType.ALLOWANCE) {
-            grossPay += salary.getTravelAllowance();
-        }
-
-        grossPay += salary.getOtherAllowance();
-        return grossPay;
-    }
-
-    private Payroll persistPayrollForEmployee(Employee employee, PayrollGenerateRequestDTO dto) {
-        EmployeeCompensation salary = compensationRepo.findActiveByEmployee(employee)
-                .orElseThrow(() -> new PayrollGenerationException("No active salary found for " + formatEmployee(employee)));
-
-        List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, "ACTIVE");
-        double totalLoanDeduction = activeLoans.stream()
-                .mapToDouble(EmployeeLoan::getMonthlyDeduction)
-                .sum();
-
-        EmployeeBankDetails bank = bankRepo.findByEmployee(employee)
-                .orElseThrow(() -> new PayrollGenerationException("Bank details missing for " + formatEmployee(employee)));
-
-        double grossPay = computeGrossPay(salary);
-        double netPay = grossPay - totalLoanDeduction;
-        if (netPay < 0) {
-            throw new PayrollGenerationException("Net pay cannot be negative for " + formatEmployee(employee));
-        }
+        PayrollComputation computation = computePayroll(
+                employee,
+                compensation,
+                dto.getPayPeriodStart(),
+                dto.getPayPeriodEnd()
+        );
 
         Payroll payroll = new Payroll();
         payroll.setEmployee(employee);
-        payroll.setPayrollCode("PR-" + employee.getId() + "-" + System.nanoTime());
+        payroll.setPayrollCode(generatePayrollCode(employeeId));
         payroll.setPayPeriodStart(dto.getPayPeriodStart());
         payroll.setPayPeriodEnd(dto.getPayPeriodEnd());
         payroll.setPayDate(dto.getPayDate());
-        payroll.setGrossPay(grossPay);
-        payroll.setLoanDeduction(totalLoanDeduction);
-        payroll.setDeductions(totalLoanDeduction);
-        payroll.setNetPayable(netPay);
-        payroll.setBankName(bank.getBankName());
-        payroll.setBankAccount(bank.getAccountNo());
 
-        payrollRepo.save(payroll);
+        payroll.setGrossPay(computation.earnedGrossPay());
+        payroll.setLoanDeduction(computation.loanDeduction());
+        payroll.setDeductions(computation.totalDeductions());
+        payroll.setNetPayable(computation.netPayable());
 
-        for (EmployeeLoan loan : activeLoans) {
-            double newBalance = loan.getBalance() - loan.getMonthlyDeduction();
-            loan.setBalance(Math.max(newBalance, 0));
-            if (loan.getBalance() == 0) {
-                loan.setStatus("CLOSED");
-            }
-            loanRepo.save(loan);
-        }
+        payroll.setWorkedHours(computation.workedHours());
+        payroll.setWorkedDays(computation.workedDays());
+        payroll.setPaidLeaveDays(computation.paidLeaveDays());
+        payroll.setUnpaidLeaveDays(computation.unpaidLeaveDays());
+        payroll.setPayableDays(computation.payableDays());
+        payroll.setLopDays(computation.lopDays());
+        payroll.setLopAmount(computation.lopAmount());
 
-        return payroll;
+        payroll.setBankName(bankDetails.getBankName());
+        payroll.setBankAccount(bankDetails.getAccountNo());
+
+        Payroll saved = payrollRepo.save(payroll);
+
+        applyLoanRecovery(employee);
+
+        return saved;
     }
 
-    /**
-     * Same gross/loan/net rules as {@link #generatePayroll} but does not persist.
-     * Used for bank file export when no payroll row exists for the month.
-     */
+    @Transactional(readOnly = true)
+    public List<PayrollHistoryDTO> getPayrollHistory(Long employeeId) {
+        Employee employee = getEmployee(employeeId);
+
+        return payrollRepo.findByEmployeeOrderByPayDateDesc(employee)
+                .stream()
+                .map(this::toHistoryDTO)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PayrollHistoryDTO getLatestPayrollForMonth(Long employeeId, LocalDate start, LocalDate end) {
+        Employee employee = getEmployee(employeeId);
+
+        Payroll payroll = payrollRepo
+                .findTopByEmployeeAndPayDateBetweenOrderByPayDateDesc(employee, start, end)
+                .orElseThrow(() -> new RuntimeException("No payroll found for selected month"));
+
+        return toHistoryDTO(payroll);
+    }
+
+    @Transactional(readOnly = true)
     public Optional<ProjectedPayrollAmounts> computeProjectedAmounts(Employee employee) {
-        Optional<EmployeeCompensation> salaryOpt = compensationRepo.findActiveByEmployee(employee);
-        if (salaryOpt.isEmpty()) {
-            return Optional.empty();
-        }
-        EmployeeCompensation salary = salaryOpt.get();
+        EmployeeCompensation compensation = getActiveCompensation(employee);
 
-        List<EmployeeLoan> activeLoans =
-                loanRepo.findByEmployeeAndStatus(employee, "ACTIVE");
+        LocalDate today = LocalDate.now();
+        LocalDate periodStart = today.withDayOfMonth(1);
+        LocalDate periodEnd = today.withDayOfMonth(today.lengthOfMonth());
 
-        double totalLoanDeduction = activeLoans.stream()
-                .mapToDouble(EmployeeLoan::getMonthlyDeduction)
-                .sum();
-
-        double grossPay = computeGrossPay(salary);
-
-        double netPay = grossPay - totalLoanDeduction;
-        if (netPay < 0) {
-            throw new RuntimeException("Net pay cannot be negative");
-        }
+        PayrollComputation computation = computePayroll(
+                employee,
+                compensation,
+                periodStart,
+                periodEnd
+        );
 
         return Optional.of(new ProjectedPayrollAmounts(
-                grossPay, totalLoanDeduction, totalLoanDeduction, netPay));
+                computation.earnedGrossPay(),
+                computation.totalDeductions(),
+                computation.netPayable()
+        ));
+    }
+
+    private PayrollComputation computePayroll(
+            Employee employee,
+            EmployeeCompensation compensation,
+            LocalDate periodStart,
+            LocalDate periodEnd
+    ) {
+        double monthlyGross = safe(compensation.getTotalCompensation());
+
+        if (monthlyGross <= 0) {
+            throw new RuntimeException("Employee total compensation must be greater than zero");
+        }
+
+        int workingDays = countWorkingDays(periodStart, periodEnd);
+        if (workingDays <= 0) {
+            throw new RuntimeException("No working days found in selected payroll period");
+        }
+
+        double perDaySalary = monthlyGross / workingDays;
+
+        List<EmployeeTimesheet> timesheets = timesheetRepo.findByEmployeeIdAndAttendanceDateBetween(
+                employee.getId(),
+                periodStart,
+                periodEnd
+        );
+
+        double workedHours = timesheets.stream()
+                .mapToLong(this::resolveWorkedMinutes)
+                .sum() / 60.0;
+
+        double workedDays = workedHours / STANDARD_HOURS_PER_DAY;
+
+        List<EmployeeLeave> approvedLeaves = leaveRepo.findApprovedLeavesForPayrollPeriod(
+                employee.getId(),
+                periodStart,
+                periodEnd
+        );
+
+        double paidLeaveDays = 0.0;
+        double unpaidLeaveDays = 0.0;
+
+        for (EmployeeLeave leave : approvedLeaves) {
+            double leaveDays = calculateLeaveDaysWithinPeriod(leave, periodStart, periodEnd);
+            if (leaveDays <= 0) {
+                continue;
+            }
+
+            if (isPaidLeave(employee, leave.getLeaveType())) {
+                paidLeaveDays += leaveDays;
+            } else {
+                unpaidLeaveDays += leaveDays;
+            }
+        }
+
+        double payableDays = Math.min(workedDays + paidLeaveDays, workingDays);
+        double lopDays = Math.max(workingDays - payableDays, 0.0);
+        double lopAmount = lopDays * perDaySalary;
+        double earnedGrossPay = Math.max(monthlyGross - lopAmount, 0.0);
+
+        List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, STATUS_ACTIVE);
+
+        double loanDeduction = activeLoans.stream()
+                .mapToDouble(loan -> Math.min(
+                        safe(loan.getMonthlyDeduction()),
+                        Math.max(safe(loan.getBalance()), 0.0)
+                ))
+                .sum();
+
+        double totalDeductions = loanDeduction;
+        double netPayable = earnedGrossPay - totalDeductions;
+
+        if (netPayable < 0) {
+            netPayable = 0.0;
+        }
+
+        return new PayrollComputation(
+                round2(monthlyGross),
+                workingDays,
+                round2(perDaySalary),
+                round2(workedHours),
+                round2(workedDays),
+                round2(paidLeaveDays),
+                round2(unpaidLeaveDays),
+                round2(payableDays),
+                round2(lopDays),
+                round2(lopAmount),
+                round2(loanDeduction),
+                round2(totalDeductions),
+                round2(netPayable),
+                round2(earnedGrossPay)
+        );
+    }
+
+    private double calculateLeaveDaysWithinPeriod(
+            EmployeeLeave leave,
+            LocalDate periodStart,
+            LocalDate periodEnd
+    ) {
+        LocalDate effectiveStart = leave.getStartDate().isBefore(periodStart)
+                ? periodStart
+                : leave.getStartDate();
+
+        LocalDate effectiveEnd = leave.getEndDate().isAfter(periodEnd)
+                ? periodEnd
+                : leave.getEndDate();
+
+        if (effectiveEnd.isBefore(effectiveStart)) {
+            return 0.0;
+        }
+
+        boolean includeWeekends = Boolean.TRUE.equals(leave.getIncludeWeekends());
+        return calculateDays(effectiveStart, effectiveEnd, includeWeekends);
+    }
+
+    private int calculateDays(LocalDate start, LocalDate end, boolean includeWeekends) {
+        int days = 0;
+        for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+            if (includeWeekends || !isWeekend(date)) {
+                days++;
+            }
+        }
+        return days;
+    }
+
+    private boolean isPaidLeave(Employee employee, String leaveType) {
+        String role = getLeaveRole(employee);
+
+        if (employee == null || employee.getCompany() == null || role == null) {
+            return false;
+        }
+
+        return leavePolicyRepo.findByCompanyOrderByIdDesc(employee.getCompany())
+                .stream()
+                .filter(policy -> same(policy.getRole(), role))
+                .filter(policy -> same(policy.getLeaveType(), leaveType))
+                .findFirst()
+                .map(CompanyLeavePolicy::getPaid)
+                .orElse(false);
+    }
+
+    private void validateNoPendingLeaves(Long employeeId, LocalDate periodStart, LocalDate periodEnd) {
+        boolean hasPendingLeaves = leaveRepo.existsPendingLeavesForPayrollPeriod(
+                employeeId,
+                periodStart,
+                periodEnd
+        );
+
+        if (hasPendingLeaves) {
+            throw new RuntimeException("Cannot generate payroll while leave approvals are pending for this period");
+        }
+    }
+
+    private void validateDuplicatePayroll(Employee employee, LocalDate payPeriodStart, LocalDate payPeriodEnd) {
+        boolean exists = payrollRepo.existsByEmployeeAndPayPeriodStartAndPayPeriodEnd(
+                employee,
+                payPeriodStart,
+                payPeriodEnd
+        );
+
+        if (exists) {
+            throw new RuntimeException("Payroll already generated for this employee and pay period");
+        }
+    }
+
+    private void applyLoanRecovery(Employee employee) {
+        List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, STATUS_ACTIVE);
+
+        for (EmployeeLoan loan : activeLoans) {
+            double monthlyDeduction = safe(loan.getMonthlyDeduction());
+            double balance = safe(loan.getBalance());
+
+            double actualRecovery = Math.min(monthlyDeduction, balance);
+            loan.setBalance(round2(Math.max(balance - actualRecovery, 0.0)));
+
+            if (loan.getBalance() <= 0.0) {
+                loan.setStatus(STATUS_CLOSED);
+            }
+
+            loanRepo.save(loan);
+        }
+    }
+
+    private Employee getEmployee(Long employeeId) {
+        return employeeRepo.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+    }
+
+    private EmployeeCompensation getActiveCompensation(Employee employee) {
+        return compensationRepo.findActiveByEmployee(employee)
+                .orElseThrow(() -> new RuntimeException("Active compensation not found for employee"));
+    }
+
+    private EmployeeBankDetails getBankDetails(Employee employee) {
+        return bankRepo.findByEmployee(employee)
+                .orElseThrow(() -> new RuntimeException("Employee bank details not found"));
+    }
+
+    private void validateRequest(PayrollGenerateRequestDTO dto) {
+        if (dto == null) {
+            throw new IllegalArgumentException("Payroll request is required");
+        }
+
+        if (dto.getPayPeriodStart() == null || dto.getPayPeriodEnd() == null || dto.getPayDate() == null) {
+            throw new IllegalArgumentException("Pay period start, pay period end, and pay date are required");
+        }
+
+        if (dto.getPayPeriodEnd().isBefore(dto.getPayPeriodStart())) {
+            throw new IllegalArgumentException("Pay period end cannot be before pay period start");
+        }
+
+        if (dto.getPayDate().isBefore(dto.getPayPeriodEnd())) {
+            throw new IllegalArgumentException("Pay date cannot be before pay period end");
+        }
+    }
+
+    private long resolveWorkedMinutes(EmployeeTimesheet timesheet) {
+        if (timesheet.getWorkedMinutes() != null) {
+            return timesheet.getWorkedMinutes();
+        }
+
+        if (timesheet.getCheckInTime() != null && timesheet.getCheckOutTime() != null) {
+            return Duration.between(timesheet.getCheckInTime(), timesheet.getCheckOutTime()).toMinutes();
+        }
+
+        return 0L;
+    }
+
+    private int countWorkingDays(LocalDate start, LocalDate end) {
+        int days = 0;
+        for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+            if (!isWeekend(date)) {
+                days++;
+            }
+        }
+        return days;
+    }
+
+    private boolean isWeekend(LocalDate date) {
+        DayOfWeek day = date.getDayOfWeek();
+        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
+    }
+
+    private PayrollPreviewDTO toPreviewDTO(PayrollComputation computation) {
+        return new PayrollPreviewDTO(
+                computation.monthlyGross(),
+                computation.workingDays(),
+                computation.perDaySalary(),
+                computation.workedHours(),
+                computation.workedDays(),
+                computation.paidLeaveDays(),
+                computation.unpaidLeaveDays(),
+                computation.payableDays(),
+                computation.lopDays(),
+                computation.lopAmount(),
+                computation.loanDeduction(),
+                computation.totalDeductions(),
+                computation.netPayable(),
+                computation.earnedGrossPay()
+        );
+    }
+
+    private PayrollHistoryDTO toHistoryDTO(Payroll payroll) {
+        PayrollHistoryDTO dto = new PayrollHistoryDTO();
+        dto.setPayrollCode(payroll.getPayrollCode());
+        dto.setPayPeriodStart(payroll.getPayPeriodStart());
+        dto.setPayPeriodEnd(payroll.getPayPeriodEnd());
+        dto.setPayDate(payroll.getPayDate());
+        dto.setGrossPay(payroll.getGrossPay());
+        dto.setLoanDeduction(payroll.getLoanDeduction());
+        dto.setTotalDeductions(payroll.getDeductions());
+        dto.setNetPayable(payroll.getNetPayable());
+        return dto;
+    }
+
+    private String getLeaveRole(Employee employee) {
+        if (employee.getCompanyRole() != null) {
+            String companyRole = clean(employee.getCompanyRole());
+            if (companyRole != null) {
+                return companyRole;
+            }
+        }
+        return clean(employee.getRole());
+    }
+
+    private String clean(String value) {
+        if (value == null) {
+            return null;
+        }
+        String cleaned = value.trim();
+        return cleaned.isEmpty() ? null : cleaned;
+    }
+
+    private String key(String value) {
+        String cleaned = clean(value);
+        return cleaned == null ? null : cleaned.toUpperCase(Locale.ROOT);
+    }
+
+    private boolean same(String left, String right) {
+        String leftKey = key(left);
+        String rightKey = key(right);
+        return leftKey != null && leftKey.equals(rightKey);
+    }
+
+    private double safe(Double value) {
+        return value == null ? 0.0 : value;
+    }
+
+    private double round2(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
+
+    private String generatePayrollCode(Long employeeId) {
+        return "PR-" + employeeId + "-" + System.currentTimeMillis();
     }
 
     public record ProjectedPayrollAmounts(
             double grossPay,
-            double loanDeduction,
             double deductions,
             double netPayable
-    ) {}
+    ) {
+    }
 
-    public List<PayrollHistoryDTO> getPayrollHistory(Long employeeId) {
-
-        Employee employee =
-                employeeRepo.findById(employeeId)
-                        .orElseThrow(() -> new RuntimeException("Employee not found"));
-
-        return payrollRepo.findByEmployeeOrderByPayDateDesc(employee)
-                .stream()
-                .map(p -> {
-                    PayrollHistoryDTO historyDto = new PayrollHistoryDTO();
-                    historyDto.setPayrollCode(p.getPayrollCode());
-                    historyDto.setPayPeriodStart(p.getPayPeriodStart());
-                    historyDto.setPayPeriodEnd(p.getPayPeriodEnd());
-                    historyDto.setPayDate(p.getPayDate());
-                    historyDto.setGrossPay(p.getGrossPay());
-                    historyDto.setNetPayable(p.getNetPayable());
-                    historyDto.setLoanDeduction(p.getLoanDeduction());
-                    historyDto.setTotalDeductions(p.getDeductions());
-                    return historyDto;
-                })
-                .collect(Collectors.toList());
+    public record PayrollComputation(
+            double monthlyGross,
+            int workingDays,
+            double perDaySalary,
+            double workedHours,
+            double workedDays,
+            double paidLeaveDays,
+            double unpaidLeaveDays,
+            double payableDays,
+            double lopDays,
+            double lopAmount,
+            double loanDeduction,
+            double totalDeductions,
+            double netPayable,
+            double earnedGrossPay
+    ) {
     }
 }
