@@ -378,7 +378,7 @@ public class EmployeeService {
         Department dept = departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new RuntimeException("Department not found"));
         assertTenantCompanyScope(dept.getCompany().getId());
-        return employeeRepository.findByDepartmentIdOrderByCreatedAtDesc(departmentId)
+        return employeeRepository.findByDepartment_IdOrderByCreatedAtDesc(departmentId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 

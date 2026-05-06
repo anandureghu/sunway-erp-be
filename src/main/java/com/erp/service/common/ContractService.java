@@ -1,7 +1,9 @@
 package com.erp.service.common;
 
 import com.erp.domain.Employee;
-import com.erp.domain.hr.*;
+import com.erp.domain.hr.AllowanceType;
+import com.erp.domain.hr.Contract;
+import com.erp.domain.hr.SalaryAllowance;
 import com.erp.dto.hr.AllowanceRequestDTO;
 import com.erp.dto.hr.AllowanceResponseDTO;
 import com.erp.dto.hr.ContractRequestDTO;
@@ -10,8 +12,10 @@ import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.AllowanceTypeRepository;
 import com.erp.repo.hr.ContractRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,13 +32,12 @@ public class ContractService {
 
     // ================= CREATE =================
 
-    public ContractResponseDTO createContract(Long employeeId,
-                                              ContractRequestDTO dto) {
+    public ContractResponseDTO createContract(Long employeeId, ContractRequestDTO dto) {
 
         Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Employee not found"));
 
-        // Allow only one active contract per employee
         contractRepository
                 .findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(employeeId)
                 .ifPresent(existing -> existing.setDeleted(true));
@@ -59,20 +62,20 @@ public class ContractService {
         mapAllowances(contract, dto.getAllowances());
 
         Contract saved = contractRepository.save(contract);
-
         return mapToResponse(saved);
     }
 
     // ================= UPDATE =================
 
-    public ContractResponseDTO updateContract(Long contractId,
-                                              ContractRequestDTO dto) {
+    public ContractResponseDTO updateContract(Long contractId, ContractRequestDTO dto) {
 
         Contract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new RuntimeException("Contract not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Contract not found"));
 
         if (contract.isDeleted()) {
-            throw new RuntimeException("Cannot update deleted contract");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Cannot update deleted contract");
         }
 
         contract.setContractType(dto.getContractType());
@@ -87,19 +90,17 @@ public class ContractService {
         contract.setAttachmentPath(dto.getAttachmentUrl());
         contract.setTermsAndConditions(dto.getTermsAndConditions());
 
-        // Replace allowance package
         contract.getAllowances().clear();
-
         mapAllowances(contract, dto.getAllowances());
 
-        return mapToResponse(contract);
+        Contract saved = contractRepository.save(contract);
+        return mapToResponse(saved);
     }
 
     // ================= GET =================
 
     @Transactional(readOnly = true)
     public ContractResponseDTO getByEmployee(Long employeeId) {
-
         return contractRepository
                 .findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(employeeId)
                 .map(this::mapToResponse)
@@ -109,17 +110,16 @@ public class ContractService {
     // ================= DELETE =================
 
     public void delete(Long contractId) {
-
         Contract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new RuntimeException("Contract not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Contract not found"));
 
         contract.setDeleted(true);
     }
 
     // ================= ALLOWANCE MAPPING =================
 
-    private void mapAllowances(Contract contract,
-                               List<AllowanceRequestDTO> allowanceDTOs) {
+    private void mapAllowances(Contract contract, List<AllowanceRequestDTO> allowanceDTOs) {
 
         if (allowanceDTOs == null || allowanceDTOs.isEmpty()) {
             return;
@@ -127,18 +127,32 @@ public class ContractService {
 
         for (AllowanceRequestDTO dto : allowanceDTOs) {
 
-            if (dto.getAllowanceTypeId() == null) {
-                throw new RuntimeException("Allowance type is required");
+            boolean hasTypeId = dto.getAllowanceTypeId() != null;
+            boolean hasCustomName = dto.getCustomName() != null && !dto.getCustomName().trim().isBlank();
+
+            if (!hasTypeId && !hasCustomName) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Allowance type is required"
+                );
             }
 
-            AllowanceType type = allowanceTypeRepository
-                    .findById(dto.getAllowanceTypeId())
-                    .orElseThrow(() ->
-                            new RuntimeException("Allowance type not found: " + dto.getAllowanceTypeId())
-                    );
+            AllowanceType type = null;
+            String customName = null;
+
+            if (hasTypeId) {
+                type = allowanceTypeRepository.findById(dto.getAllowanceTypeId())
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.BAD_REQUEST,
+                                "Allowance type not found: " + dto.getAllowanceTypeId()
+                        ));
+            } else {
+                customName = dto.getCustomName().trim();
+            }
 
             SalaryAllowance allowance = SalaryAllowance.builder()
                     .allowanceType(type)
+                    .customName(customName)
                     .amount(dto.getAmount())
                     .effectiveDate(dto.getEffectiveDate())
                     .note(dto.getNote())
@@ -158,8 +172,10 @@ public class ContractService {
                         .stream()
                         .map(a -> AllowanceResponseDTO.builder()
                                 .id(a.getId())
-                                .allowanceTypeId(a.getAllowanceType().getId())
-                                .allowanceType(a.getAllowanceType().getName())
+                                .allowanceTypeId(a.getAllowanceType() != null ? a.getAllowanceType().getId() : null)
+                                .allowanceType(a.getAllowanceType() != null
+                                        ? a.getAllowanceType().getName()
+                                        : a.getCustomName())
                                 .amount(a.getAmount())
                                 .effectiveDate(a.getEffectiveDate())
                                 .note(a.getNote())
@@ -181,10 +197,7 @@ public class ContractService {
                 .termsAndConditions(contract.getTermsAndConditions())
                 .attachmentUrl(contract.getAttachmentPath())
                 .employeeId(contract.getEmployee().getId())
-                .staffName(
-                        contract.getEmployee().getFirstName() + " " +
-                                contract.getEmployee().getLastName()
-                )
+                .staffName(contract.getEmployee().getFirstName() + " " + contract.getEmployee().getLastName())
                 .allowances(allowanceResponses)
                 .build();
     }

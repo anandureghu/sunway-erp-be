@@ -14,10 +14,6 @@ import java.util.Optional;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
-    // ======================================================
-    // MYSQL SEQUENCE TABLE (employee_no_seq)
-    // ======================================================
-
     @Modifying
     @Transactional
     @Query(value = "INSERT INTO employee_no_seq VALUES (NULL)", nativeQuery = true)
@@ -26,19 +22,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     @Query(value = "SELECT LAST_INSERT_ID()", nativeQuery = true)
     Long getCurrentEmployeeNo();
 
-    // ======================================================
-    // COMPANY QUERIES (✅ FIXED)
-    // ======================================================
-
     List<Employee> findByCompany_IdOrderByCreatedAtDesc(Long companyId);
 
     Page<Employee> findByCompany_Id(Long companyId, Pageable pageable);
 
     List<Employee> findByCompanyOrderByCreatedAtDesc(Company company);
-
-    // ======================================================
-    // ADMIN (SPRING SECURITY ROLE - ENUM) ✅ FIXED
-    // ======================================================
 
     Optional<Employee> findFirstByCompany_IdAndUserRoleIn(
             Long companyId,
@@ -55,26 +43,14 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             Role role
     );
 
-    // ======================================================
-    // BUSINESS ROLE (companyRole - STRING) ✅ ALREADY CORRECT
-    // ======================================================
-
     List<Employee> findByCompany_IdAndUser_CompanyRoleRef_NameIgnoreCaseOrderByCreatedAtDesc(
             Long companyId,
             String roleName
     );
 
-    // ======================================================
-    // DEPARTMENT
-    // ======================================================
-
-    List<Employee> findByDepartmentIdOrderByCreatedAtDesc(Long departmentId);
-
-    // ======================================================
-    // USER LINK
-    // ======================================================
+    List<Employee> findByDepartment_IdOrderByCreatedAtDesc(Long departmentId);
 
     Optional<Employee> findByUser_Id(Long userId);
 
-    List<Employee> findByCompanyIdAndStatus(Long companyId, EmployeeStatus employeeStatus);
+    List<Employee> findByCompany_IdAndStatus(Long companyId, EmployeeStatus employeeStatus);
 }

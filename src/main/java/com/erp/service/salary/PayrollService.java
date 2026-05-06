@@ -9,6 +9,7 @@ import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.salary.EmployeeBankDetails;
 import com.erp.domain.salary.EmployeeCompensation;
 import com.erp.domain.salary.Payroll;
+import com.erp.dto.salary.PayrollBatchResponseDTO;
 import com.erp.dto.salary.PayrollGenerateRequestDTO;
 import com.erp.dto.salary.PayrollHistoryDTO;
 import com.erp.dto.salary.PayrollPreviewDTO;
@@ -205,7 +206,7 @@ public class PayrollService {
     }
 
     private List<Employee> getActiveEmployeesByCompany(Long companyId) {
-        List<Employee> employees = employeeRepo.findByCompanyIdAndStatus(companyId, EmployeeStatus.ACTIVE);
+        List<Employee> employees = employeeRepo.findByCompany_IdAndStatus(companyId, EmployeeStatus.ACTIVE);
 
         if (employees == null || employees.isEmpty()) {
             throw new RuntimeException("No active employees found for company id: " + companyId);
