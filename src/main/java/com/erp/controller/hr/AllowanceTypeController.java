@@ -30,8 +30,23 @@ public class AllowanceTypeController {
 
     @GetMapping
     public ResponseEntity<List<AllowanceTypeResponseDTO>> getActive() {
-
         return ResponseEntity.ok(service.getActiveTypes());
+    }
+
+    // ================= GET ALL =================
+
+    @GetMapping("/all")
+    public ResponseEntity<List<AllowanceTypeResponseDTO>> getAll() {
+        return ResponseEntity.ok(service.getAll());
+    }
+
+    // ================= GET BY ID =================
+
+    @GetMapping("/{id}")
+    public ResponseEntity<AllowanceTypeResponseDTO> getById(
+            @PathVariable("id") Long id) {
+
+        return ResponseEntity.ok(service.getById(id));
     }
 
     // ================= UPDATE =================
@@ -51,6 +66,16 @@ public class AllowanceTypeController {
             @PathVariable("id") Long id) {
 
         service.deactivate(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ================= ACTIVATE =================
+
+    @PatchMapping("/{id}/activate")
+    public ResponseEntity<Void> activate(
+            @PathVariable("id") Long id) {
+
+        service.activate(id);
         return ResponseEntity.noContent().build();
     }
 }
