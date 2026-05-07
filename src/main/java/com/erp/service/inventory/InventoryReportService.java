@@ -42,12 +42,12 @@ public class InventoryReportService {
 
         long distinctSkus = stockRepo.countDistinctItemsForReport(companyId, warehouseId, cat);
 
-        Object[] totalsRow = stockRepo.sumTotalsForReport(companyId, warehouseId, cat);
-        long totalOnHand = toLong(totalsRow[0]);
-        long totalReserved = toLong(totalsRow[1]);
-        long totalAvailable = toLong(totalsRow[2]);
-        BigDecimal valueCost = toBigDecimal(totalsRow[3]);
-        BigDecimal valueSelling = toBigDecimal(totalsRow[4]);
+        Object[] totalsRow = normalizeRow(stockRepo.sumTotalsForReport(companyId, warehouseId, cat));
+        long totalOnHand = toLong(valueAt(totalsRow, 0));
+        long totalReserved = toLong(valueAt(totalsRow, 1));
+        long totalAvailable = toLong(valueAt(totalsRow, 2));
+        BigDecimal valueCost = toBigDecimal(valueAt(totalsRow, 3));
+        BigDecimal valueSelling = toBigDecimal(valueAt(totalsRow, 4));
 
         InventoryReportTotalsDTO totals = InventoryReportTotalsDTO.builder()
                 .distinctSkuCount(distinctSkus)
@@ -144,6 +144,23 @@ public class InventoryReportService {
             return n.longValue();
         }
         return 0L;
+    }
+
+    private static Object[] normalizeRow(Object[] row) {
+        if (row == null) {
+            return new Object[0];
+        }
+        if (row.length == 1 && row[0] instanceof Object[] nested) {
+            return nested;
+        }
+        return row;
+    }
+
+    private static Object valueAt(Object[] row, int index) {
+        if (row == null || index < 0 || index >= row.length) {
+            return null;
+        }
+        return row[index];
     }
 
     private static BigDecimal toBigDecimal(Object o) {
