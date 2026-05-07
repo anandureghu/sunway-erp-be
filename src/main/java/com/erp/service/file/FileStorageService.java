@@ -118,7 +118,7 @@ public class FileStorageService {
 
         switch (category) {
 
-            case EMPLOYEE_PROFILE, INVENTORY_IMAGE -> {
+            case EMPLOYEE_PROFILE, INVENTORY_IMAGE, COMPANY_LOGO -> {
                 if (!Objects.requireNonNull(file.getContentType())
                         .startsWith("image/")) {
                     throw new IllegalArgumentException("Only images allowed");
@@ -164,6 +164,8 @@ public class FileStorageService {
 
             case INVENTORY_IMAGE -> "inventory/" + entityId + "/"
                     + UUID.randomUUID() + "." + extension;
+
+            case COMPANY_LOGO -> "companies/" + entityId + "/logo." + extension;
 
             case INVOICE_PDF -> "invoices/" + entityId + "/"
                     + UUID.randomUUID() + ".pdf";

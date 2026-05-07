@@ -3,6 +3,7 @@ package com.erp.dto.file;
 public enum FileCategory {
     EMPLOYEE_PROFILE,
     INVENTORY_IMAGE,
+    COMPANY_LOGO,
     INVOICE_PDF,
     GOODS_RECEIPT_PDF,
     LEAVE_SUPPORTING_DOCUMENT

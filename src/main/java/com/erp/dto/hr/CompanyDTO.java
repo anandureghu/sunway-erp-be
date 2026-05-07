@@ -26,6 +26,7 @@ public class CompanyDTO {
     private String companyEmail;
     private String billingEmail;
     private String websiteUrl;
+    private String logoUrl;
     private String createdBy;
     private boolean hrEnabled;
     private boolean financeEnabled;
