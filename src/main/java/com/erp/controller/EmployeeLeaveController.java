@@ -2,7 +2,6 @@ package com.erp.controller;
 
 import com.erp.domain.Employee;
 import com.erp.domain.User;
-import com.erp.domain.security.HrAction;
 import com.erp.domain.security.Role;
 import com.erp.dto.leave.LeaveHistoryDTO;
 import com.erp.dto.leave.LeavePreviewDTO;
@@ -39,7 +38,7 @@ public class EmployeeLeaveController {
     @GetMapping("/employees/{employeeId}/leaves/available-types")
     public ResponseEntity<?> getAvailableLeaveTypes(@PathVariable Long employeeId) {
         try {
-            validateSelfAccess(employeeId, HrAction.VIEW_OWN);
+            validateSelfAccess(employeeId);
             List<String> types = leaveService.getAvailableLeaveTypes(employeeId);
             return ResponseEntity.ok(Map.of(
                     "employeeId", employeeId,
@@ -55,7 +54,7 @@ public class EmployeeLeaveController {
     @GetMapping("/employees/{employeeId}/leaves")
     public ResponseEntity<?> getLeaves(@PathVariable Long employeeId) {
         try {
-            validateSelfAccess(employeeId, HrAction.VIEW_OWN);
+            validateSelfAccess(employeeId);
             List<LeaveHistoryDTO> leaves = leaveService.history(employeeId);
             return ResponseEntity.ok(Map.of(
                     "employeeId", employeeId,
@@ -71,7 +70,7 @@ public class EmployeeLeaveController {
     @GetMapping("/employees/{employeeId}/leaves/history")
     public ResponseEntity<?> history(@PathVariable Long employeeId) {
         try {
-            validateSelfAccess(employeeId, HrAction.VIEW_OWN);
+            validateSelfAccess(employeeId);
             List<LeaveHistoryDTO> history = leaveService.history(employeeId);
             return ResponseEntity.ok(Map.of(
                     "employeeId", employeeId,
@@ -92,7 +91,7 @@ public class EmployeeLeaveController {
             @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(value = "includeWeekends", defaultValue = "false") boolean includeWeekends) {
         try {
-            validateSelfAccess(employeeId, HrAction.VIEW_OWN);
+            validateSelfAccess(employeeId);
 
             LeavePreviewDTO preview = leaveService.previewLeave(
                     employeeId,
@@ -119,10 +118,7 @@ public class EmployeeLeaveController {
         return applyLeaveInternal(employeeId, dto, null);
     }
 
-    @PostMapping(
-            value = "/employees/{employeeId}/leaves",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
+    @PostMapping(value = "/employees/{employeeId}/leaves", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> applyLeaveMultipart(
             @PathVariable Long employeeId,
             @RequestPart("data") LeaveRequestDTO dto,
@@ -135,10 +131,26 @@ public class EmployeeLeaveController {
             @PathVariable Long employeeId,
             @PathVariable Long leaveId,
             @Valid @RequestBody LeaveRequestDTO dto) {
-        try {
-            validateSelfAccess(employeeId, HrAction.CREATE);
+        return updateLeaveInternal(employeeId, leaveId, dto, null);
+    }
 
-            LeaveHistoryDTO updatedLeave = leaveService.updateLeave(employeeId, leaveId, dto);
+    @PutMapping(value = "/employees/{employeeId}/leaves/{leaveId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> updateLeaveMultipart(
+            @PathVariable Long employeeId,
+            @PathVariable Long leaveId,
+            @RequestPart("data") LeaveRequestDTO dto,
+            @RequestPart(value = "supportingDocument", required = false) MultipartFile supportingDocument) {
+        return updateLeaveInternal(employeeId, leaveId, dto, supportingDocument);
+    }
+
+    private ResponseEntity<?> updateLeaveInternal(
+            Long employeeId,
+            Long leaveId,
+            LeaveRequestDTO dto,
+            MultipartFile supportingDocument) {
+        try {
+            validateSelfAccess(employeeId);
+            LeaveHistoryDTO updatedLeave = leaveService.updateLeave(employeeId, leaveId, dto, supportingDocument);
 
             log.info("Leave updated for employee {}: leaveId={}, leaveType={}, startDate={}, endDate={}",
                     employeeId, leaveId, dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
@@ -158,8 +170,7 @@ public class EmployeeLeaveController {
             @PathVariable Long employeeId,
             @PathVariable Long leaveId) {
         try {
-            validateSelfAccess(employeeId, HrAction.CREATE);
-
+            validateSelfAccess(employeeId);
             LeaveHistoryDTO cancelledLeave = leaveService.cancelLeave(employeeId, leaveId);
 
             log.info("Leave cancelled for employee {}: leaveId={}", employeeId, leaveId);
@@ -200,13 +211,26 @@ public class EmployeeLeaveController {
         }
     }
 
+    @PostMapping("/leaves/{leaveId}/reject")
+    public ResponseEntity<?> rejectLeave(@PathVariable Long leaveId) {
+        try {
+            LeaveHistoryDTO history = leaveService.rejectLeave(leaveId);
+            return ResponseEntity.ok(history);
+        } catch (IllegalArgumentException e) {
+            return badRequest(e);
+        } catch (AccessDeniedException e) {
+            return forbidden(e);
+        } catch (RuntimeException e) {
+            return badRequest(e);
+        }
+    }
+
     private ResponseEntity<?> applyLeaveInternal(
             Long employeeId,
             LeaveRequestDTO dto,
             MultipartFile supportingDocument) {
         try {
-            validateSelfAccess(employeeId, HrAction.CREATE);
-
+            validateSelfAccess(employeeId);
             LeaveHistoryDTO history = leaveService.applyLeave(employeeId, dto, supportingDocument);
 
             log.info("Leave applied for employee {}: {} from {} to {}",
@@ -222,7 +246,7 @@ public class EmployeeLeaveController {
         }
     }
 
-    private void validateSelfAccess(Long employeeId, HrAction action) {
+    private void validateSelfAccess(Long employeeId) {
         User authUser = getAuthUser();
 
         if (authUser.getRole() == Role.ADMIN || authUser.getRole() == Role.SUPER_ADMIN) {
@@ -233,6 +257,7 @@ public class EmployeeLeaveController {
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
         boolean isOwnRecord = targetEmployee.getUser() != null
+                && targetEmployee.getUser().getId() != null
                 && targetEmployee.getUser().getId().equals(authUser.getId());
 
         if (!isOwnRecord) {

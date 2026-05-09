@@ -150,6 +150,21 @@ public class FileStorageService {
                     throw new IllegalArgumentException("Supporting document size > 5MB");
                 }
             }
+
+            case CONTRACT_ATTACHMENT -> {
+                String contentType = Objects.requireNonNull(file.getContentType());
+                boolean isPdf = Objects.equals(contentType, "application/pdf");
+                boolean isWord = Objects.equals(contentType, "application/msword")
+                        || Objects.equals(contentType, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                boolean isImage = contentType.startsWith("image/");
+
+                if (!isPdf && !isWord && !isImage) {
+                    throw new IllegalArgumentException("Only PDF, DOC, DOCX, JPG, JPEG, or PNG allowed");
+                }
+                if (file.getSize() > 15 * 1024 * 1024) {
+                    throw new IllegalArgumentException("Contract attachment size > 15MB");
+                }
+            }
         }
     }
 
@@ -174,6 +189,8 @@ public class FileStorageService {
                     + UUID.randomUUID() + ".pdf";
 
             case LEAVE_SUPPORTING_DOCUMENT -> "leaves/" + entityId + "/supporting-document." + extension;
+
+            case CONTRACT_ATTACHMENT -> "contracts/" + entityId + "/attachment." + extension;
         };
     }
 

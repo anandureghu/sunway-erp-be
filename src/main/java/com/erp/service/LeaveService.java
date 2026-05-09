@@ -4,6 +4,7 @@ import com.erp.domain.CompanyLeavePolicy;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLeave;
 import com.erp.domain.EmployeeLeaveBalance;
+import com.erp.domain.LeaveStatus;
 import com.erp.domain.User;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -41,10 +42,6 @@ import static com.erp.domain.security.HrModule.LEAVES;
 @RequiredArgsConstructor
 @Slf4j
 public class LeaveService {
-
-    private static final String STATUS_PENDING = "PENDING";
-    private static final String STATUS_APPROVED = "APPROVED";
-    private static final String STATUS_CANCELLED = "CANCELLED";
 
     private final EmployeeRepository employeeRepo;
     private final CompanyLeavePolicyRepository policyRepo;
@@ -139,7 +136,7 @@ public class LeaveService {
         leave.setDateReported(LocalDate.now());
         leave.setTotalDays(totalDays);
         leave.setIncludeWeekends(includeWeekends);
-        leave.setLeaveStatus(STATUS_PENDING);
+        leave.setLeaveStatus(LeaveStatus.PENDING);
 
         leave = leaveRepo.save(leave);
 
@@ -171,11 +168,11 @@ public class LeaveService {
             throw new AccessDeniedException("Access denied: no permission to view pending leave approvals");
         }
 
-        return leaveRepo.findByLeaveStatusOrderByDateReportedDesc(STATUS_PENDING)
+        return leaveRepo.findByLeaveStatusOrderByDateReportedDesc(LeaveStatus.PENDING)
                 .stream()
                 .filter(leave -> leave.getEmployee() != null)
                 .filter(leave -> leave.getEmployee().getId() != null)
-                .filter(leave -> approver.getId() == null || !approver.getId().equals(leave.getEmployee().getId()))
+                .filter(leave -> approver.getId() != null && !approver.getId().equals(leave.getEmployee().getId()))
                 .filter(leave -> canApproveLeave(approver, leave))
                 .map(this::mapToHistoryDTO)
                 .toList();
@@ -196,7 +193,7 @@ public class LeaveService {
             throw new RuntimeException("Leave request employee not found");
         }
 
-        if (!STATUS_PENDING.equalsIgnoreCase(leave.getLeaveStatus())) {
+        if (leave.getLeaveStatus() != LeaveStatus.PENDING) {
             throw new IllegalArgumentException("Only pending leave requests can be approved");
         }
 
@@ -219,7 +216,38 @@ public class LeaveService {
             balanceRepo.save(balance);
         }
 
-        leave.setLeaveStatus(STATUS_APPROVED);
+        leave.setLeaveStatus(LeaveStatus.APPROVED);
+        leave = leaveRepo.save(leave);
+
+        return mapToHistoryDTO(leave);
+    }
+
+    @Transactional
+    public LeaveHistoryDTO rejectLeave(Long leaveId) {
+        Employee approver = getCurrentEmployee();
+
+        if (!canActAsApprover(approver)) {
+            throw new AccessDeniedException("Access denied: no permission to reject leave");
+        }
+
+        EmployeeLeave leave = leaveRepo.findById(leaveId)
+                .orElseThrow(() -> new RuntimeException("Leave request not found"));
+
+        if (leave.getEmployee() == null) {
+            throw new RuntimeException("Leave request employee not found");
+        }
+
+        if (leave.getLeaveStatus() != LeaveStatus.PENDING) {
+            throw new IllegalArgumentException("Only pending leave requests can be rejected");
+        }
+
+        if (!canApproveLeave(approver, leave)) {
+            throw new AccessDeniedException(
+                    "Access denied: only HR manager or the employee's department manager can reject this leave"
+            );
+        }
+
+        leave.setLeaveStatus(LeaveStatus.REJECTED);
         leave = leaveRepo.save(leave);
 
         return mapToHistoryDTO(leave);
@@ -238,11 +266,11 @@ public class LeaveService {
             throw new AccessDeniedException("You can only cancel your own leave");
         }
 
-        if (!STATUS_PENDING.equalsIgnoreCase(leave.getLeaveStatus())) {
+        if (leave.getLeaveStatus() != LeaveStatus.PENDING) {
             throw new IllegalArgumentException("Only pending leaves can be cancelled");
         }
 
-        leave.setLeaveStatus(STATUS_CANCELLED);
+        leave.setLeaveStatus(LeaveStatus.CANCELLED);
         leave = leaveRepo.save(leave);
 
         return mapToHistoryDTO(leave);
@@ -250,6 +278,15 @@ public class LeaveService {
 
     @Transactional
     public LeaveHistoryDTO updateLeave(Long employeeId, Long leaveId, LeaveRequestDTO dto) {
+        return updateLeave(employeeId, leaveId, dto, null);
+    }
+
+    @Transactional
+    public LeaveHistoryDTO updateLeave(
+            Long employeeId,
+            Long leaveId,
+            LeaveRequestDTO dto,
+            MultipartFile supportingDocument) {
         validateDates(dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
 
         EmployeeLeave leave = leaveRepo.findById(leaveId)
@@ -263,7 +300,7 @@ public class LeaveService {
             throw new AccessDeniedException("You can only update your own leave");
         }
 
-        if (!STATUS_PENDING.equalsIgnoreCase(leave.getLeaveStatus())) {
+        if (leave.getLeaveStatus() != LeaveStatus.PENDING) {
             throw new IllegalArgumentException("Only pending leaves can be updated");
         }
 
@@ -273,6 +310,7 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
         validateGender(policy, employee);
+        validateSupportingDocument(policy.getLeaveType(), supportingDocument);
 
         if (Boolean.TRUE.equals(policy.getPaid())) {
             EmployeeLeaveBalance balance = getOrCreateBalance(employee, policy);
@@ -288,6 +326,17 @@ public class LeaveService {
         leave.setIncludeWeekends(includeWeekends);
 
         leave = leaveRepo.save(leave);
+
+        if (supportingDocument != null && !supportingDocument.isEmpty()) {
+            FileUploadResult uploadResult = fileStorageService.upload(
+                    supportingDocument,
+                    FileCategory.LEAVE_SUPPORTING_DOCUMENT,
+                    leave.getId().toString(),
+                    true
+            );
+            leave.setSupportingDocumentPath(uploadResult.getBlobPath());
+            leave = leaveRepo.save(leave);
+        }
 
         return mapToHistoryDTO(leave);
     }
@@ -486,7 +535,7 @@ public class LeaveService {
                         ? fileStorageService.getPublicUrl(leave.getSupportingDocumentPath())
                         : null
         );
-        dto.setLeaveStatus(leave.getLeaveStatus());
+        dto.setLeaveStatus(leave.getLeaveStatus() != null ? leave.getLeaveStatus().name() : null);
         return dto;
     }
 

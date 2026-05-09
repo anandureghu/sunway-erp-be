@@ -4,6 +4,8 @@ import com.erp.domain.Employee;
 import com.erp.domain.hr.AllowanceType;
 import com.erp.domain.hr.Contract;
 import com.erp.domain.hr.SalaryAllowance;
+import com.erp.dto.file.FileCategory;
+import com.erp.dto.file.FileUploadResult;
 import com.erp.dto.hr.AllowanceRequestDTO;
 import com.erp.dto.hr.AllowanceResponseDTO;
 import com.erp.dto.hr.ContractRequestDTO;
@@ -11,10 +13,12 @@ import com.erp.dto.hr.ContractResponseDTO;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.AllowanceTypeRepository;
 import com.erp.repo.hr.ContractRepository;
+import com.erp.service.file.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
@@ -29,10 +33,15 @@ public class ContractService {
     private final EmployeeRepository employeeRepository;
     private final AllowanceTypeRepository allowanceTypeRepository;
     private final CodeGeneratorService codeGeneratorService;
+    private final FileStorageService fileStorageService;
 
     // ================= CREATE =================
 
     public ContractResponseDTO createContract(Long employeeId, ContractRequestDTO dto) {
+        return createContract(employeeId, dto, null);
+    }
+
+    public ContractResponseDTO createContract(Long employeeId, ContractRequestDTO dto, MultipartFile attachment) {
 
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -62,12 +71,17 @@ public class ContractService {
         mapAllowances(contract, dto.getAllowances());
 
         Contract saved = contractRepository.save(contract);
+        uploadAttachmentIfPresent(saved, attachment);
         return mapToResponse(saved);
     }
 
     // ================= UPDATE =================
 
     public ContractResponseDTO updateContract(Long contractId, ContractRequestDTO dto) {
+        return updateContract(contractId, dto, null);
+    }
+
+    public ContractResponseDTO updateContract(Long contractId, ContractRequestDTO dto, MultipartFile attachment) {
 
         Contract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -87,14 +101,41 @@ public class ContractService {
         contract.setSalaryRateType(dto.getSalaryRateType());
         contract.setSignatureDate(dto.getSignatureDate());
         contract.setSignedBy(dto.getSignedBy());
-        contract.setAttachmentPath(dto.getAttachmentUrl());
+        if (dto.getAttachmentUrl() != null && !dto.getAttachmentUrl().isBlank()) {
+            contract.setAttachmentPath(dto.getAttachmentUrl());
+        }
         contract.setTermsAndConditions(dto.getTermsAndConditions());
 
         contract.getAllowances().clear();
         mapAllowances(contract, dto.getAllowances());
 
         Contract saved = contractRepository.save(contract);
+        uploadAttachmentIfPresent(saved, attachment);
         return mapToResponse(saved);
+    }
+
+    public ContractResponseDTO updateContractAttachment(Long contractId, MultipartFile attachment) {
+        Contract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Contract not found"));
+
+        if (contract.isDeleted()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Cannot update deleted contract");
+        }
+
+        uploadAttachmentIfPresent(contract, attachment);
+        return mapToResponse(contract);
+    }
+
+    public ContractResponseDTO updateEmployeeContractAttachment(Long employeeId, MultipartFile attachment) {
+        Contract contract = contractRepository
+                .findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(employeeId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Create the contract before uploading an attachment"));
+
+        uploadAttachmentIfPresent(contract, attachment);
+        return mapToResponse(contract);
     }
 
     // ================= GET =================
@@ -163,6 +204,21 @@ public class ContractService {
         }
     }
 
+    private void uploadAttachmentIfPresent(Contract contract, MultipartFile attachment) {
+        if (attachment == null || attachment.isEmpty()) {
+            return;
+        }
+
+        FileUploadResult upload = fileStorageService.upload(
+                attachment,
+                FileCategory.CONTRACT_ATTACHMENT,
+                contract.getId().toString(),
+                false
+        );
+        contract.setAttachmentPath(upload.getBlobPath());
+        contractRepository.save(contract);
+    }
+
     // ================= RESPONSE MAPPING =================
 
     private ContractResponseDTO mapToResponse(Contract contract) {
@@ -195,10 +251,20 @@ public class ContractService {
                 .signatureDate(contract.getSignatureDate())
                 .signedBy(contract.getSignedBy())
                 .termsAndConditions(contract.getTermsAndConditions())
-                .attachmentUrl(contract.getAttachmentPath())
+                .attachmentUrl(resolveAttachmentUrl(contract.getAttachmentPath()))
                 .employeeId(contract.getEmployee().getId())
                 .staffName(contract.getEmployee().getFirstName() + " " + contract.getEmployee().getLastName())
                 .allowances(allowanceResponses)
                 .build();
+    }
+
+    private String resolveAttachmentUrl(String attachmentPath) {
+        if (attachmentPath == null || attachmentPath.isBlank()) {
+            return null;
+        }
+        if (attachmentPath.startsWith("http://") || attachmentPath.startsWith("https://")) {
+            return attachmentPath;
+        }
+        return fileStorageService.getPrivateSasUrl(attachmentPath);
     }
 }
