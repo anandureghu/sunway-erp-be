@@ -6,8 +6,10 @@ import com.erp.dto.hr.CompanyDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
 import com.erp.dto.hr.PayrollExportSettingsDTO;
 import com.erp.service.hr.CompanyService;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -35,13 +37,30 @@ public class CompanyController {
     public ResponseEntity<Company> createCompany(
             @RequestBody CompanyDTO company) {
 
-        Company saved = companyService.createCompany(company);
+        Company saved = companyService.createCompany(company, null);
+        return ResponseEntity.ok(saved);
+    }
+
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Company> createCompanyMultipart(
+            @RequestPart("data") CompanyDTO company,
+            @RequestPart(value = "logo", required = false) MultipartFile logo) {
+
+        Company saved = companyService.createCompany(company, logo);
         return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/{id}")
     public Company updateCompany(@PathVariable("id") Long id, @RequestBody CompanyDTO updated) {
-        return companyService.updateCompany(id, updated);
+        return companyService.updateCompany(id, updated, null);
+    }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Company updateCompanyMultipart(
+            @PathVariable("id") Long id,
+            @RequestPart("data") CompanyDTO updated,
+            @RequestPart(value = "logo", required = false) MultipartFile logo) {
+        return companyService.updateCompany(id, updated, logo);
     }
 
     @PutMapping("/{id}/accounting-defaults")

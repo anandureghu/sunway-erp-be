@@ -58,6 +58,9 @@ public class Company {
     @Column(name = "website_url", length = 255)
     private String websiteUrl;
 
+    @Column(name = "logo_url", length = 500)
+    private String logoUrl;
+
 
     @Column(name = "company_code", length = 3)
     private String companyCode;

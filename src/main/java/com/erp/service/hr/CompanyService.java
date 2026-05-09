@@ -6,6 +6,8 @@ import com.erp.domain.hr.Company;
 import com.erp.domain.hr.CompanyInvoiceSettings;
 import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.hr.Currency;
+import com.erp.dto.file.FileCategory;
+import com.erp.dto.file.FileUploadResult;
 import com.erp.dto.hr.AccountingDefaultsDTO;
 import com.erp.dto.hr.CompanyDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
@@ -17,9 +19,11 @@ import com.erp.repo.hr.CompanyInvoiceSettingsRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.file.FileStorageService;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -34,6 +38,7 @@ public class CompanyService {
     private final ChartOfAccountsRepository   chartOfAccountsRepository;
     private final BankAccountRepository       bankAccountRepository;
     private final AuthContext                 authContext;
+    private final FileStorageService          fileStorageService;
 
     public CompanyService(
             CompanyRepository companyRepository,
@@ -42,7 +47,8 @@ public class CompanyService {
             CurrencyRepository currencyRepository,
             ChartOfAccountsRepository chartOfAccountsRepository,
             BankAccountRepository bankAccountRepository,
-            AuthContext authContext) {
+            AuthContext authContext,
+            FileStorageService fileStorageService) {
 
         this.companyRepository         = companyRepository;
         this.invoiceSettingsRepository = invoiceSettingsRepository;
@@ -51,6 +57,7 @@ public class CompanyService {
         this.chartOfAccountsRepository = chartOfAccountsRepository;
         this.bankAccountRepository     = bankAccountRepository;
         this.authContext               = authContext;
+        this.fileStorageService        = fileStorageService;
     }
 
     // ======================================================
@@ -97,7 +104,7 @@ public class CompanyService {
     // CREATE COMPANY
     // ======================================================
     @Transactional
-    public Company createCompany(CompanyDTO dto) {
+    public Company createCompany(CompanyDTO dto, MultipartFile logo) {
 
         Currency currency = currencyRepository.findById(dto.getCurrencyId())
                 .orElseThrow(() -> new RuntimeException("Currency not found"));
@@ -134,6 +141,17 @@ public class CompanyService {
         // HR can add/rename/delete these later from Settings → Roles
         seedDefaultRoles(saved);
 
+        if (logo != null && !logo.isEmpty()) {
+            FileUploadResult upload = fileStorageService.upload(
+                    logo,
+                    FileCategory.COMPANY_LOGO,
+                    saved.getId().toString(),
+                    true
+            );
+            saved.setLogoUrl(fileStorageService.buildPublicUrl(upload.getBlobPath()));
+            saved = companyRepository.save(saved);
+        }
+
         return hydrateInvoiceBrandingView(saved);
     }
 
@@ -141,7 +159,7 @@ public class CompanyService {
     // UPDATE COMPANY
     // ======================================================
     @Transactional
-    public Company updateCompany(Long id, CompanyDTO updated) {
+    public Company updateCompany(Long id, CompanyDTO updated, MultipartFile logo) {
 
         Company existing = getCompanyById(id);
 
@@ -166,6 +184,17 @@ public class CompanyService {
         existing.setHrEnabled(updated.isHrEnabled());
         existing.setFinanceEnabled(updated.isFinanceEnabled());
         existing.setInventoryEnabled(updated.isInventoryEnabled());
+
+        // Preserve existing logo when no file uploaded; replace when a new file is provided.
+        if (logo != null && !logo.isEmpty()) {
+            FileUploadResult upload = fileStorageService.upload(
+                    logo,
+                    FileCategory.COMPANY_LOGO,
+                    existing.getId().toString(),
+                    true
+            );
+            existing.setLogoUrl(fileStorageService.buildPublicUrl(upload.getBlobPath()));
+        }
 
         Company saved = companyRepository.save(existing);
         return hydrateInvoiceBrandingView(saved);
