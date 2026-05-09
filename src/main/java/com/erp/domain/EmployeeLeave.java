@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDate;
+
 @Setter
 @Getter
 @Entity
@@ -30,6 +31,7 @@ public class EmployeeLeave {
     private Boolean includeWeekends;
     private String supportingDocumentPath;
 
-    private String leaveStatus; // APPROVED
-
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private LeaveStatus leaveStatus;
 }

@@ -41,7 +41,7 @@ public class DepartmentService {
             throw new ConflictException("Department code already exists in this company");
         }
 
-        // ✅ Manager is mandatory — throws if null or not found
+        // Manager is optional; validate it only when provided.
         Employee manager = resolveManager(dto.getManagerId(), company.getId());
 
         Department department = Department.builder()
@@ -75,7 +75,6 @@ public class DepartmentService {
             throw new ConflictException("Department code already exists in this company");
         }
 
-        // ✅ Manager is mandatory on update too
         department.setDepartmentCode(dto.getDepartmentCode());
         department.setDepartmentName(dto.getDepartmentName());
         department.setDescription(dto.getDescription());
@@ -150,13 +149,12 @@ public class DepartmentService {
     }
 
     /**
-     * Manager is MANDATORY — throws ConflictException if not provided.
-     * Also validates the manager belongs to the same company.
+     * Manager is optional. When provided, validates the manager belongs to the same company.
      */
     private Employee resolveManager(Long managerId, Long companyId) {
 
         if (managerId == null) {
-            throw new ConflictException("Manager is mandatory for a department");
+            return null;
         }
 
         Employee manager = employeeRepository.findById(managerId)

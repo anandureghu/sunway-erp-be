@@ -1,5 +1,6 @@
 package com.erp.dto.salary;
 
+import com.erp.domain.salary.AccountType;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,7 +12,7 @@ public class BankDetailsRequestDTO {
     /** E.g. QIB, CBQ — required for bank payroll CSV export */
     private String bankShortName;
     private String bankBranch;
-    private String accountType;
+    private AccountType accountType;
     private String accountNo;
     private String iban;
 

@@ -30,7 +30,8 @@ public class EmployeeBankDetails {
     private String bankBranch;
 
     @Column(nullable = false)
-    private String accountType;
+    @Convert(converter = AccountTypeConverter.class)
+    private AccountType accountType;
 
     @Column(nullable = false)
     private String accountNo;

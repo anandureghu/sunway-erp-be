@@ -1,6 +1,7 @@
 package com.erp.repo;
 
 import com.erp.domain.EmployeeLeave;
+import com.erp.domain.LeaveStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,27 +18,27 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
 
     List<EmployeeLeave> findByEmployeeCompany_IdAndLeaveStatusOrderByDateReportedDesc(
             Long companyId,
-            String leaveStatus
+            LeaveStatus leaveStatus
     );
 
     List<EmployeeLeave> findByEmployeeDepartmentIdAndLeaveStatusOrderByDateReportedDesc(
             Long departmentId,
-            String leaveStatus
+            LeaveStatus leaveStatus
     );
 
-    List<EmployeeLeave> findByLeaveStatusOrderByDateReportedDesc(String leaveStatus);
+    List<EmployeeLeave> findByLeaveStatusOrderByDateReportedDesc(LeaveStatus leaveStatus);
 
     @Query("""
         select l from EmployeeLeave l
         where l.employee.id = :employeeId
-          and upper(l.leaveStatus) = upper(:status)
+          and l.leaveStatus = :status
           and l.startDate <= :periodEnd
           and l.endDate >= :periodStart
         order by l.dateReported desc
     """)
     List<EmployeeLeave> findLeavesForPayrollPeriod(
             @Param("employeeId") Long employeeId,
-            @Param("status") String status,
+            @Param("status") LeaveStatus status,
             @Param("periodStart") LocalDate periodStart,
             @Param("periodEnd") LocalDate periodEnd
     );
@@ -46,42 +47,30 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
         select case when count(l) > 0 then true else false end
         from EmployeeLeave l
         where l.employee.id = :employeeId
-          and upper(l.leaveStatus) = upper(:status)
+          and l.leaveStatus = :status
           and l.startDate <= :periodEnd
           and l.endDate >= :periodStart
     """)
     boolean existsLeavesForPayrollPeriod(
             @Param("employeeId") Long employeeId,
-            @Param("status") String status,
+            @Param("status") LeaveStatus status,
             @Param("periodStart") LocalDate periodStart,
             @Param("periodEnd") LocalDate periodEnd
     );
 
-    @Query("""
-        select l from EmployeeLeave l
-        where l.employee.id = :employeeId
-          and upper(l.leaveStatus) = 'APPROVED'
-          and l.startDate <= :periodEnd
-          and l.endDate >= :periodStart
-        order by l.dateReported desc
-    """)
-    List<EmployeeLeave> findApprovedLeavesForPayrollPeriod(
-            @Param("employeeId") Long employeeId,
-            @Param("periodStart") LocalDate periodStart,
-            @Param("periodEnd") LocalDate periodEnd
-    );
+    default List<EmployeeLeave> findApprovedLeavesForPayrollPeriod(
+            Long employeeId,
+            LocalDate periodStart,
+            LocalDate periodEnd
+    ) {
+        return findLeavesForPayrollPeriod(employeeId, LeaveStatus.APPROVED, periodStart, periodEnd);
+    }
 
-    @Query("""
-        select case when count(l) > 0 then true else false end
-        from EmployeeLeave l
-        where l.employee.id = :employeeId
-          and upper(l.leaveStatus) = 'PENDING'
-          and l.startDate <= :periodEnd
-          and l.endDate >= :periodStart
-    """)
-    boolean existsPendingLeavesForPayrollPeriod(
-            @Param("employeeId") Long employeeId,
-            @Param("periodStart") LocalDate periodStart,
-            @Param("periodEnd") LocalDate periodEnd
-    );
+    default boolean existsPendingLeavesForPayrollPeriod(
+            Long employeeId,
+            LocalDate periodStart,
+            LocalDate periodEnd
+    ) {
+        return existsLeavesForPayrollPeriod(employeeId, LeaveStatus.PENDING, periodStart, periodEnd);
+    }
 }
