@@ -1,0 +1,479 @@
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-05-13T16:37:07.867+05:30  INFO 13816 --- [           main] com.erp.Application                      : Starting Application using Java 21.0.8 with PID 13816 (C:\Users\SHRAS Admin\IdeaProjects\sunway-erp-bee\target\classes started by SHRAS Admin in C:\Users\SHRAS Admin\IdeaProjects\sunway-erp-bee)
+2026-05-13T16:37:07.900+05:30  INFO 13816 --- [           main] com.erp.Application                      : The following 1 profile is active: "mysql"
+2026-05-13T16:37:09.578+05:30  INFO 13816 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-13T16:37:10.020+05:30  INFO 13816 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 436 ms. Found 65 JPA repository interfaces.
+2026-05-13T16:37:11.220+05:30  INFO 13816 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-05-13T16:37:11.239+05:30  INFO 13816 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-05-13T16:37:11.239+05:30  INFO 13816 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+2026-05-13T16:37:11.360+05:30  INFO 13816 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-05-13T16:37:11.360+05:30  INFO 13816 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 3387 ms
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+2026-05-13T16:37:11.920+05:30  INFO 13816 --- [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-13T16:37:12.084+05:30  INFO 13816 --- [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.5.3.Final
+2026-05-13T16:37:12.160+05:30  INFO 13816 --- [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-05-13T16:37:12.929+05:30  INFO 13816 --- [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-13T16:37:12.980+05:30  INFO 13816 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-05-13T16:37:13.280+05:30  INFO 13816 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@3205610d
+2026-05-13T16:37:13.290+05:30  INFO 13816 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-05-13T16:37:13.374+05:30  WARN 13816 --- [           main] org.hibernate.orm.deprecation            : HHH90000025: MySQL8Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-13T16:37:13.374+05:30  WARN 13816 --- [           main] org.hibernate.orm.deprecation            : HHH90000026: MySQL8Dialect has been deprecated; use org.hibernate.dialect.MySQLDialect instead
+2026-05-13T16:37:16.910+05:30  INFO 13816 --- [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-13T16:37:19.674+05:30  INFO 13816 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-13T16:37:19.790+05:30 DEBUG 13816 --- [           main] .c.JpaMetamodelMappingContextFactoryBean : Initializing JpaMetamodelMappingContext…
+2026-05-13T16:37:19.814+05:30 DEBUG 13816 --- [           main] .c.JpaMetamodelMappingContextFactoryBean : Finished initializing JpaMetamodelMappingContext
+2026-05-13T16:37:20.124+05:30  INFO 13816 --- [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-13T16:37:20.426+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ItemWarehouseStock.findStockLinesOrderByValueDesc.count
+2026-05-13T16:37:20.910+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ItemWarehouseStock.countDistinctItemsForReport.count
+2026-05-13T16:37:21.062+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ItemWarehouseStock.aggregateByWarehouse.count
+2026-05-13T16:37:21.307+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ItemWarehouseStock.aggregateByCategory.count
+2026-05-13T16:37:21.407+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ItemWarehouseStock.sumTotalsForReport.count
+2026-05-13T16:37:21.412+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query ItemWarehouseStock.findByItemId
+2026-05-13T16:37:21.412+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ItemWarehouseStock.findByItemId
+2026-05-13T16:37:21.461+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query ItemWarehouseStock.findByItemIdAndWarehouseId
+2026-05-13T16:37:21.461+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ItemWarehouseStock.findByItemIdAndWarehouseId
+2026-05-13T16:37:21.501+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Item.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:21.503+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Item.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:21.546+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Item.countLowStockForReport.count
+2026-05-13T16:37:21.730+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Item.findLowStockForReport.count
+2026-05-13T16:37:21.742+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Item.existsBySkuAndCompanyId
+2026-05-13T16:37:21.742+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Item.existsBySkuAndCompanyId
+2026-05-13T16:37:21.774+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Warehouse.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:21.774+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Warehouse.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:21.780+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Warehouse.existsByCodeAndCompanyId
+2026-05-13T16:37:21.780+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Warehouse.existsByCodeAndCompanyId
+2026-05-13T16:37:21.890+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AppraisalConfig.findByYearAndStatus
+2026-05-13T16:37:21.890+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AppraisalConfig.findByYearAndStatus
+2026-05-13T16:37:21.890+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AppraisalConfig.findByYear
+2026-05-13T16:37:21.890+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AppraisalConfig.findByYear
+2026-05-13T16:37:21.890+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AppraisalConfig.findByStatus
+2026-05-13T16:37:21.890+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AppraisalConfig.findByStatus
+2026-05-13T16:37:21.957+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeAppraisalGoal.existsByTemplateId
+2026-05-13T16:37:21.957+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeAppraisalGoal.existsByTemplateId
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query User.findByCompany_IdOrderByCreatedAtDesc
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query User.findByCompany_IdOrderByCreatedAtDesc
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query User.findByEmail
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query User.findByEmail
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query User.findByUsername
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query User.findByUsername
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query User.existsByUsername
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query User.existsByUsername
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query User.existsByEmail
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query User.existsByEmail
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query User.existsByCompanyRoleRef_Id
+2026-05-13T16:37:22.040+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query User.existsByCompanyRoleRef_Id
+2026-05-13T16:37:22.090+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.findByCompany_IdOrderByCreatedAtDesc
+2026-05-13T16:37:22.090+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.findByCompany_IdOrderByCreatedAtDesc
+2026-05-13T16:37:22.090+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.findByUser_Id
+2026-05-13T16:37:22.090+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.findByUser_Id
+2026-05-13T16:37:22.090+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.incrementEmployeeNo.count
+2026-05-13T16:37:22.090+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.getCurrentEmployeeNo.count
+2026-05-13T16:37:22.090+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.findByCompany_Id
+2026-05-13T16:37:22.090+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.findByCompany_Id
+2026-05-13T16:37:22.090+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.findFirstByCompany_IdAndUserRoleIn
+2026-05-13T16:37:22.100+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.findFirstByCompany_IdAndUserRoleIn
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.findByDepartment_IdOrderByCreatedAtDesc
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.findByDepartment_IdOrderByCreatedAtDesc
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.findByCompanyOrderByCreatedAtDesc
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.findByCompanyOrderByCreatedAtDesc
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.findByCompany_IdAndStatus
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.findByCompany_IdAndStatus
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.findByCompany_IdAndUser_CompanyRoleRef_NameIgnoreCaseOrderByCreatedAtDesc
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.findByCompany_IdAndUser_CompanyRoleRef_NameIgnoreCaseOrderByCreatedAtDesc
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.findAllByCompany_IdAndUserRoleInOrderByCreatedAtDesc
+2026-05-13T16:37:22.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.findAllByCompany_IdAndUserRoleInOrderByCreatedAtDesc
+2026-05-13T16:37:22.110+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Employee.existsByCompany_IdAndUserRole
+2026-05-13T16:37:22.110+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Employee.existsByCompany_IdAndUserRole
+2026-05-13T16:37:22.150+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyProperty.findByEmployeeId
+2026-05-13T16:37:22.150+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyProperty.findByEmployeeId
+2026-05-13T16:37:22.150+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyProperty.existsByEmployeeIdAndItemCode
+2026-05-13T16:37:22.154+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyProperty.existsByEmployeeIdAndItemCode
+2026-05-13T16:37:22.197+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeContactInfo.findByEmployeeId
+2026-05-13T16:37:22.197+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeContactInfo.findByEmployeeId
+2026-05-13T16:37:22.201+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeContactInfo.existsByEmployeeId
+2026-05-13T16:37:22.201+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeContactInfo.existsByEmployeeId
+2026-05-13T16:37:22.234+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeAddress.findByEmployeeId
+2026-05-13T16:37:22.236+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeAddress.findByEmployeeId
+2026-05-13T16:37:22.236+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeAddress.deleteByEmployeeId
+2026-05-13T16:37:22.236+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeAddress.deleteByEmployeeId
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeAppraisal.findByYear
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeAppraisal.findByYear
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeAppraisal.existsByEmployeeIdAndYearAndMonth
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeAppraisal.existsByEmployeeIdAndYearAndMonth
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeAppraisal.findByEmployeeId
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeAppraisal.findByEmployeeId
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeAppraisal.findByIdAndEmployeeId
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeAppraisal.findByIdAndEmployeeId
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeAppraisal.existsByEmployeeIdAndYear
+2026-05-13T16:37:22.280+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeAppraisal.existsByEmployeeIdAndYear
+2026-05-13T16:37:22.314+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AppraisalRoleConfig.findByConfigIdAndRoleName
+2026-05-13T16:37:22.314+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AppraisalRoleConfig.findByConfigIdAndRoleName
+2026-05-13T16:37:22.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AppraisalGoalTemplate.findByRoleConfigIdAndActiveTrue
+2026-05-13T16:37:22.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AppraisalGoalTemplate.findByRoleConfigIdAndActiveTrue
+2026-05-13T16:37:22.405+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Company.findByCreatedBy
+2026-05-13T16:37:22.405+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Company.findByCreatedBy
+2026-05-13T16:37:22.430+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRole.findByCompanyIdAndActiveTrueOrderByCreatedDateDesc
+2026-05-13T16:37:22.430+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRole.findByCompanyIdAndActiveTrueOrderByCreatedDateDesc
+2026-05-13T16:37:22.430+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRole.findByIdAndCompanyId
+2026-05-13T16:37:22.430+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRole.findByIdAndCompanyId
+2026-05-13T16:37:22.430+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRole.findByCompanyIdAndNameIgnoreCase
+2026-05-13T16:37:22.430+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRole.findByCompanyIdAndNameIgnoreCase
+2026-05-13T16:37:22.430+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRole.findByCompanyIdOrderByCreatedDateDesc
+2026-05-13T16:37:22.436+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRole.findByCompanyIdOrderByCreatedDateDesc
+2026-05-13T16:37:22.437+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRole.existsByCompanyIdAndNameAndIdNot
+2026-05-13T16:37:22.437+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRole.existsByCompanyIdAndNameAndIdNot
+2026-05-13T16:37:22.438+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRole.existsByCompanyIdAndName
+2026-05-13T16:37:22.438+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRole.existsByCompanyIdAndName
+2026-05-13T16:37:22.440+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRole.findByCompanyIdAndName
+2026-05-13T16:37:22.440+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRole.findByCompanyIdAndName
+2026-05-13T16:37:22.476+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Department.findAllByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:22.476+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Department.findAllByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:22.476+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Department.existsByDepartmentCodeAndCompanyId
+2026-05-13T16:37:22.476+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Department.existsByDepartmentCodeAndCompanyId
+2026-05-13T16:37:22.501+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyLeavePolicy.findByCompanyOrderByIdDesc
+2026-05-13T16:37:22.501+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyLeavePolicy.findByCompanyOrderByIdDesc
+2026-05-13T16:37:22.501+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyLeavePolicy.findByCompanyAndRoleAndLeaveType
+2026-05-13T16:37:22.507+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyLeavePolicy.findByCompanyAndRoleAndLeaveType
+2026-05-13T16:37:22.507+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyLeavePolicy.findByCompanyAndRole
+2026-05-13T16:37:22.507+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyLeavePolicy.findByCompanyAndRole
+2026-05-13T16:37:22.510+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyLeavePolicy.findByCompanyAndPaid
+2026-05-13T16:37:22.510+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyLeavePolicy.findByCompanyAndPaid
+2026-05-13T16:37:22.544+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLeaveBalance.findByEmployeeAndLeaveType
+2026-05-13T16:37:22.544+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeaveBalance.findByEmployeeAndLeaveType
+2026-05-13T16:37:22.550+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeaveBalance.findByEmployeeId.count
+2026-05-13T16:37:22.550+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLeaveBalance.findByEmployee
+2026-05-13T16:37:22.550+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeaveBalance.findByEmployee
+2026-05-13T16:37:22.550+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeaveBalance.findByEmployeeIdAndLeaveType.count
+2026-05-13T16:37:22.550+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLeaveBalance.findByLeaveType
+2026-05-13T16:37:22.550+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeaveBalance.findByLeaveType
+2026-05-13T16:37:22.563+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeaveBalance.existsByEmployeeIdAndLeaveType.count
+2026-05-13T16:37:23.150+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeePermission.findByEmployeeId
+2026-05-13T16:37:23.152+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeePermission.findByEmployeeId
+2026-05-13T16:37:23.152+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeePermission.findByEmployee_Id
+2026-05-13T16:37:23.152+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeePermission.findByEmployee_Id
+2026-05-13T16:37:23.152+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeePermission.findByEmployeeIdAndModule
+2026-05-13T16:37:23.152+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeePermission.findByEmployeeIdAndModule
+2026-05-13T16:37:23.157+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeePermission.deleteByEmployeeId
+2026-05-13T16:37:23.157+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeePermission.deleteByEmployeeId
+2026-05-13T16:37:23.160+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeePermission.findByEmployee_IdAndModule
+2026-05-13T16:37:23.160+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeePermission.findByEmployee_IdAndModule
+2026-05-13T16:37:23.161+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeePermission.deleteByEmployee_Id
+2026-05-13T16:37:23.161+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeePermission.deleteByEmployee_Id
+2026-05-13T16:37:23.203+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRolePermission.deleteByCompanyRole_Id
+2026-05-13T16:37:23.205+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRolePermission.deleteByCompanyRole_Id
+2026-05-13T16:37:23.205+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRolePermission.findByCompanyRoleId
+2026-05-13T16:37:23.205+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRolePermission.findByCompanyRoleId
+2026-05-13T16:37:23.205+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRolePermission.deleteByCompanyRoleId
+2026-05-13T16:37:23.205+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRolePermission.deleteByCompanyRoleId
+2026-05-13T16:37:23.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRolePermission.findByCompanyRoleIdAndModule
+2026-05-13T16:37:23.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRolePermission.findByCompanyRoleIdAndModule
+2026-05-13T16:37:23.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRolePermission.findByCompanyRole_Id
+2026-05-13T16:37:23.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRolePermission.findByCompanyRole_Id
+2026-05-13T16:37:23.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRolePermission.findByCompanyRole_IdAndModule
+2026-05-13T16:37:23.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRolePermission.findByCompanyRole_IdAndModule
+2026-05-13T16:37:23.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyRolePermission.findByCompanyRole_IdAndCompanyRole_ActiveTrueAndModule
+2026-05-13T16:37:23.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyRolePermission.findByCompanyRole_IdAndCompanyRole_ActiveTrueAndModule
+2026-05-13T16:37:23.249+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EnumRolePermission.findByRole
+2026-05-13T16:37:23.249+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EnumRolePermission.findByRole
+2026-05-13T16:37:23.250+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EnumRolePermission.findByRoleAndModule
+2026-05-13T16:37:23.250+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EnumRolePermission.findByRoleAndModule
+2026-05-13T16:37:23.251+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EnumRolePermission.deleteByRole
+2026-05-13T16:37:23.251+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EnumRolePermission.deleteByRole
+2026-05-13T16:37:23.316+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeCurrentJob.findByEmployee_Id
+2026-05-13T16:37:23.316+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeCurrentJob.findByEmployee_Id
+2026-05-13T16:37:23.316+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeCurrentJob.existsByEmployee_Id
+2026-05-13T16:37:23.316+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeCurrentJob.existsByEmployee_Id
+2026-05-13T16:37:23.316+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeCurrentJob.existsByJobCode_Id
+2026-05-13T16:37:23.316+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeCurrentJob.existsByJobCode_Id
+2026-05-13T16:37:23.316+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeCurrentJob.existsByDepartment_Id
+2026-05-13T16:37:23.316+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeCurrentJob.existsByDepartment_Id
+2026-05-13T16:37:23.338+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query JobCode.findByCompany_Id
+2026-05-13T16:37:23.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query JobCode.findByCompany_Id
+2026-05-13T16:37:23.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query JobCode.findByCompany_IdAndActiveTrue
+2026-05-13T16:37:23.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query JobCode.findByCompany_IdAndActiveTrue
+2026-05-13T16:37:23.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query JobCode.findByCompany_IdAndCode
+2026-05-13T16:37:23.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query JobCode.findByCompany_IdAndCode
+2026-05-13T16:37:23.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query JobCode.findByIdAndCompany_Id
+2026-05-13T16:37:23.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query JobCode.findByIdAndCompany_Id
+2026-05-13T16:37:23.383+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeDependent.findByEmployeeId
+2026-05-13T16:37:23.383+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeDependent.findByEmployeeId
+2026-05-13T16:37:23.420+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeEducation.findByEmployeeId
+2026-05-13T16:37:23.420+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeEducation.findByEmployeeId
+2026-05-13T16:37:23.424+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeEducation.findByIdAndEmployeeId
+2026-05-13T16:37:23.424+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeEducation.findByIdAndEmployeeId
+2026-05-13T16:37:23.478+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeExperience.findByEmployeeId
+2026-05-13T16:37:23.478+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeExperience.findByEmployeeId
+2026-05-13T16:37:23.484+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeExperience.findByIdAndEmployeeId
+2026-05-13T16:37:23.486+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeExperience.findByIdAndEmployeeId
+2026-05-13T16:37:23.543+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeave.findByEmployeeCompany_IdAndLeaveStatusOrderByDateReportedDesc.count
+2026-05-13T16:37:23.543+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLeave.findByIdAndEmployeeId
+2026-05-13T16:37:23.543+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeave.findByIdAndEmployeeId
+2026-05-13T16:37:23.550+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLeave.findByEmployeeIdOrderByDateReportedDesc
+2026-05-13T16:37:23.551+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeave.findByEmployeeIdOrderByDateReportedDesc
+2026-05-13T16:37:23.553+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeave.findLeavesForPayrollPeriod.count
+2026-05-13T16:37:23.560+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLeave.findByEmployeeDepartmentIdAndLeaveStatusOrderByDateReportedDesc
+2026-05-13T16:37:23.561+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeave.findByEmployeeDepartmentIdAndLeaveStatusOrderByDateReportedDesc
+2026-05-13T16:37:23.563+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLeave.existsLeavesForPayrollPeriod.count
+2026-05-13T16:37:23.616+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLoan.findByEmployeeId
+2026-05-13T16:37:23.616+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLoan.findByEmployeeId
+2026-05-13T16:37:23.616+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLoan.findByEmployee
+2026-05-13T16:37:23.616+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLoan.findByEmployee
+2026-05-13T16:37:23.620+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLoan.findByCompanyAndStatus.count
+2026-05-13T16:37:23.620+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLoan.findByEmployeeAndStatus
+2026-05-13T16:37:23.620+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLoan.findByEmployeeAndStatus
+2026-05-13T16:37:23.620+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLoan.findByLoanCode
+2026-05-13T16:37:23.620+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLoan.findByLoanCode
+2026-05-13T16:37:23.620+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLoan.findByEmployeeIdAndStatus
+2026-05-13T16:37:23.620+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLoan.findByEmployeeIdAndStatus
+2026-05-13T16:37:23.620+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeLoan.findByEmployeeIdOrderByStartDateDesc
+2026-05-13T16:37:23.620+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeLoan.findByEmployeeIdOrderByStartDateDesc
+2026-05-13T16:37:23.655+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query LoanSequence.findByLoanTypeForUpdate.count
+2026-05-13T16:37:23.660+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query LoanSequence.findByLoanType
+2026-05-13T16:37:23.660+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query LoanSequence.findByLoanType
+2026-05-13T16:37:23.696+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeCompensation.findActiveByEmployee.count
+2026-05-13T16:37:23.710+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeCompensation.findByEmployeeAndStatus
+2026-05-13T16:37:23.710+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeCompensation.findByEmployeeAndStatus
+2026-05-13T16:37:23.762+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Passport.findByEmployeeId
+2026-05-13T16:37:23.762+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Passport.findByEmployeeId
+2026-05-13T16:37:23.762+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Passport.existsByEmployeeId
+2026-05-13T16:37:23.762+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Passport.existsByEmployeeId
+2026-05-13T16:37:23.762+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Passport.deleteByEmployeeId
+2026-05-13T16:37:23.762+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Passport.deleteByEmployeeId
+2026-05-13T16:37:23.814+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query ResidencePermit.findByEmployeeId
+2026-05-13T16:37:23.814+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ResidencePermit.findByEmployeeId
+2026-05-13T16:37:23.820+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query ResidencePermit.existsByEmployeeId
+2026-05-13T16:37:23.820+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ResidencePermit.existsByEmployeeId
+2026-05-13T16:37:23.820+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query ResidencePermit.deleteByEmployeeId
+2026-05-13T16:37:23.820+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ResidencePermit.deleteByEmployeeId
+2026-05-13T16:37:23.864+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeTimesheet.findByEmployeeIdAndAttendanceDate
+2026-05-13T16:37:23.864+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeTimesheet.findByEmployeeIdAndAttendanceDate
+2026-05-13T16:37:23.867+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeTimesheet.findByEmployeeIdAndAttendanceDateBetween
+2026-05-13T16:37:23.867+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeTimesheet.findByEmployeeIdAndAttendanceDateBetween
+2026-05-13T16:37:23.916+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query BudgetHeader.findByCompanyIdAndFiscalYearAndIsActiveTrue
+2026-05-13T16:37:23.916+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query BudgetHeader.findByCompanyIdAndFiscalYearAndIsActiveTrue
+2026-05-13T16:37:23.918+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query BudgetHeader.countByParentBudgetId
+2026-05-13T16:37:23.918+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query BudgetHeader.countByParentBudgetId
+2026-05-13T16:37:23.922+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query BudgetHeader.deactivateOtherActivesForFiscalYear.count
+2026-05-13T16:37:23.934+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query BudgetHeader.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:23.935+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query BudgetHeader.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:23.940+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query BudgetHeader.updateAmountOnly.count
+2026-05-13T16:37:24.000+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query BudgetLine.findByBudgetHeaderAndAccountAndDepartmentAndProjectId
+2026-05-13T16:37:24.000+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query BudgetLine.findByBudgetHeaderAndAccountAndDepartmentAndProjectId
+2026-05-13T16:37:24.000+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query BudgetLine.findByBudgetHeader_IdOrderByCreatedAtDesc
+2026-05-13T16:37:24.000+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query BudgetLine.findByBudgetHeader_IdOrderByCreatedAtDesc
+2026-05-13T16:37:24.031+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query ChartOfAccounts.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.031+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ChartOfAccounts.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.031+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query ChartOfAccounts.findByAccountCode
+2026-05-13T16:37:24.031+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ChartOfAccounts.findByAccountCode
+2026-05-13T16:37:24.062+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Transaction.findByPaymentIdAndTransactionTypeOrderByCreatedAtDesc
+2026-05-13T16:37:24.062+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Transaction.findByPaymentIdAndTransactionTypeOrderByCreatedAtDesc
+2026-05-13T16:37:24.070+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Transaction.aggregateByDebitAccountTypes.count
+2026-05-13T16:37:24.094+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Transaction.aggregateByCreditAccountTypes.count
+2026-05-13T16:37:24.094+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Transaction.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.094+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Transaction.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.094+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Transaction.existsByRelatedIdAndTransactionType
+2026-05-13T16:37:24.094+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Transaction.existsByRelatedIdAndTransactionType
+2026-05-13T16:37:24.101+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Transaction.existsByRelatedSubIdAndTransactionType
+2026-05-13T16:37:24.101+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Transaction.existsByRelatedSubIdAndTransactionType
+2026-05-13T16:37:24.101+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Transaction.findByPaymentIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.101+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Transaction.findByPaymentIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Transaction.existsByPaymentId
+2026-05-13T16:37:24.103+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Transaction.existsByPaymentId
+2026-05-13T16:37:24.147+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query GLAccountBalance.findByAccountIdAndFiscalYear
+2026-05-13T16:37:24.147+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query GLAccountBalance.findByAccountIdAndFiscalYear
+2026-05-13T16:37:24.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CreditNote.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.210+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CreditNote.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.245+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Invoice.findByCompanyIdAndStatusOrderByCreatedAtDesc
+2026-05-13T16:37:24.245+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.findByCompanyIdAndStatusOrderByCreatedAtDesc
+2026-05-13T16:37:24.251+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Invoice.findByCompany_IdAndToPartyOrderByCreatedAtDesc
+2026-05-13T16:37:24.253+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.findByCompany_IdAndToPartyOrderByCreatedAtDesc
+2026-05-13T16:37:24.253+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Invoice.findByCompany_IdAndTypeOrderByCreatedAtDesc
+2026-05-13T16:37:24.253+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.findByCompany_IdAndTypeOrderByCreatedAtDesc
+2026-05-13T16:37:24.256+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Invoice.findByOrderIdAndType
+2026-05-13T16:37:24.256+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.findByOrderIdAndType
+2026-05-13T16:37:24.256+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Invoice.findByToPartyOrderByCreatedAtDesc
+2026-05-13T16:37:24.256+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.findByToPartyOrderByCreatedAtDesc
+2026-05-13T16:37:24.256+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Invoice.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.256+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.263+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.monthlyByType.count
+2026-05-13T16:37:24.300+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.sumByTypeBetween.count
+2026-05-13T16:37:24.306+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.outstandingByType.count
+2026-05-13T16:37:24.320+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.topPartiesByType.count
+2026-05-13T16:37:24.330+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.countInvoicesBetween.count
+2026-05-13T16:37:24.335+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.openInvoicesForAging.count
+2026-05-13T16:37:24.335+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Invoice.findByInvoiceId
+2026-05-13T16:37:24.335+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.findByInvoiceId
+2026-05-13T16:37:24.335+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Invoice.findByOrderId
+2026-05-13T16:37:24.335+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.findByOrderId
+2026-05-13T16:37:24.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Invoice.findByCompany_IdAndOrderIdAndTypeAndSupplierInvoiceNumber
+2026-05-13T16:37:24.340+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Invoice.findByCompany_IdAndOrderIdAndTypeAndSupplierInvoiceNumber
+2026-05-13T16:37:24.390+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query CompanyInvoiceSettings.findByCompanyId
+2026-05-13T16:37:24.390+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query CompanyInvoiceSettings.findByCompanyId
+2026-05-13T16:37:24.426+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query BankAccount.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.426+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query BankAccount.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.428+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query BankAccount.existsByCompanyIdAndPrimaryAccountTrue
+2026-05-13T16:37:24.428+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query BankAccount.existsByCompanyIdAndPrimaryAccountTrue
+2026-05-13T16:37:24.463+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query SalesOrder.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.463+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query SalesOrder.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.485+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Payment.findFirstByPurchaseOrderIdAndPaymentDirection
+2026-05-13T16:37:24.485+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payment.findFirstByPurchaseOrderIdAndPaymentDirection
+2026-05-13T16:37:24.493+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Payment.findByCompany_IdAndPaymentDirectionOrderByCreatedAtDesc
+2026-05-13T16:37:24.493+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payment.findByCompany_IdAndPaymentDirectionOrderByCreatedAtDesc
+2026-05-13T16:37:24.499+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Payment.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.499+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payment.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.500+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Payment.findByInvoiceIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.500+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payment.findByInvoiceIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.500+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payment.monthlyByDirection.count
+2026-05-13T16:37:24.510+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payment.sumByDirectionBetween.count
+2026-05-13T16:37:24.510+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payment.sumAllBetween.count
+2026-05-13T16:37:24.515+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Payment.findByPaymentCode
+2026-05-13T16:37:24.515+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payment.findByPaymentCode
+2026-05-13T16:37:24.596+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Customer.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.596+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Customer.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.630+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query PurchaseOrder.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.630+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query PurchaseOrder.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.640+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query PurchaseOrder.findBySourceRequisition_Id
+2026-05-13T16:37:24.640+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query PurchaseOrder.findBySourceRequisition_Id
+2026-05-13T16:37:24.660+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Vendor.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.660+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Vendor.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.739+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query JournalEntry.findByIdAndCompanyId
+2026-05-13T16:37:24.739+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query JournalEntry.findByIdAndCompanyId
+2026-05-13T16:37:24.742+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query JournalEntry.findAllByCompanyId
+2026-05-13T16:37:24.742+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query JournalEntry.findAllByCompanyId
+2026-05-13T16:37:24.780+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query PurchaseRequisition.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.780+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query PurchaseRequisition.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.823+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Reconciliation.findByIdAndCompanyId
+2026-05-13T16:37:24.823+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Reconciliation.findByIdAndCompanyId
+2026-05-13T16:37:24.823+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Reconciliation.findAllByCompanyId
+2026-05-13T16:37:24.823+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Reconciliation.findAllByCompanyId
+2026-05-13T16:37:24.870+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Payroll.existsByEmployeeAndPayPeriodStartAndPayPeriodEnd
+2026-05-13T16:37:24.870+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payroll.existsByEmployeeAndPayPeriodStartAndPayPeriodEnd
+2026-05-13T16:37:24.870+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payroll.sumPayrollCostBetween.count
+2026-05-13T16:37:24.870+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Payroll.findTopByEmployeeAndPayDateBetweenOrderByPayDateDesc
+2026-05-13T16:37:24.870+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payroll.findTopByEmployeeAndPayDateBetweenOrderByPayDateDesc
+2026-05-13T16:37:24.870+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Payroll.findByEmployeeAndPayrollCode
+2026-05-13T16:37:24.870+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payroll.findByEmployeeAndPayrollCode
+2026-05-13T16:37:24.870+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Payroll.findByEmployeeOrderByPayDateDesc
+2026-05-13T16:37:24.870+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Payroll.findByEmployeeOrderByPayDateDesc
+2026-05-13T16:37:24.920+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AccountingPeriod.existsByCompanyIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual
+2026-05-13T16:37:24.920+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AccountingPeriod.existsByCompanyIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual
+2026-05-13T16:37:24.920+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AccountingPeriod.findByCompanyIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual
+2026-05-13T16:37:24.920+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AccountingPeriod.findByCompanyIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual
+2026-05-13T16:37:24.920+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AccountingPeriod.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.920+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AccountingPeriod.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:24.920+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AccountingPeriod.findByCompanyIdAndStatus
+2026-05-13T16:37:24.920+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AccountingPeriod.findByCompanyIdAndStatus
+2026-05-13T16:37:24.940+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AllowanceType.findByName
+2026-05-13T16:37:24.940+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AllowanceType.findByName
+2026-05-13T16:37:24.940+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AllowanceType.findByActiveTrue
+2026-05-13T16:37:24.940+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AllowanceType.findByActiveTrue
+2026-05-13T16:37:24.950+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query AllowanceType.findByNameIgnoreCase
+2026-05-13T16:37:24.950+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query AllowanceType.findByNameIgnoreCase
+2026-05-13T16:37:24.992+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Currency.findByCurrencyCode
+2026-05-13T16:37:24.992+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Currency.findByCurrencyCode
+2026-05-13T16:37:25.080+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Contract.findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc
+2026-05-13T16:37:25.080+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Contract.findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc
+2026-05-13T16:37:25.080+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Contract.existsByContractCode
+2026-05-13T16:37:25.082+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Contract.existsByContractCode
+2026-05-13T16:37:25.403+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Division.findAllByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.405+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Division.findAllByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.407+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Division.findAllByCompanyCreatedByOrderByCreatedAtDesc
+2026-05-13T16:37:25.407+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Division.findAllByCompanyCreatedByOrderByCreatedAtDesc
+2026-05-13T16:37:25.409+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Division.findAllByDepartmentIdAndCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.409+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Division.findAllByDepartmentIdAndCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.441+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Category.findByCompanyIdAndParentIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.441+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Category.findByCompanyIdAndParentIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.443+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Category.existsByCompanyIdAndParentIdAndCode
+2026-05-13T16:37:25.443+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Category.existsByCompanyIdAndParentIdAndCode
+2026-05-13T16:37:25.443+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Category.findCategoryWithSubCategories.count
+2026-05-13T16:37:25.450+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Category.findByCompanyIdAndParentIdIsNullOrderByCreatedAtDesc
+2026-05-13T16:37:25.450+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Category.findByCompanyIdAndParentIdIsNullOrderByCreatedAtDesc
+2026-05-13T16:37:25.531+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Orders.findBySupplier_Company_IdOrderByCreatedAtDesc
+2026-05-13T16:37:25.531+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Orders.findBySupplier_Company_IdOrderByCreatedAtDesc
+2026-05-13T16:37:25.613+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query GoodsReceipt.findByPurchaseOrderId
+2026-05-13T16:37:25.617+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query GoodsReceipt.findByPurchaseOrderId
+2026-05-13T16:37:25.670+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query EmployeeBankDetails.findByEmployee
+2026-05-13T16:37:25.670+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query EmployeeBankDetails.findByEmployee
+2026-05-13T16:37:25.740+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Picklist.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.740+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Picklist.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.740+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Picklist.findByCompanyIdAndSalesOrderId
+2026-05-13T16:37:25.740+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Picklist.findByCompanyIdAndSalesOrderId
+2026-05-13T16:37:25.740+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Picklist.findBySalesOrderId
+2026-05-13T16:37:25.740+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Picklist.findBySalesOrderId
+2026-05-13T16:37:25.793+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Shipment.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.793+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Shipment.findByCompanyIdOrderByCreatedAtDesc
+2026-05-13T16:37:25.793+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query Shipment.findByPicklistId
+2026-05-13T16:37:25.793+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query Shipment.findByPicklistId
+2026-05-13T16:37:25.836+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query ShipmentTrackingEvent.findByShipmentIdOrderByEventAtAscIdAsc
+2026-05-13T16:37:25.836+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query ShipmentTrackingEvent.findByShipmentIdOrderByEventAtAscIdAsc
+2026-05-13T16:37:26.120+05:30  WARN 13816 --- [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-13T16:37:26.201+05:30  INFO 13816 --- [           main] eAuthenticationProviderManagerConfigurer : Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-05-13T16:37:26.201+05:30  WARN 13816 --- [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with an AuthenticationProvider bean. UserDetailsService beans will not be used for username/password login. Consider removing the AuthenticationProvider bean. Alternatively, consider using the UserDetailsService in a manually instantiated DaoAuthenticationProvider.
+2026-05-13T16:37:26.300+05:30  INFO 13816 --- [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+2026-05-13T16:37:26.572+05:30 DEBUG 13816 --- [           main] s.w.s.m.m.a.RequestMappingHandlerMapping : 337 mappings in 'requestMappingHandlerMapping'
+2026-05-13T16:37:26.671+05:30 DEBUG 13816 --- [           main] o.s.w.s.handler.SimpleUrlHandlerMapping  : Patterns [/webjars/**, /**, /swagger-ui*/*swagger-initializer.js, /swagger-ui*/**] in 'resourceHandlerMapping'
+2026-05-13T16:37:26.900+05:30 DEBUG 13816 --- [           main] s.w.s.m.m.a.RequestMappingHandlerAdapter : ControllerAdvice beans: 0 @ModelAttribute, 0 @InitBinder, 1 RequestBodyAdvice, 1 ResponseBodyAdvice
+2026-05-13T16:37:26.960+05:30 DEBUG 13816 --- [           main] .m.m.a.ExceptionHandlerExceptionResolver : ControllerAdvice beans: 2 @ExceptionHandler, 1 ResponseBodyAdvice
+2026-05-13T16:37:27.180+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query RolePermission.findByEmployee_Id
+2026-05-13T16:37:27.180+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query RolePermission.findByEmployee_Id
+2026-05-13T16:37:27.180+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query RolePermission.deleteAllByRoleIgnoreCase
+2026-05-13T16:37:27.180+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query RolePermission.deleteAllByRoleIgnoreCase
+2026-05-13T16:37:27.180+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query RolePermission.findByEmployee_IdAndModule
+2026-05-13T16:37:27.180+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query RolePermission.findByEmployee_IdAndModule
+2026-05-13T16:37:27.180+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query RolePermission.findByRoleIgnoreCase
+2026-05-13T16:37:27.180+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query RolePermission.findByRoleIgnoreCase
+2026-05-13T16:37:27.180+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query RolePermission.findByRoleIgnoreCaseAndModule
+2026-05-13T16:37:27.185+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query RolePermission.findByRoleIgnoreCaseAndModule
+2026-05-13T16:37:27.185+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Looking up named query RolePermission.findByRoleIgnoreCaseAndEmployeeIsNull
+2026-05-13T16:37:27.185+05:30 DEBUG 13816 --- [           main] o.s.d.jpa.repository.query.NamedQuery    : Did not find named query RolePermission.findByRoleIgnoreCaseAndEmployeeIsNull
+2026-05-13T16:37:27.430+05:30  INFO 13816 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-05-13T16:37:27.443+05:30  INFO 13816 --- [           main] com.erp.Application                      : Started Application in 20.34 seconds (process running for 21.075)
+2026-05-13T16:37:27.590+05:30  INFO 13816 --- [nio-8080-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-13T16:37:27.590+05:30  INFO 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-05-13T16:37:27.590+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Detected StandardServletMultipartResolver
+2026-05-13T16:37:27.590+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Detected AcceptHeaderLocaleResolver
+2026-05-13T16:37:27.590+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Detected FixedThemeResolver
+2026-05-13T16:37:27.590+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Detected org.springframework.web.servlet.view.DefaultRequestToViewNameTranslator@3162e222
+2026-05-13T16:37:27.590+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Detected org.springframework.web.servlet.support.SessionFlashMapManager@576648bd
+2026-05-13T16:37:27.590+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : enableLoggingRequestDetails='false': request parameters and headers will be masked to prevent unsafe logging of potentially sensitive data
+2026-05-13T16:37:27.590+05:30  INFO 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-05-13T16:37:27.631+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : POST "/api/auth/login", parameters={}
+2026-05-13T16:37:27.643+05:30 DEBUG 13816 --- [nio-8080-exec-2] s.w.s.m.m.a.RequestMappingHandlerMapping : Mapped to com.erp.controller.AuthController#login(LoginRequest)
+2026-05-13T16:37:27.769+05:30 DEBUG 13816 --- [nio-8080-exec-2] m.m.a.RequestResponseBodyMethodProcessor : Read "application/json;charset=UTF-8" to [com.erp.dto.auth.LoginRequest@1e86f8a5]
+2026-05-13T16:37:28.091+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.w.s.m.m.a.HttpEntityMethodProcessor  : Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/xml;charset=UTF-8, text/xml;charset=UTF-8, application/*+xml;charset=UTF-8]
+2026-05-13T16:37:28.091+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.w.s.m.m.a.HttpEntityMethodProcessor  : Writing [com.erp.dto.auth.JwtResponse@28bcd6d2]
+2026-05-13T16:37:28.108+05:30 DEBUG 13816 --- [nio-8080-exec-2] o.s.web.servlet.DispatcherServlet        : Completed 200 OK
+2026-05-13T16:38:14.340+05:30 DEBUG 13816 --- [nio-8080-exec-4] o.s.web.servlet.DispatcherServlet        : POST "/api/auth/login", parameters={}
+2026-05-13T16:38:14.340+05:30 DEBUG 13816 --- [nio-8080-exec-4] s.w.s.m.m.a.RequestMappingHandlerMapping : Mapped to com.erp.controller.AuthController#login(LoginRequest)
+2026-05-13T16:38:14.340+05:30 DEBUG 13816 --- [nio-8080-exec-4] m.m.a.RequestResponseBodyMethodProcessor : Read "application/json;charset=UTF-8" to [com.erp.dto.auth.LoginRequest@52b2a847]
+2026-05-13T16:38:14.502+05:30 DEBUG 13816 --- [nio-8080-exec-4] o.s.w.s.m.m.a.HttpEntityMethodProcessor  : Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/xml;charset=UTF-8, text/xml;charset=UTF-8, application/*+xml;charset=UTF-8]
+2026-05-13T16:38:14.502+05:30 DEBUG 13816 --- [nio-8080-exec-4] o.s.w.s.m.m.a.HttpEntityMethodProcessor  : Writing [com.erp.dto.auth.JwtResponse@435a755e]
+2026-05-13T16:38:14.502+05:30 DEBUG 13816 --- [nio-8080-exec-4] o.s.web.servlet.DispatcherServlet        : Completed 200 OK
+2026-05-13T16:38:19.600+05:30 DEBUG 13816 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : POST "/api/role-permissions/company-roles/6", parameters={}
+2026-05-13T16:38:19.603+05:30 DEBUG 13816 --- [nio-8080-exec-1] s.w.s.m.m.a.RequestMappingHandlerMapping : Mapped to com.erp.controller.security.RolePermissionController#assignCompanyRolePermissions(Long, List)
+2026-05-13T16:38:19.612+05:30 DEBUG 13816 --- [nio-8080-exec-1] m.m.a.RequestResponseBodyMethodProcessor : Read "application/json;charset=UTF-8" to [[]]
+2026-05-13T16:38:19.650+05:30 DEBUG 13816 --- [nio-8080-exec-1] m.m.a.RequestResponseBodyMethodProcessor : Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/xml;charset=UTF-8, text/xml;charset=UTF-8, application/*+xml;charset=UTF-8]
+2026-05-13T16:38:19.650+05:30 DEBUG 13816 --- [nio-8080-exec-1] m.m.a.RequestResponseBodyMethodProcessor : Nothing to write: null body
+2026-05-13T16:38:19.650+05:30 DEBUG 13816 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed 200 OK
+2026-05-13T16:38:19.871+05:30 DEBUG 13816 --- [nio-8080-exec-6] o.s.web.servlet.DispatcherServlet        : POST "/api/role-permissions/company-roles/6", parameters={}
+2026-05-13T16:38:19.871+05:30 DEBUG 13816 --- [nio-8080-exec-6] s.w.s.m.m.a.RequestMappingHandlerMapping : Mapped to com.erp.controller.security.RolePermissionController#assignCompanyRolePermissions(Long, List)
+2026-05-13T16:38:19.871+05:30 DEBUG 13816 --- [nio-8080-exec-6] m.m.a.RequestResponseBodyMethodProcessor : Read "application/json;charset=UTF-8" to [[com.erp.dto.security.ModulePermissionDTO@77e0952d]]
+2026-05-13T16:38:19.920+05:30 DEBUG 13816 --- [nio-8080-exec-6] m.m.a.RequestResponseBodyMethodProcessor : Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/xml;charset=UTF-8, text/xml;charset=UTF-8, application/*+xml;charset=UTF-8]
+2026-05-13T16:38:19.920+05:30 DEBUG 13816 --- [nio-8080-exec-6] m.m.a.RequestResponseBodyMethodProcessor : Nothing to write: null body
+2026-05-13T16:38:19.920+05:30 DEBUG 13816 --- [nio-8080-exec-6] o.s.web.servlet.DispatcherServlet        : Completed 200 OK
+2026-05-13T16:38:20.072+05:30 DEBUG 13816 --- [nio-8080-exec-3] o.s.web.servlet.DispatcherServlet        : POST "/api/role-permissions/company-roles/6", parameters={}
+2026-05-13T16:38:20.072+05:30 DEBUG 13816 --- [nio-8080-exec-3] s.w.s.m.m.a.RequestMappingHandlerMapping : Mapped to com.erp.controller.security.RolePermissionController#assignCompanyRolePermissions(Long, List)
+2026-05-13T16:38:20.072+05:30 DEBUG 13816 --- [nio-8080-exec-3] m.m.a.RequestResponseBodyMethodProcessor : Read "application/json;charset=UTF-8" to [[com.erp.dto.security.ModulePermissionDTO@7cff10f2]]
+2026-05-13T16:38:20.090+05:30 DEBUG 13816 --- [nio-8080-exec-3] m.m.a.RequestResponseBodyMethodProcessor : Using 'application/json', given [*/*] and supported [application/json, application/*+json, application/xml;charset=UTF-8, text/xml;charset=UTF-8, application/*+xml;charset=UTF-8]
+2026-05-13T16:38:20.090+05:30 DEBUG 13816 --- [nio-8080-exec-3] m.m.a.RequestResponseBodyMethodProcessor : Nothing to write: null body
+2026-05-13T16:38:20.090+05:30 DEBUG 13816 --- [nio-8080-exec-3] o.s.web.servlet.DispatcherServlet        : Completed 200 OK

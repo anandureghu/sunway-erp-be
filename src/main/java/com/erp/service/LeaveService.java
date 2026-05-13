@@ -161,6 +161,21 @@ public class LeaveService {
                 .toList();
     }
 
+    /**
+     * Whether the current authenticated user qualifies as a leave approver.
+     * Mirrors {@link #canActAsApprover(Employee)} but returns false instead of
+     * throwing for callers that just want to know (e.g. UI gating).
+     */
+    public boolean canCurrentUserApproveLeaves() {
+        try {
+            Employee approver = getCurrentEmployee();
+            return canActAsApprover(approver);
+        } catch (RuntimeException ex) {
+            // No employee record, no auth, etc — treat as "no, can't approve".
+            return false;
+        }
+    }
+
     public List<LeaveHistoryDTO> getPendingApprovalsForCurrentApprover() {
         Employee approver = getCurrentEmployee();
 
@@ -168,7 +183,13 @@ public class LeaveService {
             throw new AccessDeniedException("Access denied: no permission to view pending leave approvals");
         }
 
-        return leaveRepo.findByLeaveStatusOrderByDateReportedDesc(LeaveStatus.PENDING)
+        Long approverCompanyId = approver.getCompany() != null ? approver.getCompany().getId() : null;
+        if (approverCompanyId == null) {
+            throw new AccessDeniedException("Approver is not linked to a company");
+        }
+
+        return leaveRepo.findByEmployeeCompany_IdAndLeaveStatusOrderByDateReportedDesc(
+                        approverCompanyId, LeaveStatus.PENDING)
                 .stream()
                 .filter(leave -> leave.getEmployee() != null)
                 .filter(leave -> leave.getEmployee().getId() != null)
@@ -197,6 +218,10 @@ public class LeaveService {
             throw new IllegalArgumentException("Only pending leave requests can be approved");
         }
 
+        if (isSelfApproval(approver, leave)) {
+            throw new AccessDeniedException("You cannot approve your own leave request");
+        }
+
         if (!canApproveLeave(approver, leave)) {
             throw new AccessDeniedException(
                     "Access denied: only HR manager or the employee's department manager can approve this leave"
@@ -213,7 +238,15 @@ public class LeaveService {
             }
 
             balance.setRemainingLeaves(balance.getRemainingLeaves() - leave.getTotalDays());
-            balanceRepo.save(balance);
+            try {
+                // saveAndFlush triggers the @Version check synchronously so we
+                // can translate concurrent-modification into a clear error
+                // rather than a generic commit-time 500.
+                balanceRepo.saveAndFlush(balance);
+            } catch (org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+                throw new IllegalStateException(
+                        "Leave balance was modified by another approval — please retry", ex);
+            }
         }
 
         leave.setLeaveStatus(LeaveStatus.APPROVED);
@@ -239,6 +272,10 @@ public class LeaveService {
 
         if (leave.getLeaveStatus() != LeaveStatus.PENDING) {
             throw new IllegalArgumentException("Only pending leave requests can be rejected");
+        }
+
+        if (isSelfApproval(approver, leave)) {
+            throw new AccessDeniedException("You cannot reject your own leave request — cancel it instead");
         }
 
         if (!canApproveLeave(approver, leave)) {
@@ -374,6 +411,12 @@ public class LeaveService {
             return false;
         }
 
+        // Defense in depth — even if a future caller skips the explicit
+        // self-approval check, fall through to deny.
+        if (isSelfApproval(approver, leave)) {
+            return false;
+        }
+
         if (hasApprovePermission() && sameCompany(approver, leave.getEmployee())) {
             return true;
         }
@@ -385,6 +428,14 @@ public class LeaveService {
         return departmentManager != null
                 && approver.getId() != null
                 && approver.getId().equals(departmentManager.getId());
+    }
+
+    private boolean isSelfApproval(Employee approver, EmployeeLeave leave) {
+        return approver != null
+                && approver.getId() != null
+                && leave != null
+                && leave.getEmployee() != null
+                && approver.getId().equals(leave.getEmployee().getId());
     }
 
     private boolean isDepartmentManager(Employee approver) {

@@ -5,6 +5,7 @@ import com.erp.dto.salary.BankDetailsRequestDTO;
 import com.erp.dto.salary.BankDetailsResponseDTO;
 import com.erp.service.salary.EmployeeBankDetailsService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -20,6 +21,12 @@ public class EmployeeBankDetailsController {
         this.service = service;
     }
 
+    @PreAuthorize("""
+        @permissionChecker.hasAny(authentication,
+            T(com.erp.domain.security.HrModule).SALARY,
+            T(com.erp.domain.security.HrAction).VIEW_OWN,
+            T(com.erp.domain.security.HrAction).VIEW_ALL)
+    """)
     @GetMapping
     public ResponseEntity<BankDetailsResponseDTO> getBankDetails(
             @PathVariable("employeeId") Long employeeId
@@ -35,6 +42,7 @@ public class EmployeeBankDetailsController {
         return ResponseEntity.ok(types);
     }
 
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).SALARY, T(com.erp.domain.security.HrAction).CREATE)")
     @PostMapping
     public ResponseEntity<Void> createBank(
             @PathVariable("employeeId") Long employeeId,
@@ -44,6 +52,7 @@ public class EmployeeBankDetailsController {
         return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).SALARY, T(com.erp.domain.security.HrAction).EDIT)")
     @PutMapping
     public ResponseEntity<Void> updateBank(
             @PathVariable("employeeId") Long employeeId,

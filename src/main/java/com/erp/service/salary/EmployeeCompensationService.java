@@ -3,10 +3,12 @@ package com.erp.service.salary;
 import com.erp.domain.Employee;
 import com.erp.domain.enums.BenefitType;
 import com.erp.domain.salary.EmployeeCompensation;
+import com.erp.domain.security.HrModule;
 import com.erp.dto.salary.CompensationRequestDTO;
 import com.erp.dto.salary.SalaryResponseDTO;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
+import com.erp.security.guard.EmployeeAccessGuard;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
@@ -17,12 +19,15 @@ public class EmployeeCompensationService {
 
     private final EmployeeRepository employeeRepo;
     private final EmployeeCompensationRepository compensationRepo;
+    private final EmployeeAccessGuard accessGuard;
 
     public EmployeeCompensationService(
             EmployeeRepository employeeRepo,
-            EmployeeCompensationRepository compensationRepo) {
+            EmployeeCompensationRepository compensationRepo,
+            EmployeeAccessGuard accessGuard) {
         this.employeeRepo = employeeRepo;
         this.compensationRepo = compensationRepo;
+        this.accessGuard = accessGuard;
     }
 
     /* ================= CREATE ================= */
@@ -32,6 +37,8 @@ public class EmployeeCompensationService {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        accessGuard.assertCanWrite(employee, HrModule.SALARY);
 
         // 🔒 Deactivate old ACTIVE salary
         compensationRepo.findByEmployeeAndStatus(employee, "ACTIVE")
@@ -58,6 +65,8 @@ public class EmployeeCompensationService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
+        accessGuard.assertCanWrite(employee, HrModule.SALARY);
+
         EmployeeCompensation c = compensationRepo
                 .findByEmployeeAndStatus(employee, "ACTIVE")
                 .orElseThrow(() -> new RuntimeException("Active salary not found"));
@@ -73,6 +82,8 @@ public class EmployeeCompensationService {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        accessGuard.assertCanRead(employee, HrModule.SALARY);
 
         EmployeeCompensation c =
                 compensationRepo.findActiveByEmployee(employee).orElse(null);

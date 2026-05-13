@@ -64,7 +64,11 @@ public class PermissionCheckService {
             return false;
         }
 
-        // 🔥 1. ADMIN BYPASS (CRITICAL FIX)
+        // 1. ADMIN / SUPER_ADMIN bypass.
+        // TODO: narrow ADMIN to per-module grants once enum_role_permissions
+        // is seeded. Removing the bypass today locks every ADMIN out because
+        // the lookup tables (enum_role_permissions, company_role_permissions)
+        // have no rows for the ADMIN role.
         if (isAdmin(user)) {
             log.debug("Admin bypass granted for user={}", user.getUsername());
             return true;
@@ -131,8 +135,30 @@ public class PermissionCheckService {
             return Optional.empty();
         }
 
-        return employeePermissionRepository
+        Optional<EmployeePermission> permission = employeePermissionRepository
                 .findByEmployeeIdAndModule(user.getEmployeeId(), module);
+
+        if (permission.isEmpty()) {
+            return Optional.empty();
+        }
+
+        EmployeePermission p = permission.get();
+
+        // Tenant guard: the Employee this permission belongs to must belong
+        // to the caller's company. Stops a stale employeeId in a JWT from
+        // granting access via another tenant's permission row.
+        Long permCompanyId = p.getEmployee() != null && p.getEmployee().getCompany() != null
+                ? p.getEmployee().getCompany().getId()
+                : null;
+        if (permCompanyId == null
+                || user.getCompanyId() == null
+                || !permCompanyId.equals(user.getCompanyId())) {
+            log.warn("Cross-tenant EmployeePermission rejected: permissionId={} permCompanyId={} userCompanyId={}",
+                    p.getId(), permCompanyId, user.getCompanyId());
+            return Optional.empty();
+        }
+
+        return permission;
     }
 
     private Optional<CompanyRolePermission> resolveCompanyRolePermission(CustomUserPrincipal user, HrModule module) {
@@ -145,26 +171,37 @@ public class PermissionCheckService {
                 companyRolePermissionRepository
                         .findByCompanyRoleIdAndModule(user.getCompanyRoleId(), module);
 
-        // 🔥 CRITICAL FIX (NULL SAFE)
-        if (permission.isPresent()) {
-            CompanyRolePermission p = permission.get();
-
-            if (p == null) return Optional.empty();
-
-            if (p.getCompanyRole() == null) {
-                log.warn("CompanyRole is NULL for permissionId={}", p.getId());
-                return Optional.empty();
-            }
-
-            if (!Boolean.TRUE.equals(p.getCompanyRole().getActive())) {
-                log.warn("CompanyRole inactive for permissionId={}", p.getId());
-                return Optional.empty();
-            }
-
-            return permission;
+        if (permission.isEmpty()) {
+            return Optional.empty();
         }
 
-        return Optional.empty();
+        CompanyRolePermission p = permission.get();
+
+        if (p.getCompanyRole() == null) {
+            log.warn("CompanyRole is NULL for permissionId={}", p.getId());
+            return Optional.empty();
+        }
+
+        // Tenant guard: the CompanyRole this permission belongs to must
+        // belong to the caller's company. Stops a stale companyRoleId in a
+        // JWT from granting access via another tenant's permission row.
+        Long roleCompanyId = p.getCompanyRole().getCompany() != null
+                ? p.getCompanyRole().getCompany().getId()
+                : null;
+        if (roleCompanyId == null
+                || user.getCompanyId() == null
+                || !roleCompanyId.equals(user.getCompanyId())) {
+            log.warn("Cross-tenant CompanyRolePermission rejected: permissionId={} roleCompanyId={} userCompanyId={}",
+                    p.getId(), roleCompanyId, user.getCompanyId());
+            return Optional.empty();
+        }
+
+        if (!Boolean.TRUE.equals(p.getCompanyRole().getActive())) {
+            log.warn("CompanyRole inactive for permissionId={}", p.getId());
+            return Optional.empty();
+        }
+
+        return permission;
     }
 
     private Optional<EnumRolePermission> resolveEnumRolePermission(CustomUserPrincipal user, HrModule module) {

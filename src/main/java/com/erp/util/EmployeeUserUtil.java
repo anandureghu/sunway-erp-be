@@ -11,7 +11,8 @@ public class EmployeeUserUtil {
     }
 
     public static String generateEmail(String username, Company company) {
-        return username + "@" + company.getCompanyName().toLowerCase() + ".com";
+        String domain = company.getCompanyName().toLowerCase().replaceAll("\\s+", "");
+        return username + "@" + domain + ".com";
     }
 
     public static String generateDefaultPassword(String username) {

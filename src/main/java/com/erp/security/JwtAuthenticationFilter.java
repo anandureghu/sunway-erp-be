@@ -4,6 +4,7 @@ import com.erp.domain.security.Role;
 import com.erp.service.security.CustomUserPrincipal;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -89,6 +90,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
             Long userId = parseLong(claims.get("userId"));
+            if (userId == null) {
+                log.warn("JWT missing or invalid userId for user '{}'", username);
+                chain.doFilter(request, response);
+                return;
+            }
             Long employeeId = parseLong(claims.get("employeeId"));
             Long companyId = parseLong(claims.get("companyId"));
             Long companyRoleId = parseLong(claims.get("companyRoleId"));
@@ -116,8 +122,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.getContext().setAuthentication(auth);
         } catch (ExpiredJwtException ex) {
             log.warn("JWT expired");
-        } catch (Exception ex) {
-            log.debug("JWT validation failed: {}", ex.getMessage());
+        } catch (JwtException | IllegalArgumentException ex) {
+            log.warn("JWT validation failed: {}", ex.getMessage());
         }
 
         chain.doFilter(request, response);

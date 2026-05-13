@@ -11,7 +11,9 @@ import com.erp.repo.EmployeeLoanRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.LoanSequenceRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
+import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class EmployeeLoanService {
     private final EmployeeLoanRepository loanRepo;
     private final LoanSequenceRepository sequenceRepo;
     private final EmployeeCompensationRepository compensationRepo;
+    private final AuthContext authContext;
 
     /* ================= GENERATE LOAN CODE ================= */
 
@@ -73,7 +76,7 @@ public class EmployeeLoanService {
         loan.setBalance(dto.getLoanAmount());
         loan.setStartDate(dto.getStartDate());
         loan.setEndDate(endDate);
-        loan.setStatus("ACTIVE");
+        loan.setStatus("PENDING_APPROVAL");
         loan.setNotes(dto.getNotes());
 
         loan = loanRepo.save(loan);
@@ -159,6 +162,55 @@ public class EmployeeLoanService {
         loanRepo.delete(loan);
     }
 
+    /* ================= APPROVE / REJECT LOAN ================= */
+
+    @Transactional
+    public LoanResponseDTO decideLoan(Long loanId, boolean approve) {
+
+        EmployeeLoan loan = loanRepo.findById(loanId)
+                .orElseThrow(() -> new RuntimeException("Loan not found"));
+
+        if (!"PENDING_APPROVAL".equals(loan.getStatus())) {
+            throw new RuntimeException(
+                    "Loan is not pending approval (current status: " + loan.getStatus() + ")");
+        }
+
+        loan.setStatus(approve ? "ACTIVE" : "REJECTED");
+        loan = loanRepo.save(loan);
+
+        return toDTO(loan);
+    }
+
+    /* ================= PENDING LOANS FOR CURRENT COMPANY ================= */
+
+    /**
+     * Returns every PENDING_APPROVAL loan in the caller's company. The
+     * controller layer already gates this on LOANS.APPROVE; this method
+     * resolves the company from the authenticated user so we never leak
+     * loans from a different tenant even if the gate were bypassed.
+     */
+    public List<LoanResponseDTO> getPendingLoanApprovalsForCurrentCompany() {
+        Long userId = authContext.getCurrentUserId();
+        if (userId == null) {
+            throw new AccessDeniedException("Unauthorized");
+        }
+
+        Employee approver = employeeRepo.findByUser_Id(userId)
+                .orElseThrow(() -> new AccessDeniedException(
+                        "Approver is not linked to an employee record"));
+
+        Long approverCompanyId = approver.getCompany() != null
+                ? approver.getCompany().getId() : null;
+        if (approverCompanyId == null) {
+            throw new AccessDeniedException("Approver is not linked to a company");
+        }
+
+        return loanRepo.findByCompanyAndStatus(approverCompanyId, "PENDING_APPROVAL")
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
     /* ================= MAKE PAYMENT ================= */
 
     @Transactional
@@ -219,13 +271,8 @@ public class EmployeeLoanService {
 
         if (monthlyDeduction > maxAllowed) {
             throw new RuntimeException(
-                    "Monthly deduction exceeds 30% of salary. Max allowed: " + maxAllowed
-            );
-        }
-
-        if (monthlyDeduction > salary) {
-            throw new RuntimeException(
-                    "Monthly deduction cannot exceed employee salary"
+                    "You don't qualify for this loan amount. Monthly deduction cannot exceed 30% of basic salary (max allowed: "
+                            + String.format("%.2f", maxAllowed) + ")."
             );
         }
     }

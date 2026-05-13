@@ -1,11 +1,16 @@
 package com.erp.service.hrsettings;
-import com.azure.core.exception.ResourceNotFoundException;
+
+import com.erp.domain.hr.Company;
 import com.erp.domain.hrsettings.JobCode;
 import com.erp.dto.hrsettings.JobCodeRequestDTO;
 import com.erp.dto.hrsettings.JobCodeResponseDTO;
 import com.erp.exception.NotFoundException;
+import com.erp.repo.EmployeeCurrentJobRepo;
+import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hrsettings.JobCodeRepository;
+import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,13 +22,18 @@ import java.util.List;
 public class JobCodeService {
 
     private final JobCodeRepository repository;
+    private final CompanyRepository companyRepository;
+    private final EmployeeCurrentJobRepo employeeCurrentJobRepo;
+    private final AuthContext authContext;
 
     // CREATE
     public JobCodeResponseDTO create(JobCodeRequestDTO dto) {
 
-        repository.findByCode(dto.getCode())
+        Company company = requireCurrentCompany();
+
+        repository.findByCompany_IdAndCode(company.getId(), dto.getCode())
                 .ifPresent(j -> {
-                    throw new RuntimeException("Job code already exists");
+                    throw new IllegalStateException("Job code already exists for this company");
                 });
 
         JobCode jobCode = JobCode.builder()
@@ -32,6 +42,7 @@ public class JobCodeService {
                 .level(dto.getLevel())
                 .grade(dto.getGrade())
                 .active(dto.getActive())
+                .company(company)
                 .build();
 
         return mapToDTO(repository.save(jobCode));
@@ -40,7 +51,8 @@ public class JobCodeService {
     // GET ALL
     @Transactional(readOnly = true)
     public List<JobCodeResponseDTO> getAll() {
-        return repository.findAll()
+        Long companyId = requireCurrentCompany().getId();
+        return repository.findByCompany_Id(companyId)
                 .stream()
                 .map(this::mapToDTO)
                 .toList();
@@ -49,7 +61,8 @@ public class JobCodeService {
     // GET ACTIVE (Dropdown)
     @Transactional(readOnly = true)
     public List<JobCodeResponseDTO> getActive() {
-        return repository.findByActiveTrue()
+        Long companyId = requireCurrentCompany().getId();
+        return repository.findByCompany_IdAndActiveTrue(companyId)
                 .stream()
                 .map(this::mapToDTO)
                 .toList();
@@ -58,9 +71,18 @@ public class JobCodeService {
     // UPDATE
     public JobCodeResponseDTO update(Long id, JobCodeRequestDTO dto) {
 
-        JobCode existing = repository.findById(id)
-                .orElseThrow(() ->
-                        new NotFoundException("Job code not found"));
+        Long companyId = requireCurrentCompany().getId();
+
+        JobCode existing = repository.findByIdAndCompany_Id(id, companyId)
+                .orElseThrow(() -> new NotFoundException("Job code not found"));
+
+        if (!existing.getCode().equals(dto.getCode())) {
+            repository.findByCompany_IdAndCode(companyId, dto.getCode())
+                    .filter(j -> !j.getId().equals(id))
+                    .ifPresent(j -> {
+                        throw new IllegalStateException("Job code already exists for this company");
+                    });
+        }
 
         existing.setCode(dto.getCode());
         existing.setTitle(dto.getTitle());
@@ -71,15 +93,29 @@ public class JobCodeService {
         return mapToDTO(repository.save(existing));
     }
 
-    // SOFT DELETE
+    // DELETE
     public void delete(Long id) {
 
-        JobCode existing = repository.findById(id)
-                .orElseThrow(() ->
-                        new NotFoundException("Job code not found"));
+        Long companyId = requireCurrentCompany().getId();
 
-        existing.setActive(false);
-        repository.save(existing);
+        JobCode existing = repository.findByIdAndCompany_Id(id, companyId)
+                .orElseThrow(() -> new NotFoundException("Job code not found"));
+
+        if (employeeCurrentJobRepo.existsByJobCode_Id(id)) {
+            throw new IllegalStateException(
+                    "Cannot delete a job code that is still assigned to employees");
+        }
+
+        repository.delete(existing);
+    }
+
+    private Company requireCurrentCompany() {
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new AccessDeniedException("No active company context");
+        }
+        return companyRepository.findById(companyId)
+                .orElseThrow(() -> new AccessDeniedException("Current company not found"));
     }
 
     private JobCodeResponseDTO mapToDTO(JobCode jobCode) {
@@ -90,6 +126,7 @@ public class JobCodeService {
                 .level(jobCode.getLevel())
                 .grade(jobCode.getGrade())
                 .active(jobCode.getActive())
+                .companyId(jobCode.getCompany() != null ? jobCode.getCompany().getId() : null)
                 .build();
     }
 }

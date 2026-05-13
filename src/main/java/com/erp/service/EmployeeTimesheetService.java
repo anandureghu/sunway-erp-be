@@ -21,6 +21,7 @@ import java.util.List;
 public class EmployeeTimesheetService {
 
     private static final double DEFAULT_AVG_HOURS_PER_DAY = 8.0;
+    private static final long MIN_WORKED_MINUTES_FOR_DAY = 360L;
 
     private final EmployeeTimesheetRepository repository;
 
@@ -175,7 +176,7 @@ public class EmployeeTimesheetService {
     }
 
     private boolean isPresentRecord(EmployeeTimesheet entity) {
-        return entity.getCheckInTime() != null;
+        return resolveWorkedMinutes(entity) >= MIN_WORKED_MINUTES_FOR_DAY;
     }
 
     private long resolveWorkedMinutes(EmployeeTimesheet entity) {

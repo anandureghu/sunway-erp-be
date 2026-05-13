@@ -60,6 +60,8 @@ public class CurrentJobService {
         JobCode jobCode = jobCodeRepo.findById(dto.getJobCodeId())
                 .orElseThrow(() -> new NotFoundException("Job code not found"));
 
+        assertSameCompany(employee, jobCode);
+
         Department department = departmentRepo.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new NotFoundException("Department not found"));
 
@@ -88,6 +90,8 @@ public class CurrentJobService {
         JobCode jobCode = jobCodeRepo.findById(dto.getJobCodeId())
                 .orElseThrow(() -> new NotFoundException("Job code not found"));
 
+        assertSameCompany(job.getEmployee(), jobCode);
+
         Department department = departmentRepo.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new NotFoundException("Department not found"));
 
@@ -100,6 +104,15 @@ public class CurrentJobService {
         EmployeeCurrentJob saved = currentJobRepo.saveAndFlush(job);
 
         return EmployeeCurrentJobMapper.toDTO(saved);
+    }
+
+    private void assertSameCompany(Employee employee, JobCode jobCode) {
+        Long empCompanyId = employee.getCompany() != null ? employee.getCompany().getId() : null;
+        Long jobCompanyId = jobCode.getCompany() != null ? jobCode.getCompany().getId() : null;
+        if (empCompanyId == null || jobCompanyId == null || !empCompanyId.equals(jobCompanyId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Job code does not belong to this employee's company");
+        }
     }
 
     // ======================================================

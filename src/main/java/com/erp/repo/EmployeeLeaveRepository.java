@@ -16,17 +16,21 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
 
     Optional<EmployeeLeave> findByIdAndEmployeeId(Long id, Long employeeId);
 
+    @Query("""
+        select l from EmployeeLeave l
+        where l.employee.company.id = :companyId
+          and l.leaveStatus = :leaveStatus
+        order by l.dateReported desc
+    """)
     List<EmployeeLeave> findByEmployeeCompany_IdAndLeaveStatusOrderByDateReportedDesc(
-            Long companyId,
-            LeaveStatus leaveStatus
+            @Param("companyId") Long companyId,
+            @Param("leaveStatus") LeaveStatus leaveStatus
     );
 
     List<EmployeeLeave> findByEmployeeDepartmentIdAndLeaveStatusOrderByDateReportedDesc(
             Long departmentId,
             LeaveStatus leaveStatus
     );
-
-    List<EmployeeLeave> findByLeaveStatusOrderByDateReportedDesc(LeaveStatus leaveStatus);
 
     @Query("""
         select l from EmployeeLeave l

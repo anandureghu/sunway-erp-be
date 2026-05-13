@@ -51,6 +51,7 @@ public class EmployeeController {
     // ======================================================
     // GET COMPANY ADMIN
     // ======================================================
+    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
     @GetMapping("/admin/{companyId}")
     public ResponseEntity<EmployeeResponseDTO> getCompanyAdmin(
             @PathVariable("companyId") Long companyId) {

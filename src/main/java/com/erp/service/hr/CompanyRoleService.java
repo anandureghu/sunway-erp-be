@@ -179,26 +179,22 @@ public class CompanyRoleService {
     }
 
     /**
-     * ✅ FIXED VERSION
-     * Prevents unwanted 500 errors when auth context is null
+     * Tenants may only act on their own company. SUPER_ADMIN bypasses the check.
      */
     private void requireCurrentCompany(Long companyId) {
-        Long currentCompanyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Company is required");
+        }
 
-        // 🔥 DEBUG (remove later)
-        System.out.println("Requested companyId: " + companyId);
-        System.out.println("Auth companyId: " + currentCompanyId);
-
-        // ✅ Allow if auth context not set (important fix)
-        if (currentCompanyId == null) {
+        String role = authContext.getCurrentUserRole();
+        if ("SUPER_ADMIN".equalsIgnoreCase(role)) {
             return;
         }
 
-        if (companyId == null || !currentCompanyId.equals(companyId)) {
-            throw new IllegalStateException(
-                    "Access denied: currentCompanyId=" + currentCompanyId +
-                            ", requested=" + companyId
-            );
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        if (currentCompanyId == null || !currentCompanyId.equals(companyId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access denied for this company");
         }
     }
 
