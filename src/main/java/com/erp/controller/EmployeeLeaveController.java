@@ -185,6 +185,12 @@ public class EmployeeLeaveController {
         }
     }
 
+    @GetMapping("/leaves/approvals/can-approve")
+    public ResponseEntity<?> canApproveLeaves() {
+        boolean canApprove = leaveService.canCurrentUserApproveLeaves();
+        return ResponseEntity.ok(Map.of("canApprove", canApprove));
+    }
+
     @GetMapping("/leaves/approvals/pending")
     public ResponseEntity<?> pendingApprovals() {
         try {
@@ -281,7 +287,7 @@ public class EmployeeLeaveController {
     }
 
     private ResponseEntity<Map<String, String>> badRequest(Exception e) {
-        log.warn("Request failed: {}", e.getMessage());
+        log.warn("Request failed", e);
         return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     }
 }

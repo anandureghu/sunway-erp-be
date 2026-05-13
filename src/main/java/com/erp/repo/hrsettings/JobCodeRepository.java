@@ -8,7 +8,11 @@ import java.util.Optional;
 
 public interface JobCodeRepository extends JpaRepository<JobCode, Long> {
 
-    Optional<JobCode> findByCode(String code);
+    List<JobCode> findByCompany_Id(Long companyId);
 
-    List<JobCode> findByActiveTrue();
+    List<JobCode> findByCompany_IdAndActiveTrue(Long companyId);
+
+    Optional<JobCode> findByCompany_IdAndCode(Long companyId, String code);
+
+    Optional<JobCode> findByIdAndCompany_Id(Long id, Long companyId);
 }

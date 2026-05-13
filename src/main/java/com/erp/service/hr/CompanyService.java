@@ -4,7 +4,6 @@ import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.CompanyInvoiceSettings;
-import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.hr.Currency;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -16,7 +15,6 @@ import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.CompanyInvoiceSettingsRepository;
-import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
@@ -33,7 +31,6 @@ import java.util.List;
 public class CompanyService {
     private final CompanyRepository           companyRepository;
     private final CompanyInvoiceSettingsRepository invoiceSettingsRepository;
-    private final CompanyRoleRepository       roleRepository;
     private final CurrencyRepository          currencyRepository;
     private final ChartOfAccountsRepository   chartOfAccountsRepository;
     private final BankAccountRepository       bankAccountRepository;
@@ -43,7 +40,6 @@ public class CompanyService {
     public CompanyService(
             CompanyRepository companyRepository,
             CompanyInvoiceSettingsRepository invoiceSettingsRepository,
-            CompanyRoleRepository roleRepository,
             CurrencyRepository currencyRepository,
             ChartOfAccountsRepository chartOfAccountsRepository,
             BankAccountRepository bankAccountRepository,
@@ -52,7 +48,6 @@ public class CompanyService {
 
         this.companyRepository         = companyRepository;
         this.invoiceSettingsRepository = invoiceSettingsRepository;
-        this.roleRepository            = roleRepository;
         this.currencyRepository        = currencyRepository;
         this.chartOfAccountsRepository = chartOfAccountsRepository;
         this.bankAccountRepository     = bankAccountRepository;
@@ -136,10 +131,6 @@ public class CompanyService {
 
         Company saved = companyRepository.save(company);
         invoiceSettingsRepository.save(InvoiceSettingsDefaults.buildDefaults(saved));
-
-        // Seed default roles for this company on day 1
-        // HR can add/rename/delete these later from Settings → Roles
-        seedDefaultRoles(saved);
 
         if (logo != null && !logo.isEmpty()) {
             FileUploadResult upload = fileStorageService.upload(
@@ -335,37 +326,6 @@ public class CompanyService {
     public void deleteCompany(Long id) {
         getCompanyById(id);
         companyRepository.deleteById(id);
-    }
-
-    // ======================================================
-    // SEED DEFAULT ROLES
-    // Called once on company creation — not exposed via API
-    // ======================================================
-    private void seedDefaultRoles(Company company) {
-
-        // { name, description }
-        List<String[]> defaults = List.of(
-                new String[]{ "Admin",            "Full system access"               },
-                new String[]{ "HR Manager",       "HR and payroll management"        },
-                new String[]{ "Finance Manager",  "Finance and budget management"    },
-                new String[]{ "Accountant",       "Accounting and reporting"         },
-                new String[]{ "AP/AR Clerk",      "Accounts payable and receivable"  },
-                new String[]{ "Controller",       "Financial control"                },
-                new String[]{ "External Auditor", "External audit read access"       },
-                new String[]{ "Employee",         "Standard employee access"         }
-        );
-
-        List<CompanyRole> roles = defaults.stream()
-                .filter(d -> !roleRepository.existsByCompanyIdAndName(company.getId(), d[0]))
-                .map(d -> CompanyRole.builder()
-                        .name(d[0])
-                        .description(d[1])
-                        .active(true)
-                        .company(company)
-                        .build())
-                .toList();
-
-        roleRepository.saveAll(roles);
     }
 
     private String defaultIfBlank(String value, String defaultValue) {

@@ -13,4 +13,5 @@ public class JobCodeResponseDTO {
     private String level;
     private String grade;
     private Boolean active;
+    private Long companyId;
 }

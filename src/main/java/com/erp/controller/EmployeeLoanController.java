@@ -87,6 +87,20 @@ public class EmployeeLoanController {
     }
 
     // ======================================================
+    // APPROVE / REJECT LOAN
+    // APPROVE — only Finance Manager / HR Manager (or anyone the admin
+    // explicitly grants LOANS.APPROVE) can decide a pending loan.
+    // ======================================================
+    @HrPermission(module = HrModule.LOANS, action = {HrAction.APPROVE})
+    @PostMapping("/{loanId}/decision")
+    public ResponseEntity<LoanResponseDTO> decideLoan(
+            @PathVariable("employeeId") Long employeeId,
+            @PathVariable("loanId") Long loanId,
+            @Valid @RequestBody LoanDecisionDTO body) {
+        return ResponseEntity.ok(loanService.decideLoan(loanId, body.isApprove()));
+    }
+
+    // ======================================================
     // MAKE LOAN PAYMENT
     // EDIT — making a payment modifies the loan record
     // ======================================================
@@ -125,5 +139,10 @@ public class EmployeeLoanController {
     @lombok.Data
     static class PaymentDTO {
         private Double amount;
+    }
+
+    @lombok.Data
+    static class LoanDecisionDTO {
+        private boolean approve;
     }
 }

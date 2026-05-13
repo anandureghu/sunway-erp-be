@@ -10,6 +10,7 @@ import com.erp.security.context.AuthContext;
 import com.erp.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
@@ -29,6 +30,7 @@ public class UserController {
         this.authContext = authContext;
     }
 
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).VIEW_ALL)")
     @GetMapping
     public ResponseEntity<List<User>> list() {
         Long companyId = authContext.getCurrentCompanyId();
@@ -38,6 +40,7 @@ public class UserController {
         return ResponseEntity.ok(repo.findByCompany_IdOrderByCreatedAtDesc(companyId));
     }
 
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).VIEW_ALL)")
     @GetMapping("/{id}")
     public ResponseEntity<UserDetailsDTO> getDetails(@PathVariable("id") Long id) {
         return ResponseEntity.ok(userService.getUserDetails(id));
@@ -56,6 +59,7 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).EDIT)")
     @PutMapping("/{id}/admin-reset-password")
     public ResponseEntity<Void> adminResetPassword(
             @PathVariable("id") Long id,

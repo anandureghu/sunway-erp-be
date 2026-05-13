@@ -67,13 +67,10 @@ public class RolePermissionController {
         return service.getCompanyRolePermissions(companyRoleId);
     }
 
-    @PreAuthorize("""
-        @permissionChecker.has(
-            authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).EDIT
-        )
-    """)
+    // Write endpoints for permission grants are admin-only. An HR Manager
+    // with HR_SETTINGS.EDIT must not be able to escalate by editing the
+    // company-role / employee permission tables.
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/company-roles/{companyRoleId}")
     public void assignCompanyRolePermissions(
             @PathVariable Long companyRoleId,
@@ -82,13 +79,7 @@ public class RolePermissionController {
         service.assignCompanyRolePermissions(companyRoleId, dtos);
     }
 
-    @PreAuthorize("""
-        @permissionChecker.has(
-            authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).DELETE
-        )
-    """)
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @DeleteMapping("/company-roles/{companyRoleId}")
     public void removeCompanyRolePermissions(@PathVariable Long companyRoleId) {
         service.removeCompanyRolePermissions(companyRoleId);
@@ -106,13 +97,7 @@ public class RolePermissionController {
         return service.getEmployeePermissions(employeeId);
     }
 
-    @PreAuthorize("""
-        @permissionChecker.has(
-            authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).EDIT
-        )
-    """)
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/employees/{employeeId}")
     public void assignEmployeePermissions(
             @PathVariable Long employeeId,
@@ -121,13 +106,7 @@ public class RolePermissionController {
         service.assignEmployeePermissions(employeeId, dtos);
     }
 
-    @PreAuthorize("""
-        @permissionChecker.has(
-            authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).DELETE
-        )
-    """)
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @DeleteMapping("/employees/{employeeId}")
     public void removeEmployeePermissions(@PathVariable Long employeeId) {
         service.removeEmployeePermissions(employeeId);

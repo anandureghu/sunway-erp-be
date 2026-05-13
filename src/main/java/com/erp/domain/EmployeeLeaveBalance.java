@@ -29,4 +29,8 @@ public class EmployeeLeaveBalance {
 
     @Column(name = "remaining_leaves", nullable = false)
     private Integer remainingLeaves;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 }

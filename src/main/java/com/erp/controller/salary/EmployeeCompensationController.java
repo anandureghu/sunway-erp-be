@@ -5,6 +5,7 @@ import com.erp.dto.salary.SalaryResponseDTO;
 import com.erp.service.salary.EmployeeCompensationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,6 +17,12 @@ public class EmployeeCompensationController {
 
     /* ================= GET ACTIVE SALARY ================= */
 
+    @PreAuthorize("""
+        @permissionChecker.hasAny(authentication,
+            T(com.erp.domain.security.HrModule).SALARY,
+            T(com.erp.domain.security.HrAction).VIEW_OWN,
+            T(com.erp.domain.security.HrAction).VIEW_ALL)
+    """)
     @GetMapping
     public ResponseEntity<SalaryResponseDTO> getSalary(
             @PathVariable("employeeId") Long employeeId) {
@@ -32,6 +39,7 @@ public class EmployeeCompensationController {
 
     /* ================= CREATE SALARY ================= */
 
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).SALARY, T(com.erp.domain.security.HrAction).CREATE)")
     @PostMapping
     public ResponseEntity<Void> createSalary(
             @PathVariable("employeeId") Long employeeId,
@@ -43,6 +51,7 @@ public class EmployeeCompensationController {
 
     /* ================= UPDATE SALARY ================= */
 
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).SALARY, T(com.erp.domain.security.HrAction).EDIT)")
     @PutMapping
     public ResponseEntity<Void> updateSalary(
             @PathVariable("employeeId") Long employeeId,

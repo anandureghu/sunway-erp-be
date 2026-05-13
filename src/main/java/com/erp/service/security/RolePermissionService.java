@@ -164,10 +164,17 @@ public class RolePermissionService {
         return result;
     }
 
+    // Upsert semantics: each call inserts-or-updates the modules present in
+    // `dtos`. Modules that already have rows but are NOT in the incoming list
+    // are preserved — this method intentionally does NOT delete missing rows.
+    //
+    // Rationale: the older "replace-all" behavior turned an accidental empty
+    // or partial list into a destructive wipe of every module's grants for
+    // the role. To fully clear a role/employee's permissions, call the
+    // explicit DELETE endpoint. To revoke a single module's grant, send a
+    // row for that module with all flags false — the read-side
+    // `hasAnyPermission` filter will then exclude it.
     public void assignEnumRolePermissions(Role role, List<ModulePermissionDTO> dtos) {
-        Set<HrModule> incomingModules = incomingModules(dtos);
-        deleteMissing(enumRolePermissionRepository.findByRole(role), incomingModules, enumRolePermissionRepository::delete);
-
         for (ModulePermissionDTO dto : dtos) {
             if (dto.getModule() == null || dto.getPermission() == null) {
                 continue;
@@ -190,20 +197,13 @@ public class RolePermissionService {
                 .orElseThrow(() -> new IllegalArgumentException("Company role not found: " + companyRoleId));
         requireCurrentCompany(companyRole.getCompany().getId());
 
-        Set<HrModule> incomingModules = incomingModules(dtos);
-        deleteMissing(
-                companyRolePermissionRepository.findByCompanyRoleId(companyRoleId),  // ✅ FIX
-                incomingModules,
-                companyRolePermissionRepository::delete
-        );
-
         for (ModulePermissionDTO dto : dtos) {
             if (dto.getModule() == null || dto.getPermission() == null) {
                 continue;
             }
 
             CompanyRolePermission permission = companyRolePermissionRepository
-                    .findByCompanyRoleIdAndModule(companyRoleId, dto.getModule())  // ✅ FIX
+                    .findByCompanyRoleIdAndModule(companyRoleId, dto.getModule())
                     .orElseGet(() -> CompanyRolePermission.builder()
                             .companyRole(companyRole)
                             .module(dto.getModule())
@@ -219,20 +219,13 @@ public class RolePermissionService {
                 .orElseThrow(() -> new IllegalArgumentException("Employee not found: " + employeeId));
         requireCurrentCompany(employee.getCompany().getId());
 
-        Set<HrModule> incomingModules = incomingModules(dtos);
-        deleteMissing(
-                employeePermissionRepository.findByEmployeeId(employeeId),  // ✅ FIX
-                incomingModules,
-                employeePermissionRepository::delete
-        );
-
         for (ModulePermissionDTO dto : dtos) {
             if (dto.getModule() == null || dto.getPermission() == null) {
                 continue;
             }
 
             EmployeePermission permission = employeePermissionRepository
-                    .findByEmployeeIdAndModule(employeeId, dto.getModule())  // ✅ FIX
+                    .findByEmployeeIdAndModule(employeeId, dto.getModule())
                     .orElseGet(() -> EmployeePermission.builder()
                             .employee(employee)
                             .module(dto.getModule())
@@ -274,38 +267,6 @@ public class RolePermissionService {
         if (currentCompanyId != null && !currentCompanyId.equals(companyId)) {
             throw new IllegalStateException("Not allowed to manage permissions for another company");
         }
-    }
-
-    private Set<HrModule> incomingModules(List<ModulePermissionDTO> dtos) {
-        Set<HrModule> modules = EnumSet.noneOf(HrModule.class);
-        for (ModulePermissionDTO dto : dtos) {
-            if (dto.getModule() != null) {
-                modules.add(dto.getModule());
-            }
-        }
-        return modules;
-    }
-
-    private <T> void deleteMissing(List<T> existingPermissions, Set<HrModule> incomingModules, java.util.function.Consumer<T> deleteFn) {
-        for (T existing : existingPermissions) {
-            HrModule module = extractModule(existing);
-            if (!incomingModules.contains(module)) {
-                deleteFn.accept(existing);
-            }
-        }
-    }
-
-    private HrModule extractModule(Object permission) {
-        if (permission instanceof EnumRolePermission value) {
-            return value.getModule();
-        }
-        if (permission instanceof CompanyRolePermission value) {
-            return value.getModule();
-        }
-        if (permission instanceof EmployeePermission value) {
-            return value.getModule();
-        }
-        throw new IllegalArgumentException("Unsupported permission type: " + permission.getClass());
     }
 
     private void apply(EnumRolePermission permission, ModulePermissionDTO.PermissionDTO dto) {
