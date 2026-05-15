@@ -26,6 +26,7 @@ import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.inventory.ItemWarehouseStockService;
+import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +49,7 @@ public class SalesOrderService {
     private final InvoiceRepository invoiceRepo;
     private final UserRepository userRepo;
     private final AuthContext auth;
+    private final DocumentSequenceService documentSequenceService;
 
     public SalesOrderService(
             SalesOrderRepository repo,
@@ -60,7 +62,8 @@ public class SalesOrderService {
             ChartOfAccountsRepository coaRepo,
             InvoiceRepository invoiceRepo,
             UserRepository userRepo,
-            AuthContext auth
+            AuthContext auth,
+            DocumentSequenceService documentSequenceService
     ) {
         this.repo = repo;
         this.customerRepo = customerRepo;
@@ -73,6 +76,7 @@ public class SalesOrderService {
         this.invoiceRepo = invoiceRepo;
         this.userRepo = userRepo;
         this.auth = auth;
+        this.documentSequenceService = documentSequenceService;
     }
 
     // --------------------------
@@ -370,7 +374,7 @@ public class SalesOrderService {
     }
 
     private String generateOrderNumber() {
-        return "SO-" + System.currentTimeMillis();
+        return documentSequenceService.generateNext("SO");
     }
 
     private SalesOrderResponseDTO toDTO(SalesOrder so) {

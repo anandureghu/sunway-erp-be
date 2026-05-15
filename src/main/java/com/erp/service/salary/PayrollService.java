@@ -21,6 +21,7 @@ import com.erp.repo.EmployeeTimesheetRepository;
 import com.erp.repo.salary.EmployeeBankDetailsRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
 import com.erp.repo.salary.PayrollRepository;
+import com.erp.service.DocumentSequenceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,7 @@ public class PayrollService {
     private final EmployeeLeaveRepository leaveRepo;
     private final CompanyLeavePolicyRepository leavePolicyRepo;
     private final PayrollRepository payrollRepo;
+    private final DocumentSequenceService documentSequenceService;
 
     @Transactional(readOnly = true)
     public PayrollPreviewDTO previewPayroll(Long employeeId, PayrollGenerateRequestDTO dto) {
@@ -527,7 +529,7 @@ public class PayrollService {
     }
 
     private String generatePayrollCode(Long employeeId) {
-        return "PR-" + employeeId + "-" + System.currentTimeMillis();
+        return documentSequenceService.generateNext("PAYROLL");
     }
 
     public record ProjectedPayrollAmounts(

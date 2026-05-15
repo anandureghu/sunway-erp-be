@@ -19,6 +19,7 @@ import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
 import com.erp.service.finance.VendorPayableService;
+import com.erp.service.DocumentSequenceService;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ public class PurchaseOrderService {
     private final VendorPayableService vendorPayableService;
     private final PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler;
     private final AuthContext auth;
+    private final DocumentSequenceService documentSequenceService;
 
     public PurchaseOrderService(
             PurchaseOrderRepository repo,
@@ -47,7 +49,8 @@ public class PurchaseOrderService {
             UserRepository userRepo,
             VendorPayableService vendorPayableService,
             @Lazy PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler,
-            AuthContext auth
+            AuthContext auth,
+            DocumentSequenceService documentSequenceService
     ) {
         this.repo = repo;
         this.vendorRepo = vendorRepo;
@@ -57,6 +60,7 @@ public class PurchaseOrderService {
         this.vendorPayableService = vendorPayableService;
         this.purchaseInvoiceGenerationScheduler = purchaseInvoiceGenerationScheduler;
         this.auth = auth;
+        this.documentSequenceService = documentSequenceService;
     }
 
     public PurchaseOrderResponseDTO create(PurchaseOrderCreateDTO dto) {
@@ -207,7 +211,7 @@ public class PurchaseOrderService {
     }
 
     private String generatePONumber() {
-        return "PO-" + System.currentTimeMillis();
+        return documentSequenceService.generateNext("PO");
     }
 
     private PurchaseOrderResponseDTO toDTO(PurchaseOrder po) {

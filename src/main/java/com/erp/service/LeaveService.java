@@ -19,6 +19,7 @@ import com.erp.repo.UserRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.security.PermissionCheckService;
+import com.erp.service.DocumentSequenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -51,6 +52,7 @@ public class LeaveService {
     private final AuthContext authContext;
     private final FileStorageService fileStorageService;
     private final PermissionCheckService permissionCheckService;
+    private final DocumentSequenceService documentSequenceService;
 
     public List<String> getAvailableLeaveTypes(Long employeeId) {
         Employee emp = getEmployee(employeeId);
@@ -129,7 +131,7 @@ public class LeaveService {
 
         EmployeeLeave leave = new EmployeeLeave();
         leave.setEmployee(employee);
-        leave.setLeaveCode("L" + System.currentTimeMillis());
+        leave.setLeaveCode(documentSequenceService.generateNext("LV"));
         leave.setLeaveType(policy.getLeaveType());
         leave.setStartDate(dto.getStartDate());
         leave.setEndDate(dto.getEndDate());

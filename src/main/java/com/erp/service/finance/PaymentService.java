@@ -22,6 +22,7 @@ import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.notification.CustomerEmailService;
+import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,7 @@ public class PaymentService {
     private final ChartOfAccountsRepository coaRepo;
     private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
+    private final DocumentSequenceService documentSequenceService;
 
     public PaymentService(PaymentRepository paymentRepo,
                           TransactionService transactionService,
@@ -55,7 +57,8 @@ public class PaymentService {
                           PurchaseRequisitionRepository purchaseRequisitionRepo,
                           ChartOfAccountsRepository coaRepo,
                           InvoiceRepository invoiceRepo,
-                          AuthContext auth) {
+                          AuthContext auth,
+                          DocumentSequenceService documentSequenceService) {
 
         this.paymentRepo = paymentRepo;
         this.transactionService = transactionService;
@@ -68,6 +71,7 @@ public class PaymentService {
         this.coaRepo = coaRepo;
         this.invoiceRepo = invoiceRepo;
         this.auth = auth;
+        this.documentSequenceService = documentSequenceService;
     }
 
     @Transactional
@@ -101,7 +105,7 @@ public class PaymentService {
 
         // 3️⃣ Payment record
         Payment payment = Payment.builder()
-                .paymentCode("PAY-" + UUID.randomUUID().toString().substring(0, 8))
+                .paymentCode(documentSequenceService.generateNext("PAY"))
                 .company(company)
                 .amount(dto.getAmount())
                 .paymentMethod(dto.getPaymentMethod())

@@ -20,6 +20,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import com.erp.service.DocumentSequenceService;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -49,19 +50,22 @@ public class TransactionService {
     private final AuthContext auth;
     private final ChartOfAccountsRepository coaRepo;
     private final GLAccountBalanceRepository glRepo;
+    private final DocumentSequenceService documentSequenceService;
 
     public TransactionService(
             TransactionRepository repo,
             CompanyRepository companyRepo,
             AuthContext auth,
             ChartOfAccountsRepository coaRepo,
-            GLAccountBalanceRepository glRepo
+            GLAccountBalanceRepository glRepo,
+            DocumentSequenceService documentSequenceService
     ) {
         this.repo = repo;
         this.companyRepo = companyRepo;
         this.auth = auth;
         this.coaRepo = coaRepo;
         this.glRepo = glRepo;
+        this.documentSequenceService = documentSequenceService;
     }
 
     /**
@@ -85,7 +89,7 @@ public class TransactionService {
         }
 
         Transaction tx = Transaction.builder()
-                .transactionCode("TX-" + System.currentTimeMillis())
+                .transactionCode(documentSequenceService.generateNext("TX"))
                 .transactionType(TYPE_OPENING_BALANCE)
                 .company(company)
                 .amount(amount)
@@ -173,7 +177,7 @@ public class TransactionService {
         boolean locked = !SOURCE_UNKNOWN.equalsIgnoreCase(src);
 
         Transaction tx = Transaction.builder()
-                .transactionCode(codePrefix + "-" + (relatedId != null ? relatedId : "0") + "-" + System.currentTimeMillis())
+                .transactionCode(documentSequenceService.generateNext(codePrefix))
                 .transactionType(transactionType)
                 .company(company)
                 .amount(abs)
@@ -281,7 +285,7 @@ public class TransactionService {
         boolean singleSided = isSingleSided(debitAccount, creditAccount);
 
         Transaction.TransactionBuilder tb = Transaction.builder()
-                .transactionCode("TX-" + System.currentTimeMillis())
+                .transactionCode(documentSequenceService.generateNext("TX"))
                 .transactionType(dto.getTransactionType() != null ? dto.getTransactionType() : TYPE_MANUAL)
                 .company(company)
                 .amount(dto.getAmount())
@@ -562,7 +566,7 @@ public class TransactionService {
                 .orElseThrow(() -> new RuntimeException("Invalid debit account"));
 
         Transaction tx = Transaction.builder()
-                .transactionCode("TX-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .transactionCode(documentSequenceService.generateNext("TX"))
                 .transactionType(txType != null ? txType : TYPE_PAYMENT)
                 .company(company)
                 .transactionDate(txDate == null ? LocalDate.now() : txDate)
@@ -609,7 +613,7 @@ public class TransactionService {
                 .orElseThrow(() -> new RuntimeException("Reverse credit account not found"));
 
         Transaction tx = Transaction.builder()
-                .transactionCode("TX-SO-CAN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .transactionCode(documentSequenceService.generateNext("TX-SO-CAN"))
                 .transactionType(TYPE_SALES_ORDER_CANCEL_REVERSAL)
                 .company(company)
                 .transactionDate(LocalDate.now())

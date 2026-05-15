@@ -34,6 +34,11 @@ public class PurchaseRequisitionController {
         return service.approve(id);
     }
 
+    @PostMapping("/{id}/archive")
+    public PurchaseRequisitionResponseDTO archive(@PathVariable("id") Long id) {
+        return service.archive(id);
+    }
+
     @GetMapping
     public List<PurchaseRequisitionResponseDTO> list() {
         return service.list();
