@@ -20,7 +20,7 @@ app:
     access-token-minutes: 60
     refresh-token-days: 7
   cors:
-    allowed-origins: "http://localhost:5173,http://localhost:3001,http://localhost:3000,https://api.picominds.com,https://sunway-erp.vercel.app"
+    allowed-origins: "http://localhost:5173,http://localhost:3001,http://localhost:3000,https://api.picominds.com,https://sunway-erp.vercel.app,https://sunwayerp.com,https://demo.sunwayerp.com,https://api.sunwayerp.com"
 server:
   port: 8080
   error:
@@ -42,4 +42,3 @@ azure:
     connection-string: ${AZURE_STORAGE_CONNECTION_STRING}
     public-container: erp-public
     private-container: erp-private
-
