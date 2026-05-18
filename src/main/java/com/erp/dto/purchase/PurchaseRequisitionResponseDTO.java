@@ -21,8 +21,11 @@ public class PurchaseRequisitionResponseDTO {
     private Instant approvedAt;
     private Instant convertedAt;
 
+    private boolean archived;
+
     private Long preferredSupplierId;
     private String preferredSupplierName;
+    private String supplierAddress;
 
     private Long departmentId;
     private String departmentName;

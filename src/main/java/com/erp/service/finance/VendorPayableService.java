@@ -5,6 +5,7 @@ import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,10 +23,12 @@ public class VendorPayableService {
 
     private final PaymentRepository paymentRepo;
     private final AuthContext auth;
+    private final DocumentSequenceService documentSequenceService;
 
-    public VendorPayableService(PaymentRepository paymentRepo, AuthContext auth) {
+    public VendorPayableService(PaymentRepository paymentRepo, AuthContext auth, DocumentSequenceService documentSequenceService) {
         this.paymentRepo = paymentRepo;
         this.auth = auth;
+        this.documentSequenceService = documentSequenceService;
     }
 
     /**
@@ -46,7 +49,7 @@ public class VendorPayableService {
         }
         Long userId = auth.getCurrentUserId();
         Payment payment = Payment.builder()
-                .paymentCode("VAP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
+                .paymentCode(documentSequenceService.generateNext("VAP"))
                 .company(po.getCompany())
                 .amount(po.getTotalAmount())
                 .paymentMethod("PENDING_VENDOR_PAYMENT")

@@ -22,6 +22,7 @@ import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.repo.sales.ShipmentRepository;
 import com.erp.repo.sales.ShipmentTrackingEventRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,7 @@ public class ShipmentService {
     private final UserRepository userRepo;
     private final ShipmentTrackingEventRepository trackingEventRepo;
     private final AuthContext auth;
+    private final DocumentSequenceService documentSequenceService;
 
     public ShipmentService(
             ShipmentRepository repo,
@@ -51,7 +53,8 @@ public class ShipmentService {
             CompanyRepository companyRepo,
             UserRepository userRepo,
             ShipmentTrackingEventRepository trackingEventRepo,
-            AuthContext auth
+            AuthContext auth,
+            DocumentSequenceService documentSequenceService
     ) {
         this.repo = repo;
         this.picklistRepo = picklistRepo;
@@ -61,6 +64,7 @@ public class ShipmentService {
         this.userRepo = userRepo;
         this.trackingEventRepo = trackingEventRepo;
         this.auth = auth;
+        this.documentSequenceService = documentSequenceService;
     }
 
     // --------------------------
@@ -283,7 +287,7 @@ public class ShipmentService {
     }
 
     private String generateShipmentNumber() {
-        return "SH-" + System.currentTimeMillis();
+        return documentSequenceService.generateNext("SH");
     }
 
     private String resolveDeliveryAddress(String dtoAddress, Picklist picklist) {

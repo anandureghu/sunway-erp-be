@@ -27,6 +27,8 @@ public class PurchaseRequisition {
     @Column(nullable = false)
     private String requisitionNumber;
 
+    private boolean archived = false;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PurchaseRequisitionStatus status;
@@ -42,6 +44,8 @@ public class PurchaseRequisition {
     @ManyToOne
     @JoinColumn(name = "preferred_supplier_id")
     private Vendor preferredSupplier;
+
+    private String supplierAddress;
 
     @ManyToOne
     @JoinColumn(name = "department_id")

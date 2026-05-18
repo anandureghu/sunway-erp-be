@@ -19,6 +19,7 @@ public class PurchaseRequisitionCreateDTO {
     private Long creditAccountId;
 
     private Long preferredSupplierId;
+    private String supplierAddress;
     private Long departmentId;
     /** When set, PR is created on behalf of this user; otherwise current user. */
     private Long requestedByUserId;

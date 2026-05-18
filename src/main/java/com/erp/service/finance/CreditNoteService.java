@@ -12,6 +12,7 @@ import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.erp.service.DocumentSequenceService;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -26,6 +27,7 @@ public class CreditNoteService {
     private final CompanyRepository companyRepository;
     private final InvoiceRepository invoiceRepository;
     private final AuthContext auth;
+    private final DocumentSequenceService documentSequenceService;
 
     public List<CreditNoteResponseDTO> getAllForCompany() {
         Long companyId = auth.getCurrentCompanyId();
@@ -57,7 +59,7 @@ public class CreditNoteService {
         Company company = companyRepository.findById(companyId).orElseThrow(() -> new RuntimeException("Company doesn't exist"));
 
         CreditNote creditNote = CreditNote.builder()
-                .creditNoteNumber("CN-" + UUID.randomUUID().toString().substring(0, 8))
+                .creditNoteNumber(documentSequenceService.generateNext("CN"))
                 .invoice(invoice)
                 .company(company)
                 .amount(dto.getAmount())

@@ -14,6 +14,7 @@ import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.sales.PicklistRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ public class PicklistService {
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
     private final AuthContext auth;
+    private final DocumentSequenceService documentSequenceService;
 
     public PicklistService(
             PicklistRepository repo,
@@ -36,7 +38,8 @@ public class PicklistService {
             InvoiceRepository invoiceRepo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
-            AuthContext auth
+            AuthContext auth,
+            DocumentSequenceService documentSequenceService
     ) {
         this.repo = repo;
         this.soRepo = soRepo;
@@ -44,6 +47,7 @@ public class PicklistService {
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
         this.auth = auth;
+        this.documentSequenceService = documentSequenceService;
     }
 
     // --------------------------
@@ -147,7 +151,7 @@ public class PicklistService {
     }
 
     private String generatePicklistNumber() {
-        return "PL-" + System.currentTimeMillis();
+        return documentSequenceService.generateNext("PL");
     }
 
     private PicklistResponseDTO toDTO(Picklist p) {

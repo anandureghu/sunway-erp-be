@@ -33,6 +33,7 @@ import com.erp.service.pdf.InvoicePDFService;
 import com.erp.service.purchase.PurchaseOrderService;
 import com.erp.service.sales.SalesOrderService;
 import com.erp.service.hr.InvoiceSettingsDefaults;
+import com.erp.service.DocumentSequenceService;
 import com.erp.util.InMemoryMultipartFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -72,6 +73,7 @@ public class InvoiceService {
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final CustomerEmailService customerEmailService;
     private final TransactionService transactionService;
+    private final DocumentSequenceService documentSequenceService;
 
     @Transactional
     public void handleSalesOrderCancellation(Long salesOrderId) {
@@ -240,7 +242,7 @@ public class InvoiceService {
             supplierRef = null;
         }
 
-        String invoiceCode = "INV-" + UUID.randomUUID().toString().substring(0, 8);
+        String invoiceCode = documentSequenceService.generateNext("INV");
 
         Invoice invoice = Invoice.builder()
                 .invoiceId(invoiceCode)
@@ -387,7 +389,7 @@ public class InvoiceService {
     private void createPendingPaymentEntry(Invoice invoice) {
         if (paymentRepo.findByInvoiceIdOrderByCreatedAtDesc(invoice.getInvoiceId()).isEmpty()) {
             Payment payment = Payment.builder()
-                    .paymentCode("PAY-REQ-" + UUID.randomUUID().toString().substring(0, 8))
+                    .paymentCode(documentSequenceService.generateNext("PAY-REQ"))
                     .company(invoice.getCompany())
                     .paymentMethod("PENDING_REQUEST")
                     .amount(invoice.getAmount())

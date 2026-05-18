@@ -22,6 +22,7 @@ import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
 import com.erp.service.finance.VendorPayableService;
+import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +47,7 @@ public class PurchaseRequisitionService {
     private final VendorPayableService vendorPayableService;
     private final PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler;
     private final AuthContext auth;
+    private final DocumentSequenceService documentSequenceService;
 
     public PurchaseRequisitionService(
             PurchaseRequisitionRepository repo,
@@ -58,7 +60,8 @@ public class PurchaseRequisitionService {
             PurchaseOrderRepository purchaseOrderRepo,
             ChartOfAccountsRepository coaRepo,
             VendorPayableService vendorPayableService,
-            PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler
+            PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler,
+            DocumentSequenceService documentSequenceService
     ) {
         this.repo = repo;
         this.itemRepo = itemRepo;
@@ -71,15 +74,14 @@ public class PurchaseRequisitionService {
         this.coaRepo = coaRepo;
         this.vendorPayableService = vendorPayableService;
         this.purchaseInvoiceGenerationScheduler = purchaseInvoiceGenerationScheduler;
+        this.documentSequenceService = documentSequenceService;
     }
 
     public PurchaseRequisitionResponseDTO create(PurchaseRequisitionCreateDTO dto) {
         if (dto.getItems() == null || dto.getItems().isEmpty()) {
             throw new RuntimeException("At least one line item is required");
         }
-        if (dto.getPreferredSupplierId() == null) {
-            throw new RuntimeException("Preferred supplier is required");
-        }
+
         if (dto.getDebitAccountId() == null || dto.getCreditAccountId() == null) {
             throw new RuntimeException("Debit and credit accounts are required");
         }
@@ -94,10 +96,13 @@ public class PurchaseRequisitionService {
         BigDecimal estimatedTotal = computeTotalFromItemDtos(dto.getItems());
         validatePostingBalances(debitAccount, creditAccount, estimatedTotal);
 
-        Vendor supplier = vendorRepo.findById(dto.getPreferredSupplierId())
-                .orElseThrow(() -> new RuntimeException("Supplier not found"));
-        if (!supplier.getCompany().getId().equals(company.getId())) {
-            throw new RuntimeException("Supplier does not belong to this company");
+        Vendor supplier = null;
+        if (dto.getPreferredSupplierId() != null) {
+            supplier = vendorRepo.findById(dto.getPreferredSupplierId())
+                    .orElseThrow(() -> new RuntimeException("Supplier not found"));
+            if (!supplier.getCompany().getId().equals(company.getId())) {
+                throw new RuntimeException("Supplier does not belong to this company");
+            }
         }
 
         User requester = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
@@ -133,11 +138,12 @@ public class PurchaseRequisitionService {
         }).toList();
 
         PurchaseRequisition pr = PurchaseRequisition.builder()
-                .requisitionNumber("PR-" + System.currentTimeMillis())
+                .requisitionNumber(documentSequenceService.generateNext("PR"))
                 .status(PurchaseRequisitionStatus.DRAFT)
                 .company(company)
                 .requestedBy(requester)
                 .preferredSupplier(supplier)
+                .supplierAddress(dto.getSupplierAddress())
                 .department(department)
                 .debitAccount(debitAccount)
                 .creditAccount(creditAccount)
@@ -198,6 +204,17 @@ public class PurchaseRequisitionService {
         repo.save(pr);
 
         return toDTO(pr, po.getId());
+    }
+
+    public PurchaseRequisitionResponseDTO archive(Long id) {
+        PurchaseRequisition pr = getEntity(id);
+
+        if (pr.getStatus() != PurchaseRequisitionStatus.CONVERTED && pr.getStatus() != PurchaseRequisitionStatus.REJECTED) {
+            throw new RuntimeException("Only CONVERTED or REJECTED requisitions can be archived");
+        }
+
+        pr.setArchived(true);
+        return toDTO(repo.save(pr), null);
     }
 
     public PurchaseRequisitionResponseDTO get(Long id) {
@@ -302,7 +319,7 @@ public class PurchaseRequisitionService {
                 .setScale(2, RoundingMode.HALF_UP);
 
         PurchaseOrder po = PurchaseOrder.builder()
-                .orderNumber("PO-" + System.currentTimeMillis())
+                .orderNumber(documentSequenceService.generateNext("PO"))
                 .supplier(supplier)
                 .orderDate(LocalDate.now())
                 .status(PurchaseOrderStatus.DRAFT)
@@ -329,6 +346,7 @@ public class PurchaseRequisitionService {
                         .createdAt(pr.getCreatedAt())
                         .approvedAt(pr.getApprovedAt())
                         .convertedAt(pr.getConvertedAt())
+                        .archived(pr.isArchived())
                         .createdPurchaseOrderId(createdPurchaseOrderId)
                         .items(
                                 pr.getItems().stream()
@@ -344,7 +362,8 @@ public class PurchaseRequisitionService {
 
         if (pr.getPreferredSupplier() != null) {
             b.preferredSupplierId(pr.getPreferredSupplier().getId())
-                    .preferredSupplierName(pr.getPreferredSupplier().getVendorName());
+                    .preferredSupplierName(pr.getPreferredSupplier().getVendorName())
+                    .supplierAddress(pr.getSupplierAddress());
         }
         if (pr.getDepartment() != null) {
             b.departmentId(pr.getDepartment().getId())
