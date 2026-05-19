@@ -1,9 +1,12 @@
 package com.erp.dto.currentjob;
 
+import com.erp.domain.enums.EmploymentCategory;
+import com.erp.domain.enums.EmploymentType;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Getter
@@ -25,6 +28,16 @@ public class EmployeeCurrentJobResponseDTO {
     private LocalDate startDate;
     private LocalDate expectedEndDate;
 
+    private EmploymentCategory employmentCategory;
+    private EmploymentType employmentType;
+
+    private Long reportingManagerId;
+    private String reportingManagerName;
+    private String reportingManagerEmployeeNo;
+
+    private LocalDate contractStartDate;
+    private LocalDate contractEndDate;
+
     @Getter
     @Setter
     @Builder
@@ -33,7 +46,9 @@ public class EmployeeCurrentJobResponseDTO {
         private String code;
         private String title;
         private String level;
-        private String grade;
+        private String salaryGrade;
+        private BigDecimal minSalary;
+        private BigDecimal maxSalary;
     }
 
     @Getter
@@ -43,5 +58,8 @@ public class EmployeeCurrentJobResponseDTO {
         private Long id;
         private String code;
         private String name;
+        private Long divisionId;
+        private String divisionCode;
+        private String divisionName;
     }
 }

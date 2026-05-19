@@ -14,6 +14,7 @@ import com.erp.dto.hr.CreateEmployeeDTO;
 import com.erp.dto.hr.EmployeeResponseDTO;
 import com.erp.dto.hr.UpdateEmployeeDTO;
 import com.erp.repo.CompanyLeavePolicyRepository;
+import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeLeaveBalanceRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
@@ -54,6 +55,7 @@ public class EmployeeService {
     private final EmployeeContactInfoRepository contactInfoRepository;
     private final CompanyLeavePolicyRepository policyRepo;
     private final EmployeeLeaveBalanceRepository balanceRepo;
+    private final EmployeeCurrentJobRepo currentJobRepo;
     private final LeavePolicyService leavePolicyService;
     private final AuthContext authContext;
     private final PasswordEncoder passwordEncoder;
@@ -69,6 +71,7 @@ public class EmployeeService {
             EmployeeContactInfoRepository contactInfoRepository,
             CompanyLeavePolicyRepository policyRepo,
             EmployeeLeaveBalanceRepository balanceRepo,
+            EmployeeCurrentJobRepo currentJobRepo,
             LeavePolicyService leavePolicyService,
             AuthContext authContext,
             PasswordEncoder passwordEncoder,
@@ -83,6 +86,7 @@ public class EmployeeService {
         this.contactInfoRepository = contactInfoRepository;
         this.policyRepo = policyRepo;
         this.balanceRepo = balanceRepo;
+        this.currentJobRepo = currentJobRepo;
         this.leavePolicyService = leavePolicyService;
         this.authContext = authContext;
         this.passwordEncoder = passwordEncoder;
@@ -490,10 +494,15 @@ public class EmployeeService {
     private EmployeeResponseDTO toDTO(Employee e) {
 
         Company             c  = e.getCompany();
-        EmployeeContactInfo ci = e.getContactInfo();
 
         String imageUrl = e.getImageUrl() != null
                 ? fileStorageService.getPublicUrl(e.getImageUrl())
+                : null;
+
+        String designation = e.getId() != null
+                ? currentJobRepo.findByEmployee_Id(e.getId())
+                    .map(cj -> cj.getJobCode() != null ? cj.getJobCode().getTitle() : null)
+                    .orElse(null)
                 : null;
 
         return EmployeeResponseDTO.builder()
@@ -525,6 +534,7 @@ public class EmployeeService {
                 .departmentId(e.getDepartment()   != null ? e.getDepartment().getId()             : null)
                 .departmentName(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
                 .imageUrl(imageUrl)
+                .designation(designation)
                 .build();
     }
 

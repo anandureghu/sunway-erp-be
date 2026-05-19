@@ -5,9 +5,33 @@ spring:
     username: ${DB_USER:root}
     password: ${DB_PASS:Shras@123}
   jpa:
+    # ddl-auto MUST stay on `validate`. With `update`, Hibernate silently
+    # adds entity-driven columns at boot but cannot rename or drop, which
+    # produces orphan columns (see V20260519 for the `grade` cleanup). All
+    # schema changes go through Flyway migrations.
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
         format_sql: true
+  # =============================================================================
+  # Flyway — versioned schema migrations.
+  # Files live under src/main/resources/db/migration/ named V<version>__name.sql.
+  #
+  # Baseline is set to 20260516 because everything up to and including that
+  # version has already been applied manually to existing environments. On the
+  # first boot with Flyway wired up, baseline-on-migrate creates the
+  # flyway_schema_history table and marks V20260512..V20260516 as already-done.
+  # New migrations from V20260517 onward will be picked up and run automatically.
+  # =============================================================================
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: "20260516"
+    baseline-description: "Baseline after manual application of V20260513..V20260516"
+    # Verifies that the checksum of every applied migration in
+    # flyway_schema_history still matches the file on disk. Catches edits
+    # to already-applied migrations, which would silently fork environments.
+    validate-on-migrate: true

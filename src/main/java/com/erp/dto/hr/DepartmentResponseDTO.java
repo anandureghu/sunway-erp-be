@@ -23,4 +23,8 @@ public class DepartmentResponseDTO {
     private String companyCode;
 
     private String description;
+
+    private Long divisionId;
+    private String divisionCode;
+    private String divisionName;
 }
