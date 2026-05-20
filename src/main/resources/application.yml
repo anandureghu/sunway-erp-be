@@ -25,7 +25,7 @@ server:
   port: 8080
   error:
     include-message: always
-    include-stacktrace: always
+    include-stacktrace: never
 
 logging:
   level:
@@ -33,6 +33,15 @@ logging:
     org.springframework.web: DEBUG
     org.springframework.data.jpa: DEBUG
     org.hibernate.SQL: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 
 springdoc:
   override-server-url: true
