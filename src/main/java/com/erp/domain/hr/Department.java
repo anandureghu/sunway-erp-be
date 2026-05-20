@@ -33,6 +33,10 @@ public class Department {
     @JoinColumn(name = "manager_id", referencedColumnName = "id")
     private Employee manager;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "division_id")
+    private Division division;
+
     @ManyToOne
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;

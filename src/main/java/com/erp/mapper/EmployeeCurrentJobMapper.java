@@ -1,5 +1,6 @@
 package com.erp.mapper;
 
+import com.erp.domain.Employee;
 import com.erp.domain.EmployeeCurrentJob;
 import com.erp.dto.currentjob.EmployeeCurrentJobResponseDTO;
 
@@ -7,7 +8,6 @@ public class EmployeeCurrentJobMapper {
 
     public static EmployeeCurrentJobResponseDTO toDTO(EmployeeCurrentJob e) {
 
-        // ✅ Null-safe JobInfo
         EmployeeCurrentJobResponseDTO.JobInfo jobInfo = null;
         if (e.getJobCode() != null) {
             jobInfo = EmployeeCurrentJobResponseDTO.JobInfo.builder()
@@ -15,22 +15,34 @@ public class EmployeeCurrentJobMapper {
                     .code(e.getJobCode().getCode())
                     .title(e.getJobCode().getTitle())
                     .level(e.getJobCode().getLevel())
-                    .grade(e.getJobCode().getGrade())
+                    .salaryGrade(e.getJobCode().getSalaryGrade())
+                    .minSalary(e.getJobCode().getMinSalary())
+                    .maxSalary(e.getJobCode().getMaxSalary())
                     .build();
         }
 
-        // ✅ Null-safe DepartmentInfo
         EmployeeCurrentJobResponseDTO.DepartmentInfo departmentInfo = null;
         if (e.getDepartment() != null) {
+            var dept = e.getDepartment();
+            var division = dept.getDivision();
             departmentInfo = EmployeeCurrentJobResponseDTO.DepartmentInfo.builder()
-                    .id(e.getDepartment().getId())
-                    .code(e.getDepartment().getDepartmentCode())
-                    .name(e.getDepartment().getDepartmentName())
+                    .id(dept.getId())
+                    .code(dept.getDepartmentCode())
+                    .name(dept.getDepartmentName())
+                    .divisionId(division != null ? division.getId() : null)
+                    .divisionCode(division != null ? division.getCode() : null)
+                    .divisionName(division != null ? division.getName() : null)
                     .build();
         }
 
-        // ✅ Null-safe employeeId
         Long employeeId = e.getEmployee() != null ? e.getEmployee().getId() : null;
+
+        Employee rm = e.getReportingManager();
+        Long reportingManagerId = rm != null ? rm.getId() : null;
+        String reportingManagerName = rm != null
+                ? joinNonBlank(rm.getFirstName(), rm.getLastName())
+                : null;
+        String reportingManagerEmployeeNo = rm != null ? rm.getEmployeeNo() : null;
 
         return EmployeeCurrentJobResponseDTO.builder()
                 .id(e.getId())
@@ -43,6 +55,13 @@ public class EmployeeCurrentJobMapper {
                 .effectiveFrom(e.getEffectiveFrom())
                 .startDate(e.getStartDate())
                 .expectedEndDate(e.getExpectedEndDate())
+                .employmentCategory(e.getEmploymentCategory())
+                .employmentType(e.getEmploymentType())
+                .reportingManagerId(reportingManagerId)
+                .reportingManagerName(reportingManagerName)
+                .reportingManagerEmployeeNo(reportingManagerEmployeeNo)
+                .contractStartDate(e.getContractStartDate())
+                .contractEndDate(e.getContractEndDate())
                 .build();
     }
 
@@ -55,5 +74,20 @@ public class EmployeeCurrentJobMapper {
         e.setWorkLocation(d.getWorkLocation());
         e.setWorkCity(d.getWorkCity());
         e.setWorkCountry(d.getWorkCountry());
+        e.setEmploymentCategory(d.getEmploymentCategory());
+        e.setEmploymentType(d.getEmploymentType());
+        e.setContractStartDate(d.getContractStartDate());
+        e.setContractEndDate(d.getContractEndDate());
+        // reportingManager is set in the service (needs repository lookup)
+    }
+
+    private static String joinNonBlank(String a, String b) {
+        StringBuilder sb = new StringBuilder();
+        if (a != null && !a.isBlank()) sb.append(a.trim());
+        if (b != null && !b.isBlank()) {
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(b.trim());
+        }
+        return sb.length() == 0 ? null : sb.toString();
     }
 }

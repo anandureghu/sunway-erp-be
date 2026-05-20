@@ -3,6 +3,8 @@ package com.erp.dto.hrsettings;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.math.BigDecimal;
+
 @Getter
 @Builder
 public class JobCodeResponseDTO {
@@ -11,7 +13,9 @@ public class JobCodeResponseDTO {
     private String code;
     private String title;
     private String level;
-    private String grade;
+    private String salaryGrade;
+    private BigDecimal minSalary;
+    private BigDecimal maxSalary;
     private Boolean active;
     private Long companyId;
 }

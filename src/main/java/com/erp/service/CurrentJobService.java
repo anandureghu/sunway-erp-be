@@ -26,9 +26,6 @@ public class CurrentJobService {
     private final JobCodeRepository jobCodeRepo;
     private final DepartmentRepository departmentRepo;
 
-    // ======================================================
-    // GET CURRENT JOB
-    // ======================================================
     @Transactional(readOnly = true)
     public EmployeeCurrentJobResponseDTO get(Long employeeId) {
 
@@ -38,15 +35,11 @@ public class CurrentJobService {
 
         if (job == null) return null;
 
-        // ✅ Force-initialize lazy relations while session is open
         initializeLazyRelations(job);
 
         return EmployeeCurrentJobMapper.toDTO(job);
     }
 
-    // ======================================================
-    // CREATE CURRENT JOB
-    // ======================================================
     public EmployeeCurrentJobResponseDTO create(Long employeeId,
                                                 EmployeeCurrentJobRequestDTO dto) {
 
@@ -71,16 +64,13 @@ public class CurrentJobService {
         job.setDepartment(department);
 
         EmployeeCurrentJobMapper.updateEntity(job, dto);
+        applyReportingManager(job, employee, dto.getReportingManagerId());
 
-        // ✅ Save and flush so ID is generated before toDTO is called
         EmployeeCurrentJob saved = currentJobRepo.saveAndFlush(job);
 
         return EmployeeCurrentJobMapper.toDTO(saved);
     }
 
-    // ======================================================
-    // UPDATE CURRENT JOB
-    // ======================================================
     public EmployeeCurrentJobResponseDTO update(Long employeeId,
                                                 EmployeeCurrentJobRequestDTO dto) {
 
@@ -99,11 +89,34 @@ public class CurrentJobService {
         job.setDepartment(department);
 
         EmployeeCurrentJobMapper.updateEntity(job, dto);
+        applyReportingManager(job, job.getEmployee(), dto.getReportingManagerId());
 
-        // ✅ Flush to persist before mapping
         EmployeeCurrentJob saved = currentJobRepo.saveAndFlush(job);
 
         return EmployeeCurrentJobMapper.toDTO(saved);
+    }
+
+    private void applyReportingManager(EmployeeCurrentJob job, Employee employee, Long managerId) {
+        if (managerId == null) {
+            job.setReportingManager(null);
+            return;
+        }
+
+        if (employee.getId() != null && employee.getId().equals(managerId)) {
+            throw new IllegalArgumentException("Reporting manager cannot be the employee themselves");
+        }
+
+        Employee manager = employeeRepo.findById(managerId)
+                .orElseThrow(() -> new NotFoundException("Reporting manager not found"));
+
+        Long empCompanyId = employee.getCompany() != null ? employee.getCompany().getId() : null;
+        Long mgrCompanyId = manager.getCompany() != null ? manager.getCompany().getId() : null;
+        if (empCompanyId == null || !empCompanyId.equals(mgrCompanyId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Reporting manager must belong to the same company");
+        }
+
+        job.setReportingManager(manager);
     }
 
     private void assertSameCompany(Employee employee, JobCode jobCode) {
@@ -115,20 +128,21 @@ public class CurrentJobService {
         }
     }
 
-    // ======================================================
-    // HELPER — force initialize lazy relations inside session
-    // ======================================================
     private void initializeLazyRelations(EmployeeCurrentJob job) {
-        // Touch each lazy relation to trigger Hibernate to load them
-        // This must be called while the @Transactional session is still open
         if (job.getEmployee() != null) {
-            job.getEmployee().getId(); // ✅ triggers load
+            job.getEmployee().getId();
         }
         if (job.getJobCode() != null) {
-            job.getJobCode().getId();  // ✅ triggers load
+            job.getJobCode().getId();
         }
         if (job.getDepartment() != null) {
-            job.getDepartment().getId(); // ✅ triggers load
+            job.getDepartment().getId();
+            if (job.getDepartment().getDivision() != null) {
+                job.getDepartment().getDivision().getId();
+            }
+        }
+        if (job.getReportingManager() != null) {
+            job.getReportingManager().getId();
         }
     }
 }

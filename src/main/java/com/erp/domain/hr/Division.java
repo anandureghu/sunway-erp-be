@@ -20,7 +20,7 @@ public class Division {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "code", nullable = false, length = 3)
+    @Column(name = "code", nullable = false, length = 10)
     private String code;
 
     @Column(name = "name", nullable = false)
@@ -29,7 +29,6 @@ public class Division {
     @Column(name = "description")
     private String description;
 
-    // 🔥 Manager now mapped to Employee
     @ManyToOne
     @JoinColumn(name = "manager_id", referencedColumnName = "id")
     private Employee manager;
@@ -37,10 +36,6 @@ public class Division {
     @ManyToOne
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
-
-    @ManyToOne
-    @JoinColumn(name = "department_id", nullable = false)
-    private Department department;
 
     private Instant createdAt;
 

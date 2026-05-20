@@ -48,4 +48,11 @@ public class EmployeeResponseDTO {
     private Long companyRoleId;
     private Boolean forcePasswordReset;
     private String  imageUrl;
+
+    /**
+     * Job designation derived from the employee's current job assignment
+     * (employee_current_job → job_codes.title). Distinct from {@link #companyRole}
+     * which represents the security/permission role on the linked User.
+     */
+    private String designation;
 }

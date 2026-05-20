@@ -1,5 +1,7 @@
 package com.erp.dto.currentjob;
 
+import com.erp.domain.enums.EmploymentCategory;
+import com.erp.domain.enums.EmploymentType;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
@@ -27,4 +29,10 @@ public class EmployeeCurrentJobRequestDTO {
     private LocalDate startDate;
 
     private LocalDate expectedEndDate;
+
+    private EmploymentCategory employmentCategory;
+    private EmploymentType employmentType;
+    private Long reportingManagerId;
+    private LocalDate contractStartDate;
+    private LocalDate contractEndDate;
 }

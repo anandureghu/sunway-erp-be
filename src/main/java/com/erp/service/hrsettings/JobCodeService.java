@@ -14,6 +14,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -36,11 +37,15 @@ public class JobCodeService {
                     throw new IllegalStateException("Job code already exists for this company");
                 });
 
+        validateSalaryRange(dto.getMinSalary(), dto.getMaxSalary());
+
         JobCode jobCode = JobCode.builder()
                 .code(dto.getCode())
                 .title(dto.getTitle())
                 .level(dto.getLevel())
-                .grade(dto.getGrade())
+                .salaryGrade(dto.getSalaryGrade())
+                .minSalary(dto.getMinSalary())
+                .maxSalary(dto.getMaxSalary())
                 .active(dto.getActive())
                 .company(company)
                 .build();
@@ -84,10 +89,14 @@ public class JobCodeService {
                     });
         }
 
+        validateSalaryRange(dto.getMinSalary(), dto.getMaxSalary());
+
         existing.setCode(dto.getCode());
         existing.setTitle(dto.getTitle());
         existing.setLevel(dto.getLevel());
-        existing.setGrade(dto.getGrade());
+        existing.setSalaryGrade(dto.getSalaryGrade());
+        existing.setMinSalary(dto.getMinSalary());
+        existing.setMaxSalary(dto.getMaxSalary());
         existing.setActive(dto.getActive());
 
         return mapToDTO(repository.save(existing));
@@ -118,13 +127,21 @@ public class JobCodeService {
                 .orElseThrow(() -> new AccessDeniedException("Current company not found"));
     }
 
+    private void validateSalaryRange(BigDecimal min, BigDecimal max) {
+        if (min != null && max != null && min.compareTo(max) > 0) {
+            throw new IllegalArgumentException("Min salary cannot exceed max salary");
+        }
+    }
+
     private JobCodeResponseDTO mapToDTO(JobCode jobCode) {
         return JobCodeResponseDTO.builder()
                 .id(jobCode.getId())
                 .code(jobCode.getCode())
                 .title(jobCode.getTitle())
                 .level(jobCode.getLevel())
-                .grade(jobCode.getGrade())
+                .salaryGrade(jobCode.getSalaryGrade())
+                .minSalary(jobCode.getMinSalary())
+                .maxSalary(jobCode.getMaxSalary())
                 .active(jobCode.getActive())
                 .companyId(jobCode.getCompany() != null ? jobCode.getCompany().getId() : null)
                 .build();

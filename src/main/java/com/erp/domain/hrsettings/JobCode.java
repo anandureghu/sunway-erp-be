@@ -4,6 +4,8 @@ import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(
         name = "job_codes",
@@ -32,10 +34,17 @@ public class JobCode {
     @Column(nullable = false)
     private String level;  // Intern, Junior, Mid...
 
-    @Column(nullable = false)
-    private String grade;  // G1, G2...
+    @Column(name = "salary_grade", nullable = false)
+    private String salaryGrade;  // G1, G2...
+
+    @Column(name = "min_salary", precision = 15, scale = 2)
+    private BigDecimal minSalary;
+
+    @Column(name = "max_salary", precision = 15, scale = 2)
+    private BigDecimal maxSalary;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean active = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
