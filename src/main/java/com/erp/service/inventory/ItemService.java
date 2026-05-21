@@ -93,6 +93,7 @@ public class ItemService {
                 .serialNo(dto.getSerialNo())
                 .costPrice(dto.getCostPrice())
                 .sellingPrice(dto.getSellingPrice())
+                .unitSale(dto.getUnitSale())
                 .unitMeasure(dto.getUnitMeasure())
                 .reorderLevel(dto.getReorderLevel())
                 .status(dto.getStatus())
@@ -140,7 +141,9 @@ public class ItemService {
 
         int oldTotalQty = item.getQuantity() == null ? 0 : item.getQuantity();
 
+        if (dto.getSku() != null && !dto.getSku().isBlank()) item.setSku(dto.getSku().toUpperCase());
         item.setName(dto.getName());
+        item.setType(dto.getType());
         item.setCategory(dto.getCategory());
         item.setSubCategory(dto.getSubCategory());
         item.setBrand(dto.getBrand());
@@ -148,8 +151,13 @@ public class ItemService {
         item.setQuantity(dto.getQuantity());
         item.setMinimum(dto.getMinimum());
         item.setMaximum(dto.getMaximum());
+        if (dto.getReorderLevel() != null) item.setReorderLevel(dto.getReorderLevel());
+        item.setBarcode(dto.getBarcode());
+        item.setSerialNo(dto.getSerialNo());
+        if (dto.getUnitMeasure() != null) item.setUnitMeasure(dto.getUnitMeasure());
         item.setCostPrice(dto.getCostPrice());
         item.setSellingPrice(dto.getSellingPrice());
+        item.setUnitSale(dto.getUnitSale());
         item.setStatus(dto.getStatus());
         // Preserve existing image on normal updates unless an explicit value is provided.
         if (dto.getImageUrl() != null) {
@@ -324,14 +332,24 @@ public class ItemService {
                 .id(item.getId())
                 .sku(item.getSku())
                 .name(item.getName())
+                .type(item.getType())
                 .category(item.getCategory())
                 .subCategory(item.getSubCategory())
                 .brand(item.getBrand())
+                .description(item.getDescription())
+                .unitMeasure(item.getUnitMeasure())
+                .barcode(item.getBarcode())
+                .serialNo(item.getSerialNo())
+                .location(item.getLocation())
                 .quantity(item.getQuantity())
                 .available(item.getAvailable())
                 .reserved(item.getReserved())
+                .minimum(item.getMinimum())
+                .maximum(item.getMaximum())
+                .reorderLevel(item.getReorderLevel())
                 .costPrice(item.getCostPrice())
                 .sellingPrice(item.getSellingPrice())
+                .unitSale(item.getUnitSale())
                 .status(item.getStatus())
                 .imageUrl(imageUrl)
                 .createdAt(item.getCreatedAt())

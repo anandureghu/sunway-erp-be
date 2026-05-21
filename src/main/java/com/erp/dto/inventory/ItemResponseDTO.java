@@ -17,12 +17,23 @@ public class ItemResponseDTO {
     private String subCategory;
     private String brand;
 
+    private String type;
+    private String description;
+    private String unitMeasure;
+    private String barcode;
+    private String serialNo;
+    private String location;
+
     private Integer quantity;
     private Integer available;
     private Integer reserved;
+    private Integer minimum;
+    private Integer maximum;
+    private Integer reorderLevel;
 
     private BigDecimal costPrice;
     private BigDecimal sellingPrice;
+    private BigDecimal unitSale;
     private String imageUrl;
 
     private String status;

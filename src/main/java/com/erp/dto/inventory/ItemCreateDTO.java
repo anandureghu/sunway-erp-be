@@ -24,6 +24,7 @@ public class ItemCreateDTO {
 
     private BigDecimal costPrice;
     private BigDecimal sellingPrice;
+    private BigDecimal unitSale;
 
     private String unitMeasure;
     private Integer reorderLevel;
