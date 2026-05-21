@@ -26,6 +26,7 @@ public class ProfileResponse {
     private String firstName;
     private String lastName;
     private String phoneNo;
+    private String imageUrl;
 
     // from Employee → Company
     private Long   companyId;
@@ -50,6 +51,7 @@ public class ProfileResponse {
                 .firstName(emp != null ? emp.getFirstName() : null)
                 .lastName(emp != null ? emp.getLastName() : null)
                 .phoneNo(emp != null ? emp.getPhoneNo() : null)
+                .imageUrl(emp != null ? emp.getImageUrl() : null)
                 .companyId(emp != null && emp.getCompany() != null
                         ? emp.getCompany().getId() : null)
                 .companyName(emp != null && emp.getCompany() != null

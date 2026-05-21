@@ -28,6 +28,7 @@ public class UserDetailsDTO {
     private String firstName;
     private String lastName;
     private String phoneNo;
+    private String imageUrl;
 
     // ── Company info ──────────────────────────────────────────────────────────
     private Long   companyId;
