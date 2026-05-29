@@ -3,6 +3,7 @@ package com.erp.service.admin;
 import com.erp.domain.User;
 import com.erp.domain.admin.AdminSystemLog;
 import com.erp.dto.admin.AdminSystemLogResponseDTO;
+import com.erp.exception.NotFoundException;
 import com.erp.repo.UserRepository;
 import com.erp.repo.admin.AdminSystemLogRepository;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -11,11 +12,17 @@ import ch.qos.logback.classic.spi.ThrowableProxyUtil;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class AdminSystemLogService {
@@ -131,17 +138,74 @@ public class AdminSystemLogService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AdminSystemLogResponseDTO> list(String level, String module, Pageable pageable) {
-        Specification<AdminSystemLog> spec = (root, query, cb) -> cb.conjunction();
-        if (level != null && !level.isBlank()) {
-            String normalized = level.trim().toUpperCase();
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("level"), normalized));
-        }
-        if (module != null && !module.isBlank()) {
-            String pattern = module.trim();
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("module"), pattern));
-        }
-        return repo.findAll(spec, pageable).map(this::toDto);
+    public AdminSystemLogResponseDTO getById(Long id) {
+        return repo.findById(id)
+                .map(this::toDto)
+                .orElseThrow(() -> new NotFoundException("System log not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AdminSystemLogResponseDTO> list(
+            String level,
+            String module,
+            String search,
+            Long userId,
+            LocalDate from,
+            LocalDate to,
+            Pageable pageable
+    ) {
+        return repo.findAll(buildListSpecification(level, module, search, userId, from, to), pageable)
+                .map(this::toDto);
+    }
+
+    private static Specification<AdminSystemLog> buildListSpecification(
+            String level,
+            String module,
+            String search,
+            Long userId,
+            LocalDate from,
+            LocalDate to
+    ) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (level != null && !level.isBlank()) {
+                predicates.add(cb.equal(root.get("level"), level.trim().toUpperCase()));
+            }
+            if (module != null && !module.isBlank()) {
+                predicates.add(cb.equal(root.get("module"), module.trim()));
+            }
+            if (userId != null) {
+                predicates.add(cb.equal(root.get("userId"), userId));
+            }
+            if (search != null && !search.isBlank()) {
+                String pattern = "%" + search.trim().toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("message")), pattern),
+                        cb.like(cb.lower(root.get("userEmail")), pattern),
+                        cb.like(cb.lower(root.get("userUsername")), pattern),
+                        cb.like(cb.lower(root.get("requestUri")), pattern),
+                        cb.like(cb.lower(root.get("loggerName")), pattern)
+                ));
+            }
+            if (from != null) {
+                predicates.add(cb.greaterThanOrEqualTo(
+                        root.get("createdAt"),
+                        from.atStartOfDay(ZoneOffset.UTC).toInstant()
+                ));
+            }
+            if (to != null) {
+                predicates.add(cb.lessThan(
+                        root.get("createdAt"),
+                        to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+                ));
+            }
+
+            if (predicates.isEmpty()) {
+                return cb.conjunction();
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
     }
 
     private AdminSystemLogResponseDTO toDto(AdminSystemLog log) {
