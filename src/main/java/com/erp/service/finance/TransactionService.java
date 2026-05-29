@@ -43,6 +43,9 @@ public class TransactionService {
     public static final String TYPE_PURCHASE_REQUISITION = "PURCHASE_REQUISITION";
     /** Vendor payment confirmed in AP: expense/inventory debit and cash credit via {@link #applyPostingToCoa}. */
     public static final String TYPE_VENDOR_PAYMENT = "VENDOR_PAYMENT";
+    /** PO released: commit funds from purchase debit/credit defaults (debit -=, credit +=). */
+    public static final String TYPE_PURCHASE_ORDER_ENCUMBRANCE = "PURCHASE_ORDER_ENCUMBRANCE";
+    public static final String TYPE_PURCHASE_ORDER_CANCEL_REVERSAL = "PURCHASE_ORDER_CANCEL_REVERSAL";
     public static final String TYPE_SALES_ORDER_CANCEL_REVERSAL = "SALES_ORDER_CANCEL_REVERSAL";
 
     private final TransactionRepository repo;
@@ -409,6 +412,16 @@ public class TransactionService {
         }
     }
 
+    public boolean hasPurchaseOrderVendorPaymentPosting(Long purchaseOrderId) {
+        return purchaseOrderId != null
+                && repo.existsByRelatedIdAndTransactionType(purchaseOrderId, TYPE_VENDOR_PAYMENT);
+    }
+
+    public boolean hasPurchaseOrderEncumbrance(Long purchaseOrderId) {
+        return purchaseOrderId != null
+                && repo.existsByRelatedIdAndTransactionType(purchaseOrderId, TYPE_PURCHASE_ORDER_ENCUMBRANCE);
+    }
+
     public TransactionResponseDTO get(Long id) {
         Transaction tx = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Transaction not found"));
@@ -622,6 +635,110 @@ public class TransactionService {
                 .creditAccount(creditAccount)
                 .transactionDescription("Sales order cancellation reversal")
                 .relatedId(relatedSalesOrderId)
+                .source(null)
+                .sourceLocked(false)
+                .createdAt(Instant.now())
+                .createdBy(auth.getCurrentUserId())
+                .build();
+
+        Transaction saved = repo.save(tx);
+        applyPostingToCoa(saved);
+        return toDTO(saved);
+    }
+
+    @Transactional
+    public TransactionResponseDTO createPurchaseOrderEncumbrance(
+            Long companyId,
+            Long purchaseOrderId,
+            BigDecimal amount,
+            Long debitAccountId,
+            Long creditAccountId,
+            String orderNumber
+    ) {
+        if (purchaseOrderId == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid purchase order id and amount are required");
+        }
+        if (debitAccountId == null || creditAccountId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Purchase order posting accounts are required");
+        }
+        if (repo.existsByRelatedIdAndTransactionType(purchaseOrderId, TYPE_PURCHASE_ORDER_ENCUMBRANCE)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Purchase order encumbrance already posted");
+        }
+
+        validateTwoSidedPostingBalances(debitAccountId, creditAccountId, amount, companyId);
+
+        Company company = companyRepo.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        ChartOfAccounts debitAccount = coaRepo.findById(debitAccountId)
+                .orElseThrow(() -> new RuntimeException("Debit account not found"));
+        ChartOfAccounts creditAccount = coaRepo.findById(creditAccountId)
+                .orElseThrow(() -> new RuntimeException("Credit account not found"));
+
+        String desc = "Purchase order encumbrance"
+                + (orderNumber != null && !orderNumber.isBlank() ? " — PO " + orderNumber : "");
+
+        Transaction tx = Transaction.builder()
+                .transactionCode(documentSequenceService.generateNext("TX-PO"))
+                .transactionType(TYPE_PURCHASE_ORDER_ENCUMBRANCE)
+                .company(company)
+                .transactionDate(LocalDate.now())
+                .amount(amount)
+                .debitAccount(debitAccount)
+                .creditAccount(creditAccount)
+                .transactionDescription(desc)
+                .relatedId(purchaseOrderId)
+                .source(null)
+                .sourceLocked(false)
+                .createdAt(Instant.now())
+                .createdBy(auth.getCurrentUserId())
+                .build();
+
+        Transaction saved = repo.save(tx);
+        applyPostingToCoa(saved);
+        return toDTO(saved);
+    }
+
+    @Transactional
+    public TransactionResponseDTO createPurchaseOrderCancelReversal(
+            Long companyId,
+            Long purchaseOrderId,
+            BigDecimal amount,
+            Long originalDebitAccountId,
+            Long originalCreditAccountId,
+            String orderNumber
+    ) {
+        if (purchaseOrderId == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid purchase order id and amount are required");
+        }
+        if (originalDebitAccountId == null || originalCreditAccountId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Purchase order accounts are required");
+        }
+        if (repo.existsByRelatedIdAndTransactionType(purchaseOrderId, TYPE_PURCHASE_ORDER_CANCEL_REVERSAL)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Purchase order cancellation reversal already exists");
+        }
+
+        Company company = companyRepo.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        ChartOfAccounts debitAccount = coaRepo.findById(originalCreditAccountId)
+                .orElseThrow(() -> new RuntimeException("Reverse debit account not found"));
+        ChartOfAccounts creditAccount = coaRepo.findById(originalDebitAccountId)
+                .orElseThrow(() -> new RuntimeException("Reverse credit account not found"));
+
+        String desc = "Purchase order cancellation — release encumbrance"
+                + (orderNumber != null && !orderNumber.isBlank() ? " — PO " + orderNumber : "");
+
+        Transaction tx = Transaction.builder()
+                .transactionCode(documentSequenceService.generateNext("TX-PO-CAN"))
+                .transactionType(TYPE_PURCHASE_ORDER_CANCEL_REVERSAL)
+                .company(company)
+                .transactionDate(LocalDate.now())
+                .amount(amount)
+                .debitAccount(debitAccount)
+                .creditAccount(creditAccount)
+                .transactionDescription(desc)
+                .relatedId(purchaseOrderId)
                 .source(null)
                 .sourceLocked(false)
                 .createdAt(Instant.now())

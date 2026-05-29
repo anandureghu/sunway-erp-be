@@ -72,4 +72,8 @@ public class PurchaseOrder {
     @ManyToOne
     @JoinColumn(name = "source_requisition_id")
     private PurchaseRequisition sourceRequisition;
+
+    /** GL encumbrance posted when the PO is released (confirmed). */
+    @Column(name = "finance_transaction_id")
+    private Long financeTransactionId;
 }
