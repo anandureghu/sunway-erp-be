@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -91,6 +92,8 @@ public class ItemService {
                 .maximum(dto.getMaximum())
                 .barcode(dto.getBarcode())
                 .serialNo(dto.getSerialNo())
+                .dateReceived(resolveInitialDateReceived(dto))
+                .expiryDate(parseOptionalDate(dto.getExpiryDate()))
                 .costPrice(dto.getCostPrice())
                 .sellingPrice(dto.getSellingPrice())
                 .unitSale(dto.getUnitSale())
@@ -154,6 +157,12 @@ public class ItemService {
         if (dto.getReorderLevel() != null) item.setReorderLevel(dto.getReorderLevel());
         item.setBarcode(dto.getBarcode());
         item.setSerialNo(dto.getSerialNo());
+        if (dto.getDateReceived() != null) {
+            item.setDateReceived(parseOptionalDate(dto.getDateReceived()));
+        }
+        if (dto.getExpiryDate() != null) {
+            item.setExpiryDate(parseOptionalDate(dto.getExpiryDate()));
+        }
         if (dto.getUnitMeasure() != null) item.setUnitMeasure(dto.getUnitMeasure());
         item.setCostPrice(dto.getCostPrice());
         item.setSellingPrice(dto.getSellingPrice());
@@ -259,6 +268,14 @@ public class ItemService {
             item.setSellingPrice(dto.getUnitPrice());
         }
 
+        item.setDateReceived(resolveReceiveDate(dto.getReceivedDate()));
+        if (dto.getExpiryDate() != null) {
+            item.setExpiryDate(parseOptionalDate(dto.getExpiryDate()));
+        }
+        if (dto.getSerialNo() != null && !dto.getSerialNo().isBlank()) {
+            item.setSerialNo(dto.getSerialNo());
+        }
+
         item.setUpdatedBy(user);
         item.setUpdatedAt(Instant.now());
 
@@ -340,6 +357,8 @@ public class ItemService {
                 .unitMeasure(item.getUnitMeasure())
                 .barcode(item.getBarcode())
                 .serialNo(item.getSerialNo())
+                .dateReceived(item.getDateReceived())
+                .expiryDate(item.getExpiryDate())
                 .location(item.getLocation())
                 .quantity(item.getQuantity())
                 .available(item.getAvailable())
@@ -364,6 +383,25 @@ public class ItemService {
                                 item.getWarehouse().getCountry()
                         )
                 ).build();
+    }
+
+    private LocalDate resolveReceiveDate(String receivedDate) {
+        LocalDate parsed = parseOptionalDate(receivedDate);
+        return parsed != null ? parsed : LocalDate.now();
+    }
+
+    private LocalDate resolveInitialDateReceived(ItemCreateDTO dto) {
+        if (dto.getQuantity() == null || dto.getQuantity() <= 0) {
+            return parseOptionalDate(dto.getDateReceived());
+        }
+        return resolveReceiveDate(dto.getDateReceived());
+    }
+
+    private LocalDate parseOptionalDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(value);
     }
 
 }

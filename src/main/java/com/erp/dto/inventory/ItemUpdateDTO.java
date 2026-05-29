@@ -22,6 +22,8 @@ public class ItemUpdateDTO {
 
     private String barcode;
     private String serialNo;
+    private String dateReceived;
+    private String expiryDate;
     private String unitMeasure;
 
     private BigDecimal costPrice;

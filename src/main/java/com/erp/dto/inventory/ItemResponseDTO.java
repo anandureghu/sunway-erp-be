@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Data
 @Builder
@@ -22,6 +23,8 @@ public class ItemResponseDTO {
     private String unitMeasure;
     private String barcode;
     private String serialNo;
+    private LocalDate dateReceived;
+    private LocalDate expiryDate;
     private String location;
 
     private Integer quantity;

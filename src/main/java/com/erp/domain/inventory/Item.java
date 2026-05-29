@@ -7,6 +7,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -47,6 +48,12 @@ public class Item {
 
     @Column(name = "serial_no")
     private String serialNo;
+
+    @Column(name = "date_received")
+    private LocalDate dateReceived;
+
+    @Column(name = "expiry_date")
+    private LocalDate expiryDate;
 
     @Column(name = "unit_sale", precision = 18, scale = 2)
     private BigDecimal unitSale;
