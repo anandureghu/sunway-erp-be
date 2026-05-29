@@ -60,6 +60,7 @@ public class PurchaseRequisitionService {
     private final DocumentSequenceService documentSequenceService;
     private final PurchaseRequisitionDocumentRepository documentRepo;
     private final FileStorageService fileStorageService;
+    private final PurchaseProcurementDuplicateGuard procurementDuplicateGuard;
 
     public PurchaseRequisitionService(
             PurchaseRequisitionRepository repo,
@@ -76,7 +77,8 @@ public class PurchaseRequisitionService {
             PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler,
             DocumentSequenceService documentSequenceService,
             PurchaseRequisitionDocumentRepository documentRepo,
-            FileStorageService fileStorageService
+            FileStorageService fileStorageService,
+            PurchaseProcurementDuplicateGuard procurementDuplicateGuard
     ) {
         this.repo = repo;
         this.itemRepo = itemRepo;
@@ -93,10 +95,12 @@ public class PurchaseRequisitionService {
         this.documentSequenceService = documentSequenceService;
         this.documentRepo = documentRepo;
         this.fileStorageService = fileStorageService;
+        this.procurementDuplicateGuard = procurementDuplicateGuard;
     }
 
     public PurchaseRequisitionResponseDTO create(PurchaseRequisitionCreateDTO dto) {
         validateCreateDto(dto);
+        assertNoPendingProcurementForDto(dto, null);
 
         Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
         ChartOfAccounts debitAccount = resolveCoa(company.getId(), dto.getDebitAccountId());
@@ -111,6 +115,31 @@ public class PurchaseRequisitionService {
 
         applyDtoToRequisition(pr, dto, company, debitAccount, creditAccount);
         return toDTO(repo.save(pr), null);
+    }
+
+    private void assertNoPendingProcurementForDto(PurchaseRequisitionCreateDTO dto, Long excludeRequisitionId) {
+        List<Long> itemIds = dto.getItems().stream()
+                .map(PurchaseRequisitionItemDTO::getItemId)
+                .toList();
+        procurementDuplicateGuard.assertNoPendingProcurement(
+                auth.getCurrentCompanyId(),
+                dto.getDeliveryWarehouseId(),
+                itemIds,
+                excludeRequisitionId);
+    }
+
+    private void assertNoPendingProcurementForRequisition(PurchaseRequisition pr, Long excludeRequisitionId) {
+        if (pr.getDeliveryWarehouse() == null || pr.getItems() == null || pr.getItems().isEmpty()) {
+            return;
+        }
+        List<Long> itemIds = pr.getItems().stream()
+                .map(line -> line.getItem().getId())
+                .toList();
+        procurementDuplicateGuard.assertNoPendingProcurement(
+                pr.getCompany().getId(),
+                pr.getDeliveryWarehouse().getId(),
+                itemIds,
+                excludeRequisitionId);
     }
 
     private void validateCreateDto(PurchaseRequisitionCreateDTO dto) {
@@ -233,6 +262,7 @@ public class PurchaseRequisitionService {
 
         BigDecimal total = computeTotalForRequisition(pr);
         validatePostingBalances(pr.getDebitAccount(), pr.getCreditAccount(), total);
+        assertNoPendingProcurementForRequisition(pr, pr.getId());
 
         clearReviewFeedback(pr);
         pr.setStatus(PurchaseRequisitionStatus.SUBMITTED);
@@ -245,6 +275,7 @@ public class PurchaseRequisitionService {
         if (pr.getStatus() != PurchaseRequisitionStatus.DRAFT) {
             throw new RuntimeException("Only DRAFT requisitions can be updated");
         }
+        assertNoPendingProcurementForDto(dto, id);
 
         Company company = pr.getCompany();
         ChartOfAccounts debitAccount = resolveCoa(company.getId(), dto.getDebitAccountId());
