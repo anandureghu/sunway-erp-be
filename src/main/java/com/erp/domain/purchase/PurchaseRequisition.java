@@ -5,10 +5,12 @@ import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.Department;
 import com.erp.domain.inventory.Vendor;
+import com.erp.domain.inventory.Warehouse;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 @Getter
@@ -58,6 +60,25 @@ public class PurchaseRequisition {
     private Instant createdAt;
     private Instant approvedAt;
 
+    private LocalDate requestedDate;
+    private LocalDate requiredDeliveryDate;
+    private String projectCode;
+
+    private String requisitionDescription;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private PurchaseRequisitionUrgency urgency = PurchaseRequisitionUrgency.NORMAL;
+
+    private LocalDate requiredByDate;
+
+    @ManyToOne
+    @JoinColumn(name = "delivery_warehouse_id")
+    private Warehouse deliveryWarehouse;
+
+    private String justification;
+
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "requisition_id")
     private List<PurchaseRequisitionItem> items;
@@ -85,5 +106,11 @@ public class PurchaseRequisition {
     @PrePersist
     void onCreate() {
         createdAt = Instant.now();
+        if (requestedDate == null) {
+            requestedDate = LocalDate.now();
+        }
+        if (urgency == null) {
+            urgency = PurchaseRequisitionUrgency.NORMAL;
+        }
     }
 }

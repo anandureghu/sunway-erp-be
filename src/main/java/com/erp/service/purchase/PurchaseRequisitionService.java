@@ -6,8 +6,12 @@ import com.erp.domain.hr.Company;
 import com.erp.domain.hr.Department;
 import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.Vendor;
+import com.erp.domain.inventory.Warehouse;
 import com.erp.domain.purchase.*;
+import com.erp.dto.file.FileCategory;
+import com.erp.dto.file.FileUploadResult;
 import com.erp.dto.purchase.PurchaseRequisitionCreateDTO;
+import com.erp.dto.purchase.PurchaseRequisitionDocumentDTO;
 import com.erp.dto.purchase.PurchaseRequisitionItemDTO;
 import com.erp.dto.purchase.PurchaseRequisitionResponseDTO;
 import com.erp.repo.UserRepository;
@@ -16,8 +20,11 @@ import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.VendorRepository;
+import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
+import com.erp.repo.purchase.PurchaseRequisitionDocumentRepository;
 import com.erp.repo.purchase.PurchaseRequisitionRepository;
+import com.erp.service.file.FileStorageService;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
@@ -25,6 +32,7 @@ import com.erp.service.finance.VendorPayableService;
 import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -41,6 +49,7 @@ public class PurchaseRequisitionService {
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
     private final VendorRepository vendorRepo;
+    private final WarehouseRepository warehouseRepo;
     private final DepartmentRepository departmentRepo;
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final ChartOfAccountsRepository coaRepo;
@@ -48,6 +57,8 @@ public class PurchaseRequisitionService {
     private final PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
+    private final PurchaseRequisitionDocumentRepository documentRepo;
+    private final FileStorageService fileStorageService;
 
     public PurchaseRequisitionService(
             PurchaseRequisitionRepository repo,
@@ -56,12 +67,15 @@ public class PurchaseRequisitionService {
             UserRepository userRepo,
             AuthContext auth,
             VendorRepository vendorRepo,
+            WarehouseRepository warehouseRepo,
             DepartmentRepository departmentRepo,
             PurchaseOrderRepository purchaseOrderRepo,
             ChartOfAccountsRepository coaRepo,
             VendorPayableService vendorPayableService,
             PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler,
-            DocumentSequenceService documentSequenceService
+            DocumentSequenceService documentSequenceService,
+            PurchaseRequisitionDocumentRepository documentRepo,
+            FileStorageService fileStorageService
     ) {
         this.repo = repo;
         this.itemRepo = itemRepo;
@@ -69,12 +83,15 @@ public class PurchaseRequisitionService {
         this.userRepo = userRepo;
         this.auth = auth;
         this.vendorRepo = vendorRepo;
+        this.warehouseRepo = warehouseRepo;
         this.departmentRepo = departmentRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
         this.coaRepo = coaRepo;
         this.vendorPayableService = vendorPayableService;
         this.purchaseInvoiceGenerationScheduler = purchaseInvoiceGenerationScheduler;
         this.documentSequenceService = documentSequenceService;
+        this.documentRepo = documentRepo;
+        this.fileStorageService = fileStorageService;
     }
 
     public PurchaseRequisitionResponseDTO create(PurchaseRequisitionCreateDTO dto) {
@@ -87,6 +104,21 @@ public class PurchaseRequisitionService {
         }
         if (dto.getDebitAccountId().equals(dto.getCreditAccountId())) {
             throw new RuntimeException("Debit and credit accounts cannot be the same");
+        }
+        if (dto.getRequiredDeliveryDate() == null) {
+            throw new RuntimeException("Required delivery date is required");
+        }
+        if (dto.getRequiredByDate() == null) {
+            throw new RuntimeException("Required-by date is required");
+        }
+        if (dto.getRequisitionDescription() == null || dto.getRequisitionDescription().isBlank()) {
+            throw new RuntimeException("Requisition description is required");
+        }
+        if (dto.getJustification() == null || dto.getJustification().isBlank()) {
+            throw new RuntimeException("Justification is required");
+        }
+        if (dto.getDeliveryWarehouseId() == null) {
+            throw new RuntimeException("Delivery warehouse is required");
         }
 
         Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
@@ -120,6 +152,15 @@ public class PurchaseRequisitionService {
             }
         }
 
+        Warehouse deliveryWarehouse = warehouseRepo.findById(dto.getDeliveryWarehouseId())
+                .orElseThrow(() -> new RuntimeException("Delivery warehouse not found"));
+        if (!deliveryWarehouse.getCompany().getId().equals(company.getId())) {
+            throw new RuntimeException("Delivery warehouse does not belong to this company");
+        }
+
+        LocalDate requestedDate = dto.getRequestedDate() != null ? dto.getRequestedDate() : LocalDate.now();
+        PurchaseRequisitionUrgency urgency = resolveUrgency(dto.getUrgency());
+
         List<PurchaseRequisitionItem> items = dto.getItems().stream().map(i -> {
             Item item = itemRepo.findById(i.getItemId())
                     .orElseThrow(() -> new RuntimeException("Item not found"));
@@ -147,6 +188,14 @@ public class PurchaseRequisitionService {
                 .department(department)
                 .debitAccount(debitAccount)
                 .creditAccount(creditAccount)
+                .requestedDate(requestedDate)
+                .requiredDeliveryDate(dto.getRequiredDeliveryDate())
+                .projectCode(trimToNull(dto.getProjectCode()))
+                .requisitionDescription(dto.getRequisitionDescription().trim())
+                .urgency(urgency)
+                .requiredByDate(dto.getRequiredByDate())
+                .deliveryWarehouse(deliveryWarehouse)
+                .justification(dto.getJustification().trim())
                 .items(items)
                 .build();
 
@@ -226,6 +275,72 @@ public class PurchaseRequisitionService {
                 .stream()
                 .map(pr -> toDTO(pr, null))
                 .toList();
+    }
+
+    public PurchaseRequisitionDocumentDTO uploadDocument(Long requisitionId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new RuntimeException("File is required");
+        }
+        PurchaseRequisition pr = getEntity(requisitionId);
+        User uploader = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
+
+        FileUploadResult upload = fileStorageService.upload(
+                file,
+                FileCategory.PURCHASE_REQUISITION_DOCUMENT,
+                pr.getId().toString(),
+                false
+        );
+
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || originalName.isBlank()) {
+            originalName = "document";
+        }
+
+        PurchaseRequisitionDocument doc = PurchaseRequisitionDocument.builder()
+                .requisition(pr)
+                .fileName(originalName)
+                .blobPath(upload.getBlobPath())
+                .contentType(file.getContentType())
+                .fileSizeBytes(file.getSize())
+                .uploadedBy(uploader)
+                .build();
+
+        return toDocumentDTO(documentRepo.save(doc));
+    }
+
+    public List<PurchaseRequisitionDocumentDTO> listDocuments(Long requisitionId) {
+        getEntity(requisitionId);
+        return documentRepo.findByRequisitionIdOrderByUploadedAtDesc(requisitionId)
+                .stream()
+                .map(this::toDocumentDTO)
+                .toList();
+    }
+
+    public void deleteDocument(Long requisitionId, Long documentId) {
+        getEntity(requisitionId);
+        PurchaseRequisitionDocument doc = documentRepo
+                .findByIdAndRequisitionId(documentId, requisitionId)
+                .orElseThrow(() -> new RuntimeException("Document not found"));
+        documentRepo.delete(doc);
+    }
+
+    private static PurchaseRequisitionUrgency resolveUrgency(String urgency) {
+        if (urgency == null || urgency.isBlank()) {
+            return PurchaseRequisitionUrgency.NORMAL;
+        }
+        try {
+            return PurchaseRequisitionUrgency.valueOf(urgency.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid urgency: " + urgency);
+        }
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String t = value.trim();
+        return t.isEmpty() ? null : t;
     }
 
     private ChartOfAccounts resolveCoa(Long companyId, Long accountId) {
@@ -358,6 +473,12 @@ public class PurchaseRequisitionService {
                                                 i.getEstimatedUnitCost(),
                                                 i.getRemarks()))
                                         .toList()
+                        )
+                        .documents(
+                                documentRepo.findByRequisitionIdOrderByUploadedAtDesc(pr.getId())
+                                        .stream()
+                                        .map(this::toDocumentDTO)
+                                        .toList()
                         );
 
         if (pr.getPreferredSupplier() != null) {
@@ -372,6 +493,17 @@ public class PurchaseRequisitionService {
         if (pr.getRequestedBy() != null) {
             b.requestedById(pr.getRequestedBy().getId())
                     .requestedByName(pr.getRequestedBy().getFullName());
+        }
+        b.requestedDate(pr.getRequestedDate())
+                .requiredDeliveryDate(pr.getRequiredDeliveryDate())
+                .projectCode(pr.getProjectCode())
+                .requisitionDescription(pr.getRequisitionDescription())
+                .urgency(pr.getUrgency() != null ? pr.getUrgency().name() : null)
+                .requiredByDate(pr.getRequiredByDate())
+                .justification(pr.getJustification());
+        if (pr.getDeliveryWarehouse() != null) {
+            b.deliveryWarehouseId(pr.getDeliveryWarehouse().getId())
+                    .deliveryWarehouseName(pr.getDeliveryWarehouse().getName());
         }
         if (pr.getDebitAccount() != null) {
             b.debitAccountId(pr.getDebitAccount().getId())
@@ -395,5 +527,31 @@ public class PurchaseRequisitionService {
         }
 
         return b.build();
+    }
+
+    private PurchaseRequisitionDocumentDTO toDocumentDTO(PurchaseRequisitionDocument doc) {
+        PurchaseRequisitionDocumentDTO.PurchaseRequisitionDocumentDTOBuilder b =
+                PurchaseRequisitionDocumentDTO.builder()
+                        .id(doc.getId())
+                        .fileName(doc.getFileName())
+                        .contentType(doc.getContentType())
+                        .fileSizeBytes(doc.getFileSizeBytes())
+                        .uploadedAt(doc.getUploadedAt())
+                        .downloadUrl(resolveDocumentUrl(doc.getBlobPath()));
+        if (doc.getUploadedBy() != null) {
+            b.uploadedById(doc.getUploadedBy().getId())
+                    .uploadedByName(doc.getUploadedBy().getFullName());
+        }
+        return b.build();
+    }
+
+    private String resolveDocumentUrl(String blobPath) {
+        if (blobPath == null || blobPath.isBlank()) {
+            return null;
+        }
+        if (blobPath.startsWith("http://") || blobPath.startsWith("https://")) {
+            return blobPath;
+        }
+        return fileStorageService.getPrivateSasUrl(blobPath);
     }
 }

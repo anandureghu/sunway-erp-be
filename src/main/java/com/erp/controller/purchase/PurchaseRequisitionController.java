@@ -1,9 +1,13 @@
 package com.erp.controller.purchase;
 
 import com.erp.dto.purchase.PurchaseRequisitionCreateDTO;
+import com.erp.dto.purchase.PurchaseRequisitionDocumentDTO;
 import com.erp.dto.purchase.PurchaseRequisitionResponseDTO;
 import com.erp.service.purchase.PurchaseRequisitionService;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -47,5 +51,27 @@ public class PurchaseRequisitionController {
     @GetMapping("/{id}")
     public PurchaseRequisitionResponseDTO get(@PathVariable("id") Long id) {
         return service.get(id);
+    }
+
+    @PostMapping(value = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public PurchaseRequisitionDocumentDTO uploadDocument(
+            @PathVariable("id") Long id,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return service.uploadDocument(id, file);
+    }
+
+    @GetMapping("/{id}/documents")
+    public List<PurchaseRequisitionDocumentDTO> listDocuments(@PathVariable("id") Long id) {
+        return service.listDocuments(id);
+    }
+
+    @DeleteMapping("/{id}/documents/{documentId}")
+    public ResponseEntity<Void> deleteDocument(
+            @PathVariable("id") Long id,
+            @PathVariable("documentId") Long documentId
+    ) {
+        service.deleteDocument(id, documentId);
+        return ResponseEntity.noContent().build();
     }
 }
