@@ -47,6 +47,7 @@ public class TransactionService {
     public static final String TYPE_PURCHASE_ORDER_ENCUMBRANCE = "PURCHASE_ORDER_ENCUMBRANCE";
     public static final String TYPE_PURCHASE_ORDER_CANCEL_REVERSAL = "PURCHASE_ORDER_CANCEL_REVERSAL";
     public static final String TYPE_SALES_ORDER_CANCEL_REVERSAL = "SALES_ORDER_CANCEL_REVERSAL";
+    public static final String TYPE_STOCK_VARIANCE = "STOCK_VARIANCE";
 
     private final TransactionRepository repo;
     private final CompanyRepository companyRepo;
@@ -777,5 +778,59 @@ public class TransactionService {
         Transaction saved = repo.save(tx);
         applyPostingToCoa(saved);
         return toDTO(saved);
+    }
+
+    /**
+     * Posts inventory variance to GL: loss reduces inventory asset; gain increases it.
+     */
+    @Transactional
+    public Transaction createForStockVariance(
+            Long companyId,
+            Long varianceId,
+            BigDecimal amount,
+            Long inventoryAssetAccountId,
+            Long varianceExpenseAccountId,
+            boolean inventoryIncrease,
+            LocalDate txDate,
+            String description
+    ) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Variance amount must be positive");
+        }
+        Company company = companyRepo.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        ChartOfAccounts inventoryAsset = coaRepo.findById(inventoryAssetAccountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Inventory asset account not found"));
+        ChartOfAccounts varianceExpense = coaRepo.findById(varianceExpenseAccountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Variance expense account not found"));
+
+        if (!inventoryAsset.getCompany().getId().equals(companyId)
+                || !varianceExpense.getCompany().getId().equals(companyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accounts must belong to your company");
+        }
+
+        ChartOfAccounts debitAccount = inventoryIncrease ? inventoryAsset : varianceExpense;
+        ChartOfAccounts creditAccount = inventoryIncrease ? varianceExpense : inventoryAsset;
+
+        Transaction tx = Transaction.builder()
+                .transactionCode(documentSequenceService.generateNext("TX-VAR"))
+                .transactionType(TYPE_STOCK_VARIANCE)
+                .company(company)
+                .transactionDate(txDate != null ? txDate : LocalDate.now())
+                .amount(amount)
+                .debitAccount(debitAccount)
+                .creditAccount(creditAccount)
+                .transactionDescription(description != null ? description : "Stock variance")
+                .relatedId(varianceId)
+                .source("STOCK_VARIANCE")
+                .sourceLocked(true)
+                .createdAt(Instant.now())
+                .createdBy(auth.getCurrentUserId())
+                .build();
+
+        Transaction saved = repo.save(tx);
+        applyPostingToCoa(saved);
+        return saved;
     }
 }

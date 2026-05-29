@@ -192,6 +192,74 @@ public class ItemWarehouseStockService {
         syncItemAggregates(item);
     }
 
+    public void transferBetweenWarehouses(
+            Long itemId,
+            Long fromWarehouseId,
+            Long toWarehouseId,
+            int quantity,
+            Long companyId
+    ) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Transfer quantity must be positive");
+        }
+        if (fromWarehouseId.equals(toWarehouseId)) {
+            throw new IllegalArgumentException("Source and destination warehouse must differ");
+        }
+        Item item = loadItemForCompany(itemId, companyId);
+        Warehouse fromWh = loadWarehouseForCompany(fromWarehouseId, companyId);
+        Warehouse toWh = loadWarehouseForCompany(toWarehouseId, companyId);
+
+        ItemWarehouseStock fromRow = stockRepo.findByItemIdAndWarehouseId(itemId, fromWarehouseId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No stock for this item at the source warehouse"));
+        if (fromRow.available() < quantity) {
+            throw new IllegalArgumentException(
+                    "Insufficient available stock at "
+                            + fromWh.getName()
+                            + ". Available: "
+                            + fromRow.available()
+                            + ", requested: "
+                            + quantity);
+        }
+
+        fromRow.setQuantityOnHand(nz(fromRow.getQuantityOnHand()) - quantity);
+        stockRepo.save(fromRow);
+
+        ItemWarehouseStock toRow = getOrCreateStockRow(item, toWh);
+        toRow.setQuantityOnHand(nz(toRow.getQuantityOnHand()) + quantity);
+        stockRepo.save(toRow);
+
+        syncItemAggregates(item);
+    }
+
+    public int getQuantityOnHand(Long itemId, Long warehouseId, Long companyId) {
+        Item item = loadItemForCompany(itemId, companyId);
+        loadWarehouseForCompany(warehouseId, companyId);
+        return stockRepo.findByItemIdAndWarehouseId(item.getId(), warehouseId)
+                .map(row -> nz(row.getQuantityOnHand()))
+                .orElse(0);
+    }
+
+    public void applyDelta(Long itemId, Long warehouseId, int delta, Long companyId) {
+        if (delta == 0) {
+            return;
+        }
+        Item item = loadItemForCompany(itemId, companyId);
+        Warehouse wh = loadWarehouseForCompany(warehouseId, companyId);
+        ItemWarehouseStock row = getOrCreateStockRow(item, wh);
+        int newQty = nz(row.getQuantityOnHand()) + delta;
+        if (newQty < nz(row.getReserved())) {
+            throw new IllegalArgumentException(
+                    "Adjustment would leave less on hand than reserved at this warehouse");
+        }
+        if (newQty < 0) {
+            throw new IllegalArgumentException("Resulting quantity cannot be negative");
+        }
+        row.setQuantityOnHand(newQty);
+        stockRepo.save(row);
+        syncItemAggregates(item);
+    }
+
     @Transactional(readOnly = true)
     public List<ItemWarehouseStockRowDTO> listStockForItem(Long itemId, Long companyId) {
         Item item = loadItemForCompany(itemId, companyId);
