@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- WARN/ERROR → admin_system_logs (no local log files) -->
+    <appender name="ADMIN_DB" class="com.erp.logging.AdminSystemLogAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ADMIN_DB"/>
+    </root>
+
+    <logger name="com.erp.service.admin.AdminSystemLogService" level="INFO"/>
+    <logger name="com.erp.logging.AdminSystemLogAppender" level="INFO"/>
+</configuration>

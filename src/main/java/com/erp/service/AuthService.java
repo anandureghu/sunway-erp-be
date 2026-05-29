@@ -68,6 +68,7 @@ public class AuthService {
         claims.put("userId",    u.getId());
         claims.put("employeeId", emp.getId());
         claims.put("username",  u.getUsername());
+        claims.put("email",     u.getEmail());
         claims.put("companyId", emp.getCompany().getId());
         claims.put("role",      u.getRole().name());
         claims.put("companyRoleId", u.getCompanyRoleId());
@@ -95,6 +96,7 @@ public class AuthService {
         newClaims.put("userId",    u.getId());
         newClaims.put("employeeId", emp.getId());
         newClaims.put("username",  u.getUsername());
+        newClaims.put("email",     u.getEmail());
         newClaims.put("companyId", emp.getCompany().getId());
         newClaims.put("role",      u.getRole().name());
         newClaims.put("companyRoleId", u.getCompanyRoleId());

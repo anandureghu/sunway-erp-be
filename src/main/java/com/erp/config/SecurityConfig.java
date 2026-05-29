@@ -1,5 +1,6 @@
 package com.erp.config;
 
+import com.erp.security.AdminLogContextFilter;
 import com.erp.security.JwtAuthenticationFilter;
 import com.erp.security.RestAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,12 +27,18 @@ import java.util.List;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final AdminLogContextFilter adminLogContextFilter;
     private final RestAuthenticationEntryPoint entryPoint;
 
     @Value("${app.cors.allowed-origins}") private String allowedOriginsCsv;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, RestAuthenticationEntryPoint entryPoint) {
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthFilter,
+            AdminLogContextFilter adminLogContextFilter,
+            RestAuthenticationEntryPoint entryPoint
+    ) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.adminLogContextFilter = adminLogContextFilter;
         this.entryPoint = entryPoint;
     }
 
@@ -64,7 +71,8 @@ public class SecurityConfig {
 
 
                 .headers(h -> h.frameOptions(f -> f.disable()))
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(adminLogContextFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

@@ -28,10 +28,13 @@ server:
     include-stacktrace: never
 
 logging:
+  # Console only — WARN/ERROR are persisted to admin_system_logs (see logback-spring.xml).
+  # Do not set logging.file.name (no app.log on disk).
   level:
+    root: INFO
     org.springframework.security: INFO
-    org.springframework.web: DEBUG
-    org.springframework.data.jpa: DEBUG
+    org.springframework.web: INFO
+    org.springframework.data.jpa: INFO
     org.hibernate.SQL: INFO
 
 management:
