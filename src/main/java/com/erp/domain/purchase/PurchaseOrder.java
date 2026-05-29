@@ -32,7 +32,7 @@ public class PurchaseOrder {
     @Column(name = "order_number", nullable = false)
     private String orderNumber;
 
-    @ManyToOne(optional = false)
+    @ManyToOne
     @JoinColumn(name = "supplier_id")
     private Vendor supplier;
 

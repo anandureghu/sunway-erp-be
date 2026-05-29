@@ -7,6 +7,7 @@ import com.erp.domain.inventory.Vendor;
 import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderItem;
 import com.erp.domain.purchase.PurchaseOrderStatus;
+import com.erp.dto.purchase.PurchaseOrderAssignSupplierDTO;
 import com.erp.dto.purchase.PurchaseOrderCreateDTO;
 import com.erp.dto.purchase.PurchaseOrderItemDTO;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
@@ -116,11 +117,38 @@ public class PurchaseOrderService {
         return toDTO(saved);
     }
 
+    public PurchaseOrderResponseDTO assignSupplier(Long id, PurchaseOrderAssignSupplierDTO dto) {
+        if (dto.getSupplierId() == null) {
+            throw new RuntimeException("Supplier is required");
+        }
+        PurchaseOrder po = getEntity(id);
+        if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
+            throw new RuntimeException("Supplier can only be assigned on DRAFT purchase orders");
+        }
+
+        Long companyId = po.getCompany().getId();
+        Vendor supplier = vendorRepo.findById(dto.getSupplierId())
+                .orElseThrow(() -> new RuntimeException("Supplier not found"));
+        if (!supplier.getCompany().getId().equals(companyId)) {
+            throw new RuntimeException("Supplier does not belong to this company");
+        }
+
+        po.setSupplier(supplier);
+        PurchaseOrder saved = repo.save(po);
+        repo.flush();
+        vendorPayableService.createVendorPayableForPurchaseOrder(saved);
+        purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(saved.getId());
+        return toDTO(saved);
+    }
+
     public PurchaseOrderResponseDTO confirm(Long id) {
         PurchaseOrder po = getEntity(id);
 
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
             throw new RuntimeException("Only DRAFT purchase orders can be confirmed");
+        }
+        if (po.getSupplier() == null) {
+            throw new RuntimeException("Assign a supplier before releasing this purchase order");
         }
 
         if (!vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId())) {
@@ -222,8 +250,8 @@ public class PurchaseOrderService {
                         po.getSourceRequisition() != null
                                 ? po.getSourceRequisition().getId()
                                 : null)
-                .supplierId(po.getSupplier().getId())
-                .supplierName(po.getSupplier().getVendorName())
+                .supplierId(po.getSupplier() != null ? po.getSupplier().getId() : null)
+                .supplierName(po.getSupplier() != null ? po.getSupplier().getVendorName() : null)
                 .orderDate(po.getOrderDate())
                 .status(po.getStatus().name())
                 .archived(po.isArchived())

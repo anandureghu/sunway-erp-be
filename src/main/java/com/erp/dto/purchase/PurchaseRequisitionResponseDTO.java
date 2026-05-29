@@ -34,6 +34,13 @@ public class PurchaseRequisitionResponseDTO {
     private Long requestedById;
     private String requestedByName;
 
+    private String rejectionReason;
+    /** REJECT or SEND_BACK when returned to requester */
+    private String reviewAction;
+    private Instant rejectedAt;
+    private Long rejectedById;
+    private String rejectedByName;
+
     private LocalDate requestedDate;
     private LocalDate requiredDeliveryDate;
     private String projectCode;

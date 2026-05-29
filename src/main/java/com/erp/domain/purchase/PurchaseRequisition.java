@@ -57,6 +57,17 @@ public class PurchaseRequisition {
     @JoinColumn(name = "approved_by")
     private User approvedBy;
 
+    private String rejectionReason;
+
+    @Enumerated(EnumType.STRING)
+    private PurchaseRequisitionReviewAction reviewAction;
+
+    private Instant rejectedAt;
+
+    @ManyToOne
+    @JoinColumn(name = "rejected_by")
+    private User rejectedBy;
+
     private Instant createdAt;
     private Instant approvedAt;
 

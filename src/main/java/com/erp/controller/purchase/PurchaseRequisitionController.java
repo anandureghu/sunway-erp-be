@@ -3,6 +3,7 @@ package com.erp.controller.purchase;
 import com.erp.dto.purchase.PurchaseRequisitionCreateDTO;
 import com.erp.dto.purchase.PurchaseRequisitionDocumentDTO;
 import com.erp.dto.purchase.PurchaseRequisitionResponseDTO;
+import com.erp.dto.purchase.PurchaseRequisitionReviewDTO;
 import com.erp.service.purchase.PurchaseRequisitionService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +37,35 @@ public class PurchaseRequisitionController {
     @PostMapping("/{id}/approve")
     public PurchaseRequisitionResponseDTO approve(@PathVariable("id") Long id) {
         return service.approve(id);
+    }
+
+    @PostMapping("/{id}/reject")
+    public PurchaseRequisitionResponseDTO reject(
+            @PathVariable("id") Long id,
+            @RequestBody PurchaseRequisitionReviewDTO dto
+    ) {
+        return service.reject(id, dto);
+    }
+
+    @PostMapping("/{id}/send-back")
+    public PurchaseRequisitionResponseDTO sendBack(
+            @PathVariable("id") Long id,
+            @RequestBody PurchaseRequisitionReviewDTO dto
+    ) {
+        return service.sendBack(id, dto);
+    }
+
+    @PostMapping("/{id}/revise")
+    public PurchaseRequisitionResponseDTO revise(@PathVariable("id") Long id) {
+        return service.revise(id);
+    }
+
+    @PutMapping("/{id}")
+    public PurchaseRequisitionResponseDTO update(
+            @PathVariable("id") Long id,
+            @RequestBody PurchaseRequisitionCreateDTO dto
+    ) {
+        return service.update(id, dto);
     }
 
     @PostMapping("/{id}/archive")

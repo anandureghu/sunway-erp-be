@@ -14,6 +14,7 @@ import com.erp.dto.purchase.PurchaseRequisitionCreateDTO;
 import com.erp.dto.purchase.PurchaseRequisitionDocumentDTO;
 import com.erp.dto.purchase.PurchaseRequisitionItemDTO;
 import com.erp.dto.purchase.PurchaseRequisitionResponseDTO;
+import com.erp.dto.purchase.PurchaseRequisitionReviewDTO;
 import com.erp.repo.UserRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.CompanyRepository;
@@ -95,10 +96,27 @@ public class PurchaseRequisitionService {
     }
 
     public PurchaseRequisitionResponseDTO create(PurchaseRequisitionCreateDTO dto) {
+        validateCreateDto(dto);
+
+        Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
+        ChartOfAccounts debitAccount = resolveCoa(company.getId(), dto.getDebitAccountId());
+        ChartOfAccounts creditAccount = resolveCoa(company.getId(), dto.getCreditAccountId());
+        validatePostingBalances(debitAccount, creditAccount, computeTotalFromItemDtos(dto.getItems()));
+
+        PurchaseRequisition pr = PurchaseRequisition.builder()
+                .requisitionNumber(documentSequenceService.generateNext("PR"))
+                .status(PurchaseRequisitionStatus.DRAFT)
+                .company(company)
+                .build();
+
+        applyDtoToRequisition(pr, dto, company, debitAccount, creditAccount);
+        return toDTO(repo.save(pr), null);
+    }
+
+    private void validateCreateDto(PurchaseRequisitionCreateDTO dto) {
         if (dto.getItems() == null || dto.getItems().isEmpty()) {
             throw new RuntimeException("At least one line item is required");
         }
-
         if (dto.getDebitAccountId() == null || dto.getCreditAccountId() == null) {
             throw new RuntimeException("Debit and credit accounts are required");
         }
@@ -120,14 +138,15 @@ public class PurchaseRequisitionService {
         if (dto.getDeliveryWarehouseId() == null) {
             throw new RuntimeException("Delivery warehouse is required");
         }
+    }
 
-        Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
-        ChartOfAccounts debitAccount = resolveCoa(company.getId(), dto.getDebitAccountId());
-        ChartOfAccounts creditAccount = resolveCoa(company.getId(), dto.getCreditAccountId());
-
-        BigDecimal estimatedTotal = computeTotalFromItemDtos(dto.getItems());
-        validatePostingBalances(debitAccount, creditAccount, estimatedTotal);
-
+    private void applyDtoToRequisition(
+            PurchaseRequisition pr,
+            PurchaseRequisitionCreateDTO dto,
+            Company company,
+            ChartOfAccounts debitAccount,
+            ChartOfAccounts creditAccount
+    ) {
         Vendor supplier = null;
         if (dto.getPreferredSupplierId() != null) {
             supplier = vendorRepo.findById(dto.getPreferredSupplierId())
@@ -137,7 +156,10 @@ public class PurchaseRequisitionService {
             }
         }
 
-        User requester = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
+        User requester = pr.getRequestedBy();
+        if (requester == null) {
+            requester = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
+        }
         if (dto.getRequestedByUserId() != null) {
             requester = userRepo.findById(dto.getRequestedByUserId())
                     .orElseThrow(() -> new RuntimeException("Requested-by user not found"));
@@ -161,7 +183,27 @@ public class PurchaseRequisitionService {
         LocalDate requestedDate = dto.getRequestedDate() != null ? dto.getRequestedDate() : LocalDate.now();
         PurchaseRequisitionUrgency urgency = resolveUrgency(dto.getUrgency());
 
-        List<PurchaseRequisitionItem> items = dto.getItems().stream().map(i -> {
+        List<PurchaseRequisitionItem> items = buildItemsFromDto(dto);
+
+        pr.setRequestedBy(requester);
+        pr.setPreferredSupplier(supplier);
+        pr.setSupplierAddress(dto.getSupplierAddress());
+        pr.setDepartment(department);
+        pr.setDebitAccount(debitAccount);
+        pr.setCreditAccount(creditAccount);
+        pr.setRequestedDate(requestedDate);
+        pr.setRequiredDeliveryDate(dto.getRequiredDeliveryDate());
+        pr.setProjectCode(trimToNull(dto.getProjectCode()));
+        pr.setRequisitionDescription(dto.getRequisitionDescription().trim());
+        pr.setUrgency(urgency);
+        pr.setRequiredByDate(dto.getRequiredByDate());
+        pr.setDeliveryWarehouse(deliveryWarehouse);
+        pr.setJustification(dto.getJustification().trim());
+        pr.setItems(items);
+    }
+
+    private List<PurchaseRequisitionItem> buildItemsFromDto(PurchaseRequisitionCreateDTO dto) {
+        return dto.getItems().stream().map(i -> {
             Item item = itemRepo.findById(i.getItemId())
                     .orElseThrow(() -> new RuntimeException("Item not found"));
 
@@ -177,29 +219,6 @@ public class PurchaseRequisitionService {
                     .remarks(i.getRemarks())
                     .build();
         }).toList();
-
-        PurchaseRequisition pr = PurchaseRequisition.builder()
-                .requisitionNumber(documentSequenceService.generateNext("PR"))
-                .status(PurchaseRequisitionStatus.DRAFT)
-                .company(company)
-                .requestedBy(requester)
-                .preferredSupplier(supplier)
-                .supplierAddress(dto.getSupplierAddress())
-                .department(department)
-                .debitAccount(debitAccount)
-                .creditAccount(creditAccount)
-                .requestedDate(requestedDate)
-                .requiredDeliveryDate(dto.getRequiredDeliveryDate())
-                .projectCode(trimToNull(dto.getProjectCode()))
-                .requisitionDescription(dto.getRequisitionDescription().trim())
-                .urgency(urgency)
-                .requiredByDate(dto.getRequiredByDate())
-                .deliveryWarehouse(deliveryWarehouse)
-                .justification(dto.getJustification().trim())
-                .items(items)
-                .build();
-
-        return toDTO(repo.save(pr), null);
     }
 
     public PurchaseRequisitionResponseDTO submit(Long id) {
@@ -208,9 +227,6 @@ public class PurchaseRequisitionService {
         if (pr.getStatus() != PurchaseRequisitionStatus.DRAFT) {
             throw new RuntimeException("Only DRAFT requisitions can be submitted");
         }
-        if (pr.getPreferredSupplier() == null) {
-            throw new RuntimeException("Preferred supplier is required before submit");
-        }
         if (pr.getDebitAccount() == null || pr.getCreditAccount() == null) {
             throw new RuntimeException("Debit and credit accounts are required before submit");
         }
@@ -218,8 +234,74 @@ public class PurchaseRequisitionService {
         BigDecimal total = computeTotalForRequisition(pr);
         validatePostingBalances(pr.getDebitAccount(), pr.getCreditAccount(), total);
 
+        clearReviewFeedback(pr);
         pr.setStatus(PurchaseRequisitionStatus.SUBMITTED);
         return toDTO(repo.save(pr), null);
+    }
+
+    public PurchaseRequisitionResponseDTO update(Long id, PurchaseRequisitionCreateDTO dto) {
+        validateCreateDto(dto);
+        PurchaseRequisition pr = getEntity(id);
+        if (pr.getStatus() != PurchaseRequisitionStatus.DRAFT) {
+            throw new RuntimeException("Only DRAFT requisitions can be updated");
+        }
+
+        Company company = pr.getCompany();
+        ChartOfAccounts debitAccount = resolveCoa(company.getId(), dto.getDebitAccountId());
+        ChartOfAccounts creditAccount = resolveCoa(company.getId(), dto.getCreditAccountId());
+        validatePostingBalances(debitAccount, creditAccount, computeTotalFromItemDtos(dto.getItems()));
+
+        applyDtoToRequisition(pr, dto, company, debitAccount, creditAccount);
+        return toDTO(repo.save(pr), null);
+    }
+
+    public PurchaseRequisitionResponseDTO reject(Long id, PurchaseRequisitionReviewDTO dto) {
+        return returnToRequester(id, dto, PurchaseRequisitionReviewAction.REJECT);
+    }
+
+    public PurchaseRequisitionResponseDTO sendBack(Long id, PurchaseRequisitionReviewDTO dto) {
+        return returnToRequester(id, dto, PurchaseRequisitionReviewAction.SEND_BACK);
+    }
+
+    public PurchaseRequisitionResponseDTO revise(Long id) {
+        PurchaseRequisition pr = getEntity(id);
+        if (pr.getStatus() != PurchaseRequisitionStatus.REJECTED) {
+            throw new RuntimeException("Only REJECTED requisitions can be revised");
+        }
+        pr.setStatus(PurchaseRequisitionStatus.DRAFT);
+        return toDTO(repo.save(pr), null);
+    }
+
+    private PurchaseRequisitionResponseDTO returnToRequester(
+            Long id,
+            PurchaseRequisitionReviewDTO dto,
+            PurchaseRequisitionReviewAction action
+    ) {
+        if (dto.getComments() == null || dto.getComments().isBlank()) {
+            throw new RuntimeException("Comments are required");
+        }
+        PurchaseRequisition pr = getEntity(id);
+        if (pr.getStatus() != PurchaseRequisitionStatus.SUBMITTED) {
+            throw new RuntimeException("Only SUBMITTED requisitions can be returned to the requester");
+        }
+
+        User reviewer = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
+        pr.setStatus(PurchaseRequisitionStatus.REJECTED);
+        pr.setRejectionReason(dto.getComments().trim());
+        pr.setReviewAction(action);
+        pr.setRejectedBy(reviewer);
+        pr.setRejectedAt(Instant.now());
+        pr.setApprovedBy(null);
+        pr.setApprovedAt(null);
+
+        return toDTO(repo.save(pr), null);
+    }
+
+    private static void clearReviewFeedback(PurchaseRequisition pr) {
+        pr.setRejectionReason(null);
+        pr.setReviewAction(null);
+        pr.setRejectedBy(null);
+        pr.setRejectedAt(null);
     }
 
     /**
@@ -230,9 +312,6 @@ public class PurchaseRequisitionService {
 
         if (pr.getStatus() != PurchaseRequisitionStatus.SUBMITTED) {
             throw new RuntimeException("Only SUBMITTED requisitions can be approved");
-        }
-        if (pr.getPreferredSupplier() == null) {
-            throw new RuntimeException("Preferred supplier is required");
         }
         if (pr.getDebitAccount() == null || pr.getCreditAccount() == null) {
             throw new RuntimeException("Debit and credit accounts are required");
@@ -282,6 +361,10 @@ public class PurchaseRequisitionService {
             throw new RuntimeException("File is required");
         }
         PurchaseRequisition pr = getEntity(requisitionId);
+        if (pr.getStatus() != PurchaseRequisitionStatus.DRAFT
+                && pr.getStatus() != PurchaseRequisitionStatus.REJECTED) {
+            throw new RuntimeException("Documents can only be uploaded while the requisition is draft or awaiting revision");
+        }
         User uploader = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
 
         FileUploadResult upload = fileStorageService.upload(
@@ -400,7 +483,6 @@ public class PurchaseRequisitionService {
     }
 
     private PurchaseOrder createPurchaseOrderFromRequisition(PurchaseRequisition pr, User actor) {
-        Vendor supplier = pr.getPreferredSupplier();
         Company company = pr.getCompany();
 
         List<PurchaseOrderItem> poItems = pr.getItems().stream().map(pri -> {
@@ -435,7 +517,7 @@ public class PurchaseRequisitionService {
 
         PurchaseOrder po = PurchaseOrder.builder()
                 .orderNumber(documentSequenceService.generateNext("PO"))
-                .supplier(supplier)
+                .supplier(null)
                 .orderDate(LocalDate.now())
                 .status(PurchaseOrderStatus.DRAFT)
                 .totalAmount(total)
@@ -448,7 +530,6 @@ public class PurchaseRequisitionService {
         PurchaseOrder saved = purchaseOrderRepo.save(po);
         purchaseOrderRepo.flush();
         vendorPayableService.createVendorPayableForPurchaseOrder(saved);
-        purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(saved.getId());
         return saved;
     }
 
@@ -493,6 +574,15 @@ public class PurchaseRequisitionService {
         if (pr.getRequestedBy() != null) {
             b.requestedById(pr.getRequestedBy().getId())
                     .requestedByName(pr.getRequestedBy().getFullName());
+        }
+        b.rejectionReason(pr.getRejectionReason());
+        if (pr.getReviewAction() != null) {
+            b.reviewAction(pr.getReviewAction().name());
+        }
+        b.rejectedAt(pr.getRejectedAt());
+        if (pr.getRejectedBy() != null) {
+            b.rejectedById(pr.getRejectedBy().getId())
+                    .rejectedByName(pr.getRejectedBy().getFullName());
         }
         b.requestedDate(pr.getRequestedDate())
                 .requiredDeliveryDate(pr.getRequiredDeliveryDate())

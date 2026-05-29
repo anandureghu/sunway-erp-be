@@ -1,5 +1,6 @@
 package com.erp.controller.purchase;
 
+import com.erp.dto.purchase.PurchaseOrderAssignSupplierDTO;
 import com.erp.dto.purchase.PurchaseOrderCreateDTO;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.purchase.PurchaseOrderUpdateDTO;
@@ -21,6 +22,14 @@ public class PurchaseOrderController {
     @PostMapping
     public PurchaseOrderResponseDTO create(@RequestBody PurchaseOrderCreateDTO dto) {
         return service.create(dto);
+    }
+
+    @PostMapping("/{id}/supplier")
+    public PurchaseOrderResponseDTO assignSupplier(
+            @PathVariable("id") Long id,
+            @RequestBody PurchaseOrderAssignSupplierDTO dto
+    ) {
+        return service.assignSupplier(id, dto);
     }
 
     @PostMapping("/{id}/confirm")
