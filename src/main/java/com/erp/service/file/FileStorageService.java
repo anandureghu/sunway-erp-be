@@ -185,6 +185,9 @@ public class FileStorageService {
             case INVOICE_PDF -> "invoices/" + entityId + "/"
                     + UUID.randomUUID() + ".pdf";
 
+            case PAYMENT_RECEIPT_PDF -> "payments/" + entityId + "/"
+                    + UUID.randomUUID() + ".pdf";
+
             case GOODS_RECEIPT_PDF -> "goods-receipts/" + entityId + "/"
                     + UUID.randomUUID() + ".pdf";
 

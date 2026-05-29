@@ -85,6 +85,12 @@ public class VendorPayableService {
                 .orElse(false);
     }
 
+    public Optional<Long> findVendorPaymentIdForPurchaseOrder(Long purchaseOrderId) {
+        return paymentRepo.findFirstByPurchaseOrderIdAndPaymentDirection(
+                        purchaseOrderId, PaymentDirection.VENDOR)
+                .map(Payment::getId);
+    }
+
     private static boolean isReleasedToSupplier(PurchaseOrderStatus status) {
         return status == PurchaseOrderStatus.CONFIRMED
                 || status == PurchaseOrderStatus.PARTIALLY_RECEIVED

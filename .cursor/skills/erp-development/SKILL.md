@@ -68,3 +68,4 @@ Restart app if migration added.
 
 - **Purchase orders (draft)** — `PUT` update may change `supplierId` via `applyDraftSupplierChange` only while status is `DRAFT`; use `ConflictException` if not draft. See `PurchaseOrderService`, `PurchaseOrderUpdateDTO`.
 - **PO → AP** — Vendor payable + generated purchase invoice are created in `onReleasedToSupplier` when status becomes `CONFIRMED`. AP vendor payments and purchase invoices list only CONFIRMED+ POs. `confirmVendorPayment` requires released PO. `cancel` blocked with `ConflictException` after AP payment confirmed.
+- **PO payment receipts** — On `confirmVendorPayment`: regenerate GENERATED purchase invoice PDF (RECEIPT badge) + `VendorPaymentReceiptPdfService` → `payments/{id}/pdf`. PO DTO includes `purchaseInvoiceId`, `vendorPaymentId`.

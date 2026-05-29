@@ -546,6 +546,23 @@ public class InvoiceService {
                 .ifPresent(invoiceCode -> applyPayment(invoiceCode, amount));
     }
 
+    /**
+     * Regenerates the ERP-generated purchase invoice PDF after vendor payment so the document
+     * shows PAID / receipt styling (same pattern as sales receipts).
+     */
+    public void regenerateGeneratedPurchaseInvoicePdfAfterVendorPayment(Long purchaseOrderId) {
+        if (purchaseOrderId == null) {
+            return;
+        }
+        repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
+                .filter(inv -> inv.getDocumentSource() == InvoiceDocumentSource.GENERATED)
+                .filter(inv -> {
+                    String st = inv.getStatus() == null ? "" : inv.getStatus().trim();
+                    return "PAID".equalsIgnoreCase(st) || "PARTIALLY_PAID".equalsIgnoreCase(st);
+                })
+                .ifPresent(this::generateAndUploadInvoicePdf);
+    }
+
     // ============================================================
     // READ OPERATIONS
     // ============================================================

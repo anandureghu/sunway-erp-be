@@ -1,7 +1,9 @@
 package com.erp.service.purchase;
 
+import com.erp.domain.InvoiceType;
 import com.erp.domain.User;
 import com.erp.domain.finance.ChartOfAccounts;
+import com.erp.domain.finance.Invoice;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.Vendor;
@@ -22,6 +24,7 @@ import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
+import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
@@ -52,6 +55,7 @@ public class PurchaseOrderService {
     private final PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler;
     private final TransactionService transactionService;
     private final ChartOfAccountsRepository coaRepo;
+    private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
 
@@ -65,6 +69,7 @@ public class PurchaseOrderService {
             @Lazy PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler,
             TransactionService transactionService,
             ChartOfAccountsRepository coaRepo,
+            InvoiceRepository invoiceRepo,
             AuthContext auth,
             DocumentSequenceService documentSequenceService
     ) {
@@ -77,6 +82,7 @@ public class PurchaseOrderService {
         this.purchaseInvoiceGenerationScheduler = purchaseInvoiceGenerationScheduler;
         this.transactionService = transactionService;
         this.coaRepo = coaRepo;
+        this.invoiceRepo = invoiceRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
     }
@@ -504,6 +510,13 @@ public class PurchaseOrderService {
                 .createdByName(po.getCreatedBy().getFullName())
                 .totalAmount(po.getTotalAmount())
                 .vendorPaymentSettled(vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId()))
+                .purchaseInvoiceId(
+                        invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                                .map(Invoice::getId)
+                                .orElse(null))
+                .vendorPaymentId(
+                        vendorPayableService.findVendorPaymentIdForPurchaseOrder(po.getId())
+                                .orElse(null))
                 .items(
                         po.getItems().stream().map(i ->
                                 PurchaseOrderItemDTO.builder()

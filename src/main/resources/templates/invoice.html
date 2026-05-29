@@ -290,7 +290,7 @@
                     <div class="badge">
                         <div class="badge-title"
                              th:text="${invoice.status == 'PAID'
-                             ? (type.name() == 'PURCHASE' ? 'PAID' : 'RECEIPT')
+                             ? 'RECEIPT'
                              : (type.name() == 'PURCHASE' ? 'PURCHASE' : 'INVOICE')}">INVOICE</div>
                         <div class="badge-id"
                              th:text="${invoice.invoiceId}">

@@ -23,8 +23,14 @@ import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.domain.InvoiceType;
+import com.erp.domain.finance.Invoice;
+import com.erp.domain.inventory.Vendor;
 import com.erp.service.notification.CustomerEmailService;
 import com.erp.service.DocumentSequenceService;
+import com.erp.service.pdf.VendorPaymentReceiptPdfService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +41,8 @@ import java.util.UUID;
 
 @Service
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final PaymentRepository paymentRepo;
     private final TransactionService transactionService;
@@ -48,6 +56,7 @@ public class PaymentService {
     private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
+    private final VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService;
 
     public PaymentService(PaymentRepository paymentRepo,
                           TransactionService transactionService,
@@ -60,7 +69,8 @@ public class PaymentService {
                           ChartOfAccountsRepository coaRepo,
                           InvoiceRepository invoiceRepo,
                           AuthContext auth,
-                          DocumentSequenceService documentSequenceService) {
+                          DocumentSequenceService documentSequenceService,
+                          VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService) {
 
         this.paymentRepo = paymentRepo;
         this.transactionService = transactionService;
@@ -74,6 +84,7 @@ public class PaymentService {
         this.invoiceRepo = invoiceRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
+        this.vendorPaymentReceiptPdfService = vendorPaymentReceiptPdfService;
     }
 
     @Transactional
@@ -331,7 +342,71 @@ public class PaymentService {
         postVendorPaymentToAccounting(saved);
         invoiceService.applyPurchaseInvoicePaymentForPurchaseOrder(
                 saved.getPurchaseOrderId(), saved.getAmount());
+        try {
+            invoiceService.regenerateGeneratedPurchaseInvoicePdfAfterVendorPayment(po.getId());
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to regenerate purchase invoice receipt PDF for PO id={}: {}",
+                    po.getId(),
+                    e.getMessage());
+        }
+        try {
+            String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                    .map(Invoice::getInvoiceId)
+                    .orElse(null);
+            Vendor supplier = po.getSupplier();
+            String supplierName = supplier != null ? supplier.getVendorName() : null;
+            String receiptUrl = vendorPaymentReceiptPdfService.generateAndUpload(
+                    saved,
+                    po.getCompany(),
+                    po,
+                    supplierName,
+                    purchaseInvoiceCode);
+            saved.setPdfUrl(receiptUrl);
+            saved = paymentRepo.save(saved);
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to generate vendor payment receipt PDF for payment id={}: {}",
+                    saved.getId(),
+                    e.getMessage());
+        }
         return toDTO(saved);
+    }
+
+    public String getOrCreateVendorPaymentReceiptPdfUrl(Long paymentId) {
+        Payment payment = paymentRepo.findById(paymentId)
+                .orElseThrow(() -> new RuntimeException("Payment not found"));
+        assertPaymentInTenant(payment);
+        if (payment.getPaymentDirection() != PaymentDirection.VENDOR) {
+            throw new RuntimeException("Receipt PDF is only available for vendor payments");
+        }
+        if (!"PENDING_VENDOR_PAYMENT".equalsIgnoreCase(payment.getPaymentMethod())) {
+            String existing = payment.getPdfUrl();
+            if (existing != null && !existing.isBlank() && !existing.contains("dummy.url")) {
+                return existing;
+            }
+        } else {
+            throw new RuntimeException("Confirm the vendor payment before downloading the receipt");
+        }
+        if (payment.getPurchaseOrderId() == null) {
+            throw new RuntimeException("Vendor payment is not linked to a purchase order");
+        }
+        PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
+                .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
+        String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                .map(Invoice::getInvoiceId)
+                .orElse(null);
+        Vendor supplier = po.getSupplier();
+        String supplierName = supplier != null ? supplier.getVendorName() : null;
+        String receiptUrl = vendorPaymentReceiptPdfService.generateAndUpload(
+                payment,
+                po.getCompany(),
+                po,
+                supplierName,
+                purchaseInvoiceCode);
+        payment.setPdfUrl(receiptUrl);
+        paymentRepo.save(payment);
+        return receiptUrl;
     }
 
     /**
