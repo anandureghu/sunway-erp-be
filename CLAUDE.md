@@ -2,6 +2,8 @@
 
 Spring Boot API (`com.erp`). Cursor: `.cursor/rules/`, `.cursor/skills/erp-development/`.
 
+**Agents:** If you establish a pattern not already documented, append rules/skills in the same session — see `.cursor/rules/capture-knowledge.mdc` and [AGENTS.md](./AGENTS.md).
+
 ## Commands
 
 ```bash

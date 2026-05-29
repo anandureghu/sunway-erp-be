@@ -58,3 +58,7 @@ Prefer typed exceptions over `RuntimeException` for expected failures.
 ## Git
 
 Commit only when the user asks. No Co-authored-by or agent branding.
+
+## Agent-maintained docs
+
+If you introduce a reusable pattern not already in rules/skills, append it per **`capture-knowledge.mdc`** (same session, before you finish).

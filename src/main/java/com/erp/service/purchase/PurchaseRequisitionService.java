@@ -216,7 +216,8 @@ public class PurchaseRequisitionService {
 
         pr.setRequestedBy(requester);
         pr.setPreferredSupplier(supplier);
-        pr.setSupplierAddress(dto.getSupplierAddress());
+        pr.setSupplierAddress(
+                supplier != null ? trimToNull(dto.getSupplierAddress()) : null);
         pr.setDepartment(department);
         pr.setDebitAccount(debitAccount);
         pr.setCreditAccount(creditAccount);
@@ -273,7 +274,8 @@ public class PurchaseRequisitionService {
         validateCreateDto(dto);
         PurchaseRequisition pr = getEntity(id);
         if (pr.getStatus() != PurchaseRequisitionStatus.DRAFT) {
-            throw new RuntimeException("Only DRAFT requisitions can be updated");
+            throw new RuntimeException(
+                    "Only draft requisitions can be edited. Rejected requisitions must use Revise first.");
         }
         assertNoPendingProcurementForDto(dto, id);
 

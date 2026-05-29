@@ -141,20 +141,25 @@ public class PurchaseOrderService {
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
             throw new RuntimeException("Supplier can only be assigned on DRAFT purchase orders");
         }
+        applyDraftSupplierChange(po, dto.getSupplierId());
+        return toDTO(repo.save(po));
+    }
 
+    private void applyDraftSupplierChange(PurchaseOrder po, Long supplierId) {
         Long companyId = po.getCompany().getId();
-        Vendor supplier = vendorRepo.findById(dto.getSupplierId())
+        Vendor supplier = vendorRepo.findById(supplierId)
                 .orElseThrow(() -> new RuntimeException("Supplier not found"));
         if (!supplier.getCompany().getId().equals(companyId)) {
             throw new RuntimeException("Supplier does not belong to this company");
         }
-
+        boolean changed = po.getSupplier() == null
+                || !po.getSupplier().getId().equals(supplierId);
         po.setSupplier(supplier);
-        PurchaseOrder saved = repo.save(po);
-        repo.flush();
-        vendorPayableService.createVendorPayableForPurchaseOrder(saved);
-        purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(saved.getId());
-        return toDTO(saved);
+        if (changed) {
+            repo.flush();
+            vendorPayableService.createVendorPayableForPurchaseOrder(po);
+            purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(po.getId());
+        }
     }
 
     public PurchaseOrderResponseDTO confirm(Long id) {
@@ -188,6 +193,12 @@ public class PurchaseOrderService {
 
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
             throw new RuntimeException("Only DRAFT purchase orders can be updated");
+        }
+
+        if (dto.getSupplierId() != null) {
+            applyDraftSupplierChange(po, dto.getSupplierId());
+        } else if (po.getSupplier() == null) {
+            throw new RuntimeException("Supplier is required on draft purchase orders");
         }
 
         po.getItems().clear();

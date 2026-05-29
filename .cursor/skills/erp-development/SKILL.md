@@ -8,6 +8,10 @@ description: >-
 
 # Sunway backend development
 
+## Maintain docs
+
+Before closing a task: if you used a pattern **not** already in `.cursor/rules/` or this skill, append it per `.cursor/rules/capture-knowledge.mdc` (usually under **Captured patterns** below or `project.mdc`).
+
 ## Find the right module
 
 1. Locate `controller/<module>/` for the REST path (e.g. `/api/purchase/`, `/api/sales/`).
@@ -57,3 +61,9 @@ mvn compile -DskipTests
 ```
 
 Restart app if migration added.
+
+## Captured patterns
+
+<!-- Agents: prepend new bullets here (newest first). Do not duplicate project.mdc. -->
+
+- **Purchase orders (draft)** — `PUT` update may change `supplierId` via `applyDraftSupplierChange` only while status is `DRAFT`; use `ConflictException` if not draft. See `PurchaseOrderService`, `PurchaseOrderUpdateDTO`.
