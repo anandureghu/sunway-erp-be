@@ -3,3 +3,13 @@
 *.class
 !/target/sunway-1.0.0.jar
 !/target/sunway-1.0.0.jar.original
+
+# OS / editor
+.DS_Store
+
+# Runtime logs
+*.log
+
+# Local file uploads (use blob storage in deployed environments)
+/uploads/*
+!/uploads/.gitkeep
