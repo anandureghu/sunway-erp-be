@@ -7,6 +7,7 @@ import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
 import com.erp.service.file.FileStorageService;
 import com.erp.util.InMemoryMultipartFile;
+import com.erp.util.PaymentMethodLabels;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,8 +36,15 @@ public class VendorPaymentReceiptPdfService {
             context.setVariable("payment", payment);
             context.setVariable("company", company);
             context.setVariable("purchaseOrder", purchaseOrder);
+            String poNumber = purchaseOrder != null && purchaseOrder.getOrderNumber() != null
+                    ? purchaseOrder.getOrderNumber()
+                    : (purchaseOrder != null ? "PO-" + purchaseOrder.getId() : "—");
+            context.setVariable("poOrderNumber", poNumber);
             context.setVariable("supplierName", supplierName != null ? supplierName : "—");
             context.setVariable("purchaseInvoiceCode", purchaseInvoiceCode);
+            context.setVariable(
+                    "paymentMethodLabel",
+                    PaymentMethodLabels.displayLabel(payment.getPaymentMethod()));
 
             String html = templateEngine.process("vendor_payment_receipt", context);
 

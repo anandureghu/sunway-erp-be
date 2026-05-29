@@ -44,7 +44,7 @@
     <tr>
         <td width="50%">
             <div class="label">Purchase order</div>
-            <div class="value" th:text="${purchaseOrder.orderNumber}">PO-0001</div>
+            <div class="value" th:text="${poOrderNumber}">PO-0001</div>
         </td>
         <td width="50%">
             <div class="label">Payment date</div>
@@ -54,7 +54,7 @@
     <tr>
         <td>
             <div class="label">Payment method</div>
-            <div class="value" th:text="${payment.paymentMethod}">BANK_TRANSFER</div>
+            <div class="value" th:text="${paymentMethodLabel}">Bank transfer</div>
         </td>
         <td>
             <div class="label">Linked invoice</div>

@@ -11,9 +11,11 @@ import com.erp.domain.purchase.PurchaseRequisition;
 import com.erp.exception.ConflictException;
 import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.hr.Company;
+import com.erp.dto.finance.ConfirmPaymentDTO;
 import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
+import com.erp.util.PaymentMethodLabels;
 import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
@@ -289,7 +291,7 @@ public class PaymentService {
     }
 
     @Transactional
-    public PaymentResponseDTO confirmPayment(Long id) {
+    public PaymentResponseDTO confirmPayment(Long id, ConfirmPaymentDTO body) {
         Payment payment = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
         assertPaymentInTenant(payment);
@@ -298,7 +300,7 @@ public class PaymentService {
                 ? payment.getPaymentDirection()
                 : PaymentDirection.CUSTOMER;
         if (dir == PaymentDirection.VENDOR) {
-            return confirmVendorPayment(payment);
+            return confirmVendorPayment(payment, body);
         }
 
         if (!"PENDING_REQUEST".equalsIgnoreCase(payment.getPaymentMethod())) {
@@ -328,8 +330,8 @@ public class PaymentService {
         return toDTO(saved);
     }
 
-    private PaymentResponseDTO confirmVendorPayment(Payment payment) {
-        if (!"PENDING_VENDOR_PAYMENT".equalsIgnoreCase(payment.getPaymentMethod())) {
+    private PaymentResponseDTO confirmVendorPayment(Payment payment, ConfirmPaymentDTO body) {
+        if (!PaymentMethodLabels.PENDING_VENDOR.equalsIgnoreCase(payment.getPaymentMethod())) {
             throw new RuntimeException("Vendor payment is already confirmed or is not pending");
         }
         if (payment.getPurchaseOrderId() == null) {
@@ -344,7 +346,14 @@ public class PaymentService {
         if (payment.getAmount() == null || payment.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Invalid payment amount");
         }
-        payment.setPaymentMethod("BANK_TRANSFER");
+        String methodCode;
+        try {
+            methodCode = PaymentMethodLabels.normalizeVendorMethod(
+                    body != null ? body.getPaymentMethod() : null);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+        payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")

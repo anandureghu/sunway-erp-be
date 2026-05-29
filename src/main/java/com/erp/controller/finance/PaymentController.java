@@ -1,6 +1,7 @@
 package com.erp.controller.finance;
 
 import com.erp.domain.finance.PaymentDirection;
+import com.erp.dto.finance.ConfirmPaymentDTO;
 import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
 import com.erp.service.finance.PaymentService;
@@ -33,8 +34,10 @@ public class PaymentController {
     }
 
     @PostMapping("/{id}/confirm")
-    public PaymentResponseDTO confirmPayment(@PathVariable("id") Long id) {
-        return paymentService.confirmPayment(id);
+    public PaymentResponseDTO confirmPayment(
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) ConfirmPaymentDTO body) {
+        return paymentService.confirmPayment(id, body);
     }
 
     @PostMapping("/{id}/archive")
