@@ -3,6 +3,7 @@ package com.erp.service.finance;
 import com.erp.domain.finance.Payment;
 import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.purchase.PurchaseOrder;
+import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
@@ -32,12 +33,15 @@ public class VendorPayableService {
     }
 
     /**
-     * Creates a pending vendor payable row when a purchase order is created (AP).
+     * Creates a pending vendor payable when the PO is released to the supplier (CONFIRMED+).
      * Idempotent if a vendor payable already exists for the PO.
      */
     @Transactional
     public void createVendorPayableForPurchaseOrder(PurchaseOrder po) {
         if (po == null || po.getId() == null) {
+            return;
+        }
+        if (!isReleasedToSupplier(po.getStatus())) {
             return;
         }
         if (paymentRepo.findFirstByPurchaseOrderIdAndPaymentDirection(po.getId(), PaymentDirection.VENDOR)
@@ -65,16 +69,29 @@ public class VendorPayableService {
     }
 
     /**
-     * Whether the PO may be released to the supplier: vendor payable must be confirmed,
-     * unless there is no vendor payable row (legacy orders).
+     * Whether finance has confirmed the vendor payment in AP (not merely released to supplier).
      */
     public boolean isVendorPaymentSettledForPurchaseOrder(Long purchaseOrderId) {
-        Optional<Payment> opt = paymentRepo.findFirstByPurchaseOrderIdAndPaymentDirection(
-                purchaseOrderId, PaymentDirection.VENDOR);
-        if (opt.isEmpty()) {
-            return true;
-        }
-        String method = opt.get().getPaymentMethod();
-        return method != null && !"PENDING_VENDOR_PAYMENT".equalsIgnoreCase(method);
+        return paymentRepo.findFirstByPurchaseOrderIdAndPaymentDirection(
+                        purchaseOrderId, PaymentDirection.VENDOR)
+                .map(p -> !isPendingVendorPayment(p.getPaymentMethod()))
+                .orElse(false);
+    }
+
+    public boolean hasPendingVendorPayable(Long purchaseOrderId) {
+        return paymentRepo.findFirstByPurchaseOrderIdAndPaymentDirection(
+                        purchaseOrderId, PaymentDirection.VENDOR)
+                .map(p -> isPendingVendorPayment(p.getPaymentMethod()))
+                .orElse(false);
+    }
+
+    private static boolean isReleasedToSupplier(PurchaseOrderStatus status) {
+        return status == PurchaseOrderStatus.CONFIRMED
+                || status == PurchaseOrderStatus.PARTIALLY_RECEIVED
+                || status == PurchaseOrderStatus.RECEIVED;
+    }
+
+    private static boolean isPendingVendorPayment(String method) {
+        return method != null && "PENDING_VENDOR_PAYMENT".equalsIgnoreCase(method.trim());
     }
 }

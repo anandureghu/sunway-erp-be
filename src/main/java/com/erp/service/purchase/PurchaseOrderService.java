@@ -27,6 +27,7 @@ import com.erp.security.context.AuthContext;
 import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
 import com.erp.service.finance.TransactionService;
 import com.erp.service.finance.VendorPayableService;
+import com.erp.exception.ConflictException;
 import com.erp.service.DocumentSequenceService;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
@@ -127,9 +128,6 @@ public class PurchaseOrderService {
                 .build();
 
         PurchaseOrder saved = repo.save(po);
-        repo.flush();
-        vendorPayableService.createVendorPayableForPurchaseOrder(saved);
-        purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(saved.getId());
         return toDTO(saved);
     }
 
@@ -157,8 +155,6 @@ public class PurchaseOrderService {
         po.setSupplier(supplier);
         if (changed) {
             repo.flush();
-            vendorPayableService.createVendorPayableForPurchaseOrder(po);
-            purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(po.getId());
         }
     }
 
@@ -175,7 +171,15 @@ public class PurchaseOrderService {
         postEncumbranceOnConfirm(po);
 
         po.setStatus(PurchaseOrderStatus.CONFIRMED);
-        return toDTO(repo.save(po));
+        PurchaseOrder saved = repo.save(po);
+        repo.flush();
+        onReleasedToSupplier(saved);
+        return toDTO(saved);
+    }
+
+    private void onReleasedToSupplier(PurchaseOrder po) {
+        vendorPayableService.createVendorPayableForPurchaseOrder(po);
+        purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(po.getId());
     }
 
     public PurchaseOrderResponseDTO get(Long id) {
@@ -241,6 +245,10 @@ public class PurchaseOrderService {
         PurchaseOrder po = getEntity(id);
         if (po.getStatus() == PurchaseOrderStatus.CANCELLED) {
             return toDTO(po);
+        }
+        if (vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId())) {
+            throw new ConflictException(
+                    "Cannot cancel this purchase order: vendor payment has already been confirmed in Accounts Payable.");
         }
         releaseEncumbranceOnCancel(po);
         po.setStatus(PurchaseOrderStatus.CANCELLED);

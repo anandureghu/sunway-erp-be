@@ -17,6 +17,7 @@ import com.erp.dto.finance.InvoiceResponse;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.sales.SalesOrderResponseDTO;
 import com.erp.domain.purchase.PurchaseOrder;
+import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
@@ -446,9 +447,8 @@ public class InvoiceService {
     }
 
     /**
-     * Creates a generated purchase (AP) cross-check invoice for a purchase order in {@code DRAFT} or any
-     * status, using company default purchase accounts. Called when the PO is first created (including
-     * when created from an approved PR). Idempotent: returns the existing invoice if one already exists.
+     * Creates a generated purchase (AP) cross-check invoice after the PO is released to the supplier.
+     * Idempotent: returns the existing invoice if one already exists.
      * Runs in a new transaction when invoked after PO commit so PDF generation sees a persisted PO.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
@@ -461,6 +461,14 @@ public class InvoiceService {
         PurchaseOrder po = purchaseOrderRepo.findById(purchaseOrderId)
                 .filter(p -> p.getCompany().getId().equals(auth.getCurrentCompanyId()))
                 .orElseThrow(() -> new RuntimeException("Purchase order not found"));
+
+        if (po.getStatus() == PurchaseOrderStatus.DRAFT || po.getStatus() == PurchaseOrderStatus.CANCELLED) {
+            throw new RuntimeException(
+                    "Purchase invoice is created when the purchase order is released to the supplier (confirmed).");
+        }
+        if (po.getSupplier() == null) {
+            throw new RuntimeException("Assign a supplier before generating the purchase invoice");
+        }
 
         Company company = po.getCompany();
         if (company.getDefaultPurchaseDebitAccountId() == null
@@ -484,7 +492,8 @@ public class InvoiceService {
         req.setDebitAccount(company.getDefaultPurchaseDebitAccountId());
         req.setCreditAccount(company.getDefaultPurchaseCreditAccountId());
         req.setItemDescription("Auto-generated from purchase order " + po.getOrderNumber());
-        req.setNotesRemarks("Auto-generated when purchase order was created (internal cross-check).");
+        req.setNotesRemarks(
+                "Auto-generated when purchase order was released to supplier (internal cross-check for AP matching).");
         req.setDocumentSource(InvoiceDocumentSource.GENERATED);
 
         InvoiceResponse response = createInvoice(req, null, false);
@@ -565,7 +574,21 @@ public class InvoiceService {
         if (type == null) {
             return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream().map(this::toDTO).toList();
         }
-        return repo.findByCompany_IdAndTypeOrderByCreatedAtDesc(companyId, type).stream().map(this::toDTO).toList();
+        return repo.findByCompany_IdAndTypeOrderByCreatedAtDesc(companyId, type).stream()
+                .filter(inv -> type != InvoiceType.PURCHASE || isPurchaseInvoiceVisibleInAccountsPayable(inv))
+                .map(this::toDTO)
+                .toList();
+    }
+
+    private boolean isPurchaseInvoiceVisibleInAccountsPayable(Invoice invoice) {
+        if (invoice.getOrderId() == null) {
+            return true;
+        }
+        return purchaseOrderRepo.findById(invoice.getOrderId())
+                .map(po -> po.getStatus() == PurchaseOrderStatus.CONFIRMED
+                        || po.getStatus() == PurchaseOrderStatus.PARTIALLY_RECEIVED
+                        || po.getStatus() == PurchaseOrderStatus.RECEIVED)
+                .orElse(false);
     }
 
     public List<InvoiceResponse> getInvoicesByCustomer(String toParty) {

@@ -6,7 +6,9 @@ import com.erp.domain.finance.Invoice;
 import com.erp.domain.finance.Payment;
 import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.purchase.PurchaseOrder;
+import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
+import com.erp.exception.ConflictException;
 import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.hr.Company;
 import com.erp.dto.finance.CreatePaymentDTO;
@@ -204,8 +206,24 @@ public class PaymentService {
                     .toList();
         }
         return paymentRepo.findByCompany_IdAndPaymentDirectionOrderByCreatedAtDesc(companyId, PaymentDirection.VENDOR).stream()
+                .filter(this::isVendorPaymentVisibleInAccountsPayable)
                 .map(this::toDTO)
                 .toList();
+    }
+
+    private boolean isVendorPaymentVisibleInAccountsPayable(Payment payment) {
+        if (payment.getPurchaseOrderId() == null) {
+            return false;
+        }
+        return purchaseOrderRepo.findById(payment.getPurchaseOrderId())
+                .map(po -> isPurchaseOrderEligibleForAccountsPayable(po.getStatus()))
+                .orElse(false);
+    }
+
+    private static boolean isPurchaseOrderEligibleForAccountsPayable(PurchaseOrderStatus status) {
+        return status == PurchaseOrderStatus.CONFIRMED
+                || status == PurchaseOrderStatus.PARTIALLY_RECEIVED
+                || status == PurchaseOrderStatus.RECEIVED;
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsByInvoice(String invoiceId) {
@@ -290,6 +308,15 @@ public class PaymentService {
     private PaymentResponseDTO confirmVendorPayment(Payment payment) {
         if (!"PENDING_VENDOR_PAYMENT".equalsIgnoreCase(payment.getPaymentMethod())) {
             throw new RuntimeException("Vendor payment is already confirmed or is not pending");
+        }
+        if (payment.getPurchaseOrderId() == null) {
+            throw new RuntimeException("Vendor payment is not linked to a purchase order");
+        }
+        PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
+                .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
+        if (!isPurchaseOrderEligibleForAccountsPayable(po.getStatus())) {
+            throw new ConflictException(
+                    "Release the purchase order to the supplier before confirming vendor payment in Accounts Payable.");
         }
         if (payment.getAmount() == null || payment.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Invalid payment amount");

@@ -28,8 +28,6 @@ import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.service.file.FileStorageService;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CoaBalanceRules;
-import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
-import com.erp.service.finance.VendorPayableService;
 import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,8 +52,6 @@ public class PurchaseRequisitionService {
     private final DepartmentRepository departmentRepo;
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final ChartOfAccountsRepository coaRepo;
-    private final VendorPayableService vendorPayableService;
-    private final PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
     private final PurchaseRequisitionDocumentRepository documentRepo;
@@ -73,8 +69,6 @@ public class PurchaseRequisitionService {
             DepartmentRepository departmentRepo,
             PurchaseOrderRepository purchaseOrderRepo,
             ChartOfAccountsRepository coaRepo,
-            VendorPayableService vendorPayableService,
-            PurchaseInvoiceGenerationScheduler purchaseInvoiceGenerationScheduler,
             DocumentSequenceService documentSequenceService,
             PurchaseRequisitionDocumentRepository documentRepo,
             FileStorageService fileStorageService,
@@ -90,8 +84,6 @@ public class PurchaseRequisitionService {
         this.departmentRepo = departmentRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
         this.coaRepo = coaRepo;
-        this.vendorPayableService = vendorPayableService;
-        this.purchaseInvoiceGenerationScheduler = purchaseInvoiceGenerationScheduler;
         this.documentSequenceService = documentSequenceService;
         this.documentRepo = documentRepo;
         this.fileStorageService = fileStorageService;
@@ -562,7 +554,6 @@ public class PurchaseRequisitionService {
 
         PurchaseOrder saved = purchaseOrderRepo.save(po);
         purchaseOrderRepo.flush();
-        vendorPayableService.createVendorPayableForPurchaseOrder(saved);
         return saved;
     }
 
