@@ -5,6 +5,7 @@ import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.finance.InvoiceDocumentSource;
 import com.erp.domain.finance.Payment;
+import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.finance.Transaction;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
@@ -114,7 +115,8 @@ public class InvoiceService {
                                 tx.getCreditAccount().getId(),
                                 tx.getDebitAccount().getId(),
                                 LocalDate.now(),
-                                "PAYMENT_REVERSAL");
+                                "PAYMENT_REVERSAL",
+                                tx.getInvoiceId() != null ? tx.getInvoiceId() : invoice.getInvoiceId());
                     }
                 }
             }
@@ -139,8 +141,8 @@ public class InvoiceService {
                         salesOrderId,
                         invoice.getAmount(),
                         invoice.getDebitAccount().getId(),
-                        invoice.getCreditAccount().getId()
-                );
+                        invoice.getCreditAccount().getId(),
+                        invoice.getInvoiceId());
             } catch (ResponseStatusException ignored) {
                 // If reversal already exists, keep cancellation idempotent.
             }
@@ -455,6 +457,7 @@ public class InvoiceService {
     public InvoiceResponse createOrGetGeneratedPurchaseInvoiceForPurchaseOrder(Long purchaseOrderId) {
         Optional<Invoice> existing = repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
         if (existing.isPresent()) {
+            linkPurchaseInvoiceToFinanceReferences(purchaseOrderId, existing.get().getInvoiceId());
             return toDTO(existing.get());
         }
 
@@ -505,7 +508,24 @@ public class InvoiceService {
         saved.setAmount(total);
         saved.setOpenAmount(total);
         saved.setOutstanding(total);
-        return toDTO(repo.save(saved));
+        Invoice persisted = repo.save(saved);
+        linkPurchaseInvoiceToFinanceReferences(purchaseOrderId, persisted.getInvoiceId());
+        return toDTO(persisted);
+    }
+
+    private void linkPurchaseInvoiceToFinanceReferences(Long purchaseOrderId, String invoiceCode) {
+        if (purchaseOrderId == null || invoiceCode == null || invoiceCode.isBlank()) {
+            return;
+        }
+        transactionService.linkInvoiceToPurchaseOrderTransactions(purchaseOrderId, invoiceCode);
+        paymentRepo.findFirstByPurchaseOrderIdAndPaymentDirection(
+                        purchaseOrderId, PaymentDirection.VENDOR)
+                .ifPresent(payment -> {
+                    if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
+                        payment.setInvoiceId(invoiceCode);
+                        paymentRepo.save(payment);
+                    }
+                });
     }
 
     // ============================================================
@@ -784,6 +804,13 @@ public class InvoiceService {
 
         CompanyInvoiceSettings invoiceSettings = getOrCreateInvoiceSettings(i.getCompany());
 
+        String orderNumber = null;
+        if (purchaseOrder != null) {
+            orderNumber = purchaseOrder.getOrderNumber();
+        } else if (salesOrder != null) {
+            orderNumber = salesOrder.getOrderNumber();
+        }
+
         return InvoiceResponse.builder()
                 .id(i.getId())
                 .invoiceId(i.getInvoiceId())
@@ -820,6 +847,7 @@ public class InvoiceService {
                 .externalDocumentUrl(i.getExternalDocumentUrl())
                 .createdAt(i.getCreatedAt())
                 .orderId(i.getOrderId())
+                .orderNumber(orderNumber)
                 .type(i.getType())
                 .salesOrder(salesOrder)
                 .purchaseOrder(purchaseOrder)

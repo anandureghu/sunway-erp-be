@@ -15,6 +15,8 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class PurchaseRequisitionItemDTO {
     private Long itemId;
+    /** Item master name (populated on read). */
+    private String itemName;
     private Integer requestedQty;
     /** Snapshot of item cost price (populated on read). */
     private BigDecimal actualItemPrice;

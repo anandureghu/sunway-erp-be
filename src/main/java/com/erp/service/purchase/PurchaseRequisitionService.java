@@ -570,13 +570,18 @@ public class PurchaseRequisitionService {
                         .createdPurchaseOrderId(createdPurchaseOrderId)
                         .items(
                                 pr.getItems().stream()
-                                        .map(i -> new PurchaseRequisitionItemDTO(
-                                                i.getItem().getId(),
-                                                i.getRequestedQty(),
-                                                i.getActualItemPrice(),
-                                                i.getOtherUnitCost(),
-                                                i.getEstimatedUnitCost(),
-                                                i.getRemarks()))
+                                        .map(i -> {
+                                            PurchaseRequisitionItemDTO line =
+                                                    new PurchaseRequisitionItemDTO(
+                                                            i.getItem().getId(),
+                                                            i.getItem().getName(),
+                                                            i.getRequestedQty(),
+                                                            i.getActualItemPrice(),
+                                                            i.getOtherUnitCost(),
+                                                            i.getEstimatedUnitCost(),
+                                                            i.getRemarks());
+                                            return line;
+                                        })
                                         .toList()
                         )
                         .documents(

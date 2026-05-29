@@ -17,6 +17,10 @@ public class PaymentResponseDTO {
     /** CUSTOMER = AR receipt; VENDOR = AP vendor payable / payment */
     private String paymentDirection;
     private Long purchaseOrderId;
+    /** Business PO number when {@link #purchaseOrderId} is set. */
+    private String purchaseOrderNumber;
+    /** Business SO number for customer payments linked to a sales invoice. */
+    private String salesOrderNumber;
     private String pdfUrl;
     private boolean archived;
     private Instant createdAt;

@@ -568,7 +568,8 @@ public class TransactionService {
                                                    Long debitAccountId,
                                                    Long creditAccountId,
                                                    LocalDate txDate,
-                                                   String txType) {
+                                                   String txType,
+                                                   String invoiceId) {
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
@@ -587,6 +588,7 @@ public class TransactionService {
                 .creditAccount(creditAccount)
                 .debitAccount(debitAccount)
                 .paymentId(paymentId != null ? String.valueOf(paymentId) : null)
+                .invoiceId(invoiceId)
                 .source(null)
                 .sourceLocked(false)
                 .createdAt(Instant.now())
@@ -598,13 +600,39 @@ public class TransactionService {
         return saved;
     }
 
+    /**
+     * Backfills {@code invoice_id} on PO-related GL rows (encumbrance, vendor payment, cancel reversal)
+     * after the generated purchase invoice exists.
+     */
+    @Transactional
+    public void linkInvoiceToPurchaseOrderTransactions(Long purchaseOrderId, String invoiceId) {
+        if (purchaseOrderId == null || invoiceId == null || invoiceId.isBlank()) {
+            return;
+        }
+        List<String> linkableTypes = List.of(
+                TYPE_PURCHASE_ORDER_ENCUMBRANCE,
+                TYPE_PURCHASE_ORDER_CANCEL_REVERSAL,
+                TYPE_VENDOR_PAYMENT);
+        List<Transaction> toUpdate = repo.findByRelatedIdAndInvoiceIdIsNull(purchaseOrderId).stream()
+                .filter(tx -> tx.getTransactionType() != null
+                        && linkableTypes.contains(tx.getTransactionType()))
+                .toList();
+        for (Transaction tx : toUpdate) {
+            tx.setInvoiceId(invoiceId);
+        }
+        if (!toUpdate.isEmpty()) {
+            repo.saveAll(toUpdate);
+        }
+    }
+
     @Transactional
     public TransactionResponseDTO createSalesOrderCancelReversal(
             Long companyId,
             Long relatedSalesOrderId,
             BigDecimal amount,
             Long originalDebitAccountId,
-            Long originalCreditAccountId
+            Long originalCreditAccountId,
+            String invoiceId
     ) {
         if (relatedSalesOrderId == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid sales order id and amount are required");
@@ -635,6 +663,7 @@ public class TransactionService {
                 .creditAccount(creditAccount)
                 .transactionDescription("Sales order cancellation reversal")
                 .relatedId(relatedSalesOrderId)
+                .invoiceId(invoiceId)
                 .source(null)
                 .sourceLocked(false)
                 .createdAt(Instant.now())

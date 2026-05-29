@@ -157,7 +157,7 @@ public class PaymentService {
         PaymentDirection dir = p.getPaymentDirection() != null
                 ? p.getPaymentDirection()
                 : PaymentDirection.CUSTOMER;
-        return PaymentResponseDTO.builder()
+        PaymentResponseDTO.PaymentResponseDTOBuilder b = PaymentResponseDTO.builder()
                 .id(p.getId())
                 .paymentCode(p.getPaymentCode())
                 .companyId(p.getCompany().getId())
@@ -169,8 +169,20 @@ public class PaymentService {
                 .purchaseOrderId(p.getPurchaseOrderId())
                 .pdfUrl(p.getPdfUrl())
                 .archived(p.isArchived())
-                .createdAt(p.getCreatedAt())
-                .build();
+                .createdAt(p.getCreatedAt());
+        if (p.getPurchaseOrderId() != null) {
+            purchaseOrderRepo.findById(p.getPurchaseOrderId())
+                    .ifPresent(po -> b.purchaseOrderNumber(po.getOrderNumber()));
+        }
+        if (p.getInvoiceId() != null && !p.getInvoiceId().isBlank()) {
+            invoiceRepo.findByInvoiceId(p.getInvoiceId()).ifPresent(inv -> {
+                if (inv.getType() == InvoiceType.SALES && inv.getOrderId() != null) {
+                    salesOrderRepo.findById(inv.getOrderId())
+                            .ifPresent(so -> b.salesOrderNumber(so.getOrderNumber()));
+                }
+            });
+        }
+        return b.build();
     }
 
     @Transactional
@@ -338,6 +350,13 @@ public class PaymentService {
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Vendor payment confirmed (AP)"
         );
+        invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                .map(Invoice::getInvoiceId)
+                .ifPresent(code -> {
+                    if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
+                        payment.setInvoiceId(code);
+                    }
+                });
         Payment saved = paymentRepo.save(payment);
         postVendorPaymentToAccounting(saved);
         invoiceService.applyPurchaseInvoicePaymentForPurchaseOrder(
@@ -458,6 +477,10 @@ public class PaymentService {
                 payment.getAmount(),
                 companyId);
 
+        String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                .map(Invoice::getInvoiceId)
+                .orElse(payment.getInvoiceId());
+
         TransactionResponseDTO tx = transactionService.create(CreateTransactionDTO.builder()
                 .companyId(companyId)
                 .transactionType(TransactionService.TYPE_VENDOR_PAYMENT)
@@ -466,6 +489,7 @@ public class PaymentService {
                 .debitAccount(debitAccountId)
                 .creditAccount(creditAccountId)
                 .paymentId(String.valueOf(payment.getId()))
+                .invoiceId(purchaseInvoiceCode)
                 .relatedId(po.getId())
                 .transactionDescription(
                         encumbered
@@ -519,7 +543,8 @@ public class PaymentService {
                 debitAccountId,
                 creditAccountId,
                 payment.getEffectiveDate(),
-                "PAYMENT"
+                "PAYMENT",
+                invoice.getInvoiceId()
         );
     }
 
