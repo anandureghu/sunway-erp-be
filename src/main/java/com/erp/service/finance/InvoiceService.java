@@ -5,6 +5,7 @@ import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.finance.InvoiceDocumentSource;
 import com.erp.domain.finance.Payment;
+import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.finance.Transaction;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
@@ -17,6 +18,7 @@ import com.erp.dto.finance.InvoiceResponse;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.sales.SalesOrderResponseDTO;
 import com.erp.domain.purchase.PurchaseOrder;
+import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
@@ -113,7 +115,8 @@ public class InvoiceService {
                                 tx.getCreditAccount().getId(),
                                 tx.getDebitAccount().getId(),
                                 LocalDate.now(),
-                                "PAYMENT_REVERSAL");
+                                "PAYMENT_REVERSAL",
+                                tx.getInvoiceId() != null ? tx.getInvoiceId() : invoice.getInvoiceId());
                     }
                 }
             }
@@ -138,8 +141,8 @@ public class InvoiceService {
                         salesOrderId,
                         invoice.getAmount(),
                         invoice.getDebitAccount().getId(),
-                        invoice.getCreditAccount().getId()
-                );
+                        invoice.getCreditAccount().getId(),
+                        invoice.getInvoiceId());
             } catch (ResponseStatusException ignored) {
                 // If reversal already exists, keep cancellation idempotent.
             }
@@ -446,21 +449,29 @@ public class InvoiceService {
     }
 
     /**
-     * Creates a generated purchase (AP) cross-check invoice for a purchase order in {@code DRAFT} or any
-     * status, using company default purchase accounts. Called when the PO is first created (including
-     * when created from an approved PR). Idempotent: returns the existing invoice if one already exists.
+     * Creates a generated purchase (AP) cross-check invoice after the PO is released to the supplier.
+     * Idempotent: returns the existing invoice if one already exists.
      * Runs in a new transaction when invoked after PO commit so PDF generation sees a persisted PO.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public InvoiceResponse createOrGetGeneratedPurchaseInvoiceForPurchaseOrder(Long purchaseOrderId) {
         Optional<Invoice> existing = repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
         if (existing.isPresent()) {
+            linkPurchaseInvoiceToFinanceReferences(purchaseOrderId, existing.get().getInvoiceId());
             return toDTO(existing.get());
         }
 
         PurchaseOrder po = purchaseOrderRepo.findById(purchaseOrderId)
                 .filter(p -> p.getCompany().getId().equals(auth.getCurrentCompanyId()))
                 .orElseThrow(() -> new RuntimeException("Purchase order not found"));
+
+        if (po.getStatus() == PurchaseOrderStatus.DRAFT || po.getStatus() == PurchaseOrderStatus.CANCELLED) {
+            throw new RuntimeException(
+                    "Purchase invoice is created when the purchase order is released to the supplier (confirmed).");
+        }
+        if (po.getSupplier() == null) {
+            throw new RuntimeException("Assign a supplier before generating the purchase invoice");
+        }
 
         Company company = po.getCompany();
         if (company.getDefaultPurchaseDebitAccountId() == null
@@ -484,7 +495,8 @@ public class InvoiceService {
         req.setDebitAccount(company.getDefaultPurchaseDebitAccountId());
         req.setCreditAccount(company.getDefaultPurchaseCreditAccountId());
         req.setItemDescription("Auto-generated from purchase order " + po.getOrderNumber());
-        req.setNotesRemarks("Auto-generated when purchase order was created (internal cross-check).");
+        req.setNotesRemarks(
+                "Auto-generated when purchase order was released to supplier (internal cross-check for AP matching).");
         req.setDocumentSource(InvoiceDocumentSource.GENERATED);
 
         InvoiceResponse response = createInvoice(req, null, false);
@@ -496,7 +508,24 @@ public class InvoiceService {
         saved.setAmount(total);
         saved.setOpenAmount(total);
         saved.setOutstanding(total);
-        return toDTO(repo.save(saved));
+        Invoice persisted = repo.save(saved);
+        linkPurchaseInvoiceToFinanceReferences(purchaseOrderId, persisted.getInvoiceId());
+        return toDTO(persisted);
+    }
+
+    private void linkPurchaseInvoiceToFinanceReferences(Long purchaseOrderId, String invoiceCode) {
+        if (purchaseOrderId == null || invoiceCode == null || invoiceCode.isBlank()) {
+            return;
+        }
+        transactionService.linkInvoiceToPurchaseOrderTransactions(purchaseOrderId, invoiceCode);
+        paymentRepo.findFirstByPurchaseOrderIdAndPaymentDirection(
+                        purchaseOrderId, PaymentDirection.VENDOR)
+                .ifPresent(payment -> {
+                    if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
+                        payment.setInvoiceId(invoiceCode);
+                        paymentRepo.save(payment);
+                    }
+                });
     }
 
     // ============================================================
@@ -537,6 +566,23 @@ public class InvoiceService {
                 .ifPresent(invoiceCode -> applyPayment(invoiceCode, amount));
     }
 
+    /**
+     * Regenerates the ERP-generated purchase invoice PDF after vendor payment so the document
+     * shows PAID / receipt styling (same pattern as sales receipts).
+     */
+    public void regenerateGeneratedPurchaseInvoicePdfAfterVendorPayment(Long purchaseOrderId) {
+        if (purchaseOrderId == null) {
+            return;
+        }
+        repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
+                .filter(inv -> inv.getDocumentSource() == InvoiceDocumentSource.GENERATED)
+                .filter(inv -> {
+                    String st = inv.getStatus() == null ? "" : inv.getStatus().trim();
+                    return "PAID".equalsIgnoreCase(st) || "PARTIALLY_PAID".equalsIgnoreCase(st);
+                })
+                .ifPresent(this::generateAndUploadInvoicePdf);
+    }
+
     // ============================================================
     // READ OPERATIONS
     // ============================================================
@@ -565,7 +611,21 @@ public class InvoiceService {
         if (type == null) {
             return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream().map(this::toDTO).toList();
         }
-        return repo.findByCompany_IdAndTypeOrderByCreatedAtDesc(companyId, type).stream().map(this::toDTO).toList();
+        return repo.findByCompany_IdAndTypeOrderByCreatedAtDesc(companyId, type).stream()
+                .filter(inv -> type != InvoiceType.PURCHASE || isPurchaseInvoiceVisibleInAccountsPayable(inv))
+                .map(this::toDTO)
+                .toList();
+    }
+
+    private boolean isPurchaseInvoiceVisibleInAccountsPayable(Invoice invoice) {
+        if (invoice.getOrderId() == null) {
+            return true;
+        }
+        return purchaseOrderRepo.findById(invoice.getOrderId())
+                .map(po -> po.getStatus() == PurchaseOrderStatus.CONFIRMED
+                        || po.getStatus() == PurchaseOrderStatus.PARTIALLY_RECEIVED
+                        || po.getStatus() == PurchaseOrderStatus.RECEIVED)
+                .orElse(false);
     }
 
     public List<InvoiceResponse> getInvoicesByCustomer(String toParty) {
@@ -744,6 +804,13 @@ public class InvoiceService {
 
         CompanyInvoiceSettings invoiceSettings = getOrCreateInvoiceSettings(i.getCompany());
 
+        String orderNumber = null;
+        if (purchaseOrder != null) {
+            orderNumber = purchaseOrder.getOrderNumber();
+        } else if (salesOrder != null) {
+            orderNumber = salesOrder.getOrderNumber();
+        }
+
         return InvoiceResponse.builder()
                 .id(i.getId())
                 .invoiceId(i.getInvoiceId())
@@ -780,6 +847,7 @@ public class InvoiceService {
                 .externalDocumentUrl(i.getExternalDocumentUrl())
                 .createdAt(i.getCreatedAt())
                 .orderId(i.getOrderId())
+                .orderNumber(orderNumber)
                 .type(i.getType())
                 .salesOrder(salesOrder)
                 .purchaseOrder(purchaseOrder)

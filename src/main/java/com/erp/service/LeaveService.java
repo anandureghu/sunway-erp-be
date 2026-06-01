@@ -6,12 +6,14 @@ import com.erp.domain.EmployeeLeave;
 import com.erp.domain.EmployeeLeaveBalance;
 import com.erp.domain.LeaveStatus;
 import com.erp.domain.User;
+import com.erp.domain.hr.Company;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
 import com.erp.dto.leave.LeaveHistoryDTO;
 import com.erp.dto.leave.LeavePreviewDTO;
 import com.erp.dto.leave.LeaveRequestDTO;
 import com.erp.repo.CompanyLeavePolicyRepository;
+import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeLeaveBalanceRepository;
 import com.erp.repo.EmployeeLeaveRepository;
 import com.erp.repo.EmployeeRepository;
@@ -29,6 +31,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -49,6 +53,7 @@ public class LeaveService {
     private final EmployeeLeaveBalanceRepository balanceRepo;
     private final EmployeeLeaveRepository leaveRepo;
     private final UserRepository userRepo;
+    private final EmployeeCurrentJobRepo currentJobRepo;
     private final AuthContext authContext;
     private final FileStorageService fileStorageService;
     private final PermissionCheckService permissionCheckService;
@@ -92,6 +97,7 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, leaveType);
         validateGender(policy, employee);
+        enforceAccrualRules(employee, policy);
 
         if (!Boolean.TRUE.equals(policy.getPaid())) {
             return new LeavePreviewDTO(totalDays, 0, 0);
@@ -102,7 +108,7 @@ public class LeaveService {
         int remainingAfter = remainingBefore - totalDays;
 
         if (remainingAfter < 0) {
-            throw new RuntimeException("Insufficient leave balance");
+            throw new RuntimeException(insufficientBalanceMessage(employee, policy, totalDays));
         }
 
         return new LeavePreviewDTO(totalDays, remainingBefore, remainingAfter);
@@ -120,12 +126,13 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
         validateGender(policy, employee);
+        enforceAccrualRules(employee, policy);
         validateSupportingDocument(policy.getLeaveType(), supportingDocument);
 
         if (Boolean.TRUE.equals(policy.getPaid())) {
             EmployeeLeaveBalance balance = getOrCreateBalance(employee, policy);
             if (balance.getRemainingLeaves() < totalDays) {
-                throw new RuntimeException("Insufficient leave balance");
+                throw new RuntimeException(insufficientBalanceMessage(employee, policy, totalDays));
             }
         }
 
@@ -231,12 +238,14 @@ public class LeaveService {
         }
 
         CompanyLeavePolicy policy = getPolicy(leave.getEmployee(), leave.getLeaveType());
+        enforceAccrualRules(leave.getEmployee(), policy);
 
         if (Boolean.TRUE.equals(policy.getPaid())) {
             EmployeeLeaveBalance balance = getOrCreateBalance(leave.getEmployee(), policy);
 
             if (balance.getRemainingLeaves() < leave.getTotalDays()) {
-                throw new RuntimeException("Insufficient leave balance");
+                throw new RuntimeException(
+                        insufficientBalanceMessage(leave.getEmployee(), policy, leave.getTotalDays()));
             }
 
             balance.setRemainingLeaves(balance.getRemainingLeaves() - leave.getTotalDays());
@@ -349,12 +358,13 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
         validateGender(policy, employee);
+        enforceAccrualRules(employee, policy);
         validateSupportingDocument(policy.getLeaveType(), supportingDocument);
 
         if (Boolean.TRUE.equals(policy.getPaid())) {
             EmployeeLeaveBalance balance = getOrCreateBalance(employee, policy);
             if (balance.getRemainingLeaves() < newDays) {
-                throw new RuntimeException("Insufficient leave balance");
+                throw new RuntimeException(insufficientBalanceMessage(employee, policy, newDays));
             }
         }
 
@@ -519,15 +529,151 @@ public class LeaveService {
     }
 
     private EmployeeLeaveBalance getOrCreateBalance(Employee employee, CompanyLeavePolicy policy) {
-        return findBalance(employee, policy.getLeaveType())
+        EmployeeLeaveBalance balance = findBalance(employee, policy.getLeaveType())
                 .orElseGet(() -> {
                     EmployeeLeaveBalance newBalance = new EmployeeLeaveBalance();
                     newBalance.setEmployee(employee);
                     newBalance.setLeaveType(balanceKey(policy.getLeaveType()));
-                    newBalance.setTotalLeaves(policy.getDefaultDays());
-                    newBalance.setRemainingLeaves(policy.getDefaultDays());
+                    int initial = isAccruedAnnualLeave(employee, policy)
+                            ? accruedAnnualDays(employee, LocalDate.now())
+                            : policy.getDefaultDays();
+                    newBalance.setTotalLeaves(initial);
+                    newBalance.setRemainingLeaves(initial);
                     return balanceRepo.save(newBalance);
                 });
+
+        // For accrued annual leave, the "total" must follow months worked rather
+        // than the static policy default. Recompute on every read so balances
+        // reflect the live accrual without needing a nightly job.
+        if (isAccruedAnnualLeave(employee, policy)) {
+            int accrued = accruedAnnualDays(employee, LocalDate.now());
+            int used = Math.max(balance.getTotalLeaves() - balance.getRemainingLeaves(), 0);
+            int newRemaining = Math.max(accrued - used, 0);
+            if (balance.getTotalLeaves() != accrued || balance.getRemainingLeaves() != newRemaining) {
+                balance.setTotalLeaves(accrued);
+                balance.setRemainingLeaves(newRemaining);
+                balance = balanceRepo.save(balance);
+            }
+        }
+
+        return balance;
+    }
+
+    /**
+     * Enforces the configurable annual-leave rules (minimum service period and
+     * accrual cap). Other leave types are unaffected.
+     */
+    private void enforceAccrualRules(Employee employee, CompanyLeavePolicy policy) {
+        if (!isAccruedAnnualLeave(employee, policy)) {
+            return;
+        }
+
+        Company company = employee.getCompany();
+        Integer minMonths = company.getMinServiceMonthsForAnnualLeave();
+        if (minMonths == null || minMonths <= 0) {
+            return;
+        }
+
+        LocalDate joinDate = resolveJoinDate(employee);
+        if (joinDate == null) {
+            throw new RuntimeException(
+                    "Annual leave requires a join date — set it on the employee profile "
+                            + "or the Current Job's start / effective date");
+        }
+
+        long monthsWorked = ChronoUnit.MONTHS.between(joinDate, LocalDate.now());
+        if (monthsWorked < minMonths) {
+            throw new RuntimeException(
+                    "Annual leave requires a minimum of " + minMonths
+                            + " months of service (current: " + monthsWorked + ")");
+        }
+    }
+
+    /**
+     * Effective join date for accrual purposes. Prefers
+     * {@link Employee#getJoinDate()}; if HR only filled in the Current Job
+     * dates, falls back to the current-job start date (and then to
+     * effective-from). Returning null tells the caller no date is available.
+     */
+    private LocalDate resolveJoinDate(Employee employee) {
+        if (employee == null) {
+            return null;
+        }
+        if (employee.getJoinDate() != null) {
+            return employee.getJoinDate();
+        }
+        if (employee.getId() == null) {
+            return null;
+        }
+        return currentJobRepo.findByEmployee_Id(employee.getId())
+                .map(job -> job.getStartDate() != null
+                        ? job.getStartDate()
+                        : job.getEffectiveFrom())
+                .orElse(null);
+    }
+
+    private boolean isAccruedAnnualLeave(Employee employee, CompanyLeavePolicy policy) {
+        if (employee == null || employee.getCompany() == null || policy == null) {
+            return false;
+        }
+        return employee.getCompany().isAnnualLeaveAccrualEnabled()
+                && isAnnualLeave(policy.getLeaveType());
+    }
+
+    private boolean isAnnualLeave(String leaveType) {
+        String normalized = key(leaveType);
+        return normalized != null && normalized.contains("ANNUAL");
+    }
+
+    /** Average days per month — used to prorate accrual within a partial month. */
+    private static final BigDecimal AVG_DAYS_PER_MONTH = new BigDecimal("30.4375");
+
+    /**
+     * Builds a clearer "insufficient balance" message. For accrued annual leave,
+     * shows current balance, days requested, days of service, and accrual rate
+     * so HR can see *why* there isn't enough yet rather than guessing.
+     */
+    private String insufficientBalanceMessage(Employee employee, CompanyLeavePolicy policy, int requestedDays) {
+        EmployeeLeaveBalance balance = getOrCreateBalance(employee, policy);
+        int remaining = balance.getRemainingLeaves();
+
+        if (isAccruedAnnualLeave(employee, policy)) {
+            LocalDate joinDate = resolveJoinDate(employee);
+            long daysWorked = joinDate != null
+                    ? Math.max(ChronoUnit.DAYS.between(joinDate, LocalDate.now()), 0)
+                    : 0;
+            BigDecimal rate = employee.getCompany().getAnnualLeaveAccrualDaysPerMonth();
+            return "Insufficient leave balance: requested " + requestedDays
+                    + " day(s) but only " + remaining + " accrued (employee has "
+                    + daysWorked + " day(s) of service at " + rate
+                    + " day(s) per month).";
+        }
+
+        return "Insufficient leave balance: requested " + requestedDays
+                + " day(s) but only " + remaining + " available.";
+    }
+
+    private int accruedAnnualDays(Employee employee, LocalDate asOf) {
+        LocalDate joinDate = resolveJoinDate(employee);
+        if (joinDate == null) {
+            return 0;
+        }
+        long daysWorked = ChronoUnit.DAYS.between(joinDate, asOf);
+        if (daysWorked <= 0) {
+            return 0;
+        }
+        BigDecimal rate = employee.getCompany().getAnnualLeaveAccrualDaysPerMonth();
+        if (rate == null) {
+            rate = new BigDecimal("1.50");
+        }
+        // Day-prorated accrual: a new hire who's been here 29 days earns
+        // floor(29 * 1.5 / 30.4375) = 1 day rather than getting nothing
+        // until day 30.
+        BigDecimal months = BigDecimal.valueOf(daysWorked)
+                .divide(AVG_DAYS_PER_MONTH, 6, RoundingMode.HALF_UP);
+        return rate.multiply(months)
+                .setScale(0, RoundingMode.FLOOR)
+                .intValue();
     }
 
     private Optional<EmployeeLeaveBalance> findBalance(Employee employee, String leaveType) {

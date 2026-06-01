@@ -81,6 +81,7 @@ public class UserService {
                 .firstName(emp != null ? emp.getFirstName() : null)
                 .lastName(emp != null ? emp.getLastName() : null)
                 .phoneNo(emp != null ? emp.getPhoneNo() : null)
+                .imageUrl(emp != null ? emp.getImageUrl() : null)
 
                 .companyId(
                         emp != null && emp.getCompany() != null

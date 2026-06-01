@@ -6,12 +6,16 @@ import com.erp.domain.finance.Invoice;
 import com.erp.domain.finance.Payment;
 import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.purchase.PurchaseOrder;
+import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
+import com.erp.exception.ConflictException;
 import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.hr.Company;
+import com.erp.dto.finance.ConfirmPaymentDTO;
 import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
+import com.erp.util.PaymentMethodLabels;
 import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
@@ -21,8 +25,14 @@ import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.domain.InvoiceType;
+import com.erp.domain.finance.Invoice;
+import com.erp.domain.inventory.Vendor;
 import com.erp.service.notification.CustomerEmailService;
 import com.erp.service.DocumentSequenceService;
+import com.erp.service.pdf.VendorPaymentReceiptPdfService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +43,8 @@ import java.util.UUID;
 
 @Service
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final PaymentRepository paymentRepo;
     private final TransactionService transactionService;
@@ -46,6 +58,7 @@ public class PaymentService {
     private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
+    private final VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService;
 
     public PaymentService(PaymentRepository paymentRepo,
                           TransactionService transactionService,
@@ -58,7 +71,8 @@ public class PaymentService {
                           ChartOfAccountsRepository coaRepo,
                           InvoiceRepository invoiceRepo,
                           AuthContext auth,
-                          DocumentSequenceService documentSequenceService) {
+                          DocumentSequenceService documentSequenceService,
+                          VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService) {
 
         this.paymentRepo = paymentRepo;
         this.transactionService = transactionService;
@@ -72,6 +86,7 @@ public class PaymentService {
         this.invoiceRepo = invoiceRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
+        this.vendorPaymentReceiptPdfService = vendorPaymentReceiptPdfService;
     }
 
     @Transactional
@@ -144,7 +159,7 @@ public class PaymentService {
         PaymentDirection dir = p.getPaymentDirection() != null
                 ? p.getPaymentDirection()
                 : PaymentDirection.CUSTOMER;
-        return PaymentResponseDTO.builder()
+        PaymentResponseDTO.PaymentResponseDTOBuilder b = PaymentResponseDTO.builder()
                 .id(p.getId())
                 .paymentCode(p.getPaymentCode())
                 .companyId(p.getCompany().getId())
@@ -156,8 +171,20 @@ public class PaymentService {
                 .purchaseOrderId(p.getPurchaseOrderId())
                 .pdfUrl(p.getPdfUrl())
                 .archived(p.isArchived())
-                .createdAt(p.getCreatedAt())
-                .build();
+                .createdAt(p.getCreatedAt());
+        if (p.getPurchaseOrderId() != null) {
+            purchaseOrderRepo.findById(p.getPurchaseOrderId())
+                    .ifPresent(po -> b.purchaseOrderNumber(po.getOrderNumber()));
+        }
+        if (p.getInvoiceId() != null && !p.getInvoiceId().isBlank()) {
+            invoiceRepo.findByInvoiceId(p.getInvoiceId()).ifPresent(inv -> {
+                if (inv.getType() == InvoiceType.SALES && inv.getOrderId() != null) {
+                    salesOrderRepo.findById(inv.getOrderId())
+                            .ifPresent(so -> b.salesOrderNumber(so.getOrderNumber()));
+                }
+            });
+        }
+        return b.build();
     }
 
     @Transactional
@@ -204,8 +231,24 @@ public class PaymentService {
                     .toList();
         }
         return paymentRepo.findByCompany_IdAndPaymentDirectionOrderByCreatedAtDesc(companyId, PaymentDirection.VENDOR).stream()
+                .filter(this::isVendorPaymentVisibleInAccountsPayable)
                 .map(this::toDTO)
                 .toList();
+    }
+
+    private boolean isVendorPaymentVisibleInAccountsPayable(Payment payment) {
+        if (payment.getPurchaseOrderId() == null) {
+            return false;
+        }
+        return purchaseOrderRepo.findById(payment.getPurchaseOrderId())
+                .map(po -> isPurchaseOrderEligibleForAccountsPayable(po.getStatus()))
+                .orElse(false);
+    }
+
+    private static boolean isPurchaseOrderEligibleForAccountsPayable(PurchaseOrderStatus status) {
+        return status == PurchaseOrderStatus.CONFIRMED
+                || status == PurchaseOrderStatus.PARTIALLY_RECEIVED
+                || status == PurchaseOrderStatus.RECEIVED;
     }
 
     public java.util.List<PaymentResponseDTO> getPaymentsByInvoice(String invoiceId) {
@@ -248,7 +291,7 @@ public class PaymentService {
     }
 
     @Transactional
-    public PaymentResponseDTO confirmPayment(Long id) {
+    public PaymentResponseDTO confirmPayment(Long id, ConfirmPaymentDTO body) {
         Payment payment = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
         assertPaymentInTenant(payment);
@@ -257,7 +300,7 @@ public class PaymentService {
                 ? payment.getPaymentDirection()
                 : PaymentDirection.CUSTOMER;
         if (dir == PaymentDirection.VENDOR) {
-            return confirmVendorPayment(payment);
+            return confirmVendorPayment(payment, body);
         }
 
         if (!"PENDING_REQUEST".equalsIgnoreCase(payment.getPaymentMethod())) {
@@ -287,28 +330,117 @@ public class PaymentService {
         return toDTO(saved);
     }
 
-    private PaymentResponseDTO confirmVendorPayment(Payment payment) {
-        if (!"PENDING_VENDOR_PAYMENT".equalsIgnoreCase(payment.getPaymentMethod())) {
+    private PaymentResponseDTO confirmVendorPayment(Payment payment, ConfirmPaymentDTO body) {
+        if (!PaymentMethodLabels.PENDING_VENDOR.equalsIgnoreCase(payment.getPaymentMethod())) {
             throw new RuntimeException("Vendor payment is already confirmed or is not pending");
+        }
+        if (payment.getPurchaseOrderId() == null) {
+            throw new RuntimeException("Vendor payment is not linked to a purchase order");
+        }
+        PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
+                .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
+        if (!isPurchaseOrderEligibleForAccountsPayable(po.getStatus())) {
+            throw new ConflictException(
+                    "Release the purchase order to the supplier before confirming vendor payment in Accounts Payable.");
         }
         if (payment.getAmount() == null || payment.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Invalid payment amount");
         }
-        payment.setPaymentMethod("BANK_TRANSFER");
+        String methodCode;
+        try {
+            methodCode = PaymentMethodLabels.normalizeVendorMethod(
+                    body != null ? body.getPaymentMethod() : null);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+        payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Vendor payment confirmed (AP)"
         );
+        invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                .map(Invoice::getInvoiceId)
+                .ifPresent(code -> {
+                    if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
+                        payment.setInvoiceId(code);
+                    }
+                });
         Payment saved = paymentRepo.save(payment);
         postVendorPaymentToAccounting(saved);
         invoiceService.applyPurchaseInvoicePaymentForPurchaseOrder(
                 saved.getPurchaseOrderId(), saved.getAmount());
+        try {
+            invoiceService.regenerateGeneratedPurchaseInvoicePdfAfterVendorPayment(po.getId());
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to regenerate purchase invoice receipt PDF for PO id={}: {}",
+                    po.getId(),
+                    e.getMessage());
+        }
+        try {
+            String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                    .map(Invoice::getInvoiceId)
+                    .orElse(null);
+            Vendor supplier = po.getSupplier();
+            String supplierName = supplier != null ? supplier.getVendorName() : null;
+            String receiptUrl = vendorPaymentReceiptPdfService.generateAndUpload(
+                    saved,
+                    po.getCompany(),
+                    po,
+                    supplierName,
+                    purchaseInvoiceCode);
+            saved.setPdfUrl(receiptUrl);
+            saved = paymentRepo.save(saved);
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to generate vendor payment receipt PDF for payment id={}: {}",
+                    saved.getId(),
+                    e.getMessage());
+        }
         return toDTO(saved);
     }
 
+    public String getOrCreateVendorPaymentReceiptPdfUrl(Long paymentId) {
+        Payment payment = paymentRepo.findById(paymentId)
+                .orElseThrow(() -> new RuntimeException("Payment not found"));
+        assertPaymentInTenant(payment);
+        if (payment.getPaymentDirection() != PaymentDirection.VENDOR) {
+            throw new RuntimeException("Receipt PDF is only available for vendor payments");
+        }
+        if (!"PENDING_VENDOR_PAYMENT".equalsIgnoreCase(payment.getPaymentMethod())) {
+            String existing = payment.getPdfUrl();
+            if (existing != null && !existing.isBlank() && !existing.contains("dummy.url")) {
+                return existing;
+            }
+        } else {
+            throw new RuntimeException("Confirm the vendor payment before downloading the receipt");
+        }
+        if (payment.getPurchaseOrderId() == null) {
+            throw new RuntimeException("Vendor payment is not linked to a purchase order");
+        }
+        PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
+                .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
+        String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                .map(Invoice::getInvoiceId)
+                .orElse(null);
+        Vendor supplier = po.getSupplier();
+        String supplierName = supplier != null ? supplier.getVendorName() : null;
+        String receiptUrl = vendorPaymentReceiptPdfService.generateAndUpload(
+                payment,
+                po.getCompany(),
+                po,
+                supplierName,
+                purchaseInvoiceCode);
+        payment.setPdfUrl(receiptUrl);
+        paymentRepo.save(payment);
+        return receiptUrl;
+    }
+
     /**
-     * Posts the purchase to the GL when vendor payment is confirmed: debit (expense/inventory from PR), credit cash.
+     * Posts vendor payment to the GL. When the PO was already released with an encumbrance
+     * (debit/credit purchase defaults), pays down the credit (AP) account and credits cash.
+     * Otherwise debits expense/inventory from the PR and credits cash (legacy path).
      */
     private void postVendorPaymentToAccounting(Payment payment) {
         if (payment.getPurchaseOrderId() == null) {
@@ -317,35 +449,69 @@ public class PaymentService {
         PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
                 .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
         PurchaseRequisition pr = po.getSourceRequisition();
-        if (pr == null || pr.getDebitAccount() == null) {
-            throw new RuntimeException(
-                    "Cannot post vendor payment to the chart of accounts: this purchase order has no source "
-                            + "requisition with a debit (expense/inventory) account. Create the PO from an approved PR.");
-        }
         Long cashAccountId = resolveDefaultCashAccountId(payment.getCompany().getId());
         Long companyId = payment.getCompany().getId();
+
+        Long debitAccountId;
+        Long creditAccountId;
+        boolean encumbered = po.getFinanceTransactionId() != null
+                || transactionService.hasPurchaseOrderEncumbrance(po.getId());
+
+        if (encumbered) {
+            if (pr == null || pr.getCreditAccount() == null) {
+                Company company = po.getCompany();
+                Long apId = company.getDefaultPurchaseCreditAccountId();
+                if (apId == null) {
+                    throw new RuntimeException(
+                            "Cannot post vendor payment: purchase order has encumbrance but no credit (AP) account is available.");
+                }
+                debitAccountId = apId;
+            } else {
+                debitAccountId = pr.getCreditAccount().getId();
+            }
+            creditAccountId = cashAccountId;
+        } else {
+            if (pr == null || pr.getDebitAccount() == null) {
+                throw new RuntimeException(
+                        "Cannot post vendor payment to the chart of accounts: this purchase order has no source "
+                                + "requisition with a debit (expense/inventory) account. Create the PO from an approved PR.");
+            }
+            debitAccountId = pr.getDebitAccount().getId();
+            creditAccountId = cashAccountId;
+        }
+
         transactionService.validateTwoSidedPostingBalances(
-                pr.getDebitAccount().getId(),
-                cashAccountId,
+                debitAccountId,
+                creditAccountId,
                 payment.getAmount(),
                 companyId);
+
+        String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                .map(Invoice::getInvoiceId)
+                .orElse(payment.getInvoiceId());
 
         TransactionResponseDTO tx = transactionService.create(CreateTransactionDTO.builder()
                 .companyId(companyId)
                 .transactionType(TransactionService.TYPE_VENDOR_PAYMENT)
                 .transactionDate(payment.getEffectiveDate())
                 .amount(payment.getAmount())
-                .debitAccount(pr.getDebitAccount().getId())
-                .creditAccount(cashAccountId)
+                .debitAccount(debitAccountId)
+                .creditAccount(creditAccountId)
                 .paymentId(String.valueOf(payment.getId()))
+                .invoiceId(purchaseInvoiceCode)
                 .relatedId(po.getId())
-                .transactionDescription("Vendor payment (AP) — PO " + po.getOrderNumber())
+                .transactionDescription(
+                        encumbered
+                                ? "Vendor payment (AP settlement) — PO " + po.getOrderNumber()
+                                : "Vendor payment (AP) — PO " + po.getOrderNumber())
                 .build());
 
-        purchaseRequisitionRepo.findById(pr.getId()).ifPresent(managed -> {
-            managed.setFinanceTransactionId(tx.getId());
-            purchaseRequisitionRepo.save(managed);
-        });
+        if (pr != null) {
+            purchaseRequisitionRepo.findById(pr.getId()).ifPresent(managed -> {
+                managed.setFinanceTransactionId(tx.getId());
+                purchaseRequisitionRepo.save(managed);
+            });
+        }
     }
 
     private Long resolveDefaultCashAccountId(Long companyId) {
@@ -386,7 +552,8 @@ public class PaymentService {
                 debitAccountId,
                 creditAccountId,
                 payment.getEffectiveDate(),
-                "PAYMENT"
+                "PAYMENT",
+                invoice.getInvoiceId()
         );
     }
 

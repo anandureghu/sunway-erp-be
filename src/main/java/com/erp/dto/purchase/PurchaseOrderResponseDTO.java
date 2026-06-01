@@ -27,6 +27,10 @@ public class PurchaseOrderResponseDTO {
     private String createdAt;
     private Long createdById;
     private String createdByName;
-    /** False when a vendor payable exists and is still unpaid (blocks release to supplier). */
+    /** True after vendor payment is confirmed in Accounts Payable. */
     private Boolean vendorPaymentSettled;
+    /** ERP purchase invoice linked to this PO (for receipt after payment). */
+    private Long purchaseInvoiceId;
+    /** Vendor payable / payment row in AP (for payment receipt PDF). */
+    private Long vendorPaymentId;
 }

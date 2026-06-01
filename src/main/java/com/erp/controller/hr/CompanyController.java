@@ -3,6 +3,7 @@ package com.erp.controller.hr;
 import com.erp.domain.hr.Company;
 import com.erp.dto.hr.AccountingDefaultsDTO;
 import com.erp.dto.hr.CompanyDTO;
+import com.erp.dto.hr.HrPoliciesDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
 import com.erp.dto.hr.PayrollExportSettingsDTO;
 import com.erp.service.hr.CompanyService;
@@ -75,6 +76,18 @@ public class CompanyController {
             @PathVariable("id") Long id,
             @RequestBody InvoiceBrandingSettingsDTO body) {
         return companyService.updateInvoiceBrandingSettings(id, body);
+    }
+
+    @GetMapping("/{id}/hr-policies")
+    public ResponseEntity<HrPoliciesDTO> getHrPolicies(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(companyService.getHrPolicies(id));
+    }
+
+    @PutMapping("/{id}/hr-policies")
+    public ResponseEntity<HrPoliciesDTO> updateHrPolicies(
+            @PathVariable("id") Long id,
+            @RequestBody HrPoliciesDTO body) {
+        return ResponseEntity.ok(companyService.updateHrPolicies(id, body));
     }
 
     @GetMapping("/{id}/payroll-export-settings")

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 @Data
@@ -33,6 +34,23 @@ public class PurchaseRequisitionResponseDTO {
     private Long requestedById;
     private String requestedByName;
 
+    private String rejectionReason;
+    /** REJECT or SEND_BACK when returned to requester */
+    private String reviewAction;
+    private Instant rejectedAt;
+    private Long rejectedById;
+    private String rejectedByName;
+
+    private LocalDate requestedDate;
+    private LocalDate requiredDeliveryDate;
+    private String projectCode;
+    private String requisitionDescription;
+    private String urgency;
+    private LocalDate requiredByDate;
+    private Long deliveryWarehouseId;
+    private String deliveryWarehouseName;
+    private String justification;
+
     /** Populated when approval creates a purchase order in the same request. */
     private Long createdPurchaseOrderId;
 
@@ -44,4 +62,5 @@ public class PurchaseRequisitionResponseDTO {
     private Long financeTransactionId;
 
     private List<PurchaseRequisitionItemDTO> items;
+    private List<PurchaseRequisitionDocumentDTO> documents;
 }

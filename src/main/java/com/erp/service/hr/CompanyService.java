@@ -9,6 +9,7 @@ import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
 import com.erp.dto.hr.AccountingDefaultsDTO;
 import com.erp.dto.hr.CompanyDTO;
+import com.erp.dto.hr.HrPoliciesDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
 import com.erp.dto.hr.PayrollExportSettingsDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -123,6 +125,20 @@ public class CompanyService {
                 .hrEnabled(dto.isHrEnabled())
                 .financeEnabled(dto.isFinanceEnabled())
                 .inventoryEnabled(dto.isInventoryEnabled())
+                .annualLeaveAccrualEnabled(Boolean.TRUE.equals(dto.getAnnualLeaveAccrualEnabled()))
+                .annualLeaveAccrualDaysPerMonth(
+                        dto.getAnnualLeaveAccrualDaysPerMonth() != null
+                                ? dto.getAnnualLeaveAccrualDaysPerMonth()
+                                : new BigDecimal("1.50"))
+                .minServiceMonthsForAnnualLeave(
+                        dto.getMinServiceMonthsForAnnualLeave() != null
+                                ? dto.getMinServiceMonthsForAnnualLeave()
+                                : 6)
+                .retirementCompensationEnabled(Boolean.TRUE.equals(dto.getRetirementCompensationEnabled()))
+                .retirementCompensationMonthsPerYear(
+                        dto.getRetirementCompensationMonthsPerYear() != null
+                                ? dto.getRetirementCompensationMonthsPerYear()
+                                : new BigDecimal("1.00"))
                 .createdAt(Instant.now())
                 .build();
 
@@ -175,6 +191,26 @@ public class CompanyService {
         existing.setHrEnabled(updated.isHrEnabled());
         existing.setFinanceEnabled(updated.isFinanceEnabled());
         existing.setInventoryEnabled(updated.isInventoryEnabled());
+
+        // Leave accrual policy (only overwrite when client explicitly sends a value
+        // so that partial updates don't silently disable accrual).
+        if (updated.getAnnualLeaveAccrualEnabled() != null) {
+            existing.setAnnualLeaveAccrualEnabled(updated.getAnnualLeaveAccrualEnabled());
+        }
+        if (updated.getAnnualLeaveAccrualDaysPerMonth() != null) {
+            existing.setAnnualLeaveAccrualDaysPerMonth(updated.getAnnualLeaveAccrualDaysPerMonth());
+        }
+        if (updated.getMinServiceMonthsForAnnualLeave() != null) {
+            existing.setMinServiceMonthsForAnnualLeave(updated.getMinServiceMonthsForAnnualLeave());
+        }
+
+        // Retirement compensation policy
+        if (updated.getRetirementCompensationEnabled() != null) {
+            existing.setRetirementCompensationEnabled(updated.getRetirementCompensationEnabled());
+        }
+        if (updated.getRetirementCompensationMonthsPerYear() != null) {
+            existing.setRetirementCompensationMonthsPerYear(updated.getRetirementCompensationMonthsPerYear());
+        }
 
         // Preserve existing logo when no file uploaded; replace when a new file is provided.
         if (logo != null && !logo.isEmpty()) {
@@ -284,6 +320,64 @@ public class CompanyService {
             throw new RuntimeException("Default bank account does not belong to this company");
         }
         return bankId;
+    }
+
+    // ======================================================
+    // HR POLICIES (leave accrual + retirement compensation)
+    // ======================================================
+    public HrPoliciesDTO getHrPolicies(Long companyId) {
+        Company company = getCompanyById(companyId);
+        return toHrPoliciesDto(company);
+    }
+
+    @Transactional
+    public HrPoliciesDTO updateHrPolicies(Long companyId, HrPoliciesDTO dto) {
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        String role = authContext.getCurrentUserRole();
+        boolean isSuperAdmin = role != null && "SUPER_ADMIN".equalsIgnoreCase(role);
+        if (!isSuperAdmin && (currentCompanyId == null || !currentCompanyId.equals(companyId))) {
+            throw new RuntimeException("Not allowed to update this company's HR policies");
+        }
+
+        Company company = getCompanyById(companyId);
+
+        if (dto.getAnnualLeaveAccrualEnabled() != null) {
+            company.setAnnualLeaveAccrualEnabled(dto.getAnnualLeaveAccrualEnabled());
+        }
+        if (dto.getAnnualLeaveAccrualDaysPerMonth() != null) {
+            company.setAnnualLeaveAccrualDaysPerMonth(dto.getAnnualLeaveAccrualDaysPerMonth());
+        }
+        if (dto.getMinServiceMonthsForAnnualLeave() != null) {
+            company.setMinServiceMonthsForAnnualLeave(dto.getMinServiceMonthsForAnnualLeave());
+        }
+        if (dto.getRetirementCompensationEnabled() != null) {
+            company.setRetirementCompensationEnabled(dto.getRetirementCompensationEnabled());
+        }
+        if (dto.getRetirementCompensationMonthsPerYear() != null) {
+            company.setRetirementCompensationMonthsPerYear(dto.getRetirementCompensationMonthsPerYear());
+        }
+
+        companyRepository.save(company);
+        return toHrPoliciesDto(company);
+    }
+
+    private HrPoliciesDTO toHrPoliciesDto(Company company) {
+        return HrPoliciesDTO.builder()
+                .annualLeaveAccrualEnabled(company.isAnnualLeaveAccrualEnabled())
+                .annualLeaveAccrualDaysPerMonth(
+                        company.getAnnualLeaveAccrualDaysPerMonth() != null
+                                ? company.getAnnualLeaveAccrualDaysPerMonth()
+                                : new BigDecimal("1.50"))
+                .minServiceMonthsForAnnualLeave(
+                        company.getMinServiceMonthsForAnnualLeave() != null
+                                ? company.getMinServiceMonthsForAnnualLeave()
+                                : 6)
+                .retirementCompensationEnabled(company.isRetirementCompensationEnabled())
+                .retirementCompensationMonthsPerYear(
+                        company.getRetirementCompensationMonthsPerYear() != null
+                                ? company.getRetirementCompensationMonthsPerYear()
+                                : new BigDecimal("1.00"))
+                .build();
     }
 
     // ======================================================

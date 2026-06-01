@@ -35,6 +35,19 @@ public class LeaveYearEndJob {
 
             if (policy != null && policy.isPaid()) {
 
+                // Annual leave that runs on company-wide accrual is recomputed
+                // live from join-date by LeaveService — don't blow it away
+                // every January.
+                boolean accruedAnnual =
+                        balance.getEmployee().getCompany() != null
+                                && balance.getEmployee().getCompany().isAnnualLeaveAccrualEnabled()
+                                && balance.getLeaveType() != null
+                                && balance.getLeaveType().toUpperCase().contains("ANNUAL");
+
+                if (accruedAnnual) {
+                    continue;
+                }
+
                 balance.setTotalLeaves(policy.getDefaultDays());
                 balance.setRemainingLeaves(policy.getDefaultDays());
 

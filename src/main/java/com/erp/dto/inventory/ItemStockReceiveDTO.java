@@ -11,6 +11,7 @@ public class ItemStockReceiveDTO {
     private Integer quantityReceived;
 
     private String receivedDate;
+    private String expiryDate;
     private String batchNo;
     private String serialNo;
     private String referenceNo;

@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 @Builder
 @Data
 @NoArgsConstructor
@@ -42,4 +44,13 @@ public class CompanyDTO {
     private String invoiceFooterSupportEmail;
     private String invoiceFooterBillingEmail;
     private Boolean invoiceQrEnabled;
+
+    // ---- Leave accrual policy ----
+    private Boolean annualLeaveAccrualEnabled;
+    private BigDecimal annualLeaveAccrualDaysPerMonth;
+    private Integer minServiceMonthsForAnnualLeave;
+
+    // ---- Retirement / end-of-service compensation policy ----
+    private Boolean retirementCompensationEnabled;
+    private BigDecimal retirementCompensationMonthsPerYear;
 }

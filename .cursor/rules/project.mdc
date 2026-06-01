@@ -1,0 +1,64 @@
+---
+description: Sunway ERP backend — stack, architecture, modules, and conventions
+alwaysApply: true
+---
+
+# Sunway ERP backend
+
+Java 21 · Spring Boot 3.3 · JPA · Flyway (MySQL) · package `com.erp`
+
+## Commands
+
+```bash
+mvn spring-boot:run
+mvn compile -DskipTests
+mvn flyway:migrate
+```
+
+## Layering
+
+`controller` → `service` (`@Transactional`) → `repository` → `domain`  
+API shapes in `dto`. Keep controllers thin.
+
+## Modules (packages)
+
+| Area | Packages |
+|------|-----------|
+| HR & company | `hr`, `hrsettings`, root `Employee*`, `Leave*`, `CurrentJob*`, `CompanyProperty*` |
+| Payroll | `salary` |
+| Appraisal | `appraisal` |
+| Inventory | `inventory` |
+| Purchase | `purchase` |
+| Sales | `sales` |
+| Finance | `finance` |
+| Security | `security`, `AuthService` |
+| Files / PDF | `file`, `pdf`, `dto.file` |
+| Shared | `common`, `DocumentSequenceService`, `exception` |
+
+Follow patterns in the **same module** you are changing (naming, DTOs, status enums, guards).
+
+## Multi-tenant
+
+Use `AuthContext` for current user/company/role. Scope queries with `auth.getCurrentCompanyId()` unless super-admin.
+
+## Errors & API
+
+`GlobalExceptionHandler` returns JSON with `message` (and sometimes `errors`):
+
+- `ConflictException` → 409 (business rule / duplicate)
+- `NotFoundException` → 404
+- `MethodArgumentNotValidException` → 400 field map
+
+Prefer typed exceptions over `RuntimeException` for expected failures.
+
+## Schema changes
+
+`src/main/resources/db/migration/VYYYYMMDD__snake_description.sql` + matching entity/DTO in the same change.
+
+## Git
+
+Commit only when the user asks. No Co-authored-by or agent branding.
+
+## Agent-maintained docs
+
+If you introduce a reusable pattern not already in rules/skills, append it per **`capture-knowledge.mdc`** (same session, before you finish).

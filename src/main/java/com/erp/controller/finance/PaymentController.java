@@ -1,9 +1,11 @@
 package com.erp.controller.finance;
 
 import com.erp.domain.finance.PaymentDirection;
+import com.erp.dto.finance.ConfirmPaymentDTO;
 import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
 import com.erp.service.finance.PaymentService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,8 +34,10 @@ public class PaymentController {
     }
 
     @PostMapping("/{id}/confirm")
-    public PaymentResponseDTO confirmPayment(@PathVariable("id") Long id) {
-        return paymentService.confirmPayment(id);
+    public PaymentResponseDTO confirmPayment(
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) ConfirmPaymentDTO body) {
+        return paymentService.confirmPayment(id, body);
     }
 
     @PostMapping("/{id}/archive")
@@ -47,6 +51,11 @@ public class PaymentController {
     @GetMapping("/{id}")
     public PaymentResponseDTO getPaymentById(@PathVariable("id") Long id) {
         return paymentService.getPaymentById(id);
+    }
+
+    @GetMapping("/{id}/pdf")
+    public ResponseEntity<String> getVendorPaymentReceiptPdf(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(paymentService.getOrCreateVendorPaymentReceiptPdfUrl(id));
     }
 
     // ----------------------------------------------------------

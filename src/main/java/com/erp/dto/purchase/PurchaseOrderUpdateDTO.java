@@ -14,6 +14,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class PurchaseOrderUpdateDTO {
+    private Long supplierId;
     private Integer quantity;
     private BigDecimal unitCost;
     private LocalDate orderDate;

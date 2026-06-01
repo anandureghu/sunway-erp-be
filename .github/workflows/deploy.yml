@@ -51,12 +51,22 @@ jobs:
           key: ${{ secrets.AZURE_SSH_KEY }}
           port: 22
           script: |
-            cd /home/${{ secrets.AZURE_USER }}/apps/sunway
+            set -e
+            DEPLOY_DIR="/home/${{ secrets.AZURE_USER }}/apps/sunway"
 
-            mv deploy/app.jar app.jar
+            mv "$DEPLOY_DIR/deploy/app.jar" "$DEPLOY_DIR/app.jar"
 
             sudo systemctl restart sunway
 
-            sleep 5
+            echo "Waiting for service to start..."
+            for i in $(seq 1 24); do
+              if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
+                echo "Service is healthy after ${i}s"
+                exit 0
+              fi
+              sleep 5
+            done
 
-            sudo systemctl status sunway --no-pager
+            echo "Service did not become healthy within 120s"
+            sudo journalctl -u sunway -n 50 --no-pager
+            exit 1

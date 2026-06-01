@@ -23,6 +23,7 @@ import com.erp.service.pdf.GoodsReceiptPdfService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -95,6 +96,8 @@ public class GoodsReceiptService {
             if (accepted > 0) {
                 itemWarehouseStockService.addIncomingStock(
                         item.getId(), wh.getId(), accepted, companyId);
+                item.setDateReceived(LocalDate.now());
+                itemRepo.save(item);
             }
 
             return GoodsReceiptItem.builder()

@@ -58,6 +58,8 @@ public class InvoiceResponse {
 
     private InvoiceType type;
     private Long orderId;
+    /** Sales or purchase order business number for list/detail display. */
+    private String orderNumber;
 
     private Long creditAccountId;
     private Long debitAccountId;

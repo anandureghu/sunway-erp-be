@@ -1,6 +1,8 @@
 package com.erp.controller.purchase;
 
+import com.erp.dto.purchase.PurchaseOrderAssignSupplierDTO;
 import com.erp.dto.purchase.PurchaseOrderCreateDTO;
+import com.erp.dto.purchase.PurchaseOrderPostingPreviewDTO;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.purchase.PurchaseOrderUpdateDTO;
 import com.erp.service.purchase.PurchaseOrderService;
@@ -23,6 +25,14 @@ public class PurchaseOrderController {
         return service.create(dto);
     }
 
+    @PostMapping("/{id}/supplier")
+    public PurchaseOrderResponseDTO assignSupplier(
+            @PathVariable("id") Long id,
+            @RequestBody PurchaseOrderAssignSupplierDTO dto
+    ) {
+        return service.assignSupplier(id, dto);
+    }
+
     @PostMapping("/{id}/confirm")
     public PurchaseOrderResponseDTO confirm(@PathVariable("id") Long id) {
         return service.confirm(id);
@@ -31,6 +41,14 @@ public class PurchaseOrderController {
     @GetMapping("/{id}")
     public PurchaseOrderResponseDTO get(@PathVariable("id") Long id) {
         return service.get(id);
+    }
+
+    @GetMapping("/{id}/posting-preview")
+    public PurchaseOrderPostingPreviewDTO postingPreview(
+            @PathVariable("id") Long id,
+            @RequestParam("action") String action
+    ) {
+        return service.getPostingPreview(id, action);
     }
 
     @GetMapping

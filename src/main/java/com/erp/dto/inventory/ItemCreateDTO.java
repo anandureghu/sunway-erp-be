@@ -21,9 +21,12 @@ public class ItemCreateDTO {
 
     private String barcode;
     private String serialNo;
+    private String dateReceived;
+    private String expiryDate;
 
     private BigDecimal costPrice;
     private BigDecimal sellingPrice;
+    private BigDecimal unitSale;
 
     private String unitMeasure;
     private Integer reorderLevel;
