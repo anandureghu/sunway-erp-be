@@ -3,6 +3,7 @@ package com.erp.domain.hr;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Getter
@@ -122,6 +123,31 @@ public class Company {
 
     @Column(name = "payroll_sif_version", length = 16)
     private String payrollSifVersion;
+
+    /**
+     * HR policy: annual leave accrual.
+     * When enabled, annual-leave balance accrues as months_worked * accrual_days_per_month,
+     * and leave can only be taken after `minServiceMonthsForAnnualLeave` months of service.
+     */
+    @Column(name = "annual_leave_accrual_enabled", nullable = false)
+    private boolean annualLeaveAccrualEnabled;
+
+    @Column(name = "annual_leave_accrual_days_per_month", nullable = false, precision = 5, scale = 2)
+    private BigDecimal annualLeaveAccrualDaysPerMonth = new BigDecimal("1.50");
+
+    @Column(name = "min_service_months_for_annual_leave", nullable = false)
+    private Integer minServiceMonthsForAnnualLeave = 6;
+
+    /**
+     * HR policy: retirement / end-of-service compensation.
+     * When enabled, employee accrues `retirementCompensationMonthsPerYear` months of basic salary
+     * per completed year of service.
+     */
+    @Column(name = "retirement_compensation_enabled", nullable = false)
+    private boolean retirementCompensationEnabled;
+
+    @Column(name = "retirement_compensation_months_per_year", nullable = false, precision = 5, scale = 2)
+    private BigDecimal retirementCompensationMonthsPerYear = new BigDecimal("1.00");
 
     @Transient
     private String invoiceHeaderSubtitle;

@@ -207,8 +207,8 @@
                 <configuration>
                     <driver>com.mysql.cj.jdbc.Driver</driver>
                     <url>jdbc:mysql://${db.host}:${db.port}/${db.name}?createDatabaseIfNotExist=true&amp;useSSL=false&amp;serverTimezone=UTC</url>
-                    <user>${db.user}</user>
-                    <password>${db.password}</password>
+                    <user>root</user>
+                    <password>Shras@123</password>
                     <locations>
                         <location>filesystem:src/main/resources/db/migration</location>
                     </locations>

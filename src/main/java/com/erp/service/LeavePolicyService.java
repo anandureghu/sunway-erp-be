@@ -121,6 +121,14 @@ public class LeavePolicyService {
                 }
             }
 
+            // When this company runs annual-leave on accrual, the balance is
+            // recomputed live from join-date by LeaveService — don't seed it
+            // with the policy's static yearly default (would over-credit new
+            // hires).
+            if (isAccruedAnnualLeavePolicy(company, policy)) {
+                continue;
+            }
+
             Optional<EmployeeLeaveBalance> optional = findBalance(employee, policy.getLeaveType());
             int newTotal = policy.getDefaultDays();
 
@@ -176,6 +184,14 @@ public class LeavePolicyService {
                 continue;
             }
 
+            // For accrued annual leave the balance is created lazily by
+            // LeaveService at the first preview/apply, reflecting the months
+            // worked. Seeding the static default here would over-credit the
+            // employee on day one.
+            if (isAccruedAnnualLeavePolicy(company, policy)) {
+                continue;
+            }
+
             EmployeeLeaveBalance balance = new EmployeeLeaveBalance();
             balance.setEmployee(employee);
             balance.setLeaveType(balanceKey(policy.getLeaveType()));
@@ -184,6 +200,17 @@ public class LeavePolicyService {
 
             balanceRepo.save(balance);
         }
+    }
+
+    private boolean isAccruedAnnualLeavePolicy(Company company, CompanyLeavePolicy policy) {
+        if (company == null || policy == null) {
+            return false;
+        }
+        if (!company.isAnnualLeaveAccrualEnabled()) {
+            return false;
+        }
+        String normalized = key(policy.getLeaveType());
+        return normalized != null && normalized.contains("ANNUAL");
     }
 
     @Transactional
