@@ -20,6 +20,11 @@ public class EmployeeLeave {
     @JoinColumn(name = "employee_id")
     private Employee employee;
 
+    /** Optional colleague (same department) who covers duties during the leave. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "delegate_employee_id")
+    private Employee delegate;
+
     private String leaveCode;
     private String leaveType;
 

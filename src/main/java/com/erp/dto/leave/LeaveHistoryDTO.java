@@ -21,4 +21,6 @@ public class LeaveHistoryDTO {
     private Boolean includeWeekends;
     private String supportingDocumentUrl;
     private String leaveStatus;
+    private Long delegateId;
+    private String delegateName;
 }

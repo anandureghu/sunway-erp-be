@@ -54,6 +54,14 @@ public class Payroll {
     @Column(name = "net_payable", nullable = false)
     private Double netPayable = 0.0;
 
+    /** Accrued end-of-service gratuity paid out on a final-settlement run (0 otherwise). */
+    @Column(name = "end_of_service_compensation", nullable = false)
+    private Double endOfServiceCompensation = 0.0;
+
+    /** True when this run is an exit settlement (gratuity paid, active loans recovered in full). */
+    @Column(name = "final_settlement", nullable = false)
+    private boolean finalSettlement = false;
+
     @Column(name = "worked_hours", nullable = false)
     private Double workedHours = 0.0;
 
@@ -113,6 +121,7 @@ public class Payroll {
         loanDeduction = safe(loanDeduction);
         deductions = safe(deductions);
         netPayable = safe(netPayable);
+        endOfServiceCompensation = safe(endOfServiceCompensation);
         workedHours = safe(workedHours);
         workedDays = safe(workedDays);
         paidLeaveDays = safe(paidLeaveDays);

@@ -111,8 +111,12 @@ public class PayslipDocumentService {
         dto.setLopDays(payroll.getLopDays());
         dto.setLopAmount(payroll.getLopAmount());
 
-        dto.setEarnings(buildEarnings(compensation));
-        dto.setDeductions(buildDeductions(activeLoans));
+        List<LineItemDTO> earnings = buildEarnings(compensation);
+        if (payroll.getEndOfServiceCompensation() != null && payroll.getEndOfServiceCompensation() > 0) {
+            earnings.add(line("End of Service Compensation", payroll.getEndOfServiceCompensation()));
+        }
+        dto.setEarnings(earnings);
+        dto.setDeductions(buildDeductions(activeLoans, payroll));
 
         dto.setGrossPay(payroll.getGrossPay());
         dto.setTotalDeductions(payroll.getDeductions());
@@ -149,8 +153,19 @@ public class PayslipDocumentService {
         return list;
     }
 
-    private List<LineItemDTO> buildDeductions(List<EmployeeLoan> loans) {
+    private List<LineItemDTO> buildDeductions(List<EmployeeLoan> loans, Payroll payroll) {
         List<LineItemDTO> list = new ArrayList<>();
+
+        // On a final settlement the loans are recovered in full and closed during the
+        // run, so they no longer appear as ACTIVE here — show the settled total instead.
+        if (payroll.isFinalSettlement()) {
+            double settled = payroll.getLoanDeduction() != null ? payroll.getLoanDeduction() : 0.0;
+            if (settled > 0) {
+                list.add(line("Loan Settlement (full)", settled));
+            }
+            return list;
+        }
+
         if (loans == null) {
             return list;
         }

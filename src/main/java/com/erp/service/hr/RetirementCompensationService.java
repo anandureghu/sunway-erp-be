@@ -106,6 +106,46 @@ public class RetirementCompensationService {
                 .build();
     }
 
+    /**
+     * Accrued end-of-service gratuity for an employee, for internal use by payroll
+     * during a final settlement. Unlike {@link #calculate(Long)} this performs no
+     * tenant/permission checks and never throws — it returns {@link BigDecimal#ZERO}
+     * when the policy is disabled or the data needed to compute it is missing.
+     */
+    public BigDecimal computeAccruedAmount(Employee employee) {
+        if (employee == null) {
+            return BigDecimal.ZERO;
+        }
+
+        Company company = employee.getCompany();
+        if (company == null || !company.isRetirementCompensationEnabled()) {
+            return BigDecimal.ZERO;
+        }
+
+        LocalDate joinDate = resolveJoinDate(employee);
+        if (joinDate == null) {
+            return BigDecimal.ZERO;
+        }
+
+        EmployeeCompensation comp = compensationRepo.findActiveByEmployee(employee).orElse(null);
+        if (comp == null || comp.getBasicSalary() == null) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal basicSalary = BigDecimal.valueOf(comp.getBasicSalary());
+        BigDecimal monthsPerYear = company.getRetirementCompensationMonthsPerYear() != null
+                ? company.getRetirementCompensationMonthsPerYear()
+                : BigDecimal.ONE;
+
+        long daysOfService = Math.max(ChronoUnit.DAYS.between(joinDate, LocalDate.now()), 0);
+        BigDecimal yearsOfService = BigDecimal.valueOf(daysOfService)
+                .divide(DAYS_PER_YEAR, 4, RoundingMode.HALF_UP);
+        BigDecimal accruedMonths = yearsOfService.multiply(monthsPerYear)
+                .setScale(4, RoundingMode.HALF_UP);
+
+        return basicSalary.multiply(accruedMonths).setScale(2, RoundingMode.HALF_UP);
+    }
+
     private String safe(String value) {
         return value == null ? "" : value;
     }

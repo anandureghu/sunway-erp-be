@@ -22,6 +22,7 @@ import com.erp.repo.salary.EmployeeBankDetailsRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
 import com.erp.repo.salary.PayrollRepository;
 import com.erp.service.DocumentSequenceService;
+import com.erp.service.hr.RetirementCompensationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,9 +31,11 @@ import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +44,16 @@ public class PayrollService {
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_CLOSED = "CLOSED";
     private static final double STANDARD_HOURS_PER_DAY = 8.0;
+
+    /**
+     * Employment-ending statuses. A payroll run for an employee in any of these
+     * states is a final settlement: the accrued end-of-service gratuity is paid
+     * and any active loans are recovered in full from it. Such employees are
+     * excluded from bulk runs (which only process {@link EmployeeStatus#ACTIVE})
+     * and must be processed individually.
+     */
+    private static final Set<EmployeeStatus> FINAL_SETTLEMENT_STATUSES =
+            EnumSet.of(EmployeeStatus.TERMINATED, EmployeeStatus.RESIGNED, EmployeeStatus.RETIRED);
 
     private final EmployeeRepository employeeRepo;
     private final EmployeeCompensationRepository compensationRepo;
@@ -51,6 +64,7 @@ public class PayrollService {
     private final CompanyLeavePolicyRepository leavePolicyRepo;
     private final PayrollRepository payrollRepo;
     private final DocumentSequenceService documentSequenceService;
+    private final RetirementCompensationService retirementCompensationService;
 
     @Transactional(readOnly = true)
     public PayrollPreviewDTO previewPayroll(Long employeeId, PayrollGenerateRequestDTO dto) {
@@ -90,7 +104,7 @@ public class PayrollService {
         Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
         Payroll saved = payrollRepo.save(payroll);
 
-        applyLoanRecovery(employee);
+        applyLoanRecovery(employee, computation.finalSettlement());
 
         return saved;
     }
@@ -120,7 +134,7 @@ public class PayrollService {
             Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
             payrollRepo.save(payroll);
 
-            applyLoanRecovery(employee);
+            applyLoanRecovery(employee, computation.finalSettlement());
             generatedCount++;
         }
 
@@ -188,7 +202,10 @@ public class PayrollService {
         payroll.setPayPeriodEnd(dto.getPayPeriodEnd());
         payroll.setPayDate(dto.getPayDate());
 
-        payroll.setGrossPay(computation.earnedGrossPay());
+        // Gross includes the end-of-service gratuity so it reconciles with net on a final run.
+        payroll.setGrossPay(round2(computation.earnedGrossPay() + computation.endOfServiceCompensation()));
+        payroll.setEndOfServiceCompensation(computation.endOfServiceCompensation());
+        payroll.setFinalSettlement(computation.finalSettlement());
         payroll.setLoanDeduction(computation.loanDeduction());
         payroll.setDeductions(computation.totalDeductions());
         payroll.setNetPayable(computation.netPayable());
@@ -276,17 +293,25 @@ public class PayrollService {
         double lopAmount = lopDays * perDaySalary;
         double earnedGrossPay = Math.max(monthlyGross - lopAmount, 0.0);
 
+        boolean finalSettlement = isFinalSettlement(employee);
+
+        // End-of-service gratuity is paid only on a final settlement (exiting employee).
+        double endOfServiceCompensation = finalSettlement
+                ? retirementCompensationService.computeAccruedAmount(employee).doubleValue()
+                : 0.0;
+
         List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, STATUS_ACTIVE);
 
+        // Normal runs recover the monthly installment; a final settlement clears the
+        // full outstanding balance, deducted from the end-of-service payment.
         double loanDeduction = activeLoans.stream()
-                .mapToDouble(loan -> Math.min(
-                        safe(loan.getMonthlyDeduction()),
-                        Math.max(safe(loan.getBalance()), 0.0)
-                ))
+                .mapToDouble(loan -> finalSettlement
+                        ? Math.max(safe(loan.getBalance()), 0.0)
+                        : Math.min(safe(loan.getMonthlyDeduction()), Math.max(safe(loan.getBalance()), 0.0)))
                 .sum();
 
         double totalDeductions = loanDeduction;
-        double netPayable = earnedGrossPay - totalDeductions;
+        double netPayable = (earnedGrossPay + endOfServiceCompensation) - totalDeductions;
 
         if (netPayable < 0) {
             netPayable = 0.0;
@@ -306,8 +331,14 @@ public class PayrollService {
                 round2(loanDeduction),
                 round2(totalDeductions),
                 round2(netPayable),
-                round2(earnedGrossPay)
+                round2(earnedGrossPay),
+                round2(endOfServiceCompensation),
+                finalSettlement
         );
+    }
+
+    private boolean isFinalSettlement(Employee employee) {
+        return employee != null && FINAL_SETTLEMENT_STATUSES.contains(employee.getStatus());
     }
 
     private double calculateLeaveDaysWithinPeriod(
@@ -381,14 +412,15 @@ public class PayrollService {
         }
     }
 
-    private void applyLoanRecovery(Employee employee) {
+    private void applyLoanRecovery(Employee employee, boolean finalSettlement) {
         List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, STATUS_ACTIVE);
 
         for (EmployeeLoan loan : activeLoans) {
             double monthlyDeduction = safe(loan.getMonthlyDeduction());
             double balance = safe(loan.getBalance());
 
-            double actualRecovery = Math.min(monthlyDeduction, balance);
+            // A final settlement clears the whole balance; otherwise recover one installment.
+            double actualRecovery = finalSettlement ? balance : Math.min(monthlyDeduction, balance);
             loan.setBalance(round2(Math.max(balance - actualRecovery, 0.0)));
 
             if (loan.getBalance() <= 0.0) {
@@ -474,7 +506,9 @@ public class PayrollService {
                 computation.loanDeduction(),
                 computation.totalDeductions(),
                 computation.netPayable(),
-                computation.earnedGrossPay()
+                computation.earnedGrossPay(),
+                computation.endOfServiceCompensation(),
+                computation.finalSettlement()
         );
     }
 
@@ -488,6 +522,8 @@ public class PayrollService {
         dto.setLoanDeduction(payroll.getLoanDeduction());
         dto.setTotalDeductions(payroll.getDeductions());
         dto.setNetPayable(payroll.getNetPayable());
+        dto.setEndOfServiceCompensation(payroll.getEndOfServiceCompensation());
+        dto.setFinalSettlement(payroll.isFinalSettlement());
         return dto;
     }
 
@@ -553,7 +589,9 @@ public class PayrollService {
             double loanDeduction,
             double totalDeductions,
             double netPayable,
-            double earnedGrossPay
+            double earnedGrossPay,
+            double endOfServiceCompensation,
+            boolean finalSettlement
     ) {
     }
 }
