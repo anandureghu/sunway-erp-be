@@ -84,6 +84,37 @@ public class DivisionService {
         return toDTO(divisionRepository.save(division));
     }
 
+    public DivisionResponseDTO updateDivision(Long id, CreateDivisionDTO dto) {
+        Division division = divisionRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Division not found"));
+
+        if (dto.getCode() != null) {
+            division.setCode(dto.getCode());
+        }
+        if (dto.getName() != null) {
+            division.setName(dto.getName());
+        }
+        division.setDescription(dto.getDescription());
+
+        if (dto.getManagerId() != null) {
+            Employee manager = employeeRepository.findById(dto.getManagerId())
+                    .orElseThrow(() -> new RuntimeException("Manager not found"));
+            division.setManager(manager);
+        } else {
+            division.setManager(null);
+        }
+
+        if (dto.getCompanyId() != null
+                && (division.getCompany() == null
+                || !dto.getCompanyId().equals(division.getCompany().getId()))) {
+            Company company = companyRepository.findById(dto.getCompanyId())
+                    .orElseThrow(() -> new RuntimeException("Company not found"));
+            division.setCompany(company);
+        }
+
+        return toDTO(divisionRepository.save(division));
+    }
+
     public List<DivisionResponseDTO> getDivisionsByCompanyId(Long companyId) {
         return divisionRepository.findAllByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream().map(this::toDTO).toList();

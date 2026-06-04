@@ -42,6 +42,12 @@ public class CompanyLeavePolicy {
     @Column(name = "allowed_gender")
     private String allowedGender;
 
+    @Column(name = "religion_restricted", nullable = false)
+    private Boolean religionRestricted = false;
+
+    @Column(name = "allowed_religion")
+    private String allowedReligion;
+
     // ✅ Safe boolean getter (prevents NullPointerException)
     public boolean isPaid() {
         return Boolean.TRUE.equals(this.paid);
@@ -49,5 +55,9 @@ public class CompanyLeavePolicy {
 
     public boolean isGenderRestricted() {
         return Boolean.TRUE.equals(this.genderRestricted);
+    }
+
+    public boolean isReligionRestricted() {
+        return Boolean.TRUE.equals(this.religionRestricted);
     }
 }

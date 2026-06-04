@@ -78,6 +78,13 @@ public class LeaveService {
                     }
                     return true;
                 })
+                .filter(policy -> {
+                    if (Boolean.TRUE.equals(policy.getReligionRestricted())) {
+                        String employeeReligion = clean(emp.getReligion());
+                        return employeeReligion != null && same(employeeReligion, policy.getAllowedReligion());
+                    }
+                    return true;
+                })
                 .map(CompanyLeavePolicy::getLeaveType)
                 .distinct()
                 .toList();
@@ -97,6 +104,7 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, leaveType);
         validateGender(policy, employee);
+        validateReligion(policy, employee);
         enforceAccrualRules(employee, policy);
 
         if (!Boolean.TRUE.equals(policy.getPaid())) {
@@ -126,6 +134,7 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
         validateGender(policy, employee);
+        validateReligion(policy, employee);
         enforceAccrualRules(employee, policy);
         validateSupportingDocument(policy.getLeaveType(), supportingDocument);
 
@@ -359,6 +368,7 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
         validateGender(policy, employee);
+        validateReligion(policy, employee);
         enforceAccrualRules(employee, policy);
         validateSupportingDocument(policy.getLeaveType(), supportingDocument);
 
@@ -554,6 +564,19 @@ public class LeaveService {
 
         if (employeeGender == null || !same(employeeGender, policy.getAllowedGender())) {
             throw new RuntimeException("This leave type is not allowed for your gender");
+        }
+    }
+
+    private void validateReligion(CompanyLeavePolicy policy, Employee employee) {
+        if (!Boolean.TRUE.equals(policy.getReligionRestricted())) {
+            return;
+        }
+
+        String employeeReligion = clean(employee.getReligion());
+
+        if (employeeReligion == null || !same(employeeReligion, policy.getAllowedReligion())) {
+            throw new RuntimeException(
+                    "This leave type is restricted to " + policy.getAllowedReligion() + " employees");
         }
     }
 
