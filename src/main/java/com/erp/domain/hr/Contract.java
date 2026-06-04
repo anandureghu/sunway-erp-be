@@ -27,12 +27,7 @@ import java.util.List;
 public class Contract {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "contract_seq")
-    @SequenceGenerator(
-            name = "contract_seq",
-            sequenceName = "contract_sequence",
-            allocationSize = 1
-    )
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "contract_code", nullable = false, updatable = false)

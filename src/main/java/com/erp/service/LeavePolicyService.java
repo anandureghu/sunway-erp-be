@@ -80,6 +80,7 @@ public class LeavePolicyService {
             String role = clean(dto.getRole());
             String leaveType = clean(dto.getLeaveType());
             String allowedGender = clean(dto.getAllowedGender());
+            String allowedReligion = clean(dto.getAllowedReligion());
 
             CompanyLeavePolicy policy = findPolicy(company, role, leaveType)
                     .orElseGet(() -> {
@@ -94,6 +95,8 @@ public class LeavePolicyService {
             policy.setPaid(dto.getPaid() != null ? dto.getPaid() : true);
             policy.setGenderRestricted(dto.getGenderRestricted() != null ? dto.getGenderRestricted() : false);
             policy.setAllowedGender(Boolean.TRUE.equals(policy.getGenderRestricted()) ? allowedGender : null);
+            policy.setReligionRestricted(dto.getReligionRestricted() != null ? dto.getReligionRestricted() : false);
+            policy.setAllowedReligion(Boolean.TRUE.equals(policy.getReligionRestricted()) ? allowedReligion : null);
 
             policyRepo.save(policy);
             syncBalances(company, policy);
@@ -117,6 +120,13 @@ public class LeavePolicyService {
             if (Boolean.TRUE.equals(policy.getGenderRestricted())) {
                 String employeeGender = clean(employee.getGender());
                 if (employeeGender == null || !same(employeeGender, policy.getAllowedGender())) {
+                    continue;
+                }
+            }
+
+            if (Boolean.TRUE.equals(policy.getReligionRestricted())) {
+                String employeeReligion = clean(employee.getReligion());
+                if (employeeReligion == null || !same(employeeReligion, policy.getAllowedReligion())) {
                     continue;
                 }
             }
@@ -176,6 +186,13 @@ public class LeavePolicyService {
             if (Boolean.TRUE.equals(policy.getGenderRestricted())) {
                 String employeeGender = clean(employee.getGender());
                 if (employeeGender == null || !same(employeeGender, policy.getAllowedGender())) {
+                    continue;
+                }
+            }
+
+            if (Boolean.TRUE.equals(policy.getReligionRestricted())) {
+                String employeeReligion = clean(employee.getReligion());
+                if (employeeReligion == null || !same(employeeReligion, policy.getAllowedReligion())) {
                     continue;
                 }
             }
@@ -295,6 +312,8 @@ public class LeavePolicyService {
         dto.setPaid(Boolean.TRUE.equals(policy.getPaid()));
         dto.setGenderRestricted(Boolean.TRUE.equals(policy.getGenderRestricted()));
         dto.setAllowedGender(policy.getAllowedGender());
+        dto.setReligionRestricted(Boolean.TRUE.equals(policy.getReligionRestricted()));
+        dto.setAllowedReligion(policy.getAllowedReligion());
         return dto;
     }
 

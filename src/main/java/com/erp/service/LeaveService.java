@@ -78,6 +78,13 @@ public class LeaveService {
                     }
                     return true;
                 })
+                .filter(policy -> {
+                    if (Boolean.TRUE.equals(policy.getReligionRestricted())) {
+                        String employeeReligion = clean(emp.getReligion());
+                        return employeeReligion != null && same(employeeReligion, policy.getAllowedReligion());
+                    }
+                    return true;
+                })
                 .map(CompanyLeavePolicy::getLeaveType)
                 .distinct()
                 .toList();
@@ -97,6 +104,7 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, leaveType);
         validateGender(policy, employee);
+        validateReligion(policy, employee);
         enforceAccrualRules(employee, policy);
 
         if (!Boolean.TRUE.equals(policy.getPaid())) {
@@ -126,6 +134,7 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
         validateGender(policy, employee);
+        validateReligion(policy, employee);
         enforceAccrualRules(employee, policy);
         validateSupportingDocument(policy.getLeaveType(), supportingDocument);
 
@@ -146,6 +155,7 @@ public class LeaveService {
         leave.setTotalDays(totalDays);
         leave.setIncludeWeekends(includeWeekends);
         leave.setLeaveStatus(LeaveStatus.PENDING);
+        leave.setDelegate(resolveDelegate(employee, dto.getDelegateId()));
 
         leave = leaveRepo.save(leave);
 
@@ -358,6 +368,7 @@ public class LeaveService {
 
         CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
         validateGender(policy, employee);
+        validateReligion(policy, employee);
         enforceAccrualRules(employee, policy);
         validateSupportingDocument(policy.getLeaveType(), supportingDocument);
 
@@ -373,6 +384,7 @@ public class LeaveService {
         leave.setEndDate(dto.getEndDate());
         leave.setTotalDays(newDays);
         leave.setIncludeWeekends(includeWeekends);
+        leave.setDelegate(resolveDelegate(employee, dto.getDelegateId()));
 
         leave = leaveRepo.save(leave);
 
@@ -393,6 +405,33 @@ public class LeaveService {
     private Employee getEmployee(Long id) {
         return employeeRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+    }
+
+    /**
+     * Resolves and validates the optional leave delegate. The delegate must be a
+     * different employee in the same department as the requestor. Returns null
+     * when no delegate is supplied (delegation is optional).
+     */
+    private Employee resolveDelegate(Employee requestor, Long delegateId) {
+        if (delegateId == null) {
+            return null;
+        }
+
+        Employee delegate = employeeRepo.findById(delegateId)
+                .orElseThrow(() -> new RuntimeException("Selected delegate not found"));
+
+        if (requestor.getId() != null && requestor.getId().equals(delegate.getId())) {
+            throw new IllegalArgumentException("You cannot delegate to yourself");
+        }
+
+        Long requestorDept = requestor.getDepartment() != null ? requestor.getDepartment().getId() : null;
+        Long delegateDept = delegate.getDepartment() != null ? delegate.getDepartment().getId() : null;
+
+        if (requestorDept == null || delegateDept == null || !requestorDept.equals(delegateDept)) {
+            throw new IllegalArgumentException("Delegate must be a colleague from the same department");
+        }
+
+        return delegate;
     }
 
     private Employee getCurrentEmployee() {
@@ -525,6 +564,19 @@ public class LeaveService {
 
         if (employeeGender == null || !same(employeeGender, policy.getAllowedGender())) {
             throw new RuntimeException("This leave type is not allowed for your gender");
+        }
+    }
+
+    private void validateReligion(CompanyLeavePolicy policy, Employee employee) {
+        if (!Boolean.TRUE.equals(policy.getReligionRestricted())) {
+            return;
+        }
+
+        String employeeReligion = clean(employee.getReligion());
+
+        if (employeeReligion == null || !same(employeeReligion, policy.getAllowedReligion())) {
+            throw new RuntimeException(
+                    "This leave type is restricted to " + policy.getAllowedReligion() + " employees");
         }
     }
 
@@ -735,7 +787,17 @@ public class LeaveService {
                         : null
         );
         dto.setLeaveStatus(leave.getLeaveStatus() != null ? leave.getLeaveStatus().name() : null);
+        if (leave.getDelegate() != null) {
+            dto.setDelegateId(leave.getDelegate().getId());
+            dto.setDelegateName(
+                    (safeName(leave.getDelegate().getFirstName()) + " "
+                            + safeName(leave.getDelegate().getLastName())).trim());
+        }
         return dto;
+    }
+
+    private String safeName(String value) {
+        return value == null ? "" : value;
     }
 
     private void validateSupportingDocument(String leaveType, MultipartFile supportingDocument) {

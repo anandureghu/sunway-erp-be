@@ -27,4 +27,9 @@ public class HrPoliciesDTO {
     // ---- Retirement compensation ----
     private Boolean retirementCompensationEnabled;
     private BigDecimal retirementCompensationMonthsPerYear;
+
+    // ---- Loan eligibility & repayment ----
+    private Boolean loanPolicyEnabled;
+    private Integer loanMinServiceDays;
+    private Integer loanMaxRepaymentMonths;
 }

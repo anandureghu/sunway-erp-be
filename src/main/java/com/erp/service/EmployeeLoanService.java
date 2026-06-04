@@ -4,9 +4,11 @@ import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLoan;
 import com.erp.domain.LoanSequence;
 import com.erp.domain.LoanType;
+import com.erp.domain.hr.Company;
 import com.erp.domain.salary.EmployeeCompensation;
 import com.erp.dto.loan.LoanRequestDTO;
 import com.erp.dto.loan.LoanResponseDTO;
+import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeLoanRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.LoanSequenceRepository;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,6 +32,7 @@ public class EmployeeLoanService {
     private final EmployeeLoanRepository loanRepo;
     private final LoanSequenceRepository sequenceRepo;
     private final EmployeeCompensationRepository compensationRepo;
+    private final EmployeeCurrentJobRepo currentJobRepo;
     private final AuthContext authContext;
 
     /* ================= GENERATE LOAN CODE ================= */
@@ -59,6 +63,7 @@ public class EmployeeLoanService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
+        validateLoanPolicy(employee, dto.getLoanPeriod());
         validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
 
         String loanCode = generateLoanCode(dto.getLoanType());
@@ -99,6 +104,7 @@ public class EmployeeLoanService {
             throw new RuntimeException("Loan does not belong to this employee");
         }
 
+        validateLoanPolicy(employee, dto.getLoanPeriod());
         validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
 
         Double monthlyDeduction = dto.getLoanAmount() / dto.getLoanPeriod();
@@ -245,6 +251,63 @@ public class EmployeeLoanService {
     }
 
     /* ================= VALIDATION METHOD ================= */
+
+    /**
+     * Enforces the company's loan eligibility & repayment policy (when enabled):
+     * a minimum service period since join date before a loan may be requested,
+     * and a cap on the repayment period in months.
+     */
+    private void validateLoanPolicy(Employee employee, Integer loanPeriod) {
+        Company company = employee.getCompany();
+        if (company == null || !company.isLoanPolicyEnabled()) {
+            return;
+        }
+
+        Integer maxMonths = company.getLoanMaxRepaymentMonths();
+        if (maxMonths != null && maxMonths > 0
+                && loanPeriod != null && loanPeriod > maxMonths) {
+            throw new RuntimeException(
+                    "Repayment period cannot exceed " + maxMonths + " months as per company loan policy.");
+        }
+
+        Integer minServiceDays = company.getLoanMinServiceDays();
+        if (minServiceDays == null || minServiceDays <= 0) {
+            return;
+        }
+
+        LocalDate joinDate = resolveJoinDate(employee);
+        if (joinDate == null) {
+            throw new RuntimeException(
+                    "Cannot verify loan eligibility — the employee's join date is not set.");
+        }
+
+        long daysOfService = ChronoUnit.DAYS.between(joinDate, LocalDate.now());
+        if (daysOfService < minServiceDays) {
+            long remaining = minServiceDays - daysOfService;
+            throw new RuntimeException(
+                    "Employee is not yet eligible for a loan. Company policy requires "
+                            + minServiceDays + " days of service before requesting a loan ("
+                            + Math.max(remaining, 0) + " more day(s) to go).");
+        }
+    }
+
+    /**
+     * Effective join date: employee.joinDate, falling back to the current job's
+     * start / effective-from date when only those are set.
+     */
+    private LocalDate resolveJoinDate(Employee employee) {
+        if (employee.getJoinDate() != null) {
+            return employee.getJoinDate();
+        }
+        if (employee.getId() == null) {
+            return null;
+        }
+        return currentJobRepo.findByEmployee_Id(employee.getId())
+                .map(job -> job.getStartDate() != null
+                        ? job.getStartDate()
+                        : job.getEffectiveFrom())
+                .orElse(null);
+    }
 
     private void validateLoanAgainstSalary(Employee employee,
                                            Double loanAmount,

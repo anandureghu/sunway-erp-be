@@ -34,6 +34,13 @@ public class DivisionController {
         return divisionService.getDivisionById(id);
     }
 
+    // Update division
+    @PutMapping("/{id}")
+    public DivisionResponseDTO updateDivision(@PathVariable("id") Long id,
+                                              @RequestBody CreateDivisionDTO dto) {
+        return divisionService.updateDivision(id, dto);
+    }
+
     // Delete department
     @DeleteMapping("/{id}")
     public void deleteDivision(@PathVariable("id") Long id) {

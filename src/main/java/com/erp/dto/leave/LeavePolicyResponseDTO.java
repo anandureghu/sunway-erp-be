@@ -15,4 +15,7 @@ public class LeavePolicyResponseDTO {
 
     private boolean genderRestricted;
     private String allowedGender;
+
+    private boolean religionRestricted;
+    private String allowedReligion;
 }

@@ -356,6 +356,15 @@ public class CompanyService {
         if (dto.getRetirementCompensationMonthsPerYear() != null) {
             company.setRetirementCompensationMonthsPerYear(dto.getRetirementCompensationMonthsPerYear());
         }
+        if (dto.getLoanPolicyEnabled() != null) {
+            company.setLoanPolicyEnabled(dto.getLoanPolicyEnabled());
+        }
+        if (dto.getLoanMinServiceDays() != null) {
+            company.setLoanMinServiceDays(Math.max(dto.getLoanMinServiceDays(), 0));
+        }
+        if (dto.getLoanMaxRepaymentMonths() != null) {
+            company.setLoanMaxRepaymentMonths(Math.max(dto.getLoanMaxRepaymentMonths(), 1));
+        }
 
         companyRepository.save(company);
         return toHrPoliciesDto(company);
@@ -377,6 +386,15 @@ public class CompanyService {
                         company.getRetirementCompensationMonthsPerYear() != null
                                 ? company.getRetirementCompensationMonthsPerYear()
                                 : new BigDecimal("1.00"))
+                .loanPolicyEnabled(company.isLoanPolicyEnabled())
+                .loanMinServiceDays(
+                        company.getLoanMinServiceDays() != null
+                                ? company.getLoanMinServiceDays()
+                                : 365)
+                .loanMaxRepaymentMonths(
+                        company.getLoanMaxRepaymentMonths() != null
+                                ? company.getLoanMaxRepaymentMonths()
+                                : 24)
                 .build();
     }
 

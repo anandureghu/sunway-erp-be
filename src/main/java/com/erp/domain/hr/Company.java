@@ -149,6 +149,21 @@ public class Company {
     @Column(name = "retirement_compensation_months_per_year", nullable = false, precision = 5, scale = 2)
     private BigDecimal retirementCompensationMonthsPerYear = new BigDecimal("1.00");
 
+    /**
+     * HR policy: loan eligibility & repayment.
+     * When enabled, an employee may request a loan only after `loanMinServiceDays`
+     * of service (since join date), and the repayment period may not exceed
+     * `loanMaxRepaymentMonths`.
+     */
+    @Column(name = "loan_policy_enabled", nullable = false)
+    private boolean loanPolicyEnabled;
+
+    @Column(name = "loan_min_service_days", nullable = false)
+    private Integer loanMinServiceDays = 365;
+
+    @Column(name = "loan_max_repayment_months", nullable = false)
+    private Integer loanMaxRepaymentMonths = 24;
+
     @Transient
     private String invoiceHeaderSubtitle;
 
