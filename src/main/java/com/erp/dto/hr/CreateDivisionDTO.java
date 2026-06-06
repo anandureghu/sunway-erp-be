@@ -14,5 +14,6 @@ public class CreateDivisionDTO {
     private String name;
     private String description;
     private Long managerId;
+    private Long departmentId;
     private Long companyId;
 }

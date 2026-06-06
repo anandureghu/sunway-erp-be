@@ -3,7 +3,6 @@ package com.erp.service.hr;
 import com.erp.domain.Employee;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.Department;
-import com.erp.domain.hr.Division;
 import com.erp.dto.hr.CreateDepartmentDTO;
 import com.erp.dto.hr.DepartmentResponseDTO;
 import com.erp.exception.NotFoundException;
@@ -12,7 +11,6 @@ import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.DepartmentRepository;
-import com.erp.repo.hr.DivisionRepository;
 import com.erp.security.context.AuthContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -29,11 +27,8 @@ public class DepartmentService {
     private final DepartmentRepository departmentRepository;
     private final CompanyRepository    companyRepository;
     private final EmployeeRepository   employeeRepository;
-    private final DivisionRepository   divisionRepository;
     private final AuthContext          authContext;
     private final EmployeeCurrentJobRepo employeeCurrentJobRepository;
-
-    // ── Create ────────────────────────────────────────────────────────────────
 
     public DepartmentResponseDTO createDepartment(Long companyId, CreateDepartmentDTO dto) {
 
@@ -45,22 +40,18 @@ public class DepartmentService {
         }
 
         Employee manager = resolveManager(dto.getManagerId(), company.getId());
-        Division division = resolveDivision(dto.getDivisionId(), company.getId());
 
         Department department = Department.builder()
                 .departmentCode(dto.getDepartmentCode())
                 .departmentName(dto.getDepartmentName())
                 .description(dto.getDescription())
                 .manager(manager)
-                .division(division)
                 .company(company)
                 .createdAt(Instant.now())
                 .build();
 
         return toDTO(departmentRepository.save(department));
     }
-
-    // ── Update ────────────────────────────────────────────────────────────────
 
     public DepartmentResponseDTO updateDepartment(Long companyId, Long id, CreateDepartmentDTO dto) {
 
@@ -83,19 +74,14 @@ public class DepartmentService {
         department.setDepartmentName(dto.getDepartmentName());
         department.setDescription(dto.getDescription());
         department.setManager(resolveManager(dto.getManagerId(), company.getId()));
-        department.setDivision(resolveDivision(dto.getDivisionId(), company.getId()));
 
         return toDTO(departmentRepository.save(department));
     }
-
-    // ── Get All ───────────────────────────────────────────────────────────────
 
     public List<DepartmentResponseDTO> getDepartmentsByCompanyId(Long companyId) {
         return departmentRepository.findAllByCompanyIdOrderByCreatedAtDesc(resolveCompany(companyId).getId())
                 .stream().map(this::toDTO).toList();
     }
-
-    // ── Get Single ────────────────────────────────────────────────────────────
 
     public DepartmentResponseDTO getDepartmentById(Long companyId, Long id) {
 
@@ -109,8 +95,6 @@ public class DepartmentService {
 
         return toDTO(department);
     }
-
-    // ── Delete ────────────────────────────────────────────────────────────────
 
     public void deleteDepartment(Long companyId, Long id) {
 
@@ -131,8 +115,6 @@ public class DepartmentService {
 
         departmentRepository.delete(department);
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private Company resolveCompany(Long pathCompanyId) {
 
@@ -169,24 +151,7 @@ public class DepartmentService {
         return manager;
     }
 
-    private Division resolveDivision(Long divisionId, Long companyId) {
-
-        if (divisionId == null) {
-            return null;
-        }
-
-        Division division = divisionRepository.findById(divisionId)
-                .orElseThrow(() -> new NotFoundException("Division not found"));
-
-        if (division.getCompany() == null || !division.getCompany().getId().equals(companyId)) {
-            throw new ConflictException("Division must belong to the same company");
-        }
-
-        return division;
-    }
-
     private DepartmentResponseDTO toDTO(Department d) {
-        Division division = d.getDivision();
         return DepartmentResponseDTO.builder()
                 .id(d.getId())
                 .departmentCode(d.getDepartmentCode())
@@ -197,9 +162,6 @@ public class DepartmentService {
                 .managerLastName(d.getManager()  != null ? d.getManager().getLastName()  : null)
                 .companyId(d.getCompany().getId())
                 .companyName(d.getCompany().getCompanyName())
-                .divisionId(division != null ? division.getId() : null)
-                .divisionCode(division != null ? division.getCode() : null)
-                .divisionName(division != null ? division.getName() : null)
                 .build();
     }
 }

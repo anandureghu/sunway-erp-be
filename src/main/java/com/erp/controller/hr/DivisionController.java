@@ -47,9 +47,16 @@ public class DivisionController {
         divisionService.deleteDivision(id);
     }
 
-    // Get departments by company
+    // Get divisions by company
     @GetMapping("/company/{companyId}")
     public List<DivisionResponseDTO> getDivisionsByCompany(@PathVariable("companyId") Long companyId) {
         return divisionService.getDivisionsByCompanyId(companyId);
+    }
+
+    // Get divisions under a department (subcategories)
+    @GetMapping("/department/{departmentId}")
+    public List<DivisionResponseDTO> getDivisionsByDepartment(
+            @PathVariable("departmentId") Long departmentId) {
+        return divisionService.getDivisionsByDepartmentId(departmentId);
     }
 }

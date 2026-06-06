@@ -12,14 +12,19 @@ import java.time.Instant;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "departments")
+@Table(
+        name = "departments",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"company_id", "department_code"})
+        }
+)
 public class Department {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "department_code", unique = true, nullable = false)
+    @Column(name = "department_code", nullable = false)
     private String departmentCode;
 
     @Column(name = "department_name", nullable = false)
@@ -32,10 +37,6 @@ public class Department {
     @ManyToOne
     @JoinColumn(name = "manager_id", referencedColumnName = "id")
     private Employee manager;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "division_id")
-    private Division division;
 
     @ManyToOne
     @JoinColumn(name = "company_id", nullable = false)

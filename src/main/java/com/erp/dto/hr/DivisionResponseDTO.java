@@ -19,6 +19,10 @@ public class DivisionResponseDTO {
     private String managerFirstName;
     private String managerLastName;
 
+    private Long departmentId;
+    private String departmentCode;
+    private String departmentName;
+
     private Long companyId;
     private String companyName;
     private String companyCode;

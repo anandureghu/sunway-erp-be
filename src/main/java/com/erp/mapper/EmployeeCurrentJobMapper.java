@@ -24,7 +24,7 @@ public class EmployeeCurrentJobMapper {
         EmployeeCurrentJobResponseDTO.DepartmentInfo departmentInfo = null;
         if (e.getDepartment() != null) {
             var dept = e.getDepartment();
-            var division = dept.getDivision();
+            var division = e.getDivision();
             departmentInfo = EmployeeCurrentJobResponseDTO.DepartmentInfo.builder()
                     .id(dept.getId())
                     .code(dept.getDepartmentCode())

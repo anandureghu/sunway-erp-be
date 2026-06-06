@@ -18,6 +18,8 @@ public class EmployeeCurrentJobRequestDTO {
     @NotNull(message = "Department is required")
     private Long departmentId;
 
+    private Long divisionId;
+
     private String workLocation;
     private String workCity;
     private String workCountry;
