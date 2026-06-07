@@ -9,3 +9,17 @@ alwaysApply: true
 - Message style: `feat(scope): why-focused summary`
 - No Co-authored-by or agent branding
 - No `--no-verify` or force-push to main/develop unless user requests
+- **Do not push** unless the user explicitly asks
+
+## Backend commit workflow
+
+When the user asks to commit backend changes:
+
+1. Run `mvn -q -DskipTests package` from the backend root and fix any build failures before committing.
+2. Force-stage both deployable artifacts (they are gitignored except via negation rules):
+   ```bash
+   git add -f target/sunway-1.0.0.jar target/sunway-1.0.0.jar.original
+   ```
+3. Stage source changes, commit, and stop — do not push.
+
+Both `target/sunway-1.0.0.jar` and `target/sunway-1.0.0.jar.original` must be included in every backend commit that touches application code.
