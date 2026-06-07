@@ -22,6 +22,11 @@ public class GoodsReceiptController {
         return service.receive(dto);
     }
 
+    @GetMapping
+    public List<GoodsReceiptResponseDTO> listAll() {
+        return service.listForCurrentCompany();
+    }
+
     @GetMapping("/purchase-order/{poId}")
     public List<GoodsReceiptResponseDTO> list(@PathVariable("poId") Long poId) {
         return service.listByPO(poId);
