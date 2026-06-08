@@ -7,7 +7,7 @@ alwaysApply: true
 
 - Commit only when the user explicitly asks
 - Message style: `feat(scope): why-focused summary`
-- No Co-authored-by or agent branding
+- No Co-authored-by or agent branding (see **Cursor attribution** below)
 - No `--no-verify` or force-push to main/develop unless user requests
 - **Do not push** unless the user explicitly asks
 
@@ -45,6 +45,24 @@ git show --name-only HEAD   # confirm both .jar files are listed
 ```
 
 Do not push unless the user explicitly asks.
+
+## Cursor attribution (why Co-authored-by appears)
+
+Project rules tell the agent not to add `Co-authored-by`, but **Cursor IDE** can still append it when the agent runs `git commit` (Settings → **Agent → Attribution**). That is separate from `.cursor/rules/`.
+
+**Disable in Cursor:** Settings → Agent → turn off **Attribution**.
+
+**Repo hook (backup):** `.githooks/prepare-commit-msg` strips the Cursor trailer. One-time per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+After committing, verify the message has no `Co-authored-by`:
+
+```bash
+git log -1 --format=%B
+```
 
 ### 4. If build changes only the JARs
 
