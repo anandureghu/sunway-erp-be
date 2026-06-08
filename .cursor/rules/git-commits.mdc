@@ -11,15 +11,41 @@ alwaysApply: true
 - No `--no-verify` or force-push to main/develop unless user requests
 - **Do not push** unless the user explicitly asks
 
-## Backend commit workflow
+## Backend commit workflow (required)
 
-When the user asks to commit backend changes:
+When the user asks to commit backend changes, **always** follow this sequence. Do not skip steps.
 
-1. Run `mvn -q -DskipTests package` from the backend root and fix any build failures before committing.
-2. Force-stage both deployable artifacts (they are gitignored except via negation rules):
-   ```bash
-   git add -f target/sunway-1.0.0.jar target/sunway-1.0.0.jar.original
-   ```
-3. Stage source changes, commit, and stop — do not push.
+### 1. Build (required — not `compile` alone)
 
-Both `target/sunway-1.0.0.jar` and `target/sunway-1.0.0.jar.original` must be included in every backend commit that touches application code.
+From the backend root:
+
+```bash
+mvn -q -DskipTests package
+```
+
+- Fix any build failures before committing
+- `mvn compile` alone is **not** sufficient
+
+### 2. Stage deployable JARs (required)
+
+Force-stage both artifacts (gitignored except via negation in `.gitignore`):
+
+```bash
+git add -f target/sunway-1.0.0.jar target/sunway-1.0.0.jar.original
+```
+
+Both files **must** be in every backend commit that touches application code.
+
+### 3. Stage source, commit, verify
+
+```bash
+git add <source files>
+git commit -m "..."
+git show --name-only HEAD   # confirm both .jar files are listed
+```
+
+Do not push unless the user explicitly asks.
+
+### 4. If build changes only the JARs
+
+If source is unchanged but the user still wants a deploy refresh, rebuild with `mvn package` and commit only the two JAR files.
