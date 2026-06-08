@@ -9,5 +9,6 @@ import lombok.Setter;
 public class LoginRequest {
     @NotBlank private String loginId;
     @NotBlank private String password;
-
+    /** Optional: pick active company when user belongs to multiple tenants */
+    private Long preferredCompanyId;
 }

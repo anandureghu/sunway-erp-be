@@ -43,8 +43,10 @@ public class ProfileResponse {
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole().name())
-                .companyRoleId(user.getCompanyRoleId())
-                .companyRole(user.getCompanyRole())
+                .companyRoleId(emp != null && emp.getCompanyRoleId() != null
+                        ? emp.getCompanyRoleId() : user.getCompanyRoleId())
+                .companyRole(emp != null && emp.getCompanyRole() != null
+                        ? emp.getCompanyRole() : user.getCompanyRole())
                 .createdAt(user.getCreatedAt())
                 .employeeId(emp != null ? emp.getId() : null)
                 .employeeNo(emp != null ? emp.getEmployeeNo() : null)

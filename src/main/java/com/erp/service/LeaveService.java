@@ -443,6 +443,9 @@ public class LeaveService {
         User currentUser = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        Employee emp = authContext.getCurrentEmployee();
+        if (emp != null) return emp;
+
         return employeeRepo.findByUser_Id(currentUser.getId())
                 .orElseThrow(() -> new RuntimeException("Employee record not found"));
     }

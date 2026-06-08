@@ -3,16 +3,21 @@ package com.erp.dto.auth;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
+@Setter
 public class JwtResponse {
-    @Setter
     private String accessToken;
-    @Setter
     private String refreshToken;
     private final String tokenType = "Bearer";
-    public JwtResponse() {}
-    public JwtResponse(String accessToken, String refreshToken) {
-        this.accessToken = accessToken; this.refreshToken = refreshToken;
-    }
+    private List<CompanySummary> companies;
+    private boolean requiresCompanySelection;
 
+    public JwtResponse() {}
+
+    public JwtResponse(String accessToken, String refreshToken) {
+        this.accessToken = accessToken;
+        this.refreshToken = refreshToken;
+    }
 }

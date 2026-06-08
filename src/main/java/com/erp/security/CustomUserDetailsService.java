@@ -30,7 +30,12 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .or(() -> userRepository.findByUsername(usernameOrEmail))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        Employee employee = employeeRepository.findByUser_Id(user.getId()).orElse(null);
+        Employee employee = employeeRepository.findAllByUser_Id(user.getId()).stream()
+                .findFirst()
+                .orElse(null);
+
+        Long companyId = employee != null && employee.getCompany() != null
+                ? employee.getCompany().getId() : user.getCompanyId();
 
         return new CustomUserPrincipal(
                 user.getId(),
@@ -38,9 +43,9 @@ public class CustomUserDetailsService implements UserDetailsService {
                 user.getUsername(),
                 user.getPassword(),
                 user.getRole(),
-                user.getCompanyRoleId(),
-                user.getCompanyRole(),
-                user.getCompanyId()
+                employee != null ? employee.getCompanyRoleId() : user.getCompanyRoleId(),
+                employee != null ? employee.getCompanyRole() : user.getCompanyRole(),
+                companyId
         );
     }
 }

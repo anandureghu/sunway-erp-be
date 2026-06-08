@@ -77,8 +77,11 @@ public class EmployeeController {
     @RequiresPermission(module = AppModule.LEAVES, action = {AppAction.EDIT})
     @PostMapping("/sync-all-leave-balances")
     public ResponseEntity<Void> syncAllLeaveBalances() {
-        User authUser = getAuthUser();
-        employeeService.syncAllEmployeeLeaveBalances(authUser.getCompany().getId());
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new RuntimeException("User not linked to any company");
+        }
+        employeeService.syncAllEmployeeLeaveBalances(companyId);
         return ResponseEntity.ok().build();
     }
 

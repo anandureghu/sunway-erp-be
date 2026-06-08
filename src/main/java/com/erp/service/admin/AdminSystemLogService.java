@@ -74,9 +74,7 @@ public class AdminSystemLogService {
                 if (username == null) {
                     username = user.getUsername();
                 }
-                if (companyId == null) {
-                    companyId = user.getCompanyId();
-                }
+                // Do not fall back to users.company_id — it is stale for multi-company users.
             }
         }
 

@@ -2,11 +2,15 @@ package com.erp.controller.hr;
 
 import com.erp.domain.hr.Company;
 import com.erp.dto.hr.AccountingDefaultsDTO;
+import com.erp.dto.hr.AssignUserToCompanyDTO;
 import com.erp.dto.hr.CompanyDTO;
+import com.erp.dto.hr.EmployeeResponseDTO;
+import com.erp.service.EmployeeService;
 import com.erp.dto.hr.HrPoliciesDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
 import com.erp.dto.hr.PayrollExportSettingsDTO;
 import com.erp.service.hr.CompanyService;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,9 +23,11 @@ import java.util.List;
 public class CompanyController {
 
     private final CompanyService companyService;
+    private final EmployeeService employeeService;
 
-    public CompanyController(CompanyService companyService) {
+    public CompanyController(CompanyService companyService, EmployeeService employeeService) {
         this.companyService = companyService;
+        this.employeeService = employeeService;
     }
 
     @GetMapping
@@ -107,5 +113,18 @@ public class CompanyController {
     public ResponseEntity<Void> deleteCompany(@PathVariable("id") Long id) {
         companyService.deleteCompany(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/assign-user")
+    public ResponseEntity<EmployeeResponseDTO> assignUser(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody AssignUserToCompanyDTO body) {
+        EmployeeResponseDTO result = employeeService.assignExistingUserToCompany(
+                id,
+                body.getUserId(),
+                body.getCompanyRoleId(),
+                body.getCompanyRole()
+        );
+        return ResponseEntity.ok(result);
     }
 }

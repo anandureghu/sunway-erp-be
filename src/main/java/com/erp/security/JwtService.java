@@ -43,8 +43,13 @@ public class JwtService {
     }
 
     public String generateRefreshToken(String subject) {
+        return generateRefreshToken(subject, Map.of());
+    }
+
+    public String generateRefreshToken(String subject, Map<String, Object> claims) {
         Instant now = Instant.now();
         return Jwts.builder()
+                .setClaims(claims)
                 .setSubject(subject)
                 .setIssuer(issuer)
                 .setIssuedAt(Date.from(now))

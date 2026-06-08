@@ -30,6 +30,12 @@ public class UserController {
         this.authContext = authContext;
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<List<com.erp.dto.hr.UserSearchResultDTO>> search(
+            @RequestParam("q") String q) {
+        return ResponseEntity.ok(userService.searchUsers(q));
+    }
+
     @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).VIEW_ALL)")
     @GetMapping
     public ResponseEntity<List<User>> list() {

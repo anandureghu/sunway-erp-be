@@ -201,9 +201,12 @@ public class EmployeeLoanService {
             throw new AccessDeniedException("Unauthorized");
         }
 
-        Employee approver = employeeRepo.findByUser_Id(userId)
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Approver is not linked to an employee record"));
+        Employee approver = authContext.getCurrentEmployee();
+        if (approver == null) {
+            approver = employeeRepo.findByUser_Id(userId)
+                    .orElseThrow(() -> new AccessDeniedException(
+                            "Approver is not linked to an employee record"));
+        }
 
         Long approverCompanyId = approver.getCompany() != null
                 ? approver.getCompany().getId() : null;
