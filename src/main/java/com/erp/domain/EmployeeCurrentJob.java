@@ -4,6 +4,7 @@ import com.erp.domain.enums.EmploymentCategory;
 import com.erp.domain.enums.EmploymentType;
 import com.erp.domain.hrsettings.JobCode;
 import com.erp.domain.hr.Department;
+import com.erp.domain.hr.Division;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -31,6 +32,10 @@ public class EmployeeCurrentJob {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "department_id", nullable = false)
     private Department department;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "division_id")
+    private Division division;
 
     private LocalDate startDate;
     private LocalDate effectiveFrom;

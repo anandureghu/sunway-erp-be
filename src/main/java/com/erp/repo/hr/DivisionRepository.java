@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface DivisionRepository extends JpaRepository<Division, Long> {
     List<Division> findAllByCompanyIdOrderByCreatedAtDesc(Long companyId);
+
+    List<Division> findAllByDepartment_IdOrderByCreatedAtDesc(Long departmentId);
 }

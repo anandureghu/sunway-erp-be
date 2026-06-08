@@ -3,6 +3,7 @@ package com.erp.service;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeCurrentJob;
 import com.erp.domain.hr.Department;
+import com.erp.domain.hr.Division;
 import com.erp.domain.hrsettings.JobCode;
 import com.erp.dto.currentjob.EmployeeCurrentJobRequestDTO;
 import com.erp.dto.currentjob.EmployeeCurrentJobResponseDTO;
@@ -11,6 +12,7 @@ import com.erp.mapper.EmployeeCurrentJobMapper;
 import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.DepartmentRepository;
+import com.erp.repo.hr.DivisionRepository;
 import com.erp.repo.hrsettings.JobCodeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,7 @@ public class CurrentJobService {
     private final EmployeeRepository employeeRepo;
     private final JobCodeRepository jobCodeRepo;
     private final DepartmentRepository departmentRepo;
+    private final DivisionRepository divisionRepo;
 
     @Transactional(readOnly = true)
     public EmployeeCurrentJobResponseDTO get(Long employeeId) {
@@ -57,11 +60,13 @@ public class CurrentJobService {
 
         Department department = departmentRepo.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new NotFoundException("Department not found"));
+        Division division = resolveDivision(dto.getDivisionId(), department);
 
         EmployeeCurrentJob job = new EmployeeCurrentJob();
         job.setEmployee(employee);
         job.setJobCode(jobCode);
         job.setDepartment(department);
+        job.setDivision(division);
 
         EmployeeCurrentJobMapper.updateEntity(job, dto);
         applyReportingManager(job, employee, dto.getReportingManagerId());
@@ -84,9 +89,11 @@ public class CurrentJobService {
 
         Department department = departmentRepo.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new NotFoundException("Department not found"));
+        Division division = resolveDivision(dto.getDivisionId(), department);
 
         job.setJobCode(jobCode);
         job.setDepartment(department);
+        job.setDivision(division);
 
         EmployeeCurrentJobMapper.updateEntity(job, dto);
         applyReportingManager(job, job.getEmployee(), dto.getReportingManagerId());
@@ -119,6 +126,22 @@ public class CurrentJobService {
         job.setReportingManager(manager);
     }
 
+    private Division resolveDivision(Long divisionId, Department department) {
+        if (divisionId == null) {
+            return null;
+        }
+
+        Division division = divisionRepo.findById(divisionId)
+                .orElseThrow(() -> new NotFoundException("Division not found"));
+
+        if (division.getDepartment() == null
+                || !division.getDepartment().getId().equals(department.getId())) {
+            throw new IllegalArgumentException("Division must belong to the selected department");
+        }
+
+        return division;
+    }
+
     private void assertSameCompany(Employee employee, JobCode jobCode) {
         Long empCompanyId = employee.getCompany() != null ? employee.getCompany().getId() : null;
         Long jobCompanyId = jobCode.getCompany() != null ? jobCode.getCompany().getId() : null;
@@ -137,9 +160,9 @@ public class CurrentJobService {
         }
         if (job.getDepartment() != null) {
             job.getDepartment().getId();
-            if (job.getDepartment().getDivision() != null) {
-                job.getDepartment().getDivision().getId();
-            }
+        }
+        if (job.getDivision() != null) {
+            job.getDivision().getId();
         }
         if (job.getReportingManager() != null) {
             job.getReportingManager().getId();
