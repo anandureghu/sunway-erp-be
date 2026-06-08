@@ -1,11 +1,11 @@
 package com.erp.controller;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.appraisal.EmployeeAppraisalRequestDTO;
 import com.erp.dto.appraisal.EmployeeAppraisalResponseDTO;
 import com.erp.service.appraisal.EmployeeAppraisalService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,7 +24,7 @@ public class EmployeeAppraisalController {
        LIST BY EMPLOYEE
        ========================================================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.APPRAISAL, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/employees/{employeeId}/appraisals")
     public ResponseEntity<Page<EmployeeAppraisalResponseDTO>> listByEmployee(
             @PathVariable("employeeId") Long employeeId,
@@ -39,7 +39,7 @@ public class EmployeeAppraisalController {
        POST /api/employees/{id}/appraisals?year=2026&month=MARCH
        ========================================================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.CREATE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.CREATE)
     @PostMapping("/employees/{employeeId}/appraisals")
     public ResponseEntity<EmployeeAppraisalResponseDTO> create(
             @PathVariable("employeeId") Long employeeId,
@@ -54,7 +54,7 @@ public class EmployeeAppraisalController {
        SELF SUBMIT  (DRAFT → SELF_SUBMITTED)
        ========================================================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.EDIT)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.EDIT)
     @PutMapping("/employees/{employeeId}/appraisals/{appraisalId}/self-submit")
     public ResponseEntity<EmployeeAppraisalResponseDTO> selfSubmit(
             @PathVariable("employeeId")   Long employeeId,
@@ -69,7 +69,7 @@ public class EmployeeAppraisalController {
        MANAGER REVIEW  (SELF_SUBMITTED → MANAGER_REVIEWED)
        ========================================================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.APPROVE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.APPROVE)
     @PutMapping("/employees/{employeeId}/appraisals/{appraisalId}/manager-review")
     public ResponseEntity<EmployeeAppraisalResponseDTO> managerReview(
             @PathVariable("employeeId")   Long employeeId,
@@ -84,7 +84,7 @@ public class EmployeeAppraisalController {
        LOCK  (MANAGER_REVIEWED → LOCKED)
        ========================================================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.APPROVE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.APPROVE)
     @PutMapping("/employees/{employeeId}/appraisals/{appraisalId}/lock")
     public ResponseEntity<EmployeeAppraisalResponseDTO> lock(
             @PathVariable("employeeId")  Long employeeId,
@@ -98,7 +98,7 @@ public class EmployeeAppraisalController {
        UNLOCK  (LOCKED → MANAGER_REVIEWED)
        ========================================================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.APPROVE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.APPROVE)
     @PutMapping("/employees/{employeeId}/appraisals/{appraisalId}/unlock")
     public ResponseEntity<EmployeeAppraisalResponseDTO> unlock(
             @PathVariable("employeeId")  Long employeeId,
@@ -112,7 +112,7 @@ public class EmployeeAppraisalController {
        DELETE  (blocked if LOCKED)
        ========================================================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.DELETE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.DELETE)
     @DeleteMapping("/employees/{employeeId}/appraisals/{appraisalId}")
     public ResponseEntity<Void> delete(
             @PathVariable("employeeId")  Long employeeId,
@@ -126,7 +126,7 @@ public class EmployeeAppraisalController {
        FORCE DELETE — any status
        ========================================================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.DELETE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.DELETE)
     @DeleteMapping("/employees/{employeeId}/appraisals/{appraisalId}/force")
     public ResponseEntity<Void> forceDelete(
             @PathVariable("employeeId")  Long employeeId,
@@ -140,7 +140,7 @@ public class EmployeeAppraisalController {
        GLOBAL VIEW (HR / ADMIN)
        ========================================================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.VIEW_ALL)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.VIEW_ALL)
     @GetMapping("/appraisals")
     public ResponseEntity<Page<EmployeeAppraisalResponseDTO>> listByYear(
             @RequestParam("year") Integer year,

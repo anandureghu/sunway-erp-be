@@ -30,7 +30,7 @@ public class UserController {
         this.authContext = authContext;
     }
 
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).VIEW_ALL)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).VIEW_ALL)")
     @GetMapping
     public ResponseEntity<List<User>> list() {
         Long companyId = authContext.getCurrentCompanyId();
@@ -40,7 +40,7 @@ public class UserController {
         return ResponseEntity.ok(repo.findByCompany_IdOrderByCreatedAtDesc(companyId));
     }
 
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).VIEW_ALL)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).VIEW_ALL)")
     @GetMapping("/{id}")
     public ResponseEntity<UserDetailsDTO> getDetails(@PathVariable("id") Long id) {
         return ResponseEntity.ok(userService.getUserDetails(id));
@@ -59,7 +59,7 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).EDIT)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).EDIT)")
     @PutMapping("/{id}/admin-reset-password")
     public ResponseEntity<Void> adminResetPassword(
             @PathVariable("id") Long id,

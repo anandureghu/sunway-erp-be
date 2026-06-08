@@ -1,11 +1,11 @@
 package com.erp.controller;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.property.CompanyPropertyRequestDTO;
 import com.erp.dto.property.CompanyPropertyResponseDTO;
 import com.erp.service.CompanyPropertyService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,7 +26,7 @@ public class CompanyPropertyController {
     // VIEW_OWN — user views their own assigned properties
     // VIEW_ALL — admin/HR views anyone's properties
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping
     public ResponseEntity<List<CompanyPropertyResponseDTO>> getProperties(
             @PathVariable("employeeId") Long employeeId) {
@@ -38,7 +38,7 @@ public class CompanyPropertyController {
     // CREATE PROPERTY ASSIGNMENT
     // CREATE — assigning a new property to an employee
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.CREATE})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.CREATE})
     @PostMapping
     public ResponseEntity<CompanyPropertyResponseDTO> createProperty(
             @PathVariable("employeeId") Long employeeId,
@@ -52,7 +52,7 @@ public class CompanyPropertyController {
     // UPDATE PROPERTY ASSIGNMENT
     // EDIT — updating an existing property assignment
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.EDIT})
     @PutMapping("/{propertyId}")
     public ResponseEntity<CompanyPropertyResponseDTO> updateProperty(
             @PathVariable("employeeId") Long employeeId,
@@ -67,7 +67,7 @@ public class CompanyPropertyController {
     // DELETE PROPERTY ASSIGNMENT
     // DELETE — removing a property assignment
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.DELETE})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.DELETE})
     @DeleteMapping("/{propertyId}")
     public ResponseEntity<Void> deleteProperty(
             @PathVariable("employeeId") Long employeeId,

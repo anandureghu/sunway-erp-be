@@ -4,8 +4,8 @@ import com.erp.domain.*;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.hr.Department;
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.domain.security.Role;
 import com.erp.dto.common.PageResponse;
 import com.erp.dto.file.FileCategory;
@@ -291,15 +291,15 @@ public class EmployeeService {
         if (authUser.getRole() == Role.USER) {
             boolean canViewAll = permissionCheckService.hasAccess(
                     auth,
-                    HrModule.EMPLOYEE_PROFILE,
-                    HrAction.VIEW_ALL
+                    AppModule.EMPLOYEE_PROFILE,
+                    AppAction.VIEW_ALL
             );
 
             if (!canViewAll) {
                 boolean canViewOwn = permissionCheckService.hasAccess(
                         auth,
-                        HrModule.EMPLOYEE_PROFILE,
-                        HrAction.VIEW_OWN
+                        AppModule.EMPLOYEE_PROFILE,
+                        AppAction.VIEW_OWN
                 );
 
                 if (!canViewOwn || employee.getUser() == null ||
@@ -330,13 +330,13 @@ public class EmployeeService {
         // ✅ Check both VIEW_OWN and VIEW_ALL permissions
         boolean canViewAll = permissionCheckService.hasAccess(
                 auth,
-                HrModule.EMPLOYEE_PROFILE,
-                HrAction.VIEW_ALL
+                AppModule.EMPLOYEE_PROFILE,
+                AppAction.VIEW_ALL
         );
         boolean canViewOwn = permissionCheckService.hasAccess(
                 auth,
-                HrModule.EMPLOYEE_PROFILE,
-                HrAction.VIEW_OWN
+                AppModule.EMPLOYEE_PROFILE,
+                AppAction.VIEW_OWN
         );
 
         log.debug("👤 getEmployees: canViewAll={}, canViewOwn={}", canViewAll, canViewOwn);
@@ -401,13 +401,13 @@ public class EmployeeService {
         // ✅ Check both VIEW_OWN and VIEW_ALL permissions
         boolean canViewAll = permissionCheckService.hasAccess(
                 auth,
-                HrModule.EMPLOYEE_PROFILE,
-                HrAction.VIEW_ALL
+                AppModule.EMPLOYEE_PROFILE,
+                AppAction.VIEW_ALL
         );
         boolean canViewOwn = permissionCheckService.hasAccess(
                 auth,
-                HrModule.EMPLOYEE_PROFILE,
-                HrAction.VIEW_OWN
+                AppModule.EMPLOYEE_PROFILE,
+                AppAction.VIEW_OWN
         );
 
         log.debug("👤 getEmployees(paginated): canViewAll={}, canViewOwn={}", canViewAll, canViewOwn);

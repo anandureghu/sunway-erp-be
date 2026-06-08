@@ -40,8 +40,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import static com.erp.domain.security.HrAction.APPROVE;
-import static com.erp.domain.security.HrModule.LEAVES;
+import static com.erp.domain.security.AppAction.APPROVE;
+import static com.erp.domain.security.AppModule.LEAVES;
 
 @Service
 @RequiredArgsConstructor

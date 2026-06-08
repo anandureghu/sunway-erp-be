@@ -1,8 +1,8 @@
 package com.erp.controller;
 
 import com.erp.domain.User;
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.common.PageResponse;
 import com.erp.dto.hr.CreateEmployeeDTO;
 import com.erp.dto.hr.EmployeeResponseDTO;
@@ -10,7 +10,7 @@ import com.erp.dto.hr.UpdateEmployeeDTO;
 import com.erp.repo.UserRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.EmployeeService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,7 +39,7 @@ public class EmployeeController {
     // ======================================================
     // CREATE EMPLOYEE
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.CREATE})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.CREATE})
     @PostMapping
     public ResponseEntity<EmployeeResponseDTO> createEmployee(
             @Valid @RequestBody CreateEmployeeDTO dto) {
@@ -51,7 +51,7 @@ public class EmployeeController {
     // ======================================================
     // GET COMPANY ADMIN
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_ALL})
     @GetMapping("/admin/{companyId}")
     public ResponseEntity<EmployeeResponseDTO> getCompanyAdmin(
             @PathVariable("companyId") Long companyId) {
@@ -62,7 +62,7 @@ public class EmployeeController {
     // ======================================================
     // GET EMPLOYEES PAGINATED
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/page")
     public ResponseEntity<PageResponse<EmployeeResponseDTO>> getEmployeesPaginated(
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -74,7 +74,7 @@ public class EmployeeController {
     // ======================================================
     // SYNC ALL LEAVE BALANCES
     // ======================================================
-    @HrPermission(module = HrModule.LEAVES, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.LEAVES, action = {AppAction.EDIT})
     @PostMapping("/sync-all-leave-balances")
     public ResponseEntity<Void> syncAllLeaveBalances() {
         User authUser = getAuthUser();
@@ -85,7 +85,7 @@ public class EmployeeController {
     // ======================================================
     // GET ALL EMPLOYEES (CURRENT COMPANY)
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping
     public ResponseEntity<List<EmployeeResponseDTO>> getEmployees() {
         return ResponseEntity.ok(employeeService.getEmployees());
@@ -94,7 +94,7 @@ public class EmployeeController {
     // ======================================================
     // GET EMPLOYEES BY COMPANY
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_ALL})
     @GetMapping("/company/{companyId}")
     public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByCompany(
             @PathVariable("companyId") Long companyId) {
@@ -105,7 +105,7 @@ public class EmployeeController {
     // ======================================================
     // GET MANAGERS BY COMPANY  ✅ FIXED POSITION
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_ALL})
     @GetMapping("/managers")
     public ResponseEntity<List<EmployeeResponseDTO>> getManagersByCompany(
             @RequestParam("companyId") Long companyId) {
@@ -115,7 +115,7 @@ public class EmployeeController {
     // ======================================================
     // GET EMPLOYEES BY DEPARTMENT
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_ALL})
     @GetMapping("/department/{departmentId}")
     public ResponseEntity<List<EmployeeResponseDTO>> getEmployeesByDepartment(
             @PathVariable("departmentId") Long departmentId) {
@@ -126,7 +126,7 @@ public class EmployeeController {
     // ======================================================
     // GET EMPLOYEE BY ID  ⚠️ KEEP BELOW SPECIFIC ROUTES
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/{id}")
     public ResponseEntity<EmployeeResponseDTO> getEmployeeById(
             @PathVariable("id") Long id) {
@@ -137,7 +137,7 @@ public class EmployeeController {
     // ======================================================
     // UPDATE EMPLOYEE
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.EDIT})
     @PutMapping("/{id}")
     public ResponseEntity<EmployeeResponseDTO> updateEmployee(
             @PathVariable("id") Long id,
@@ -149,7 +149,7 @@ public class EmployeeController {
     // ======================================================
     // DELETE EMPLOYEE
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.DELETE})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.DELETE})
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteEmployee(
             @PathVariable("id") Long id) {
@@ -161,7 +161,7 @@ public class EmployeeController {
     // ======================================================
     // UPLOAD PROFILE IMAGE
     // ======================================================
-    @HrPermission(module = HrModule.EMPLOYEE_PROFILE, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.EDIT})
     @PostMapping("/{id}/upload-image")
     public ResponseEntity<EmployeeResponseDTO> uploadImage(
             @PathVariable("id") Long id,

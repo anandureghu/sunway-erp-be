@@ -1,8 +1,11 @@
 package com.erp.controller.purchase;
 
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.purchase.GoodsReceiptCreateDTO;
 import com.erp.dto.purchase.GoodsReceiptResponseDTO;
 import com.erp.service.purchase.GoodsReceiptService;
+import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,26 +20,31 @@ public class GoodsReceiptController {
         this.service = service;
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.CREATE})
     @PostMapping
     public GoodsReceiptResponseDTO receive(@RequestBody GoodsReceiptCreateDTO dto) {
         return service.receive(dto);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping
     public List<GoodsReceiptResponseDTO> listAll() {
         return service.listForCurrentCompany();
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/purchase-order/{poId}")
     public List<GoodsReceiptResponseDTO> list(@PathVariable("poId") Long poId) {
         return service.listByPO(poId);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}")
     public GoodsReceiptResponseDTO get(@PathVariable("id") Long id) {
         return service.get(id);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}/pdf")
     public String getReceiptPdfUrl(@PathVariable("id") Long id) {
         return service.getOrCreateReceiptPdfUrl(id);

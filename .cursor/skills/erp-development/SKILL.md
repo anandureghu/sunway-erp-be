@@ -46,7 +46,7 @@ throw new ConflictException("Clear user-facing message");
 
 **Permissions**
 
-- `@HrPermission` / `PermissionCheckService` / `EmployeeAccessGuard` where HR routes need guards
+- `@RequiresPermission` / `PermissionCheckService` / `EmployeeAccessGuard` where routes need module guards
 
 ## Avoid
 

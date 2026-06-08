@@ -29,7 +29,7 @@ public class CompanyRolePermission {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private HrModule module;
+    private AppModule module;
 
     private boolean viewOwn;
     private boolean viewAll;

@@ -9,6 +9,8 @@ import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.StockVariance;
 import com.erp.domain.inventory.StockVarianceStatus;
 import com.erp.domain.inventory.Warehouse;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.domain.security.Role;
 import com.erp.dto.inventory.StockVarianceCreateDTO;
 import com.erp.dto.inventory.StockVarianceResponseDTO;
@@ -20,7 +22,9 @@ import com.erp.repo.inventory.StockVarianceRepository;
 import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.TransactionService;
+import com.erp.service.security.PermissionCheckService;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +47,7 @@ public class StockVarianceService {
     private final ItemWarehouseStockService stockService;
     private final TransactionService transactionService;
     private final ChartOfAccountsRepository coaRepo;
+    private final PermissionCheckService permissionCheckService;
 
     public StockVarianceService(
             StockVarianceRepository repo,
@@ -53,7 +58,8 @@ public class StockVarianceService {
             AuthContext auth,
             ItemWarehouseStockService stockService,
             TransactionService transactionService,
-            ChartOfAccountsRepository coaRepo
+            ChartOfAccountsRepository coaRepo,
+            PermissionCheckService permissionCheckService
     ) {
         this.repo = repo;
         this.itemRepo = itemRepo;
@@ -64,6 +70,7 @@ public class StockVarianceService {
         this.stockService = stockService;
         this.transactionService = transactionService;
         this.coaRepo = coaRepo;
+        this.permissionCheckService = permissionCheckService;
     }
 
     public StockVarianceResponseDTO create(StockVarianceCreateDTO dto) {
@@ -205,6 +212,9 @@ public class StockVarianceService {
 
     @Transactional(readOnly = true)
     public boolean canCurrentUserApprove() {
+        if (hasInventoryStockApprovePermission()) {
+            return true;
+        }
         User user = userRepo.findById(auth.getCurrentUserId()).orElse(null);
         return user != null && hasElevatedApprovalRole(user);
     }
@@ -293,7 +303,7 @@ public class StockVarianceService {
     }
 
     private boolean canApprove(User user, StockVariance variance) {
-        if (hasElevatedApprovalRole(user)) {
+        if (hasInventoryStockApprovePermission() || hasElevatedApprovalRole(user)) {
             return true;
         }
         Long userId = user.getId();
@@ -305,6 +315,12 @@ public class StockVarianceService {
         return to != null
                 && to.getManager() != null
                 && userId.equals(to.getManager().getId());
+    }
+
+    private boolean hasInventoryStockApprovePermission() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null
+                && permissionCheckService.hasAccess(auth, AppModule.INVENTORY_STOCK, AppAction.APPROVE);
     }
 
     private boolean hasElevatedApprovalRole(User user) {

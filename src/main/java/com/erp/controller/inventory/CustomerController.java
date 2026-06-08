@@ -1,9 +1,12 @@
 package com.erp.controller.inventory;
 
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.inventory.CustomerCreateDTO;
 import com.erp.dto.inventory.CustomerResponseDTO;
 import com.erp.dto.inventory.CustomerUpdateDTO;
 import com.erp.service.inventory.CustomerService;
+import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,25 +22,25 @@ public class CustomerController {
         this.customerService = customerService;
     }
 
-    // ---------------- GET ALL ----------------
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping
     public List<CustomerResponseDTO> getAll() {
         return customerService.getAllCustomers();
     }
 
-    // ---------------- GET BY ID ----------------
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}")
     public ResponseEntity<CustomerResponseDTO> getById(@PathVariable("id") Long id) {
         return ResponseEntity.ok(customerService.getCustomerByIdDTO(id));
     }
 
-    // ---------------- CREATE ----------------
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.CREATE})
     @PostMapping
     public ResponseEntity<CustomerResponseDTO> create(@RequestBody CustomerCreateDTO dto) {
         return ResponseEntity.ok(customerService.createCustomer(dto));
     }
 
-    // ---------------- UPDATE ----------------
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.EDIT})
     @PutMapping("/{id}")
     public ResponseEntity<CustomerResponseDTO> update(
             @PathVariable("id") Long id,
@@ -46,7 +49,7 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.updateCustomer(id, dto));
     }
 
-    // ---------------- DELETE ----------------
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.DELETE})
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
         customerService.deleteCustomer(id);

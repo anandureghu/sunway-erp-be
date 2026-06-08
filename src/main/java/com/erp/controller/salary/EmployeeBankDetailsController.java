@@ -23,9 +23,9 @@ public class EmployeeBankDetailsController {
 
     @PreAuthorize("""
         @permissionChecker.hasAny(authentication,
-            T(com.erp.domain.security.HrModule).SALARY,
-            T(com.erp.domain.security.HrAction).VIEW_OWN,
-            T(com.erp.domain.security.HrAction).VIEW_ALL)
+            T(com.erp.domain.security.AppModule).SALARY,
+            T(com.erp.domain.security.AppAction).VIEW_OWN,
+            T(com.erp.domain.security.AppAction).VIEW_ALL)
     """)
     @GetMapping
     public ResponseEntity<BankDetailsResponseDTO> getBankDetails(
@@ -42,7 +42,7 @@ public class EmployeeBankDetailsController {
         return ResponseEntity.ok(types);
     }
 
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).SALARY, T(com.erp.domain.security.HrAction).CREATE)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).SALARY, T(com.erp.domain.security.AppAction).CREATE)")
     @PostMapping
     public ResponseEntity<Void> createBank(
             @PathVariable("employeeId") Long employeeId,
@@ -52,7 +52,7 @@ public class EmployeeBankDetailsController {
         return ResponseEntity.ok().build();
     }
 
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).SALARY, T(com.erp.domain.security.HrAction).EDIT)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).SALARY, T(com.erp.domain.security.AppAction).EDIT)")
     @PutMapping
     public ResponseEntity<Void> updateBank(
             @PathVariable("employeeId") Long employeeId,

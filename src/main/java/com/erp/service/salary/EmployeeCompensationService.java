@@ -3,7 +3,7 @@ package com.erp.service.salary;
 import com.erp.domain.Employee;
 import com.erp.domain.enums.BenefitType;
 import com.erp.domain.salary.EmployeeCompensation;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.salary.CompensationRequestDTO;
 import com.erp.dto.salary.SalaryResponseDTO;
 import com.erp.repo.EmployeeRepository;
@@ -38,7 +38,7 @@ public class EmployeeCompensationService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        accessGuard.assertCanWrite(employee, HrModule.SALARY);
+        accessGuard.assertCanWrite(employee, AppModule.SALARY);
 
         // 🔒 Deactivate old ACTIVE salary
         compensationRepo.findByEmployeeAndStatus(employee, "ACTIVE")
@@ -65,7 +65,7 @@ public class EmployeeCompensationService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        accessGuard.assertCanWrite(employee, HrModule.SALARY);
+        accessGuard.assertCanWrite(employee, AppModule.SALARY);
 
         EmployeeCompensation c = compensationRepo
                 .findByEmployeeAndStatus(employee, "ACTIVE")
@@ -83,7 +83,7 @@ public class EmployeeCompensationService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        accessGuard.assertCanRead(employee, HrModule.SALARY);
+        accessGuard.assertCanRead(employee, AppModule.SALARY);
 
         EmployeeCompensation c =
                 compensationRepo.findActiveByEmployee(employee).orElse(null);

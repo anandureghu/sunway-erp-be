@@ -1,11 +1,11 @@
 package com.erp.controller;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.immigration.ResidencePermitRequestDTO;
 import com.erp.dto.immigration.ResidencePermitResponseDTO;
 import com.erp.service.ResidencePermitService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +23,7 @@ public class EmployeeResidencePermitController {
     // VIEW_OWN — user views their own permit
     // VIEW_ALL — admin/HR views anyone's permit
     // ======================================================
-    @HrPermission(module = HrModule.IMMIGRATION, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.IMMIGRATION, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/{employeeId}/residence-permit")
     public ResponseEntity<ResidencePermitResponseDTO> get(
             @PathVariable("employeeId") Long employeeId
@@ -37,7 +37,7 @@ public class EmployeeResidencePermitController {
     // CREATE RESIDENCE PERMIT
     // CREATE — adding a new residence permit record
     // ======================================================
-    @HrPermission(module = HrModule.IMMIGRATION, action = {HrAction.CREATE})
+    @RequiresPermission(module = AppModule.IMMIGRATION, action = {AppAction.CREATE})
     @PostMapping("/{employeeId}/residence-permit")
     public ResponseEntity<ResidencePermitResponseDTO> create(
             @PathVariable("employeeId") Long employeeId,
@@ -53,7 +53,7 @@ public class EmployeeResidencePermitController {
     // UPDATE RESIDENCE PERMIT
     // EDIT — updating an existing residence permit
     // ======================================================
-    @HrPermission(module = HrModule.IMMIGRATION, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.IMMIGRATION, action = {AppAction.EDIT})
     @PutMapping("/{employeeId}/residence-permit")
     public ResponseEntity<ResidencePermitResponseDTO> update(
             @PathVariable("employeeId") Long employeeId,
@@ -69,7 +69,7 @@ public class EmployeeResidencePermitController {
     // DELETE RESIDENCE PERMIT
     // DELETE — removing a residence permit record
     // ======================================================
-    @HrPermission(module = HrModule.IMMIGRATION, action = {HrAction.DELETE})
+    @RequiresPermission(module = AppModule.IMMIGRATION, action = {AppAction.DELETE})
     @DeleteMapping("/{employeeId}/residence-permit")
     public ResponseEntity<Void> delete(
             @PathVariable("employeeId") Long employeeId

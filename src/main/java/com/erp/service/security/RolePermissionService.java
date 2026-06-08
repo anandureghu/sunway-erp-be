@@ -5,7 +5,7 @@ import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.security.CompanyRolePermission;
 import com.erp.domain.security.EmployeePermission;
 import com.erp.domain.security.EnumRolePermission;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppModule;
 import com.erp.domain.security.Role;
 import com.erp.dto.security.ModulePermissionDTO;
 import com.erp.dto.security.PermissionRecordDTO;
@@ -91,7 +91,7 @@ public class RolePermissionService {
         log.info("   - companyRoleId: {}", companyRoleId);
         log.info("   - enumRole: {}", enumRole);
 
-        Map<HrModule, PermissionRecordDTO> merged = new EnumMap<>(HrModule.class);
+        Map<AppModule, PermissionRecordDTO> merged = new EnumMap<>(AppModule.class);
 
         // Priority 1: Start with enum role permissions (lowest priority)
         log.debug("📋 Priority 1: Fetching enum role permissions for role: {}", enumRole);

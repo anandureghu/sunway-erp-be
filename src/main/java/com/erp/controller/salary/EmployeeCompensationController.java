@@ -19,9 +19,9 @@ public class EmployeeCompensationController {
 
     @PreAuthorize("""
         @permissionChecker.hasAny(authentication,
-            T(com.erp.domain.security.HrModule).SALARY,
-            T(com.erp.domain.security.HrAction).VIEW_OWN,
-            T(com.erp.domain.security.HrAction).VIEW_ALL)
+            T(com.erp.domain.security.AppModule).SALARY,
+            T(com.erp.domain.security.AppAction).VIEW_OWN,
+            T(com.erp.domain.security.AppAction).VIEW_ALL)
     """)
     @GetMapping
     public ResponseEntity<SalaryResponseDTO> getSalary(
@@ -39,7 +39,7 @@ public class EmployeeCompensationController {
 
     /* ================= CREATE SALARY ================= */
 
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).SALARY, T(com.erp.domain.security.HrAction).CREATE)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).SALARY, T(com.erp.domain.security.AppAction).CREATE)")
     @PostMapping
     public ResponseEntity<Void> createSalary(
             @PathVariable("employeeId") Long employeeId,
@@ -51,7 +51,7 @@ public class EmployeeCompensationController {
 
     /* ================= UPDATE SALARY ================= */
 
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).SALARY, T(com.erp.domain.security.HrAction).EDIT)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).SALARY, T(com.erp.domain.security.AppAction).EDIT)")
     @PutMapping
     public ResponseEntity<Void> updateSalary(
             @PathVariable("employeeId") Long employeeId,

@@ -58,8 +58,8 @@ public class RolePermissionController {
     @PreAuthorize("""
         @permissionChecker.has(
             authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).VIEW_ALL
+            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+            T(com.erp.domain.security.AppAction).VIEW_ALL
         )
     """)
     @GetMapping("/company-roles/{companyRoleId}")
@@ -88,8 +88,8 @@ public class RolePermissionController {
     @PreAuthorize("""
         @permissionChecker.has(
             authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).VIEW_ALL
+            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+            T(com.erp.domain.security.AppAction).VIEW_ALL
         )
     """)
     @GetMapping("/employees/{employeeId}")

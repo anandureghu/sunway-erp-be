@@ -4,15 +4,15 @@ import com.erp.domain.CompanyLeavePolicy;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLeaveBalance;
 import com.erp.domain.hr.Company;
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.EmployeeLeaveBalanceRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.LeavePolicyService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -35,7 +35,7 @@ public class LeaveAdminController {
     private final AuthContext authContext;
     private final LeavePolicyService leavePolicyService;
 
-    @HrPermission(module = HrModule.LEAVES, action = {HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.LEAVES, action = {AppAction.VIEW_ALL})
     @GetMapping("/diagnose/{employeeId}")
     public ResponseEntity<?> diagnoseEmployee(@PathVariable Long employeeId) {
         try {
@@ -122,7 +122,7 @@ public class LeaveAdminController {
         }
     }
 
-    @HrPermission(module = HrModule.LEAVES, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.LEAVES, action = {AppAction.EDIT})
     @PostMapping("/initialize/{employeeId}")
     public ResponseEntity<?> initializeLeaveBalances(@PathVariable Long employeeId) {
         try {
@@ -160,7 +160,7 @@ public class LeaveAdminController {
         }
     }
 
-    @HrPermission(module = HrModule.LEAVES, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.LEAVES, action = {AppAction.EDIT})
     @PostMapping("/initialize-all")
     public ResponseEntity<?> initializeAllMissingBalances(
             @RequestParam(defaultValue = "false") boolean fixRoles) {
@@ -226,7 +226,7 @@ public class LeaveAdminController {
         }
     }
 
-    @HrPermission(module = HrModule.LEAVES, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.LEAVES, action = {AppAction.EDIT})
     @PostMapping("/fix-roles")
     public ResponseEntity<?> fixMissingRoles() {
         try {
@@ -283,7 +283,7 @@ public class LeaveAdminController {
         }
     }
 
-    @HrPermission(module = HrModule.LEAVES, action = {HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.LEAVES, action = {AppAction.VIEW_ALL})
     @GetMapping("/policies")
     public ResponseEntity<?> getAllPolicies(@RequestParam(required = false) Long companyId) {
         try {

@@ -2,8 +2,8 @@ package com.erp.service;
 
 import com.erp.domain.Employee;
 import com.erp.domain.User;
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.security.AdminResetPasswordRequest;
 import com.erp.dto.security.ChangePasswordRequest;
 import com.erp.dto.security.ProfileResponse;
@@ -234,8 +234,8 @@ public class UserService {
 
         return permissionCheckService.hasAccess(
                 auth,
-                HrModule.HR_SETTINGS,
-                HrAction.EDIT
+                AppModule.HR_SETTINGS,
+                AppAction.EDIT
         );
     }
 }

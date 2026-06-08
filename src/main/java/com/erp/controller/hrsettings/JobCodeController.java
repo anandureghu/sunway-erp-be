@@ -1,7 +1,7 @@
 package com.erp.controller.hrsettings;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.hrsettings.JobCodeRequestDTO;
 import com.erp.dto.hrsettings.JobCodeResponseDTO;
 import com.erp.service.hrsettings.JobCodeService;
@@ -22,7 +22,7 @@ public class JobCodeController {
     /**
      * CREATE Job Code
      */
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).CREATE)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).CREATE)")
     @PostMapping
     public JobCodeResponseDTO create(
             @Valid @RequestBody JobCodeRequestDTO dto) {
@@ -32,7 +32,7 @@ public class JobCodeController {
     /**
      * GET All Job Codes
      */
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).VIEW_ALL)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).VIEW_ALL)")
     @GetMapping
     public List<JobCodeResponseDTO> getAll() {
         return service.getAll();
@@ -44,12 +44,12 @@ public class JobCodeController {
      */
     @PreAuthorize("""
         @permissionChecker.has(authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).VIEW_OWN)
+            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+            T(com.erp.domain.security.AppAction).VIEW_OWN)
         or
         @permissionChecker.has(authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).VIEW_ALL)
+            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+            T(com.erp.domain.security.AppAction).VIEW_ALL)
     """)
     @GetMapping("/active")
     public List<JobCodeResponseDTO> getActive() {
@@ -59,7 +59,7 @@ public class JobCodeController {
     /**
      * UPDATE Job Code
      */
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).EDIT)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).EDIT)")
     @PutMapping("/{id}")
     public JobCodeResponseDTO update(
             @PathVariable("id") Long id,
@@ -70,7 +70,7 @@ public class JobCodeController {
     /**
      * DELETE Job Code
      */
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.HrModule).HR_SETTINGS, T(com.erp.domain.security.HrAction).DELETE)")
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).DELETE)")
     @DeleteMapping("/{id}")
     public void delete(@PathVariable("id") Long id) {
         service.delete(id);

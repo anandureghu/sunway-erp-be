@@ -1,8 +1,8 @@
 package com.erp.security.guard;
 
 import com.erp.domain.Employee;
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.security.context.AuthContext;
 import com.erp.service.security.PermissionCheckService;
 import lombok.RequiredArgsConstructor;
@@ -30,16 +30,16 @@ public class EmployeeAccessGuard {
      * Passes if caller is SUPER_ADMIN, has VIEW_ALL on the module (same tenant),
      * or has VIEW_OWN and the employee is the caller's own record.
      */
-    public void assertCanRead(Employee employee, HrModule module) {
+    public void assertCanRead(Employee employee, AppModule module) {
         assertSameTenant(employee);
         if (isSuperAdmin()) {
             return;
         }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (permissionCheckService.hasAccess(auth, module, HrAction.VIEW_ALL)) {
+        if (permissionCheckService.hasAccess(auth, module, AppAction.VIEW_ALL)) {
             return;
         }
-        if (permissionCheckService.hasAccess(auth, module, HrAction.VIEW_OWN)
+        if (permissionCheckService.hasAccess(auth, module, AppAction.VIEW_OWN)
                 && isOwnEmployee(employee)) {
             return;
         }
@@ -51,7 +51,7 @@ public class EmployeeAccessGuard {
      * Tenant must match (SUPER_ADMIN bypasses). The action-level grant
      * (CREATE/EDIT/DELETE) is enforced separately at the controller.
      */
-    public void assertCanWrite(Employee employee, HrModule module) {
+    public void assertCanWrite(Employee employee, AppModule module) {
         assertSameTenant(employee);
     }
 
