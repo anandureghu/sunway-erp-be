@@ -35,19 +35,19 @@ public class EmployeeAppraisalController {
     }
 
     /* =========================================================
-       CREATE — requires year + month
-       POST /api/employees/{id}/appraisals?year=2026&month=MARCH
+       CREATE — assign the employee to a specific cycle
+       POST /api/employees/{id}/appraisals?configId=5&month=MARCH
        ========================================================= */
 
     @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.CREATE)
     @PostMapping("/employees/{employeeId}/appraisals")
     public ResponseEntity<EmployeeAppraisalResponseDTO> create(
             @PathVariable("employeeId") Long employeeId,
-            @RequestParam("year")  Integer year,
-            @RequestParam("month") String  month
+            @RequestParam("configId") Long configId,
+            @RequestParam("month")    String month
     ) {
         return ResponseEntity.ok(
-                appraisalService.createAppraisal(employeeId, year, month));
+                appraisalService.createAppraisal(employeeId, configId, month));
     }
 
     /* =========================================================

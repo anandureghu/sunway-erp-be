@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -46,6 +47,30 @@ public class AppraisalConfigController {
         return configService.getByYear(year)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /* ================= LIST CYCLES FOR A YEAR ================= */
+
+    @RequiresPermission(
+            module = AppModule.APPRAISAL,
+            action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL}
+    )
+    @GetMapping("/cycles")
+    public ResponseEntity<List<AppraisalConfigResponseDTO>> listCycles(
+            @RequestParam("year") Integer year
+    ) {
+        return ResponseEntity.ok(configService.listByYear(year));
+    }
+
+    /* ================= LIST ACTIVE CYCLES (for assignment) ================= */
+
+    @RequiresPermission(
+            module = AppModule.APPRAISAL,
+            action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL}
+    )
+    @GetMapping("/cycles/active")
+    public ResponseEntity<List<AppraisalConfigResponseDTO>> listActiveCycles() {
+        return ResponseEntity.ok(configService.listActive());
     }
 
     /* ================= CREATE ================= */

@@ -8,9 +8,26 @@ import java.util.Optional;
 
 public interface AppraisalConfigRepository extends JpaRepository<AppraisalConfig, Long> {
 
-    Optional<AppraisalConfig> findByYear(Integer year);
+    // ── Single (first-match) lookups — backward-compatible getByYear/getActive ──
+    Optional<AppraisalConfig> findFirstByCompany_IdAndYearOrderByIdDesc(Long companyId, Integer year);
 
-    Optional<AppraisalConfig> findByStatus(String status);
+    Optional<AppraisalConfig> findFirstByCompanyIsNullAndYearOrderByIdDesc(Integer year);
 
-    List<AppraisalConfig> findByYearAndStatus(Integer year, String status);
+    Optional<AppraisalConfig> findFirstByStatusAndCompany_IdOrderByYearDesc(String status, Long companyId);
+
+    Optional<AppraisalConfig> findFirstByStatusAndCompanyIsNullOrderByYearDesc(String status);
+
+    // ── List lookups (multiple cycles per year / multiple active) ──────────────
+    List<AppraisalConfig> findByCompany_IdAndYearOrderByIdDesc(Long companyId, Integer year);
+
+    List<AppraisalConfig> findByCompanyIsNullAndYearOrderByIdDesc(Integer year);
+
+    List<AppraisalConfig> findByStatusAndCompany_Id(String status, Long companyId);
+
+    List<AppraisalConfig> findByStatusAndCompanyIsNull(String status);
+
+    // ── Uniqueness within a tenant: (year, cycleName) ──────────────────────────
+    Optional<AppraisalConfig> findByCompany_IdAndYearAndCycleName(Long companyId, Integer year, String cycleName);
+
+    Optional<AppraisalConfig> findByCompanyIsNullAndYearAndCycleName(Integer year, String cycleName);
 }

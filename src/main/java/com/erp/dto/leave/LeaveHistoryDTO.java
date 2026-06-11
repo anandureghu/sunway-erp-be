@@ -17,6 +17,7 @@ public class LeaveHistoryDTO {
     private LocalDate startDate;
     private LocalDate endDate;
     private LocalDate dateReported;
+    private LocalDate returnDate;
     private Integer totalDays;
     private Boolean includeWeekends;
     private String supportingDocumentUrl;

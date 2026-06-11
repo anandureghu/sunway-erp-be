@@ -8,8 +8,10 @@ import com.erp.service.PassportService;
 import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/employees")
@@ -57,6 +59,19 @@ public class EmployeePassportController {
     ) {
         dto.setEmployeeId(employeeId);
         return ResponseEntity.ok(passportService.update(dto));
+    }
+
+    // ======================================================
+    // UPLOAD PASSPORT DOCUMENT (scan)
+    // EDIT — attaching/replacing the passport scan
+    // ======================================================
+    @RequiresPermission(module = AppModule.IMMIGRATION, action = {AppAction.EDIT})
+    @PostMapping(value = "/{employeeId}/passport/document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<PassportResponseDTO> uploadPassportDocument(
+            @PathVariable("employeeId") Long employeeId,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return ResponseEntity.ok(passportService.uploadDocument(employeeId, file));
     }
 
     // ======================================================

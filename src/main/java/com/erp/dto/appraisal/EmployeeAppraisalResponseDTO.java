@@ -18,6 +18,10 @@ public class EmployeeAppraisalResponseDTO {
     private String employeeName;
     private String employeeRole;
 
+    // Owning appraisal cycle
+    private Long configId;
+    private String cycleName;
+
     private Integer year;
     private String status;
     private String month;

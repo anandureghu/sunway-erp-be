@@ -8,8 +8,10 @@ import com.erp.service.ResidencePermitService;
 import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/employees")
@@ -63,6 +65,19 @@ public class EmployeeResidencePermitController {
         return ResponseEntity.ok(
                 permitService.update(dto)
         );
+    }
+
+    // ======================================================
+    // UPLOAD RESIDENCE PERMIT DOCUMENT (scan)
+    // EDIT — attaching/replacing the residence-permit scan
+    // ======================================================
+    @RequiresPermission(module = AppModule.IMMIGRATION, action = {AppAction.EDIT})
+    @PostMapping(value = "/{employeeId}/residence-permit/document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ResidencePermitResponseDTO> uploadDocument(
+            @PathVariable("employeeId") Long employeeId,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return ResponseEntity.ok(permitService.uploadDocument(employeeId, file));
     }
 
     // ======================================================

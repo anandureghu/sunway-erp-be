@@ -30,7 +30,12 @@ public class EmployeeLeave {
 
     private LocalDate startDate;
     private LocalDate endDate;
+
+    /** Date the leave was applied/submitted (stamped server-side). */
     private LocalDate dateReported;
+
+    /** Date the employee heads back to the office after the leave. Optional. */
+    private LocalDate returnDate;
 
     private Integer totalDays;
     private Boolean includeWeekends;

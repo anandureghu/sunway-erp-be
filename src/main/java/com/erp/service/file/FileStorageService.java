@@ -197,6 +197,12 @@ public class FileStorageService {
 
             case PURCHASE_REQUISITION_DOCUMENT -> "purchase-requisitions/" + entityId + "/"
                     + UUID.randomUUID() + "." + extension;
+
+            case PASSPORT_DOCUMENT -> "immigration/" + entityId + "/passport/"
+                    + UUID.randomUUID() + "." + extension;
+
+            case RESIDENCE_PERMIT_DOCUMENT -> "immigration/" + entityId + "/residence-permit/"
+                    + UUID.randomUUID() + "." + extension;
         };
     }
 

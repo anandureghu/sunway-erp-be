@@ -1,5 +1,6 @@
 package com.erp.domain.appraisal;
 
+import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -19,6 +20,14 @@ public class AppraisalConfig {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /**
+     * Owning company. NULL means a legacy/global config that acts as a shared
+     * fallback for companies that have not created their own.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id")
+    private Company company;
 
     private Integer year;
     private String cycleName;

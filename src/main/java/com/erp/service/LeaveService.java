@@ -125,6 +125,7 @@ public class LeaveService {
     @Transactional
     public LeaveHistoryDTO applyLeave(Long employeeId, LeaveRequestDTO dto, MultipartFile supportingDocument) {
         validateDates(dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
+        validateReturnDate(dto.getEndDate(), dto.getReturnDate());
 
         Employee employee = getEmployee(employeeId);
         validateEmployeeOwnership(employeeId, employee);
@@ -152,6 +153,7 @@ public class LeaveService {
         leave.setStartDate(dto.getStartDate());
         leave.setEndDate(dto.getEndDate());
         leave.setDateReported(LocalDate.now());
+        leave.setReturnDate(dto.getReturnDate());
         leave.setTotalDays(totalDays);
         leave.setIncludeWeekends(includeWeekends);
         leave.setLeaveStatus(LeaveStatus.PENDING);
@@ -346,6 +348,7 @@ public class LeaveService {
             LeaveRequestDTO dto,
             MultipartFile supportingDocument) {
         validateDates(dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
+        validateReturnDate(dto.getEndDate(), dto.getReturnDate());
 
         EmployeeLeave leave = leaveRepo.findById(leaveId)
                 .orElseThrow(() -> new RuntimeException("Leave not found"));
@@ -382,6 +385,7 @@ public class LeaveService {
         leave.setLeaveType(policy.getLeaveType());
         leave.setStartDate(dto.getStartDate());
         leave.setEndDate(dto.getEndDate());
+        leave.setReturnDate(dto.getReturnDate());
         leave.setTotalDays(newDays);
         leave.setIncludeWeekends(includeWeekends);
         leave.setDelegate(resolveDelegate(employee, dto.getDelegateId()));
@@ -539,6 +543,21 @@ public class LeaveService {
 
         if (end.isBefore(start)) {
             throw new IllegalArgumentException("End date cannot be before start date");
+        }
+    }
+
+    /**
+     * The return-to-office date is optional, but when provided it must fall
+     * after the leave end date — the employee can only head back once the
+     * leave has finished.
+     */
+    private void validateReturnDate(LocalDate end, LocalDate returnDate) {
+        if (returnDate == null) {
+            return;
+        }
+        if (end != null && !returnDate.isAfter(end)) {
+            throw new IllegalArgumentException(
+                    "Reporting-to-office date must be after the leave end date");
         }
     }
 
@@ -782,6 +801,7 @@ public class LeaveService {
         dto.setStartDate(leave.getStartDate());
         dto.setEndDate(leave.getEndDate());
         dto.setDateReported(leave.getDateReported());
+        dto.setReturnDate(leave.getReturnDate());
         dto.setTotalDays(leave.getTotalDays());
         dto.setIncludeWeekends(Boolean.TRUE.equals(leave.getIncludeWeekends()));
         dto.setSupportingDocumentUrl(

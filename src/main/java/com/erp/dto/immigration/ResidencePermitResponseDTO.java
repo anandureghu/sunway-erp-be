@@ -1,6 +1,5 @@
 package com.erp.dto.immigration;
 
-import jdk.jshell.Snippet;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -34,5 +33,8 @@ public class ResidencePermitResponseDTO {
 
     private LocalDate startDate;
     private LocalDate endDate;
+
+    /** Time-limited download URL for the uploaded scan (null if none). */
+    private String documentUrl;
 
 }

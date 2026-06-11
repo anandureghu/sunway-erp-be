@@ -4,11 +4,17 @@ import com.erp.domain.Employee;
 import com.erp.domain.ResidencePermit;
 import com.erp.dto.immigration.ResidencePermitRequestDTO;
 import com.erp.dto.immigration.ResidencePermitResponseDTO;
+import com.erp.dto.file.FileCategory;
+import com.erp.dto.file.FileUploadResult;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.ResidencePermitRepository;
+import com.erp.security.context.AuthContext;
+import com.erp.service.file.FileStorageService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -17,12 +23,15 @@ public class ResidencePermitService {
 
     private final ResidencePermitRepository permitRepo;
     private final EmployeeRepository employeeRepo;
+    private final AuthContext authContext;
+    private final FileStorageService fileStorageService;
 
     /* ================= GET ================= */
 
     public ResidencePermitResponseDTO getByEmployee(Long employeeId) {
         ResidencePermit permit = permitRepo.findByEmployeeId(employeeId)
                 .orElseThrow(() -> new RuntimeException("Residence permit not found"));
+        assertSameTenant(permit.getEmployee());
         return toDTO(permit);
     }
 
@@ -38,6 +47,7 @@ public class ResidencePermitService {
 
         Employee employee = employeeRepo.findById(dto.getEmployeeId())
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertSameTenant(employee);
 
         ResidencePermit permit = ResidencePermit.builder()
                 .employee(employee)
@@ -66,6 +76,7 @@ public class ResidencePermitService {
 
         ResidencePermit permit = permitRepo.findByEmployeeId(dto.getEmployeeId())
                 .orElseThrow(() -> new RuntimeException("Residence permit not found"));
+        assertSameTenant(permit.getEmployee());
 
         permit.setPermitIdNumber(dto.getPermitIdNumber()); // ✅ ONLY CHANGE
         permit.setVisaType(dto.getVisaType());
@@ -89,8 +100,39 @@ public class ResidencePermitService {
 
         ResidencePermit permit = permitRepo.findByEmployeeId(employeeId)
                 .orElseThrow(() -> new RuntimeException("Residence permit not found"));
+        assertSameTenant(permit.getEmployee());
 
         permitRepo.delete(permit);
+    }
+
+    /* ================= DOCUMENT UPLOAD ================= */
+
+    public ResidencePermitResponseDTO uploadDocument(Long employeeId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("No file provided");
+        }
+        ResidencePermit permit = permitRepo.findByEmployeeId(employeeId)
+                .orElseThrow(() -> new RuntimeException("Residence permit not found"));
+        assertSameTenant(permit.getEmployee());
+
+        FileUploadResult result = fileStorageService.upload(
+                file, FileCategory.RESIDENCE_PERMIT_DOCUMENT, employeeId.toString(), false);
+        permit.setDocumentPath(result.getBlobPath());
+        permitRepo.save(permit);
+        return toDTO(permit);
+    }
+
+    /* ================= TENANT GUARD ================= */
+
+    private void assertSameTenant(Employee employee) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long employeeCompanyId = employee != null && employee.getCompany() != null
+                ? employee.getCompany().getId() : null;
+        if (currentCompanyId == null || employeeCompanyId == null
+                || !currentCompanyId.equals(employeeCompanyId)) {
+            throw new AccessDeniedException("This residence permit belongs to a different company");
+        }
     }
 
     /* ================= DATE VALIDATION ================= */
@@ -109,9 +151,13 @@ public class ResidencePermitService {
     /* ================= MAPPER ================= */
 
     private ResidencePermitResponseDTO toDTO(ResidencePermit p) {
+        Employee emp = p.getEmployee();
         return ResidencePermitResponseDTO.builder()
                 .id(p.getId())
-                .employeeId(p.getEmployee().getId())
+                .employeeId(emp.getId())
+                .employeeCode(emp.getEmployeeNo())
+                .employeeName(((emp.getFirstName() == null ? "" : emp.getFirstName())
+                        + " " + (emp.getLastName() == null ? "" : emp.getLastName())).trim())
                 .permitIdNumber(p.getPermitIdNumber())
                 .visaType(p.getVisaType())
                 .durationType(p.getDurationType())
@@ -123,6 +169,8 @@ public class ResidencePermitService {
                 .visaStatus(p.getVisaStatus())
                 .startDate(p.getStartDate())
                 .endDate(p.getEndDate())
+                .documentUrl(p.getDocumentPath() != null
+                        ? fileStorageService.getPrivateSasUrl(p.getDocumentPath()) : null)
                 .build();
     }
 }
