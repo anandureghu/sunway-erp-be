@@ -643,6 +643,9 @@ public class PurchaseRequisitionService {
         }
         if (poId != null) {
             b.createdPurchaseOrderId(poId);
+            purchaseOrderRepo
+                    .findById(poId)
+                    .ifPresent(po -> b.createdPurchaseOrderNumber(po.getOrderNumber()));
         }
 
         return b.build();

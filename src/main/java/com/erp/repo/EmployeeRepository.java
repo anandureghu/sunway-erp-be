@@ -52,5 +52,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     Optional<Employee> findByUser_Id(Long userId);
 
+    List<Employee> findAllByUser_Id(Long userId);
+
+    Optional<Employee> findByUser_IdAndCompany_Id(Long userId, Long companyId);
+
+    boolean existsByUser_IdAndCompany_Id(Long userId, Long companyId);
+
     List<Employee> findByCompany_IdAndStatus(Long companyId, EmployeeStatus employeeStatus);
 }

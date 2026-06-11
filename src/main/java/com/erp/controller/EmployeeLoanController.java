@@ -1,12 +1,12 @@
 package com.erp.controller;
 
 import com.erp.domain.LoanType;
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.loan.LoanRequestDTO;
 import com.erp.dto.loan.LoanResponseDTO;
 import com.erp.service.EmployeeLoanService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +27,7 @@ public class EmployeeLoanController {
     // GET LOAN TYPES (picklist)
     // VIEW_OWN — needed to populate the loan type dropdown
     // ======================================================
-    @HrPermission(module = HrModule.LOANS, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/types")
     public ResponseEntity<List<LoanTypeDTO>> getLoanTypes() {
         List<LoanTypeDTO> types = Arrays.stream(LoanType.values())
@@ -41,7 +41,7 @@ public class EmployeeLoanController {
     // VIEW_OWN — user views their own loans
     // VIEW_ALL — admin/HR views anyone's loans
     // ======================================================
-    @HrPermission(module = HrModule.LOANS, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping
     public ResponseEntity<List<LoanResponseDTO>> getLoans(
             @PathVariable("employeeId") Long employeeId) {
@@ -53,7 +53,7 @@ public class EmployeeLoanController {
     // VIEW_OWN — user views their own loan detail
     // VIEW_ALL — admin/HR views anyone's loan detail
     // ======================================================
-    @HrPermission(module = HrModule.LOANS, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/{loanId}")
     public ResponseEntity<LoanResponseDTO> getLoan(
             @PathVariable("employeeId") Long employeeId,
@@ -65,7 +65,7 @@ public class EmployeeLoanController {
     // APPLY FOR LOAN
     // CREATE — applying for a new loan
     // ======================================================
-    @HrPermission(module = HrModule.LOANS, action = {HrAction.CREATE})
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.CREATE})
     @PostMapping
     public ResponseEntity<LoanResponseDTO> applyLoan(
             @PathVariable("employeeId") Long employeeId,
@@ -77,7 +77,7 @@ public class EmployeeLoanController {
     // UPDATE LOAN
     // EDIT — updating an existing loan
     // ======================================================
-    @HrPermission(module = HrModule.LOANS, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.EDIT})
     @PutMapping("/{loanId}")
     public ResponseEntity<LoanResponseDTO> updateLoan(
             @PathVariable("employeeId") Long employeeId,
@@ -91,7 +91,7 @@ public class EmployeeLoanController {
     // APPROVE — only Finance Manager / HR Manager (or anyone the admin
     // explicitly grants LOANS.APPROVE) can decide a pending loan.
     // ======================================================
-    @HrPermission(module = HrModule.LOANS, action = {HrAction.APPROVE})
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.APPROVE})
     @PostMapping("/{loanId}/decision")
     public ResponseEntity<LoanResponseDTO> decideLoan(
             @PathVariable("employeeId") Long employeeId,
@@ -104,7 +104,7 @@ public class EmployeeLoanController {
     // MAKE LOAN PAYMENT
     // EDIT — making a payment modifies the loan record
     // ======================================================
-    @HrPermission(module = HrModule.LOANS, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.EDIT})
     @PostMapping("/{loanId}/payment")
     public ResponseEntity<LoanResponseDTO> makePayment(
             @PathVariable("employeeId") Long employeeId,
@@ -117,7 +117,7 @@ public class EmployeeLoanController {
     // DELETE LOAN
     // DELETE — removing a loan record
     // ======================================================
-    @HrPermission(module = HrModule.LOANS, action = {HrAction.DELETE})
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.DELETE})
     @DeleteMapping("/{loanId}")
     public ResponseEntity<Void> deleteLoan(
             @PathVariable("employeeId") Long employeeId,

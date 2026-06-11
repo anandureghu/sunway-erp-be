@@ -1,6 +1,7 @@
 package com.erp.domain;
 
 import com.erp.domain.hr.Company;
+import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.hr.Department;
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,7 +15,13 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "employees")
+@Table(
+        name = "employees",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_employee_user_company",
+                columnNames = {"user_id", "company_id"}
+        )
+)
 public class Employee {
 
     @Id
@@ -97,11 +104,16 @@ public class Employee {
     private Department department;
 
     /**
-     * Linked User (contains role + companyRole)
+     * Linked User (global security role lives on User)
      */
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", unique = true)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
     private User user;
+
+    /** Per-company HR role (Team Lead, HR Manager, etc.) */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_role_id")
+    private CompanyRole companyRoleRef;
 
     @OneToOne(
             mappedBy = "employee",
@@ -171,11 +183,18 @@ public class Employee {
         this.role = name;
     }
 
+    public Long getCompanyRoleId() {
+        return companyRoleRef != null ? companyRoleRef.getId() : null;
+    }
+
     /**
-     * 🔥 Company Role (USED FOR PERMISSIONS)
-     * Example: "Team Lead", "HR Manager"
+     * Company Role (USED FOR PERMISSIONS) — per-company on Employee.
      */
     public String getCompanyRole() {
+        if (companyRoleRef != null && companyRoleRef.getName() != null && !companyRoleRef.getName().isBlank()) {
+            return companyRoleRef.getName().trim();
+        }
+        // Legacy fallback during migration
         return (user != null && user.getCompanyRole() != null && !user.getCompanyRole().isBlank())
                 ? user.getCompanyRole().trim()
                 : null;

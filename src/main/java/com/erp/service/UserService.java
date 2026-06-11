@@ -2,12 +2,13 @@ package com.erp.service;
 
 import com.erp.domain.Employee;
 import com.erp.domain.User;
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.security.AdminResetPasswordRequest;
 import com.erp.dto.security.ChangePasswordRequest;
 import com.erp.dto.security.ProfileResponse;
 import com.erp.dto.hr.UserDetailsDTO;
+import com.erp.dto.hr.UserSearchResultDTO;
 import com.erp.domain.security.Role;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
@@ -20,6 +21,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -61,7 +65,7 @@ public class UserService {
             }
         }
 
-        Employee emp = employeeRepo.findByUser_Id(id).orElse(null);
+        Employee emp = resolveEmployeeForContext(id);
 
         return UserDetailsDTO.builder()
                 .userId(user.getId())
@@ -72,9 +76,9 @@ public class UserService {
                 // ✅ ENUM role (safe)
                 .role(user.getRole())
 
-                // ✅ COMPANY ROLE (entity safe)
-                .companyRoleId(user.getCompanyRoleId())
-                .companyRole(user.getCompanyRole())
+                // ✅ COMPANY ROLE from active employee membership
+                .companyRoleId(emp != null ? emp.getCompanyRoleId() : user.getCompanyRoleId())
+                .companyRole(emp != null ? emp.getCompanyRole() : user.getCompanyRole())
 
                 .employeeId(emp != null ? emp.getId() : null)
                 .employeeNo(emp != null ? emp.getEmployeeNo() : null)
@@ -83,11 +87,7 @@ public class UserService {
                 .phoneNo(emp != null ? emp.getPhoneNo() : null)
                 .imageUrl(emp != null ? emp.getImageUrl() : null)
 
-                .companyId(
-                        emp != null && emp.getCompany() != null
-                                ? emp.getCompany().getId()
-                                : user.getCompanyId() // ✅ fallback (important fix)
-                )
+                .companyId(resolveActiveCompanyIdForDetails(id, emp, user))
 
                 .companyName(
                         emp != null && emp.getCompany() != null
@@ -110,11 +110,42 @@ public class UserService {
     }
 
     private Long resolveTargetUserCompanyId(User user) {
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId != null) {
+            return employeeRepo.findByUser_IdAndCompany_Id(user.getId(), companyId)
+                    .map(e -> e.getCompany() != null ? e.getCompany().getId() : null)
+                    .orElse(companyId);
+        }
         Employee emp = employeeRepo.findByUser_Id(user.getId()).orElse(null);
         if (emp != null && emp.getCompany() != null) {
             return emp.getCompany().getId();
         }
-        return user.getCompanyId();
+        return authContext.getCurrentCompanyId();
+    }
+
+    private Long resolveActiveCompanyIdForDetails(Long userId, Employee emp, User user) {
+        if (userId.equals(authContext.getCurrentUserId())) {
+            Long jwtCompanyId = authContext.getCurrentCompanyId();
+            if (jwtCompanyId != null) {
+                return jwtCompanyId;
+            }
+        }
+        if (emp != null && emp.getCompany() != null) {
+            return emp.getCompany().getId();
+        }
+        return authContext.getCurrentCompanyId();
+    }
+
+    private Employee resolveEmployeeForContext(Long userId) {
+        if (userId.equals(authContext.getCurrentUserId())) {
+            Employee current = authContext.getCurrentEmployee();
+            if (current != null) return current;
+        }
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId != null) {
+            return employeeRepo.findByUser_IdAndCompany_Id(userId, companyId).orElse(null);
+        }
+        return employeeRepo.findByUser_Id(userId).orElse(null);
     }
 
     // ======================================================
@@ -132,7 +163,7 @@ public class UserService {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
-        Employee emp = employeeRepo.findByUser_Id(userId).orElse(null);
+        Employee emp = resolveEmployeeForContext(userId);
 
         return ProfileResponse.from(user, emp);
     }
@@ -185,12 +216,12 @@ public class UserService {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
-        // ✅ Company safety check
-        if (!isAdmin(principal)
-                && principal.getCompanyId() != null
-                && user.getCompanyId() != null
-                && !principal.getCompanyId().equals(user.getCompanyId())) {
-            throw new AccessDeniedException("Access denied (different company)");
+        // Company safety: target user must have membership in JWT tenant
+        if (!isAdmin(principal) && principal.getCompanyId() != null) {
+            boolean member = employeeRepo.existsByUser_IdAndCompany_Id(userId, principal.getCompanyId());
+            if (!member) {
+                throw new AccessDeniedException("Access denied (different company)");
+            }
         }
 
         if (!req.getNewPassword().equals(req.getConfirmPassword())) {
@@ -205,6 +236,34 @@ public class UserService {
         user.setForcePasswordReset(false);
 
         userRepo.save(user);
+    }
+
+    // ======================================================
+    // USER SEARCH (SUPER_ADMIN)
+    // ======================================================
+
+    public List<UserSearchResultDTO> searchUsers(String query) {
+        User current = userRepo.findById(authContext.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (current.getRole() != Role.SUPER_ADMIN) {
+            throw new AccessDeniedException("Only super admins can search users globally");
+        }
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+
+        return userRepo.searchByKeyword(query.trim()).stream()
+                .map(u -> UserSearchResultDTO.builder()
+                        .userId(u.getId())
+                        .fullName(u.getFullName())
+                        .email(u.getEmail())
+                        .username(u.getUsername())
+                        .companyNames(employeeRepo.findAllByUser_Id(u.getId()).stream()
+                                .map(e -> e.getCompany() != null ? e.getCompany().getCompanyName() : null)
+                                .filter(n -> n != null && !n.isBlank())
+                                .collect(Collectors.toList()))
+                        .build())
+                .toList();
     }
 
     // ======================================================
@@ -234,8 +293,8 @@ public class UserService {
 
         return permissionCheckService.hasAccess(
                 auth,
-                HrModule.HR_SETTINGS,
-                HrAction.EDIT
+                AppModule.HR_SETTINGS,
+                AppAction.EDIT
         );
     }
 }

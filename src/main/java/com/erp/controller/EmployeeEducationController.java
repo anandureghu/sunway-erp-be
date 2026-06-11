@@ -1,11 +1,11 @@
 package com.erp.controller;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.currentjob.EmployeeEducationRequestDTO;
 import com.erp.dto.currentjob.EmployeeEducationResponseDTO;
 import com.erp.service.EmployeeEducationService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +25,7 @@ public class EmployeeEducationController {
     // VIEW_OWN — user views their own education records
     // VIEW_ALL — admin/HR views anyone's education records
     // ======================================================
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping
     public ResponseEntity<List<EmployeeEducationResponseDTO>> getAll(
             @PathVariable("employeeId") Long employeeId
@@ -37,7 +37,7 @@ public class EmployeeEducationController {
     // CREATE EDUCATION
     // CREATE — adding a new education record
     // ======================================================
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.CREATE})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.CREATE})
     @PostMapping
     public ResponseEntity<EmployeeEducationResponseDTO> create(
             @PathVariable("employeeId") Long employeeId,
@@ -50,7 +50,7 @@ public class EmployeeEducationController {
     // UPDATE EDUCATION
     // EDIT — updating an existing education record
     // ======================================================
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.EDIT})
     @PutMapping("/{educationId}")
     public ResponseEntity<EmployeeEducationResponseDTO> update(
             @PathVariable("employeeId") Long employeeId,
@@ -66,7 +66,7 @@ public class EmployeeEducationController {
     // DELETE EDUCATION
     // DELETE — removing an education record
     // ======================================================
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.DELETE})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.DELETE})
     @DeleteMapping("/{educationId}")
     public ResponseEntity<Void> delete(
             @PathVariable("employeeId") Long employeeId,

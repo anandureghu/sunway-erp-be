@@ -14,9 +14,11 @@ import java.util.List;
 @Table(
         name = "employee_appraisals",
         uniqueConstraints = {
+                // One appraisal per employee per cycle per month — allows an
+                // employee to be appraised under several concurrent cycles.
                 @UniqueConstraint(
-                        name = "uk_employee_appraisal_month_year",
-                        columnNames = {"employee_id", "year", "month"}
+                        name = "uk_employee_appraisal_config_month",
+                        columnNames = {"employee_id", "config_id", "month"}
                 )
         },
         indexes = {

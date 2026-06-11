@@ -500,6 +500,10 @@ public class PurchaseOrderService {
                         po.getSourceRequisition() != null
                                 ? po.getSourceRequisition().getId()
                                 : null)
+                .sourceRequisitionNumber(
+                        po.getSourceRequisition() != null
+                                ? po.getSourceRequisition().getRequisitionNumber()
+                                : null)
                 .supplierId(po.getSupplier() != null ? po.getSupplier().getId() : null)
                 .supplierName(po.getSupplier() != null ? po.getSupplier().getVendorName() : null)
                 .orderDate(po.getOrderDate())

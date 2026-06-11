@@ -4,8 +4,8 @@ import com.erp.domain.*;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.hr.Department;
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.domain.security.Role;
 import com.erp.dto.common.PageResponse;
 import com.erp.dto.file.FileCategory;
@@ -105,9 +105,7 @@ public class EmployeeService {
         Company company = dto.getCompanyId() != null
                 ? companyRepository.findById(dto.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"))
-                : authUser.getCompany();
-
-        if (company == null) throw new RuntimeException("Company must be specified");
+                : resolveCurrentCompany();
 
         Department department = dto.getDepartmentId() != null
                 ? departmentRepository.findById(dto.getDepartmentId())
@@ -132,7 +130,6 @@ public class EmployeeService {
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(rawPassword));
         user.setRole(role);
-        user.setCompanyRoleRef(companyRole);
         user.setCompany(company);
         user.setForcePasswordReset(true);
 
@@ -157,6 +154,7 @@ public class EmployeeService {
                 .company(company)
                 .department(department)
                 .user(user)
+                .companyRoleRef(companyRole)
                 .birthplace(dto.getBirthplace())
                 .hometown(dto.getHometown())
                 .nationality(dto.getNationality())
@@ -222,16 +220,16 @@ public class EmployeeService {
             employee.setDepartment(department);
         }
 
-        if (employee.getUser() != null) {
+        // HR-managed company role — per-company on employee
+        if (dto.getCompanyRoleId() != null || dto.getCompanyRole() != null) {
+            employee.setCompanyRoleRef(resolveCompanyRole(
+                    employee.getCompany(),
+                    dto.getCompanyRoleId(),
+                    dto.getCompanyRole()
+            ));
+        }
 
-            // HR-managed display role — any editor can update
-            if (dto.getCompanyRoleId() != null || dto.getCompanyRole() != null) {
-                employee.getUser().setCompanyRoleRef(resolveCompanyRole(
-                        employee.getCompany(),
-                        dto.getCompanyRoleId(),
-                        dto.getCompanyRole()
-                ));
-            }
+        if (employee.getUser() != null) {
 
             // ✅ Spring Security role — ADMIN/SUPER_ADMIN only
             if (dto.getRole() != null) {
@@ -291,15 +289,15 @@ public class EmployeeService {
         if (authUser.getRole() == Role.USER) {
             boolean canViewAll = permissionCheckService.hasAccess(
                     auth,
-                    HrModule.EMPLOYEE_PROFILE,
-                    HrAction.VIEW_ALL
+                    AppModule.EMPLOYEE_PROFILE,
+                    AppAction.VIEW_ALL
             );
 
             if (!canViewAll) {
                 boolean canViewOwn = permissionCheckService.hasAccess(
                         auth,
-                        HrModule.EMPLOYEE_PROFILE,
-                        HrAction.VIEW_OWN
+                        AppModule.EMPLOYEE_PROFILE,
+                        AppAction.VIEW_OWN
                 );
 
                 if (!canViewOwn || employee.getUser() == null ||
@@ -320,9 +318,7 @@ public class EmployeeService {
     public List<EmployeeResponseDTO> getEmployees() {
 
         User authUser = getAuthUser();
-
-        if (authUser.getCompany() == null)
-            throw new RuntimeException("User not linked to any company");
+        Long companyId = resolveCurrentCompanyId();
 
         // ✅ Get authentication for permission check
         var auth = SecurityContextHolder.getContext().getAuthentication();
@@ -330,13 +326,13 @@ public class EmployeeService {
         // ✅ Check both VIEW_OWN and VIEW_ALL permissions
         boolean canViewAll = permissionCheckService.hasAccess(
                 auth,
-                HrModule.EMPLOYEE_PROFILE,
-                HrAction.VIEW_ALL
+                AppModule.EMPLOYEE_PROFILE,
+                AppAction.VIEW_ALL
         );
         boolean canViewOwn = permissionCheckService.hasAccess(
                 auth,
-                HrModule.EMPLOYEE_PROFILE,
-                HrAction.VIEW_OWN
+                AppModule.EMPLOYEE_PROFILE,
+                AppAction.VIEW_OWN
         );
 
         log.debug("👤 getEmployees: canViewAll={}, canViewOwn={}", canViewAll, canViewOwn);
@@ -345,7 +341,7 @@ public class EmployeeService {
         if (canViewAll) {
             log.info("✅ User has VIEW_ALL permission - loading all employees");
             return employeeRepository
-                    .findByCompany_IdOrderByCreatedAtDesc(authUser.getCompany().getId())
+                    .findByCompany_IdOrderByCreatedAtDesc(companyId)
                     .stream()
                     .map(this::toDTO)
                     .toList();
@@ -354,8 +350,7 @@ public class EmployeeService {
         // ✅ VIEW OWN - Return only current user's employee record
         if (canViewOwn) {
             log.info("✅ User has VIEW_OWN permission - loading own employee only");
-            Employee self = employeeRepository.findByUser_Id(authUser.getId())
-                    .orElseThrow(() -> new RuntimeException("Employee record not found"));
+            Employee self = resolveCurrentEmployee(authUser);
             return List.of(toDTO(self));
         }
 
@@ -401,13 +396,13 @@ public class EmployeeService {
         // ✅ Check both VIEW_OWN and VIEW_ALL permissions
         boolean canViewAll = permissionCheckService.hasAccess(
                 auth,
-                HrModule.EMPLOYEE_PROFILE,
-                HrAction.VIEW_ALL
+                AppModule.EMPLOYEE_PROFILE,
+                AppAction.VIEW_ALL
         );
         boolean canViewOwn = permissionCheckService.hasAccess(
                 auth,
-                HrModule.EMPLOYEE_PROFILE,
-                HrAction.VIEW_OWN
+                AppModule.EMPLOYEE_PROFILE,
+                AppAction.VIEW_OWN
         );
 
         log.debug("👤 getEmployees(paginated): canViewAll={}, canViewOwn={}", canViewAll, canViewOwn);
@@ -415,8 +410,7 @@ public class EmployeeService {
         // ✅ VIEW OWN ONLY - Return only current user's employee record (single page)
         if (!canViewAll && canViewOwn) {
             log.info("✅ User has VIEW_OWN permission - returning own employee only");
-            Employee self = employeeRepository.findByUser_Id(authUser.getId())
-                    .orElseThrow(() -> new RuntimeException("Employee not found"));
+            Employee self = resolveCurrentEmployee(authUser);
             return PageResponse.of(List.of(toDTO(self)), 1, 1, page, size);
         }
 
@@ -425,15 +419,12 @@ public class EmployeeService {
             throw new RuntimeException("Access denied: no permission to view employees");
         }
 
-        if (authUser.getCompany() == null) {
-            throw new RuntimeException("User not linked to any company");
-        }
+        Long companyId = resolveCurrentCompanyId();
 
         // ✅ VIEW ALL - Return paginated employees for current company only
         log.info("✅ User has VIEW_ALL permission - loading paginated employees");
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Employee> empPage = employeeRepository.findByCompany_Id(
-                authUser.getCompany().getId(), pageable);
+        Page<Employee> empPage = employeeRepository.findByCompany_Id(companyId, pageable);
 
         return PageResponse.of(
                 empPage.getContent().stream().map(this::toDTO).toList(),
@@ -526,8 +517,8 @@ public class EmployeeService {
                 .username(e.getUser()    != null ? e.getUser().getUsername()        : null)
                 .userId(e.getUser()      != null ? e.getUser().getId()              : null)
                 .role(e.getUser()        != null ? e.getUser().getRole()            : null)
-                .companyRoleId(e.getUser() != null ? e.getUser().getCompanyRoleId() : null)
-                .companyRole(e.getUser() != null ? e.getUser().getCompanyRole()     : null)
+                .companyRoleId(e.getCompanyRoleId())
+                .companyRole(e.getCompanyRole())
                 .forcePasswordReset(e.getUser() != null ? e.getUser().getForcePasswordReset() : null)
                 .companyId(c   != null ? c.getId()          : null)
                 .companyName(c != null ? c.getCompanyName() : null)
@@ -547,6 +538,95 @@ public class EmployeeService {
         if (userId == null) throw new RuntimeException("Unauthorized");
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    private Employee resolveCurrentEmployee(User authUser) {
+        Employee emp = authContext.getCurrentEmployee();
+        if (emp != null) return emp;
+        return employeeRepository.findByUser_Id(authUser.getId())
+                .orElseThrow(() -> new RuntimeException("Employee record not found"));
+    }
+
+    /** Active tenant from JWT — not users.company_id (stale for multi-company owners). */
+    private Long resolveCurrentCompanyId() {
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new RuntimeException("User not linked to any company");
+        }
+        return companyId;
+    }
+
+    private Company resolveCurrentCompany() {
+        return companyRepository.findById(resolveCurrentCompanyId())
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+    }
+
+    // ======================================================
+    // ASSIGN EXISTING USER TO COMPANY
+    // ======================================================
+
+    @Transactional
+    public EmployeeResponseDTO assignExistingUserToCompany(Long companyId, Long userId,
+                                                           Long companyRoleId, String companyRoleName) {
+        User authUser = getAuthUser();
+        if (authUser.getRole() != Role.SUPER_ADMIN) {
+            throw new AccessDeniedException("Only super admins can assign existing users to companies");
+        }
+
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (employeeRepository.existsByUser_IdAndCompany_Id(userId, companyId)) {
+            throw new IllegalArgumentException("User is already a member of this company");
+        }
+
+        CompanyRole companyRole = resolveCompanyRole(company, companyRoleId, companyRoleName);
+
+        Employee template = employeeRepository.findAllByUser_Id(userId).stream()
+                .findFirst()
+                .orElse(null);
+
+        String firstName;
+        String lastName;
+        if (template != null) {
+            firstName = template.getFirstName();
+            lastName = template.getLastName();
+        } else {
+            String[] parts = user.getFullName() != null ? user.getFullName().split(" ", 2) : new String[]{"User", ""};
+            firstName = parts[0];
+            lastName = parts.length > 1 ? parts[1] : "";
+        }
+
+        employeeRepository.incrementEmployeeNo();
+        String employeeNo = String.valueOf(employeeRepository.getCurrentEmployeeNo());
+
+        Employee employee = Employee.builder()
+                .employeeNo(employeeNo)
+                .firstName(firstName)
+                .lastName(lastName)
+                .status(EmployeeStatus.ACTIVE)
+                .joinDate(java.time.LocalDate.now())
+                .company(company)
+                .user(user)
+                .companyRoleRef(companyRole)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        employee.setRole(user.getRole() != null ? user.getRole().name() : Role.USER.name());
+
+        employee = employeeRepository.save(employee);
+
+        try {
+            leavePolicyService.initializeLeaveBalancesForEmployee(employee);
+        } catch (Exception e) {
+            log.warn("Failed to initialize leave balances for employee {}: {}", employee.getId(), e.getMessage());
+        }
+
+        return toDTO(employee);
     }
 
     /** Ensures {@code requestedCompanyId} matches the JWT tenant unless caller is {@link Role#SUPER_ADMIN}. */

@@ -38,4 +38,8 @@ public class Passport {
 
     private LocalDate issueDate;
     private LocalDate expiryDate;
+
+    /** Blob path of the uploaded passport scan (null if none). */
+    @Column(name = "document_path", length = 512)
+    private String documentPath;
 }

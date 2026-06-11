@@ -28,7 +28,7 @@ public class EnumRolePermission {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private HrModule module;
+    private AppModule module;
 
     private boolean viewOwn;
     private boolean viewAll;

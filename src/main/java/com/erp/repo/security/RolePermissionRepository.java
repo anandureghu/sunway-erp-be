@@ -1,6 +1,6 @@
 package com.erp.repo.security;
 
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppModule;
 import com.erp.domain.security.RolePermission;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -16,12 +16,12 @@ public interface RolePermissionRepository extends JpaRepository<RolePermission, 
 
     List<RolePermission> findByRoleIgnoreCaseAndEmployeeIsNull(String role);
 
-    Optional<RolePermission> findByRoleIgnoreCaseAndModule(String role, HrModule module);
+    Optional<RolePermission> findByRoleIgnoreCaseAndModule(String role, AppModule module);
 
     // Employee-specific
     List<RolePermission> findByEmployee_Id(Long employeeId);
 
-    Optional<RolePermission> findByEmployee_IdAndModule(Long employeeId, HrModule module);
+    Optional<RolePermission> findByEmployee_IdAndModule(Long employeeId, AppModule module);
 
     // Delete
     void deleteAllByRoleIgnoreCase(String role);

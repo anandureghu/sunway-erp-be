@@ -1,7 +1,7 @@
 package com.erp.service.security.annotation;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.service.security.PermissionCheckService;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.annotation.Aspect;
@@ -14,12 +14,12 @@ import org.springframework.stereotype.Component;
 @Aspect
 @Component
 @RequiredArgsConstructor
-public class HrPermissionAspect {
+public class RequiresPermissionAspect {
 
     private final PermissionCheckService permissionCheckService;
 
-    @Before("@annotation(hrPermission)")
-    public void checkPermission(HrPermission hrPermission) {
+    @Before("@annotation(requiresPermission)")
+    public void checkPermission(RequiresPermission requiresPermission) {
 
         Authentication auth =
                 SecurityContextHolder.getContext().getAuthentication();
@@ -28,13 +28,12 @@ public class HrPermissionAspect {
             throw new AccessDeniedException("User not authenticated");
         }
 
-        HrModule module = hrPermission.module();
-        HrAction[] actions = hrPermission.action();
+        AppModule module = requiresPermission.module();
+        AppAction[] actions = requiresPermission.action();
 
         boolean allowed = false;
 
-        for (HrAction action : actions) {
-
+        for (AppAction action : actions) {
             if (permissionCheckService.hasAccess(auth, module, action)) {
                 allowed = true;
                 break;

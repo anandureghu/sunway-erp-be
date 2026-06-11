@@ -1,5 +1,7 @@
 package com.erp.controller.inventory;
 
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemStockAdjustDTO;
@@ -10,6 +12,7 @@ import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.inventory.ItemService;
 import com.erp.service.inventory.ItemWarehouseStockService;
+import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,6 +38,7 @@ public class ItemController {
         this.auth = auth;
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.CREATE})
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ItemResponseDTO createItem(
             @RequestPart("data") ItemCreateDTO dto,
@@ -43,6 +47,7 @@ public class ItemController {
         return service.create(dto, image);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ItemResponseDTO updateJson(
             @PathVariable("id") Long id,
@@ -51,6 +56,7 @@ public class ItemController {
         return service.update(id, dto, null);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ItemResponseDTO updateMultipart(
             @PathVariable("id") Long id,
@@ -60,6 +66,7 @@ public class ItemController {
         return service.update(id, dto, image);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})
     @PostMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ItemResponseDTO updateItemImage(
             @PathVariable("id") Long id,
@@ -68,21 +75,25 @@ public class ItemController {
         return service.updateItemImage(id, image);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping
     public List<ItemResponseDTO> list() {
         return service.listForCompany();
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}")
     public ItemResponseDTO get(@PathVariable("id") Long id) {
         return service.getItem(id);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}/warehouse-stock")
     public List<ItemWarehouseStockRowDTO> listWarehouseStock(@PathVariable("id") Long id) {
         return itemWarehouseStockService.listStockForItem(id, auth.getCurrentCompanyId());
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.CREATE, AppAction.EDIT})
     @PostMapping("/{id}/stock/receive")
     public ItemResponseDTO receiveStock(
             @PathVariable("id") Long id,
@@ -91,6 +102,7 @@ public class ItemController {
         return service.receiveStock(id, dto);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.EDIT})
     @PostMapping("/{id}/stock/adjust")
     public ItemResponseDTO adjustStock(
             @PathVariable("id") Long id,

@@ -1,16 +1,17 @@
 package com.erp.controller;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.appraisal.AppraisalConfigRequestDTO;
 import com.erp.dto.appraisal.AppraisalConfigResponseDTO;
 import com.erp.service.appraisal.AppraisalConfigService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -22,9 +23,9 @@ public class AppraisalConfigController {
 
     /* ================= GET ACTIVE ================= */
 
-    @HrPermission(
-            module = HrModule.APPRAISAL,
-            action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL}
+    @RequiresPermission(
+            module = AppModule.APPRAISAL,
+            action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL}
     )
     @GetMapping("/active")
     public ResponseEntity<AppraisalConfigResponseDTO> getActive() {
@@ -35,9 +36,9 @@ public class AppraisalConfigController {
 
     /* ================= GET BY YEAR ================= */
 
-    @HrPermission(
-            module = HrModule.APPRAISAL,
-            action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL}
+    @RequiresPermission(
+            module = AppModule.APPRAISAL,
+            action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL}
     )
     @GetMapping("/year/{year}")
     public ResponseEntity<AppraisalConfigResponseDTO> getByYear(
@@ -48,9 +49,33 @@ public class AppraisalConfigController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /* ================= LIST CYCLES FOR A YEAR ================= */
+
+    @RequiresPermission(
+            module = AppModule.APPRAISAL,
+            action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL}
+    )
+    @GetMapping("/cycles")
+    public ResponseEntity<List<AppraisalConfigResponseDTO>> listCycles(
+            @RequestParam("year") Integer year
+    ) {
+        return ResponseEntity.ok(configService.listByYear(year));
+    }
+
+    /* ================= LIST ACTIVE CYCLES (for assignment) ================= */
+
+    @RequiresPermission(
+            module = AppModule.APPRAISAL,
+            action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL}
+    )
+    @GetMapping("/cycles/active")
+    public ResponseEntity<List<AppraisalConfigResponseDTO>> listActiveCycles() {
+        return ResponseEntity.ok(configService.listActive());
+    }
+
     /* ================= CREATE ================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.CREATE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.CREATE)
     @PostMapping
     public ResponseEntity<AppraisalConfigResponseDTO> create(
             @Valid @RequestBody AppraisalConfigRequestDTO dto
@@ -60,7 +85,7 @@ public class AppraisalConfigController {
 
     /* ================= UPDATE ================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.EDIT)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.EDIT)
     @PutMapping("/{id}")
     public ResponseEntity<AppraisalConfigResponseDTO> update(
             @PathVariable("id") Long id,
@@ -71,7 +96,7 @@ public class AppraisalConfigController {
 
     /* ================= ACTIVATE ================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.APPROVE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.APPROVE)
     @PutMapping("/{id}/activate")
     public ResponseEntity<AppraisalConfigResponseDTO> activate(
             @PathVariable("id") Long id
@@ -81,7 +106,7 @@ public class AppraisalConfigController {
 
     /* ================= CLOSE (NEW - REQUIRED FOR ACTIVE) ================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.APPROVE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.APPROVE)
     @PutMapping("/{id}/close")
     public ResponseEntity<?> close(
             @PathVariable("id") Long id
@@ -101,7 +126,7 @@ public class AppraisalConfigController {
 
     /* ================= SAVE AND ACTIVATE ================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.APPROVE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.APPROVE)
     @PostMapping("/save-and-activate")
     public ResponseEntity<?> saveAndActivate(
             @Valid @RequestBody AppraisalConfigRequestDTO dto
@@ -122,7 +147,7 @@ public class AppraisalConfigController {
 
     /* ================= DELETE ================= */
 
-    @HrPermission(module = HrModule.APPRAISAL, action = HrAction.DELETE)
+    @RequiresPermission(module = AppModule.APPRAISAL, action = AppAction.DELETE)
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @PathVariable("id") Long id

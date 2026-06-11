@@ -17,6 +17,8 @@ public class PurchaseOrderResponseDTO {
     private Long id;
     private String orderNumber;
     private Long sourceRequisitionId;
+    /** Human-readable PR number (e.g. PR-1000) when sourced from a requisition. */
+    private String sourceRequisitionNumber;
     private Long supplierId;
     private String supplierName;
     private LocalDate orderDate;

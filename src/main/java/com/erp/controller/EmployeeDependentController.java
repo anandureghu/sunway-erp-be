@@ -1,11 +1,11 @@
 package com.erp.controller;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.dependent.DependentRequestDTO;
 import com.erp.dto.dependent.DependentResponseDTO;
 import com.erp.service.EmployeeDependentService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +24,7 @@ public class EmployeeDependentController {
     // CREATE DEPENDENT
     // EDIT — adding a dependent is an edit operation on employee
     // ======================================================
-    @HrPermission(module = HrModule.DEPENDENTS, action = {HrAction.CREATE})
+    @RequiresPermission(module = AppModule.DEPENDENTS, action = {AppAction.CREATE})
     @PostMapping("/{employeeId}/dependents")
     public ResponseEntity<DependentResponseDTO> createDependent(
             @PathVariable("employeeId") Long employeeId,
@@ -39,7 +39,7 @@ public class EmployeeDependentController {
     // UPDATE DEPENDENT
     // EDIT — updating a dependent requires edit permission
     // ======================================================
-    @HrPermission(module = HrModule.DEPENDENTS, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.DEPENDENTS, action = {AppAction.EDIT})
     @PutMapping("/{employeeId}/dependents/{dependentId}")
     public ResponseEntity<DependentResponseDTO> updateDependent(
             @PathVariable("employeeId") Long employeeId,
@@ -56,7 +56,7 @@ public class EmployeeDependentController {
     // VIEW_OWN — user can view their own dependents
     // VIEW_ALL — admin/HR can view anyone's dependents
     // ======================================================
-    @HrPermission(module = HrModule.DEPENDENTS, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.DEPENDENTS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/{employeeId}/dependents")
     public ResponseEntity<List<DependentResponseDTO>> getDependents(
             @PathVariable("employeeId") Long employeeId
@@ -71,7 +71,7 @@ public class EmployeeDependentController {
     // VIEW_OWN — user can view their own dependent details
     // VIEW_ALL — admin/HR can view anyone's dependent details
     // ======================================================
-    @HrPermission(module = HrModule.DEPENDENTS, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.DEPENDENTS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/{employeeId}/dependents/{dependentId}")
     public ResponseEntity<DependentResponseDTO> getDependentById(
             @PathVariable("employeeId") Long employeeId,
@@ -86,7 +86,7 @@ public class EmployeeDependentController {
     // DELETE DEPENDENT
     // DELETE — removing a dependent requires delete permission
     // ======================================================
-    @HrPermission(module = HrModule.DEPENDENTS, action = {HrAction.DELETE})
+    @RequiresPermission(module = AppModule.DEPENDENTS, action = {AppAction.DELETE})
     @DeleteMapping("/{employeeId}/dependents/{dependentId}")
     public ResponseEntity<Void> deleteDependent(
             @PathVariable("employeeId") Long employeeId,

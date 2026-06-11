@@ -1,6 +1,6 @@
 package com.erp.dto.security;
 
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppModule;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
@@ -8,7 +8,7 @@ import lombok.*;
 @Setter
 public class ModulePermissionDTO {
 
-    private HrModule module;
+    private AppModule module;
 
     private PermissionDTO permission;
 

@@ -1,11 +1,11 @@
 package com.erp.controller;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.currentjob.EmployeeExperienceRequestDTO;
 import com.erp.dto.currentjob.EmployeeExperienceResponseDTO;
 import com.erp.service.EmployeeExperienceService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +25,7 @@ public class EmployeeExperienceController {
     // VIEW_OWN — user views their own experiences
     // VIEW_ALL — admin/HR views anyone's experiences
     // ======================================================
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping
     public ResponseEntity<List<EmployeeExperienceResponseDTO>> getAll(
             @PathVariable("employeeId") Long employeeId
@@ -37,7 +37,7 @@ public class EmployeeExperienceController {
     // CREATE EXPERIENCE
     // CREATE — adding a new experience record
     // ======================================================
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.CREATE})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.CREATE})
     @PostMapping
     public ResponseEntity<EmployeeExperienceResponseDTO> create(
             @PathVariable("employeeId") Long employeeId,
@@ -52,7 +52,7 @@ public class EmployeeExperienceController {
     // UPDATE EXPERIENCE
     // EDIT — updating an existing experience record
     // ======================================================
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.EDIT})
     @PutMapping("/{experienceId}")
     public ResponseEntity<EmployeeExperienceResponseDTO> update(
             @PathVariable("employeeId") Long employeeId,
@@ -68,7 +68,7 @@ public class EmployeeExperienceController {
     // DELETE EXPERIENCE
     // DELETE — removing an experience record
     // ======================================================
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.DELETE})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.DELETE})
     @DeleteMapping("/{experienceId}")
     public ResponseEntity<Void> delete(
             @PathVariable("employeeId") Long employeeId,

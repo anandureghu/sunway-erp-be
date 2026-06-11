@@ -4,11 +4,17 @@ import com.erp.domain.Employee;
 import com.erp.domain.Passport;
 import com.erp.dto.immigration.PassportRequestDTO;
 import com.erp.dto.immigration.PassportResponseDTO;
+import com.erp.dto.file.FileCategory;
+import com.erp.dto.file.FileUploadResult;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.PassportRepository;
+import com.erp.security.context.AuthContext;
+import com.erp.service.file.FileStorageService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -17,11 +23,14 @@ public class PassportService {
 
     private final PassportRepository passportRepo;
     private final EmployeeRepository employeeRepo;
+    private final AuthContext authContext;
+    private final FileStorageService fileStorageService;
 
     // ---------------- GET ----------------
     public PassportResponseDTO getByEmployee(Long employeeId) {
         Passport passport = passportRepo.findByEmployeeId(employeeId)
                 .orElseThrow(() -> new RuntimeException("Passport not found"));
+        assertSameTenant(passport.getEmployee());
         return toDTO(passport);
     }
 
@@ -36,6 +45,7 @@ public class PassportService {
 
         Employee employee = employeeRepo.findById(dto.getEmployeeId())
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertSameTenant(employee);
 
         Passport passport = Passport.builder()
                 .employee(employee)
@@ -58,6 +68,7 @@ public class PassportService {
 
         Passport passport = passportRepo.findByEmployeeId(dto.getEmployeeId())
                 .orElseThrow(() -> new RuntimeException("Passport not found"));
+        assertSameTenant(passport.getEmployee());
 
         passport.setPassportNo(dto.getPassportNo());
         passport.setNameAsPassport(dto.getNameAsPassport());
@@ -76,8 +87,37 @@ public class PassportService {
 
         Passport passport = passportRepo.findByEmployeeId(employeeId)
                 .orElseThrow(() -> new RuntimeException("Passport not found"));
+        assertSameTenant(passport.getEmployee());
 
         passportRepo.delete(passport);
+    }
+
+    // ---------------- DOCUMENT UPLOAD ----------------
+    public PassportResponseDTO uploadDocument(Long employeeId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("No file provided");
+        }
+        Passport passport = passportRepo.findByEmployeeId(employeeId)
+                .orElseThrow(() -> new RuntimeException("Passport not found"));
+        assertSameTenant(passport.getEmployee());
+
+        FileUploadResult result = fileStorageService.upload(
+                file, FileCategory.PASSPORT_DOCUMENT, employeeId.toString(), false);
+        passport.setDocumentPath(result.getBlobPath());
+        passportRepo.save(passport);
+        return toDTO(passport);
+    }
+
+    // ---------------- TENANT GUARD ----------------
+    private void assertSameTenant(Employee employee) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long employeeCompanyId = employee != null && employee.getCompany() != null
+                ? employee.getCompany().getId() : null;
+        if (currentCompanyId == null || employeeCompanyId == null
+                || !currentCompanyId.equals(employeeCompanyId)) {
+            throw new AccessDeniedException("This passport belongs to a different company");
+        }
     }
 
     // ---------------- VALIDATION ----------------
@@ -104,6 +144,8 @@ public class PassportService {
                 .nationality(p.getNationality())
                 .issueDate(p.getIssueDate())
                 .expiryDate(p.getExpiryDate())
+                .documentUrl(p.getDocumentPath() != null
+                        ? fileStorageService.getPrivateSasUrl(p.getDocumentPath()) : null)
                 .build();
     }
 }

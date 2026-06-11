@@ -45,4 +45,8 @@ public class ResidencePermit {
     private String visaStatus;
     private LocalDate startDate;
     private LocalDate endDate;
+
+    /** Blob path of the uploaded residence-permit / visa scan (null if none). */
+    @Column(name = "document_path", length = 512)
+    private String documentPath;
 }

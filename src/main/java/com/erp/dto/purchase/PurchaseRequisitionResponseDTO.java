@@ -53,6 +53,8 @@ public class PurchaseRequisitionResponseDTO {
 
     /** Populated when approval creates a purchase order in the same request. */
     private Long createdPurchaseOrderId;
+    /** Human-readable PO number (e.g. PO-1000) when a linked order exists. */
+    private String createdPurchaseOrderNumber;
 
     private Long debitAccountId;
     private String debitAccountName;

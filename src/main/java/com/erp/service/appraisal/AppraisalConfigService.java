@@ -1,10 +1,14 @@
 package com.erp.service.appraisal;
 
 import com.erp.domain.appraisal.*;
+import com.erp.domain.hr.Company;
 import com.erp.dto.appraisal.*;
 import com.erp.repo.appraisal.AppraisalConfigRepository;
 import com.erp.repo.EmployeeAppraisalGoalRepository;
+import com.erp.repo.hr.CompanyRepository;
+import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +18,15 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Appraisal configuration lifecycle, scoped per company.
+ *
+ * <p>Configs carry an optional {@code company}. A {@code null} company marks a
+ * legacy/global config that acts as a shared fallback. Reads prefer the caller's
+ * own company config and fall back to the global one. Writes always target the
+ * caller's company: editing the shared global config transparently forks a
+ * company-owned copy (copy-on-write). SUPER_ADMIN bypasses the tenant guard.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -21,14 +34,25 @@ public class AppraisalConfigService {
 
     private final AppraisalConfigRepository configRepository;
     private final EmployeeAppraisalGoalRepository employeeAppraisalGoalRepository;
+    private final AuthContext authContext;
+    private final CompanyRepository companyRepository;
 
     /* ================= CREATE ================= */
 
     public AppraisalConfigResponseDTO create(AppraisalConfigRequestDTO dto) {
-        if (configRepository.findByYear(dto.getYear()).isPresent()) {
-            throw new IllegalStateException("Config already exists for year " + dto.getYear());
+        Long companyId = authContext.getCurrentCompanyId();
+        // Multiple cycles per year are allowed; they are distinguished by name.
+        boolean exists = companyId != null
+                ? configRepository.findByCompany_IdAndYearAndCycleName(
+                        companyId, dto.getYear(), dto.getCycleName()).isPresent()
+                : configRepository.findByCompanyIsNullAndYearAndCycleName(
+                        dto.getYear(), dto.getCycleName()).isPresent();
+        if (exists) {
+            throw new IllegalStateException(
+                    "A cycle named '" + dto.getCycleName() + "' already exists for " + dto.getYear());
         }
         AppraisalConfig config = mapToEntity(dto);
+        config.setCompany(resolveCompany(companyId));
         config.setStatus("DRAFT");
         validateRoleWeights(config);
         return mapToDTO(configRepository.save(config));
@@ -40,28 +64,34 @@ public class AppraisalConfigService {
         AppraisalConfig existing = configRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Config not found"));
 
-        if ("ACTIVE".equals(existing.getStatus())) {
+        // Resolve the config the caller may actually write to (own, or a fork
+        // of the shared global one). Throws if it belongs to another company.
+        AppraisalConfig target = resolveWritableTarget(existing);
+
+        if ("ACTIVE".equals(target.getStatus())) {
             throw new IllegalStateException("Cannot edit ACTIVE config");
         }
 
-        existing.setCycleName(dto.getCycleName());
-        existing.setStartMonth(dto.getStartMonth());
-        existing.setEndMonth(dto.getEndMonth());
-        existing.setMinGoals(dto.getMinGoals());
-        existing.setMaxGoals(dto.getMaxGoals());
-        existing.setEnableSelfAssessment(dto.getEnableSelfAssessment());
-        existing.setEnableMidYear(dto.getEnableMidYear());
-        existing.setEnablePIP(dto.getEnablePIP());
+        target.setCycleName(dto.getCycleName());
+        target.setStartMonth(dto.getStartMonth());
+        target.setEndMonth(dto.getEndMonth());
+        target.setMinGoals(dto.getMinGoals());
+        target.setMaxGoals(dto.getMaxGoals());
+        target.setEnableSelfAssessment(dto.getEnableSelfAssessment());
+        target.setEnableMidYear(dto.getEnableMidYear());
+        target.setEnablePIP(dto.getEnablePIP());
 
-        Set<String> lockedRoleNames = existing.getRoleConfigs().stream()
+        // Preserve role configs whose KPI templates are already referenced by
+        // existing employee appraisals — they must not be deleted/recreated.
+        Set<String> lockedRoleNames = target.getRoleConfigs().stream()
                 .filter(role -> role.getGoalTemplates().stream()
                         .anyMatch(template ->
                                 employeeAppraisalGoalRepository.existsByTemplateId(template.getId())))
                 .map(AppraisalRoleConfig::getRoleName)
                 .collect(Collectors.toSet());
 
-        existing.getRoleConfigs().removeIf(role -> !lockedRoleNames.contains(role.getRoleName()));
-        configRepository.saveAndFlush(existing);
+        target.getRoleConfigs().removeIf(role -> !lockedRoleNames.contains(role.getRoleName()));
+        configRepository.saveAndFlush(target);
 
         if (dto.getRoles() != null) {
             for (AppraisalRoleConfigRequestDTO roleDTO : dto.getRoles()) {
@@ -70,7 +100,7 @@ public class AppraisalConfigService {
 
                 AppraisalRoleConfig role = new AppraisalRoleConfig();
                 role.setRoleName(roleName);
-                role.setConfig(existing);
+                role.setConfig(target);
 
                 if (roleDTO.getGoals() != null) {
                     for (AppraisalGoalTemplateRequestDTO goalDTO : roleDTO.getGoals()) {
@@ -83,12 +113,12 @@ public class AppraisalConfigService {
                         role.getGoalTemplates().add(goal);
                     }
                 }
-                existing.getRoleConfigs().add(role);
+                target.getRoleConfigs().add(role);
             }
         }
 
-        validateRoleWeights(existing);
-        return mapToDTO(configRepository.saveAndFlush(existing));
+        validateRoleWeights(target);
+        return mapToDTO(configRepository.saveAndFlush(target));
     }
 
     /* ================= ACTIVATE ================= */
@@ -97,16 +127,10 @@ public class AppraisalConfigService {
     public AppraisalConfigResponseDTO activate(Long id) {
         AppraisalConfig config = configRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Config not found with id: " + id));
+        assertWritable(config);
 
-        // ✅ findByYearAndStatus returns List — iterate instead of .ifPresent()
-        List<AppraisalConfig> activeConfigs = configRepository.findByYearAndStatus(config.getYear(), "ACTIVE");
-        for (AppraisalConfig active : activeConfigs) {
-            if (!active.getId().equals(id)) {
-                active.setStatus("CLOSED");
-                configRepository.save(active);
-            }
-        }
-
+        // Multiple cycles may be ACTIVE at once for the same year, so activating
+        // one does NOT close the others.
         config.setStatus("ACTIVE");
         return mapToDTO(configRepository.save(config));
     }
@@ -116,6 +140,7 @@ public class AppraisalConfigService {
     public AppraisalConfigResponseDTO deactivate(Long id) {
         AppraisalConfig config = configRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Config not found"));
+        assertWritable(config);
         if (!"ACTIVE".equals(config.getStatus())) {
             throw new IllegalStateException("Only ACTIVE config can be deactivated");
         }
@@ -128,6 +153,7 @@ public class AppraisalConfigService {
     public AppraisalConfigResponseDTO close(Long id) {
         AppraisalConfig config = configRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Config not found"));
+        assertWritable(config);
         if (!"ACTIVE".equals(config.getStatus())) {
             throw new IllegalStateException("Only ACTIVE config can be closed");
         }
@@ -138,38 +164,45 @@ public class AppraisalConfigService {
     /* ================= SAVE AND ACTIVATE ================= */
 
     public AppraisalConfigResponseDTO saveAndActivate(AppraisalConfigRequestDTO dto) {
-        Optional<AppraisalConfig> existing = configRepository.findByYear(dto.getYear());
-        Long configId;
-
-        if (existing.isPresent()) {
-            AppraisalConfig config = existing.get();
-            if ("ACTIVE".equals(config.getStatus())) {
-                throw new IllegalStateException(
-                        "An ACTIVE config already exists for year " + dto.getYear() +
-                                ". Close or deactivate it before activating a new one.");
-            }
-            configId = config.getId();
-            update(configId, dto);
-        } else {
-            configId = create(dto).getId();
-        }
+        Long companyId = authContext.getCurrentCompanyId();
+        // Match an existing cycle by (year, name); otherwise create a new one.
+        Optional<AppraisalConfig> existing = companyId != null
+                ? configRepository.findByCompany_IdAndYearAndCycleName(companyId, dto.getYear(), dto.getCycleName())
+                : configRepository.findByCompanyIsNullAndYearAndCycleName(dto.getYear(), dto.getCycleName());
+        Long configId = existing.isPresent()
+                ? updateAndReturnId(existing.get().getId(), dto)
+                : create(dto).getId();
 
         return activate(configId);
+    }
+
+    private Long updateAndReturnId(Long id, AppraisalConfigRequestDTO dto) {
+        return update(id, dto).getId();
     }
 
     /* ================= DUPLICATE ================= */
 
     public AppraisalConfigResponseDTO duplicate(Integer fromYear, Integer toYear) {
-        AppraisalConfig source = configRepository.findByYear(fromYear)
+        Long companyId = authContext.getCurrentCompanyId();
+
+        AppraisalConfig source = (companyId != null
+                ? configRepository.findFirstByCompany_IdAndYearOrderByIdDesc(companyId, fromYear)
+                : Optional.<AppraisalConfig>empty())
+                .or(() -> configRepository.findFirstByCompanyIsNullAndYearOrderByIdDesc(fromYear))
                 .orElseThrow(() -> new IllegalArgumentException("No config found for year " + fromYear));
 
-        if (configRepository.findByYear(toYear).isPresent()) {
-            throw new IllegalStateException("Config already exists for year " + toYear);
+        String copyName = source.getCycleName() + " (copy)";
+        boolean targetExists = companyId != null
+                ? configRepository.findByCompany_IdAndYearAndCycleName(companyId, toYear, copyName).isPresent()
+                : configRepository.findByCompanyIsNullAndYearAndCycleName(toYear, copyName).isPresent();
+        if (targetExists) {
+            throw new IllegalStateException("A cycle named '" + copyName + "' already exists for " + toYear);
         }
 
         AppraisalConfig copy = new AppraisalConfig();
+        copy.setCompany(resolveCompany(companyId));
         copy.setYear(toYear);
-        copy.setCycleName(source.getCycleName() + " (copy)");
+        copy.setCycleName(copyName);
         copy.setStartMonth(source.getStartMonth());
         copy.setEndMonth(source.getEndMonth());
         copy.setMinGoals(source.getMinGoals());
@@ -202,14 +235,52 @@ public class AppraisalConfigService {
 
     @Transactional(readOnly = true)
     public Optional<AppraisalConfigResponseDTO> getActive() {
-        return configRepository.findByStatus("ACTIVE").map(this::mapToDTO);
+        Long companyId = authContext.getCurrentCompanyId();
+        Optional<AppraisalConfig> own = companyId != null
+                ? configRepository.findFirstByStatusAndCompany_IdOrderByYearDesc("ACTIVE", companyId)
+                : Optional.empty();
+        return own
+                .or(() -> configRepository.findFirstByStatusAndCompanyIsNullOrderByYearDesc("ACTIVE"))
+                .map(this::mapToDTO);
     }
 
     /* ================= GET BY YEAR ================= */
 
     @Transactional(readOnly = true)
     public Optional<AppraisalConfigResponseDTO> getByYear(Integer year) {
-        return configRepository.findByYear(year).map(this::mapToDTO);
+        Long companyId = authContext.getCurrentCompanyId();
+        Optional<AppraisalConfig> own = companyId != null
+                ? configRepository.findFirstByCompany_IdAndYearOrderByIdDesc(companyId, year)
+                : Optional.empty();
+        return own
+                .or(() -> configRepository.findFirstByCompanyIsNullAndYearOrderByIdDesc(year))
+                .map(this::mapToDTO);
+    }
+
+    /* ================= LIST CYCLES ================= */
+
+    /** All cycles for a year the caller can use: own company cycles plus shared global ones. */
+    @Transactional(readOnly = true)
+    public List<AppraisalConfigResponseDTO> listByYear(Integer year) {
+        Long companyId = authContext.getCurrentCompanyId();
+        List<AppraisalConfig> result = new java.util.ArrayList<>();
+        if (companyId != null) {
+            result.addAll(configRepository.findByCompany_IdAndYearOrderByIdDesc(companyId, year));
+        }
+        result.addAll(configRepository.findByCompanyIsNullAndYearOrderByIdDesc(year));
+        return result.stream().map(this::mapToDTO).toList();
+    }
+
+    /** All ACTIVE cycles the caller can assign against: own active cycles plus shared global active ones. */
+    @Transactional(readOnly = true)
+    public List<AppraisalConfigResponseDTO> listActive() {
+        Long companyId = authContext.getCurrentCompanyId();
+        List<AppraisalConfig> result = new java.util.ArrayList<>();
+        if (companyId != null) {
+            result.addAll(configRepository.findByStatusAndCompany_Id("ACTIVE", companyId));
+        }
+        result.addAll(configRepository.findByStatusAndCompanyIsNull("ACTIVE"));
+        return result.stream().map(this::mapToDTO).toList();
     }
 
     /* ================= DELETE ================= */
@@ -217,6 +288,7 @@ public class AppraisalConfigService {
     public void delete(Long id) {
         AppraisalConfig config = configRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Config not found"));
+        assertWritable(config);
 
         if ("ACTIVE".equals(config.getStatus())) {
             throw new IllegalStateException("Cannot delete ACTIVE config. Close it first.");
@@ -233,6 +305,67 @@ public class AppraisalConfigService {
         }
 
         configRepository.delete(config);
+    }
+
+    /* ================= TENANT GUARDS ================= */
+
+    /** Config the caller may write to: own config, or a fork of the shared global one. */
+    private AppraisalConfig resolveWritableTarget(AppraisalConfig existing) {
+        if (isSuperAdmin() || sameCompany(existing)) {
+            return existing;
+        }
+        if (existing.getCompany() == null) {
+            // Copy-on-write: editing the shared global config creates/uses the
+            // caller company's own copy (matched by year + cycle name).
+            Long companyId = requireCompanyId();
+            return configRepository
+                    .findByCompany_IdAndYearAndCycleName(companyId, existing.getYear(), existing.getCycleName())
+                    .orElseGet(() -> {
+                        AppraisalConfig fork = new AppraisalConfig();
+                        fork.setCompany(resolveCompany(companyId));
+                        fork.setYear(existing.getYear());
+                        fork.setCycleName(existing.getCycleName());
+                        fork.setStatus("DRAFT");
+                        return fork;
+                    });
+        }
+        throw new AccessDeniedException("Configuration belongs to another company");
+    }
+
+    /** Block status changes / deletes on configs the caller does not own. */
+    private void assertWritable(AppraisalConfig config) {
+        if (isSuperAdmin()) return;
+        Long companyId = config.getCompany() != null ? config.getCompany().getId() : null;
+        if (companyId == null) {
+            throw new AccessDeniedException(
+                    "This is a shared global configuration. Save your company's own configuration first.");
+        }
+        Long current = authContext.getCurrentCompanyId();
+        if (current == null || !current.equals(companyId)) {
+            throw new AccessDeniedException("Configuration belongs to another company");
+        }
+    }
+
+    private boolean sameCompany(AppraisalConfig config) {
+        Long current = authContext.getCurrentCompanyId();
+        Long owner = config.getCompany() != null ? config.getCompany().getId() : null;
+        return current != null && owner != null && current.equals(owner);
+    }
+
+    private boolean isSuperAdmin() {
+        return "SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole());
+    }
+
+    private Long requireCompanyId() {
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new AccessDeniedException("No company context for the current user");
+        }
+        return companyId;
+    }
+
+    private Company resolveCompany(Long companyId) {
+        return companyId == null ? null : companyRepository.findById(companyId).orElse(null);
     }
 
     /* ================= ENTITY MAPPING ================= */

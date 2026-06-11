@@ -3,9 +3,9 @@ package com.erp.controller;
 import com.erp.dto.currentjob.EmployeeCurrentJobRequestDTO;
 import com.erp.dto.currentjob.EmployeeCurrentJobResponseDTO;
 import com.erp.service.CurrentJobService;
-import com.erp.service.security.annotation.HrPermission;
-import com.erp.domain.security.HrModule;
-import com.erp.domain.security.HrAction;
+import com.erp.service.security.annotation.RequiresPermission;
+import com.erp.domain.security.AppModule;
+import com.erp.domain.security.AppAction;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +21,7 @@ public class EmployeeCurrentJobController {
     // ---------------- GET ----------------
     // VIEW_OWN — user views their own current job
     // VIEW_ALL — admin/HR views anyone's current job
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.VIEW_OWN, HrAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping
     public ResponseEntity<EmployeeCurrentJobResponseDTO> get(
             @PathVariable("employeeId") Long employeeId
@@ -34,7 +34,7 @@ public class EmployeeCurrentJobController {
     }
 
     // ---------------- CREATE ----------------
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.CREATE})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.CREATE})
     @PostMapping
     public ResponseEntity<EmployeeCurrentJobResponseDTO> create(
             @PathVariable("employeeId") Long employeeId,
@@ -44,7 +44,7 @@ public class EmployeeCurrentJobController {
     }
 
     // ---------------- UPDATE ----------------
-    @HrPermission(module = HrModule.CURRENT_JOB, action = {HrAction.EDIT})
+    @RequiresPermission(module = AppModule.CURRENT_JOB, action = {AppAction.EDIT})
     @PutMapping
     public ResponseEntity<EmployeeCurrentJobResponseDTO> update(
             @PathVariable("employeeId") Long employeeId,

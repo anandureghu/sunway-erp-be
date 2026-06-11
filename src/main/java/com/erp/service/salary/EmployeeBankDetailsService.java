@@ -2,7 +2,7 @@ package com.erp.service.salary;
 
 import com.erp.domain.Employee;
 import com.erp.domain.salary.EmployeeBankDetails;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.salary.BankDetailsRequestDTO;
 import com.erp.dto.salary.BankDetailsResponseDTO;
 import com.erp.repo.EmployeeRepository;
@@ -35,7 +35,7 @@ public class EmployeeBankDetailsService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        accessGuard.assertCanWrite(employee, HrModule.SALARY);
+        accessGuard.assertCanWrite(employee, AppModule.SALARY);
 
         if (bankRepo.findByEmployee(employee).isPresent()) {
             throw new RuntimeException("Bank details already exist");
@@ -57,7 +57,7 @@ public class EmployeeBankDetailsService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        accessGuard.assertCanWrite(employee, HrModule.SALARY);
+        accessGuard.assertCanWrite(employee, AppModule.SALARY);
 
         EmployeeBankDetails bank = bankRepo.findByEmployee(employee)
                 .orElseThrow(() -> new RuntimeException("Bank details not found"));
@@ -74,7 +74,7 @@ public class EmployeeBankDetailsService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        accessGuard.assertCanRead(employee, HrModule.SALARY);
+        accessGuard.assertCanRead(employee, AppModule.SALARY);
 
         EmployeeBankDetails bank =
                 bankRepo.findByEmployee(employee).orElse(null);

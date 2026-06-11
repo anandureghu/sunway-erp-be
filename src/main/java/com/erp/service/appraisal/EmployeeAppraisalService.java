@@ -10,13 +10,16 @@ import com.erp.repo.EmployeeRepository;
 import com.erp.repo.appraisal.AppraisalConfigRepository;
 import com.erp.repo.appraisal.AppraisalGoalTemplateRepository;
 import com.erp.repo.appraisal.AppraisalRoleConfigRepository;
+import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -28,33 +31,48 @@ public class EmployeeAppraisalService {
     private final AppraisalConfigRepository       configRepository;
     private final AppraisalRoleConfigRepository   roleConfigRepository;
     private final AppraisalGoalTemplateRepository templateRepository;
+    private final AuthContext                     authContext;
+
+    private static final Set<String> VALID_MONTHS = Set.of(
+            "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+            "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER");
 
     /* =========================================================
        CREATE — one appraisal per employee per month per year
        ========================================================= */
 
     public EmployeeAppraisalResponseDTO createAppraisal(
-            Long employeeId, Integer year, String month) {
+            Long employeeId, Long configId, String month) {
 
         // Normalize month to uppercase (JANUARY, FEBRUARY ...)
-        String normalizedMonth = month.toUpperCase().trim();
+        String normalizedMonth = month == null ? "" : month.toUpperCase().trim();
+        if (!VALID_MONTHS.contains(normalizedMonth)) {
+            throw new IllegalArgumentException(
+                    "Invalid month: '" + month + "'. Expected a full month name (e.g. JANUARY).");
+        }
 
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new IllegalArgumentException("Employee not found"));
+        assertSameTenant(employee);
 
-        // Check uniqueness: one appraisal per employee per month per year
-        if (appraisalRepository.existsByEmployeeIdAndYearAndMonth(
-                employeeId, year, normalizedMonth)) {
+        // The cycle the admin chose to assign this employee to.
+        AppraisalConfig config = configRepository.findById(configId)
+                .orElseThrow(() -> new IllegalArgumentException("Appraisal cycle not found"));
+        assertConfigUsableFor(config, employee);
+        if (!"ACTIVE".equals(config.getStatus())) {
             throw new IllegalStateException(
-                    "Appraisal already exists for " + normalizedMonth + " " + year);
+                    "Appraisal cycle '" + config.getCycleName() + "' is not active.");
         }
 
-        // ✅ Use List to avoid "Query did not return a unique result" when duplicates exist
-        List<AppraisalConfig> configs = configRepository.findByYearAndStatus(year, "ACTIVE");
-        if (configs.isEmpty()) {
-            throw new IllegalStateException("No ACTIVE appraisal config for year " + year);
+        Integer year = config.getYear();
+
+        // One appraisal per employee, per cycle, per month.
+        if (appraisalRepository.existsByEmployeeIdAndConfig_IdAndMonth(
+                employeeId, configId, normalizedMonth)) {
+            throw new IllegalStateException(
+                    "Appraisal already exists for " + normalizedMonth + " in cycle '"
+                            + config.getCycleName() + "'.");
         }
-        AppraisalConfig config = configs.get(0);
 
         // ✅ Use companyRole ("Admin", "Manager") — matches what HR configured in appraisal settings
         //    Falls back to security enum name only if companyRole is not set
@@ -66,8 +84,9 @@ public class EmployeeAppraisalService {
         AppraisalRoleConfig roleConfig = roleConfigRepository
                 .findByConfigIdAndRoleName(config.getId(), employeeRoleName)
                 .orElseThrow(() -> new IllegalStateException(
-                        "No role config found for role: " + employeeRoleName +
-                                ". Please configure this role in HR Settings → Appraisal."));
+                        "Cycle '" + config.getCycleName() + "' has no KPIs configured for role '"
+                                + employeeRoleName + "'. Add this role to the cycle, or pick a cycle "
+                                + "that covers it."));
 
         List<AppraisalGoalTemplate> templates =
                 templateRepository.findByRoleConfigIdAndActiveTrue(roleConfig.getId());
@@ -104,9 +123,7 @@ public class EmployeeAppraisalService {
     public EmployeeAppraisalResponseDTO submitSelfAssessment(
             Long employeeId, Long appraisalId, EmployeeAppraisalRequestDTO dto) {
 
-        EmployeeAppraisal appraisal = appraisalRepository
-                .findByIdAndEmployeeId(appraisalId, employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Appraisal not found"));
+        EmployeeAppraisal appraisal = loadOwnedAppraisal(appraisalId, employeeId);
 
         if (!"DRAFT".equals(appraisal.getStatus())) {
             throw new IllegalStateException(
@@ -127,9 +144,7 @@ public class EmployeeAppraisalService {
     public EmployeeAppraisalResponseDTO submitManagerReview(
             Long employeeId, Long appraisalId, EmployeeAppraisalRequestDTO dto) {
 
-        EmployeeAppraisal appraisal = appraisalRepository
-                .findByIdAndEmployeeId(appraisalId, employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Appraisal not found"));
+        EmployeeAppraisal appraisal = loadOwnedAppraisal(appraisalId, employeeId);
 
         if (!"SELF_SUBMITTED".equals(appraisal.getStatus())) {
             throw new IllegalStateException(
@@ -150,9 +165,7 @@ public class EmployeeAppraisalService {
 
     public EmployeeAppraisalResponseDTO lockAppraisal(Long employeeId, Long appraisalId) {
 
-        EmployeeAppraisal appraisal = appraisalRepository
-                .findByIdAndEmployeeId(appraisalId, employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Appraisal not found"));
+        EmployeeAppraisal appraisal = loadOwnedAppraisal(appraisalId, employeeId);
 
         if (!"MANAGER_REVIEWED".equals(appraisal.getStatus())) {
             throw new IllegalStateException(
@@ -169,9 +182,7 @@ public class EmployeeAppraisalService {
 
     public EmployeeAppraisalResponseDTO unlockAppraisal(Long employeeId, Long appraisalId) {
 
-        EmployeeAppraisal appraisal = appraisalRepository
-                .findByIdAndEmployeeId(appraisalId, employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Appraisal not found"));
+        EmployeeAppraisal appraisal = loadOwnedAppraisal(appraisalId, employeeId);
 
         if (!"LOCKED".equals(appraisal.getStatus())) {
             throw new IllegalStateException(
@@ -188,9 +199,7 @@ public class EmployeeAppraisalService {
 
     public void delete(Long employeeId, Long appraisalId) {
 
-        EmployeeAppraisal appraisal = appraisalRepository
-                .findByIdAndEmployeeId(appraisalId, employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Appraisal not found"));
+        EmployeeAppraisal appraisal = loadOwnedAppraisal(appraisalId, employeeId);
 
         if ("LOCKED".equals(appraisal.getStatus())) {
             throw new IllegalStateException(
@@ -206,9 +215,7 @@ public class EmployeeAppraisalService {
 
     public void forceDelete(Long employeeId, Long appraisalId) {
 
-        EmployeeAppraisal appraisal = appraisalRepository
-                .findByIdAndEmployeeId(appraisalId, employeeId)
-                .orElseThrow(() -> new IllegalArgumentException("Appraisal not found"));
+        EmployeeAppraisal appraisal = loadOwnedAppraisal(appraisalId, employeeId);
 
         appraisalRepository.delete(appraisal);
     }
@@ -220,17 +227,72 @@ public class EmployeeAppraisalService {
     @Transactional(readOnly = true)
     public Page<EmployeeAppraisalResponseDTO> getAppraisalsByEmployee(
             Long employeeId, Pageable pageable) {
+        if (isSuperAdmin()) {
+            return appraisalRepository.findByEmployeeId(employeeId, pageable)
+                    .map(this::mapToResponse);
+        }
         return appraisalRepository
-                .findByEmployeeId(employeeId, pageable)
+                .findByEmployeeIdAndEmployee_Company_Id(
+                        employeeId, requireCompanyId(), pageable)
                 .map(this::mapToResponse);
     }
 
     @Transactional(readOnly = true)
     public Page<EmployeeAppraisalResponseDTO> getAppraisalsByYear(
             Integer year, Pageable pageable) {
+        if (isSuperAdmin()) {
+            return appraisalRepository.findByYear(year, pageable)
+                    .map(this::mapToResponse);
+        }
         return appraisalRepository
-                .findByYear(year, pageable)
+                .findByYearAndEmployee_Company_Id(year, requireCompanyId(), pageable)
                 .map(this::mapToResponse);
+    }
+
+    /** A cycle is usable for an employee if it is the shared global one or belongs to their company. */
+    private void assertConfigUsableFor(AppraisalConfig config, Employee employee) {
+        Long configCompanyId = config.getCompany() != null ? config.getCompany().getId() : null;
+        if (configCompanyId == null) return; // shared/global cycle
+        Long employeeCompanyId = employee.getCompany() != null ? employee.getCompany().getId() : null;
+        if (employeeCompanyId == null || !configCompanyId.equals(employeeCompanyId)) {
+            throw new AccessDeniedException("This appraisal cycle belongs to a different company");
+        }
+    }
+
+    /* =========================================================
+       TENANT GUARDS
+       ========================================================= */
+
+    /** Load an appraisal scoped to (id, employee) and verify it belongs to the caller's company. */
+    private EmployeeAppraisal loadOwnedAppraisal(Long appraisalId, Long employeeId) {
+        EmployeeAppraisal appraisal = appraisalRepository
+                .findByIdAndEmployeeId(appraisalId, employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("Appraisal not found"));
+        assertSameTenant(appraisal.getEmployee());
+        return appraisal;
+    }
+
+    /** Reject access when the target employee belongs to another company (SUPER_ADMIN may cross tenants). */
+    private void assertSameTenant(Employee employee) {
+        if (isSuperAdmin()) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long employeeCompanyId = employee.getCompany() != null ? employee.getCompany().getId() : null;
+        if (currentCompanyId == null || employeeCompanyId == null
+                || !currentCompanyId.equals(employeeCompanyId)) {
+            throw new AccessDeniedException("Appraisal belongs to a different company");
+        }
+    }
+
+    private boolean isSuperAdmin() {
+        return "SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole());
+    }
+
+    private Long requireCompanyId() {
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new AccessDeniedException("No company context for the current user");
+        }
+        return companyId;
     }
 
     /* =========================================================
@@ -256,7 +318,8 @@ public class EmployeeAppraisalService {
         }
     }
 
-    private double calculateWeightedScore(EmployeeAppraisal appraisal) {
+    /** Weighted manager score, or {@code null} when no goal has been manager-rated yet. */
+    private Double calculateWeightedScore(EmployeeAppraisal appraisal) {
         double total = 0; int weightSum = 0;
         for (EmployeeAppraisalGoal goal : appraisal.getGoals()) {
             if (goal.getManagerRating() != null && goal.getWeight() != null) {
@@ -264,7 +327,7 @@ public class EmployeeAppraisalService {
                 weightSum += goal.getWeight();
             }
         }
-        return weightSum == 0 ? 0 : total / weightSum;
+        return weightSum == 0 ? null : total / weightSum;
     }
 
     /* =========================================================
@@ -288,6 +351,8 @@ public class EmployeeAppraisalService {
 
         return EmployeeAppraisalResponseDTO.builder()
                 .id(a.getId())
+                .configId(a.getConfig() != null ? a.getConfig().getId() : null)
+                .cycleName(a.getConfig() != null ? a.getConfig().getCycleName() : null)
                 .employeeId(a.getEmployee().getId())
                 .employeeName(a.getEmployee().getFirstName() + " " + a.getEmployee().getLastName())
                 .employeeRole(

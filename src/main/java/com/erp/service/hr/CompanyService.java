@@ -4,6 +4,7 @@ import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hr.CompanyInvoiceSettings;
+import com.erp.domain.hr.CompanyRole;
 import com.erp.domain.hr.Currency;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -16,6 +17,7 @@ import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.CompanyInvoiceSettingsRepository;
+import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
@@ -33,6 +35,7 @@ import java.util.List;
 public class CompanyService {
     private final CompanyRepository           companyRepository;
     private final CompanyInvoiceSettingsRepository invoiceSettingsRepository;
+    private final CompanyRoleRepository       companyRoleRepository;
     private final CurrencyRepository          currencyRepository;
     private final ChartOfAccountsRepository   chartOfAccountsRepository;
     private final BankAccountRepository       bankAccountRepository;
@@ -42,6 +45,7 @@ public class CompanyService {
     public CompanyService(
             CompanyRepository companyRepository,
             CompanyInvoiceSettingsRepository invoiceSettingsRepository,
+            CompanyRoleRepository companyRoleRepository,
             CurrencyRepository currencyRepository,
             ChartOfAccountsRepository chartOfAccountsRepository,
             BankAccountRepository bankAccountRepository,
@@ -50,6 +54,7 @@ public class CompanyService {
 
         this.companyRepository         = companyRepository;
         this.invoiceSettingsRepository = invoiceSettingsRepository;
+        this.companyRoleRepository     = companyRoleRepository;
         this.currencyRepository        = currencyRepository;
         this.chartOfAccountsRepository = chartOfAccountsRepository;
         this.bankAccountRepository     = bankAccountRepository;
@@ -146,6 +151,7 @@ public class CompanyService {
         if (userId != null) company.setCreatedBy(String.valueOf(userId));
 
         Company saved = companyRepository.save(company);
+        seedDefaultCompanyRoles(saved);
         invoiceSettingsRepository.save(InvoiceSettingsDefaults.buildDefaults(saved));
 
         if (logo != null && !logo.isEmpty()) {
@@ -430,6 +436,25 @@ public class CompanyService {
                 .payrollSifVersion(
                         company.getPayrollSifVersion() != null ? company.getPayrollSifVersion() : "1")
                 .build();
+    }
+
+    /** Seed baseline HR roles so new companies can assign employees immediately. */
+    private void seedDefaultCompanyRoles(Company company) {
+        createRoleIfAbsent(company, "Admin", "Company administrator");
+        createRoleIfAbsent(company, "Employee", "Standard employee");
+        createRoleIfAbsent(company, "HR", "Human resources");
+    }
+
+    private void createRoleIfAbsent(Company company, String name, String description) {
+        if (companyRoleRepository.existsByCompanyIdAndName(company.getId(), name)) {
+            return;
+        }
+        companyRoleRepository.save(CompanyRole.builder()
+                .name(name)
+                .description(description)
+                .active(true)
+                .company(company)
+                .build());
     }
 
     // ======================================================

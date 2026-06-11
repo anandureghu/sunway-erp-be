@@ -11,6 +11,9 @@ public class LeaveRequestDTO {
     private LocalDate endDate;
     private Boolean includeWeekends;
 
+    /** Optional date the employee heads back to the office after the leave. */
+    private LocalDate returnDate;
+
     /** Optional delegate (same-department colleague) covering during the leave. */
     private Long delegateId;
 }

@@ -72,6 +72,7 @@ public class Company {
     @Column(name = "is_tax_active", nullable = false)
     private boolean isTaxActive;
 
+    @Builder.Default
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -132,9 +133,11 @@ public class Company {
     @Column(name = "annual_leave_accrual_enabled", nullable = false)
     private boolean annualLeaveAccrualEnabled;
 
+    @Builder.Default
     @Column(name = "annual_leave_accrual_days_per_month", nullable = false, precision = 5, scale = 2)
     private BigDecimal annualLeaveAccrualDaysPerMonth = new BigDecimal("1.50");
 
+    @Builder.Default
     @Column(name = "min_service_months_for_annual_leave", nullable = false)
     private Integer minServiceMonthsForAnnualLeave = 6;
 
@@ -146,6 +149,7 @@ public class Company {
     @Column(name = "retirement_compensation_enabled", nullable = false)
     private boolean retirementCompensationEnabled;
 
+    @Builder.Default
     @Column(name = "retirement_compensation_months_per_year", nullable = false, precision = 5, scale = 2)
     private BigDecimal retirementCompensationMonthsPerYear = new BigDecimal("1.00");
 
@@ -158,9 +162,11 @@ public class Company {
     @Column(name = "loan_policy_enabled", nullable = false)
     private boolean loanPolicyEnabled;
 
+    @Builder.Default
     @Column(name = "loan_min_service_days", nullable = false)
     private Integer loanMinServiceDays = 365;
 
+    @Builder.Default
     @Column(name = "loan_max_repayment_months", nullable = false)
     private Integer loanMaxRepaymentMonths = 24;
 

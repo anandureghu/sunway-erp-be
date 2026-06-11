@@ -3,8 +3,8 @@ package com.erp.service.security;
 import com.erp.domain.security.CompanyRolePermission;
 import com.erp.domain.security.EmployeePermission;
 import com.erp.domain.security.EnumRolePermission;
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.domain.security.Role;
 import com.erp.repo.security.CompanyRolePermissionRepository;
 import com.erp.repo.security.EmployeePermissionRepository;
@@ -29,14 +29,14 @@ public class PermissionCheckService {
     // ENTRY METHODS
     // ======================================================
 
-    public boolean has(Authentication auth, HrModule module, HrAction action) {
+    public boolean has(Authentication auth, AppModule module, AppAction action) {
         return hasAccess(auth, module, action);
     }
 
-    public boolean hasAny(Authentication auth, HrModule module, HrAction... actions) {
+    public boolean hasAny(Authentication auth, AppModule module, AppAction... actions) {
         if (actions == null || actions.length == 0) return false;
 
-        for (HrAction action : actions) {
+        for (AppAction action : actions) {
             if (hasAccess(auth, module, action)) return true;
         }
         return false;
@@ -46,7 +46,7 @@ public class PermissionCheckService {
     // CORE LOGIC (🔥 FIXED)
     // ======================================================
 
-    public boolean hasAccess(Authentication auth, HrModule module, HrAction action) {
+    public boolean hasAccess(Authentication auth, AppModule module, AppAction action) {
 
         if (auth == null || !auth.isAuthenticated()) {
             log.debug("Access denied: unauthenticated");
@@ -129,7 +129,7 @@ public class PermissionCheckService {
     // PERMISSION RESOLVERS (🔥 FIXED)
     // ======================================================
 
-    private Optional<EmployeePermission> resolveEmployeePermission(CustomUserPrincipal user, HrModule module) {
+    private Optional<EmployeePermission> resolveEmployeePermission(CustomUserPrincipal user, AppModule module) {
 
         if (user.getEmployeeId() == null || user.getEmployeeId() <= 0) {
             return Optional.empty();
@@ -161,7 +161,7 @@ public class PermissionCheckService {
         return permission;
     }
 
-    private Optional<CompanyRolePermission> resolveCompanyRolePermission(CustomUserPrincipal user, HrModule module) {
+    private Optional<CompanyRolePermission> resolveCompanyRolePermission(CustomUserPrincipal user, AppModule module) {
 
         if (user.getCompanyRoleId() == null || user.getCompanyRoleId() <= 0) {
             return Optional.empty();
@@ -204,7 +204,7 @@ public class PermissionCheckService {
         return permission;
     }
 
-    private Optional<EnumRolePermission> resolveEnumRolePermission(CustomUserPrincipal user, HrModule module) {
+    private Optional<EnumRolePermission> resolveEnumRolePermission(CustomUserPrincipal user, AppModule module) {
 
         if (user.getRole() == null) {
             return Optional.empty();
@@ -218,7 +218,7 @@ public class PermissionCheckService {
     // EVALUATION
     // ======================================================
 
-    private boolean evaluate(EmployeePermission permission, HrAction action) {
+    private boolean evaluate(EmployeePermission permission, AppAction action) {
         return evaluate(
                 permission.isViewOwn(),
                 permission.isViewAll(),
@@ -230,7 +230,7 @@ public class PermissionCheckService {
         );
     }
 
-    private boolean evaluate(CompanyRolePermission permission, HrAction action) {
+    private boolean evaluate(CompanyRolePermission permission, AppAction action) {
         return evaluate(
                 permission.isViewOwn(),
                 permission.isViewAll(),
@@ -242,7 +242,7 @@ public class PermissionCheckService {
         );
     }
 
-    private boolean evaluate(EnumRolePermission permission, HrAction action) {
+    private boolean evaluate(EnumRolePermission permission, AppAction action) {
         return evaluate(
                 permission.isViewOwn(),
                 permission.isViewAll(),
@@ -261,7 +261,7 @@ public class PermissionCheckService {
             boolean edit,
             boolean deletePermission,
             boolean approve,
-            HrAction action
+            AppAction action
     ) {
         return switch (action) {
             case VIEW_OWN -> viewOwn;

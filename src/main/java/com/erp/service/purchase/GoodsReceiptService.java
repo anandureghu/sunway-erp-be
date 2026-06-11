@@ -157,6 +157,13 @@ public class GoodsReceiptService {
                 .stream().map(this::toDTO).toList();
     }
 
+    public List<GoodsReceiptResponseDTO> listForCurrentCompany() {
+        return repo.findByCompany_IdOrderByReceivedAtDesc(auth.getCurrentCompanyId())
+                .stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
     private GoodsReceiptResponseDTO toDTO(GoodsReceipt gr) {
         return GoodsReceiptResponseDTO.builder()
                 .id(gr.getId())

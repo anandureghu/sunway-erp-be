@@ -1,6 +1,6 @@
 package com.erp.dto.security;
 
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppModule;
 import lombok.Builder;
 import lombok.Value;
 
@@ -8,7 +8,7 @@ import lombok.Value;
 @Builder
 public class PermissionRecordDTO {
     Long id;
-    HrModule module;
+    AppModule module;
     boolean viewOwn;
     boolean viewAll;
     boolean createPermission;

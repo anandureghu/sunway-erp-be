@@ -18,4 +18,7 @@ public class PassportResponseDTO {
     private String nationality;
     private LocalDate issueDate;
     private LocalDate expiryDate;
+
+    /** Time-limited download URL for the uploaded scan (null if none). */
+    private String documentUrl;
 }

@@ -1,10 +1,10 @@
 package com.erp.controller;
 
-import com.erp.domain.security.HrAction;
-import com.erp.domain.security.HrModule;
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.loan.LoanResponseDTO;
 import com.erp.service.EmployeeLoanService;
-import com.erp.service.security.annotation.HrPermission;
+import com.erp.service.security.annotation.RequiresPermission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +23,7 @@ public class LoanApprovalController {
     // Company-wide list of pending loans for the caller's tenant.
     // Gated by LOANS.APPROVE so only HR Manager / Finance Manager (or whoever
     // the admin has granted approval rights to) can see this queue.
-    @HrPermission(module = HrModule.LOANS, action = {HrAction.APPROVE})
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.APPROVE})
     @GetMapping("/pending-approvals")
     public ResponseEntity<List<LoanResponseDTO>> pendingApprovals() {
         return ResponseEntity.ok(loanService.getPendingLoanApprovalsForCurrentCompany());

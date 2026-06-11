@@ -16,8 +16,8 @@ import java.util.List;
 @PreAuthorize("""
     @permissionChecker.has(
         authentication,
-        T(com.erp.domain.security.HrModule).HR_SETTINGS,
-        T(com.erp.domain.security.HrAction).VIEW_ALL
+        T(com.erp.domain.security.AppModule).HR_SETTINGS,
+        T(com.erp.domain.security.AppAction).VIEW_ALL
     )
 """)
 public class CompanyRoleController {
@@ -64,8 +64,8 @@ public class CompanyRoleController {
     @PreAuthorize("""
         @permissionChecker.has(
             authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).EDIT
+            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+            T(com.erp.domain.security.AppAction).EDIT
         )
     """)
     @PostMapping
@@ -82,8 +82,8 @@ public class CompanyRoleController {
     @PreAuthorize("""
         @permissionChecker.has(
             authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).EDIT
+            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+            T(com.erp.domain.security.AppAction).EDIT
         )
     """)
     @PutMapping("/{id}")
@@ -101,8 +101,8 @@ public class CompanyRoleController {
     @PreAuthorize("""
         @permissionChecker.has(
             authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).EDIT
+            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+            T(com.erp.domain.security.AppAction).EDIT
         )
     """)
     @PutMapping("/{id}/toggle")
@@ -119,8 +119,8 @@ public class CompanyRoleController {
     @PreAuthorize("""
         @permissionChecker.has(
             authentication,
-            T(com.erp.domain.security.HrModule).HR_SETTINGS,
-            T(com.erp.domain.security.HrAction).DELETE
+            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+            T(com.erp.domain.security.AppAction).DELETE
         )
     """)
     @DeleteMapping("/{id}")

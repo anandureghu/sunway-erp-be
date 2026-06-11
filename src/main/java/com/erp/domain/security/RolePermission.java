@@ -34,7 +34,7 @@ public class RolePermission {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private HrModule module;
+    private AppModule module;
 
     /**
      * If set — this rule applies to this specific employee only (overrides role-level rule).
