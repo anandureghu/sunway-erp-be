@@ -1,9 +1,5 @@
--- Backfill baseline HR module permissions for existing company roles.
---
--- V1 already added these HR modules to the permission enum, but existing
--- production company roles may not have rows in company_role_permissions.
--- The frontend hides HR Settings, HR Reports, and Immigration unless the
--- logged-in user's company role returns view permissions for these modules.
+-- Idempotent HR permission backfill for baseline company roles (Admin, HR, Employee).
+-- Runs on every application startup via CompanyRolePermissionSeeder.
 
 INSERT INTO company_role_permissions (
   company_role_id,
@@ -70,7 +66,6 @@ WHERE LOWER(cr.name) IN ('admin','super admin','hr','employee')
       AND existing.module = m.module
   );
 
--- Ensure existing Admin/Super Admin rows are fully enabled for HR modules.
 UPDATE company_role_permissions crp
 JOIN company_roles cr ON cr.id = crp.company_role_id
 SET
@@ -86,8 +81,6 @@ WHERE LOWER(cr.name) IN ('admin','super admin')
     'PAYROLL','LEAVES','LOANS','APPRAISAL','HR_REPORTS','HR_SETTINGS'
   );
 
--- HR should see HR Settings/Reports/Immigration and operate HR modules, but
--- should not get delete on HR_SETTINGS or approval on non-approval modules.
 UPDATE company_role_permissions crp
 JOIN company_roles cr ON cr.id = crp.company_role_id
 SET
