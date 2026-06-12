@@ -20,6 +20,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findFirstByPurchaseOrderIdAndPaymentDirection(
             Long purchaseOrderId, PaymentDirection paymentDirection);
 
+    List<Payment> findByPurchaseOrderIdAndPaymentDirectionOrderByCreatedAtDesc(
+            Long purchaseOrderId, PaymentDirection paymentDirection);
+
+    boolean existsByInvoiceIdAndPaymentMethod(String invoiceId, String paymentMethod);
+
+    boolean existsByPurchaseOrderIdAndPaymentDirectionAndPaymentMethod(
+            Long purchaseOrderId, PaymentDirection paymentDirection, String paymentMethod);
+
     // ======================================================
     //  Finance report aggregations
     // ======================================================

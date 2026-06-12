@@ -59,6 +59,7 @@ public class PaymentService {
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
     private final VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService;
+    private final VendorPayableService vendorPayableService;
 
     public PaymentService(PaymentRepository paymentRepo,
                           TransactionService transactionService,
@@ -72,7 +73,8 @@ public class PaymentService {
                           InvoiceRepository invoiceRepo,
                           AuthContext auth,
                           DocumentSequenceService documentSequenceService,
-                          VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService) {
+                          VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService,
+                          VendorPayableService vendorPayableService) {
 
         this.paymentRepo = paymentRepo;
         this.transactionService = transactionService;
@@ -87,6 +89,7 @@ public class PaymentService {
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
         this.vendorPaymentReceiptPdfService = vendorPaymentReceiptPdfService;
+        this.vendorPayableService = vendorPayableService;
     }
 
     @Transactional
@@ -176,15 +179,59 @@ public class PaymentService {
             purchaseOrderRepo.findById(p.getPurchaseOrderId())
                     .ifPresent(po -> b.purchaseOrderNumber(po.getOrderNumber()));
         }
+        enrichInvoiceAmounts(b, p);
+        return b.build();
+    }
+
+    private void enrichInvoiceAmounts(PaymentResponseDTO.PaymentResponseDTOBuilder b, Payment p) {
         if (p.getInvoiceId() != null && !p.getInvoiceId().isBlank()) {
             invoiceRepo.findByInvoiceId(p.getInvoiceId()).ifPresent(inv -> {
+                b.invoiceTotal(inv.getAmount());
+                b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 if (inv.getType() == InvoiceType.SALES && inv.getOrderId() != null) {
                     salesOrderRepo.findById(inv.getOrderId())
                             .ifPresent(so -> b.salesOrderNumber(so.getOrderNumber()));
                 }
             });
+            return;
         }
-        return b.build();
+        if (p.getPurchaseOrderId() != null) {
+            invoiceRepo.findByOrderIdAndType(p.getPurchaseOrderId(), InvoiceType.PURCHASE).ifPresent(inv -> {
+                b.invoiceTotal(inv.getAmount());
+                b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
+            });
+        }
+    }
+
+    private BigDecimal resolveConfirmAmount(ConfirmPaymentDTO body, Invoice invoice, Payment payment) {
+        BigDecimal outstanding = invoice.getOutstanding() != null
+                ? invoice.getOutstanding()
+                : invoice.getAmount();
+        if (outstanding == null || outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Invoice has no outstanding balance");
+        }
+        BigDecimal amount;
+        if (body != null && body.getAmount() != null) {
+            amount = body.getAmount();
+        } else {
+            BigDecimal pending = payment.getAmount() != null ? payment.getAmount() : outstanding;
+            amount = pending.min(outstanding);
+        }
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Payment amount must be greater than zero");
+        }
+        if (amount.compareTo(outstanding) > 0) {
+            throw new RuntimeException("Payment amount cannot exceed outstanding balance");
+        }
+        return amount;
+    }
+
+    private Invoice requireInvoiceForCustomerPayment(Payment payment) {
+        if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
+            throw new RuntimeException("Invoice ID is missing for this payment request");
+        }
+        return invoiceRepo.findByInvoiceId(payment.getInvoiceId())
+                .orElseThrow(() -> new RuntimeException("Invoice not found for this payment"));
     }
 
     @Transactional
@@ -306,13 +353,10 @@ public class PaymentService {
         if (!"PENDING_REQUEST".equalsIgnoreCase(payment.getPaymentMethod())) {
             throw new RuntimeException("Payment is already confirmed");
         }
-        if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
-            throw new RuntimeException("Invoice ID is missing for this payment request");
-        }
-        if (payment.getAmount() == null || payment.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Invalid payment amount");
-        }
+        Invoice invoice = requireInvoiceForCustomerPayment(payment);
+        BigDecimal confirmAmount = resolveConfirmAmount(body, invoice, payment);
 
+        payment.setAmount(confirmAmount);
         payment.setPaymentMethod("BANK_TRANSFER");
         payment.setEffectiveDate(LocalDate.now());
         payment.setNotes(
@@ -321,11 +365,14 @@ public class PaymentService {
         );
         Payment saved = paymentRepo.save(payment);
 
-        Invoice invoice = invoiceService.applyPayment(saved.getInvoiceId(), saved.getAmount());
-        postPaymentToAccounting(saved, invoice);
-        if ("PAID".equalsIgnoreCase(invoice.getStatus())) {
-            salesOrderRepo.findById(invoice.getOrderId())
-                    .ifPresent(order -> customerEmailService.sendReceiptEmail(order.getCustomer(), invoice));
+        Invoice updatedInvoice = invoiceService.applyPayment(saved.getInvoiceId(), saved.getAmount());
+        postPaymentToAccounting(saved, updatedInvoice);
+        if ("PARTIALLY_PAID".equalsIgnoreCase(updatedInvoice.getStatus())) {
+            invoiceService.ensurePendingPaymentRequestForOutstanding(updatedInvoice);
+        }
+        if ("PAID".equalsIgnoreCase(updatedInvoice.getStatus())) {
+            salesOrderRepo.findById(updatedInvoice.getOrderId())
+                    .ifPresent(order -> customerEmailService.sendReceiptEmail(order.getCustomer(), updatedInvoice));
         }
         return toDTO(saved);
     }
@@ -343,9 +390,10 @@ public class PaymentService {
             throw new ConflictException(
                     "Release the purchase order to the supplier before confirming vendor payment in Accounts Payable.");
         }
-        if (payment.getAmount() == null || payment.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Invalid payment amount");
-        }
+        Invoice purchaseInvoice = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                .orElseThrow(() -> new RuntimeException("Purchase invoice not found for this purchase order"));
+        BigDecimal confirmAmount = resolveConfirmAmount(body, purchaseInvoice, payment);
+
         String methodCode;
         try {
             methodCode = PaymentMethodLabels.normalizeVendorMethod(
@@ -353,6 +401,7 @@ public class PaymentService {
         } catch (IllegalArgumentException e) {
             throw new RuntimeException(e.getMessage());
         }
+        payment.setAmount(confirmAmount);
         payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
         payment.setNotes(
@@ -368,8 +417,12 @@ public class PaymentService {
                 });
         Payment saved = paymentRepo.save(payment);
         postVendorPaymentToAccounting(saved);
-        invoiceService.applyPurchaseInvoicePaymentForPurchaseOrder(
-                saved.getPurchaseOrderId(), saved.getAmount());
+        Invoice updatedPurchaseInvoice = invoiceService.applyPayment(
+                purchaseInvoice.getInvoiceId(), saved.getAmount());
+        if ("PARTIALLY_PAID".equalsIgnoreCase(updatedPurchaseInvoice.getStatus())) {
+            vendorPayableService.ensurePendingVendorPayableForOutstanding(
+                    po, updatedPurchaseInvoice.getOutstanding());
+        }
         try {
             invoiceService.regenerateGeneratedPurchaseInvoicePdfAfterVendorPayment(po.getId());
         } catch (Exception e) {

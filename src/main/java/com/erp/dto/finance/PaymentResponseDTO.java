@@ -24,4 +24,8 @@ public class PaymentResponseDTO {
     private String pdfUrl;
     private boolean archived;
     private Instant createdAt;
+    /** Remaining balance on the linked invoice (for confirm dialog). */
+    private BigDecimal invoiceOutstanding;
+    /** Total amount on the linked invoice (for confirm dialog). */
+    private BigDecimal invoiceTotal;
 }
