@@ -32,7 +32,6 @@ public class PurchaseRequisitionCreateDTO {
     private String requisitionDescription;
     /** NORMAL, URGENT, or CRITICAL */
     private String urgency;
-    private LocalDate requiredByDate;
     private Long deliveryWarehouseId;
     private String justification;
 

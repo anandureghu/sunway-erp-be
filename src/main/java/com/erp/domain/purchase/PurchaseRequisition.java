@@ -82,8 +82,6 @@ public class PurchaseRequisition {
     @Builder.Default
     private PurchaseRequisitionUrgency urgency = PurchaseRequisitionUrgency.NORMAL;
 
-    private LocalDate requiredByDate;
-
     @ManyToOne
     @JoinColumn(name = "delivery_warehouse_id")
     private Warehouse deliveryWarehouse;

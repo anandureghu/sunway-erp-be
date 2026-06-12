@@ -46,7 +46,6 @@ public class PurchaseRequisitionResponseDTO {
     private String projectCode;
     private String requisitionDescription;
     private String urgency;
-    private LocalDate requiredByDate;
     private Long deliveryWarehouseId;
     private String deliveryWarehouseName;
     private String justification;
