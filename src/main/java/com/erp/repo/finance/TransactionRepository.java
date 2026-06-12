@@ -22,6 +22,25 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     boolean existsByRelatedSubIdAndTransactionType(Long relatedSubId, String transactionType);
 
+    @Query("""
+            select t from Transaction t
+            left join fetch t.creditAccount
+            left join fetch t.debitAccount
+            left join fetch t.archivedByUser
+            where t.relatedId = :budgetId
+              and t.transactionType = :transactionType
+              and (:from is null or t.transactionDate >= :from)
+              and (:to is null or t.transactionDate <= :to)
+              and (:archived is null or t.archived = :archived)
+            order by t.transactionDate desc, t.createdAt desc
+            """)
+    List<Transaction> findBudgetTransactions(
+            @Param("budgetId") Long budgetId,
+            @Param("transactionType") String transactionType,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("archived") Boolean archived);
+
     // ======================================================
     //  Finance report aggregations
     // ======================================================

@@ -1,5 +1,6 @@
 package com.erp.domain.finance;
 
+import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
@@ -80,5 +81,16 @@ public class Transaction {
 
     @Column(name = "related_sub_id")
     private Long relatedSubId;
+
+    @Builder.Default
+    @Column(name = "archived", nullable = false)
+    private Boolean archived = false;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @ManyToOne
+    @JoinColumn(name = "archived_by")
+    private User archivedByUser;
 
 }

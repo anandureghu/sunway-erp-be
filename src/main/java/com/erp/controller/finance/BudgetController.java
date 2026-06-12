@@ -1,14 +1,15 @@
 package com.erp.controller.finance;
 
-import com.erp.domain.finance.BudgetStatus;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.finance.*;
 import com.erp.service.finance.BudgetService;
 import com.erp.service.security.annotation.RequiresPermission;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -65,41 +66,29 @@ public class BudgetController {
     }
 
     @RequiresPermission(module = AppModule.FINANCE_BUDGET, action = {AppAction.CREATE})
-    @PostMapping("/{id}/lines")
-    public ResponseEntity<BudgetResponseDTO> addLine(
+    @PostMapping("/{id}/distribute")
+    public ResponseEntity<BudgetResponseDTO> distribute(
             @PathVariable("id") Long id,
-            @RequestBody BudgetLineCreateDTO dto
-    ) {
-        return ResponseEntity.ok(service.addLine(id, dto));
+            @RequestBody BudgetDistributeDTO dto) {
+        return ResponseEntity.ok(service.distributeBudget(id, dto));
+    }
+
+    @RequiresPermission(module = AppModule.FINANCE_BUDGET, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/{id}/distributions")
+    public List<BudgetDistributionResponseDTO> listDistributions(
+            @PathVariable("id") Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Boolean archived) {
+        return service.listDistributions(id, from, to, archived);
     }
 
     @RequiresPermission(module = AppModule.FINANCE_BUDGET, action = {AppAction.EDIT})
-    @PutMapping("/{id}/lines/{lineId}")
-    public ResponseEntity<BudgetResponseDTO> updateLine(
+    @PostMapping("/{id}/distributions/archive")
+    public ResponseEntity<Integer> archiveDistributions(
             @PathVariable("id") Long id,
-            @PathVariable("lineId") Long lineId,
-            @RequestBody BudgetLineUpdateDTO dto
-    ) {
-        return ResponseEntity.ok(service.updateLine(id, lineId, dto));
-    }
-
-    @RequiresPermission(module = AppModule.FINANCE_BUDGET, action = {AppAction.EDIT})
-    @PatchMapping("/{id}/lines/{lineId}")
-    public ResponseEntity<BudgetResponseDTO> updateLineStatus(
-            @PathVariable("id") Long id,
-            @PathVariable("lineId") Long lineId,
-            @RequestParam("status") BudgetStatus status
-    ) {
-        return ResponseEntity.ok(service.updateLineStatus(id, lineId, status));
-    }
-
-    @RequiresPermission(module = AppModule.FINANCE_BUDGET, action = {AppAction.DELETE})
-    @DeleteMapping("/{id}/lines/{lineId}")
-    public ResponseEntity<BudgetResponseDTO> deleteLine(
-            @PathVariable("id") Long id,
-            @PathVariable("lineId") Long lineId
-    ) {
-        return ResponseEntity.ok(service.deleteLine(id, lineId));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(service.archiveDistributions(id, from, to));
     }
 }
-

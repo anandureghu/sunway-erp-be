@@ -7,6 +7,7 @@ import com.erp.domain.finance.JournalEntry;
 import com.erp.domain.finance.Reconciliation;
 import com.erp.domain.finance.Transaction;
 import com.erp.domain.hr.Company;
+import com.erp.dto.finance.BudgetDistributionResponseDTO;
 import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.dto.finance.UpdateTransactionDTO;
@@ -14,6 +15,7 @@ import com.erp.dto.finance.UpdateTransactionSourceDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.GLAccountBalanceRepository;
 import com.erp.repo.finance.TransactionRepository;
+import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.security.context.AuthContext;
 import jakarta.transaction.Transactional;
@@ -39,6 +41,7 @@ public class TransactionService {
     public static final String TYPE_JOURNAL = "JOURNAL";
     public static final String TYPE_RECONCILIATION = "RECONCILIATION";
     public static final String TYPE_BUDGET = "BUDGET";
+    public static final String TYPE_BUDGET_DISTRIBUTION = "BUDGET_DISTRIBUTION";
     /** Legacy / historical rows: two-sided posting when a PR was approved (accrual); new flows post at vendor payment. */
     public static final String TYPE_PURCHASE_REQUISITION = "PURCHASE_REQUISITION";
     /** Vendor payment confirmed in AP: expense/inventory debit and cash credit via {@link #applyPostingToCoa}. */
@@ -55,6 +58,7 @@ public class TransactionService {
     private final ChartOfAccountsRepository coaRepo;
     private final GLAccountBalanceRepository glRepo;
     private final DocumentSequenceService documentSequenceService;
+    private final UserRepository userRepository;
 
     public TransactionService(
             TransactionRepository repo,
@@ -62,7 +66,8 @@ public class TransactionService {
             AuthContext auth,
             ChartOfAccountsRepository coaRepo,
             GLAccountBalanceRepository glRepo,
-            DocumentSequenceService documentSequenceService
+            DocumentSequenceService documentSequenceService,
+            UserRepository userRepository
     ) {
         this.repo = repo;
         this.companyRepo = companyRepo;
@@ -70,6 +75,7 @@ public class TransactionService {
         this.coaRepo = coaRepo;
         this.glRepo = glRepo;
         this.documentSequenceService = documentSequenceService;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -249,6 +255,174 @@ public class TransactionService {
                 line.getId(),
                 null,
                 "TX-BUD");
+    }
+
+    /** Credit the linked budget COA when a budget header is first approved. */
+    @Transactional
+    public void recordBudgetApproved(com.erp.domain.finance.BudgetHeader header) {
+        if (header.getBudgetAccount() == null || header.getAmount() == null) {
+            return;
+        }
+        if (repo.existsByRelatedIdAndTransactionType(header.getId(), TYPE_BUDGET)) {
+            return;
+        }
+        ChartOfAccounts budgetAccount = coaRepo.findById(header.getBudgetAccount().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Budget account not found"));
+        String desc = "Budget approved: " + header.getBudgetName();
+        recordSingleAccountSignedDelta(
+                budgetAccount,
+                header.getCompany(),
+                header.getAmount(),
+                TYPE_BUDGET,
+                desc,
+                header.getId(),
+                null,
+                null,
+                "TX-BUD");
+    }
+
+    /** Adjust budget COA when a revised budget amount changes. */
+    @Transactional
+    public void recordBudgetRevisionAdjustment(
+            com.erp.domain.finance.BudgetHeader header,
+            BigDecimal oldAmount,
+            BigDecimal newAmount) {
+        if (header.getBudgetAccount() == null || oldAmount == null || newAmount == null) {
+            return;
+        }
+        BigDecimal delta = newAmount.subtract(oldAmount);
+        if (delta.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        ChartOfAccounts budgetAccount = coaRepo.findById(header.getBudgetAccount().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Budget account not found"));
+        String desc = "Budget revision: " + header.getBudgetName();
+        recordSingleAccountSignedDelta(
+                budgetAccount,
+                header.getCompany(),
+                delta,
+                TYPE_BUDGET,
+                desc,
+                header.getId(),
+                null,
+                null,
+                "TX-BUD");
+    }
+
+    /** Two-sided GL posting for budget distribution: debit budget account, credit target account. */
+    @Transactional
+    public Transaction recordBudgetDistribution(
+            com.erp.domain.finance.BudgetHeader header,
+            ChartOfAccounts creditAccount,
+            BigDecimal amount,
+            String notes,
+            LocalDate postedDate) {
+        if (header.getBudgetAccount() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Budget has no linked budget account");
+        }
+        ChartOfAccounts budgetAccount = coaRepo.findById(header.getBudgetAccount().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Budget account not found"));
+
+        Long companyId = auth.getCurrentCompanyId();
+        if (!header.getCompany().getId().equals(companyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Company mismatch");
+        }
+
+        String desc = "Budget distribution: " + header.getBudgetName();
+        if (notes != null && !notes.isBlank()) {
+            desc = desc + " — " + notes;
+        }
+
+        Transaction tx = Transaction.builder()
+                .transactionCode(documentSequenceService.generateNext("TX-BUD"))
+                .transactionType(TYPE_BUDGET_DISTRIBUTION)
+                .company(header.getCompany())
+                .amount(amount)
+                .transactionDate(postedDate != null ? postedDate : LocalDate.now())
+                .debitAccount(budgetAccount)
+                .creditAccount(creditAccount)
+                .transactionDescription(desc)
+                .relatedId(header.getId())
+                .relatedSubId(creditAccount.getId())
+                .source(null)
+                .sourceLocked(false)
+                .createdAt(Instant.now())
+                .createdBy(auth.getCurrentUserId())
+                .archived(false)
+                .build();
+
+        Transaction saved = repo.save(tx);
+        applyPostingToCoa(saved);
+        return saved;
+    }
+
+    public List<BudgetDistributionResponseDTO> listBudgetDistributions(
+            Long budgetId,
+            LocalDate from,
+            LocalDate to,
+            Boolean archived) {
+        return repo.findBudgetTransactions(budgetId, TYPE_BUDGET_DISTRIBUTION, from, to, archived).stream()
+                .map(this::toBudgetDistributionDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public int archiveBudgetDistributions(Long budgetId, LocalDate from, LocalDate to) {
+        if (from == null || to == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date range is required");
+        }
+        if (from.isAfter(to)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "From date must be before to date");
+        }
+        com.erp.domain.User user = com.erp.domain.User.builder()
+                .id(auth.getCurrentUserId())
+                .build();
+        List<Transaction> rows = repo.findBudgetTransactions(
+                budgetId, TYPE_BUDGET_DISTRIBUTION, from, to, false);
+        Instant now = Instant.now();
+        for (Transaction tx : rows) {
+            tx.setArchived(true);
+            tx.setArchivedAt(now);
+            tx.setArchivedByUser(user);
+        }
+        repo.saveAll(rows);
+        return rows.size();
+    }
+
+    private BudgetDistributionResponseDTO toBudgetDistributionDTO(Transaction tx) {
+        BudgetDistributionResponseDTO.BudgetDistributionResponseDTOBuilder b =
+                BudgetDistributionResponseDTO.builder()
+                        .id(tx.getId())
+                        .transactionCode(tx.getTransactionCode())
+                        .transactionDate(tx.getTransactionDate())
+                        .amount(tx.getAmount())
+                        .transactionDescription(tx.getTransactionDescription())
+                        .createdAt(tx.getCreatedAt())
+                        .archived(Boolean.TRUE.equals(tx.getArchived()));
+
+        if (tx.getCreatedBy() != null) {
+            b.createdByUserId(tx.getCreatedBy());
+            userRepository.findById(tx.getCreatedBy())
+                    .ifPresent(u -> b.createdByUserName(u.getFullName()));
+        }
+
+        if (tx.getCreditAccount() != null) {
+            b.creditAccountId(tx.getCreditAccount().getId())
+                    .creditAccountName(tx.getCreditAccount().getAccountName())
+                    .creditAccountCode(tx.getCreditAccount().getAccountCode());
+        }
+        if (tx.getDebitAccount() != null) {
+            b.debitAccountId(tx.getDebitAccount().getId())
+                    .debitAccountName(tx.getDebitAccount().getAccountName());
+        }
+        if (tx.getArchivedAt() != null) {
+            b.archivedAt(tx.getArchivedAt());
+        }
+        if (tx.getArchivedByUser() != null) {
+            b.archivedByUserId(tx.getArchivedByUser().getId())
+                    .archivedByUserName(tx.getArchivedByUser().getFullName());
+        }
+        return b.build();
     }
 
     @Transactional
@@ -558,6 +732,14 @@ public class TransactionService {
         if (tx.getCompany() != null) {
             b.companyId(tx.getCompany().getId())
                     .companyName(tx.getCompany().getCompanyName());
+        }
+        b.archived(Boolean.TRUE.equals(tx.getArchived()))
+                .archivedAt(tx.getArchivedAt())
+                .createdAt(tx.getCreatedAt())
+                .createdByUserId(tx.getCreatedBy());
+        if (tx.getArchivedByUser() != null) {
+            b.archivedByUserId(tx.getArchivedByUser().getId())
+                    .archivedByUserName(tx.getArchivedByUser().getFullName());
         }
         return b.build();
     }

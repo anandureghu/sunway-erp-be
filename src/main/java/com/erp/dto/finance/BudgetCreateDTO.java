@@ -16,4 +16,7 @@ public class BudgetCreateDTO {
     private LocalDate startDate;
     private LocalDate endDate;
     private BigDecimal amount;
+    private String budgetType;
+    private Long budgetAccountId;
+    private String projectId;
 }
