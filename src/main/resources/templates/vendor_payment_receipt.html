@@ -65,7 +65,9 @@
 
 <div class="section">
     <div class="label">Amount paid</div>
-    <div class="amount" th:text="${#numbers.formatDecimal(payment.amount, 1, 2)}">0.00</div>
+    <div class="amount" th:text="${#strings.isEmpty(currencyCode)
+        ? #numbers.formatDecimal(payment.amount, 1, 'COMMA', 2, 'POINT')
+        : currencyCode + ' ' + #numbers.formatDecimal(payment.amount, 1, 'COMMA', 2, 'POINT')}">0.00</div>
 </div>
 
 <div class="note" th:if="${payment.notes != null and !#strings.isEmpty(payment.notes)}"

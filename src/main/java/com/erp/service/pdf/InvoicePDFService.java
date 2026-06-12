@@ -46,6 +46,9 @@ public class InvoicePDFService {
 
             Company company = companyRepository.getReferenceById(auth.getCurrentCompanyId());
             CompanyInvoiceSettings invoiceSettings = getOrCreateInvoiceSettings(company);
+            String currencyCode = company.getCurrency() != null
+                    ? company.getCurrency().getCurrencyCode()
+                    : "";
 
             if (invoice.getType().name().equals("SALES")) {
                 salesOrder = salesOrderService.get(invoice.getOrderId());
@@ -60,6 +63,7 @@ public class InvoicePDFService {
             context.setVariable("purchaseOrder", purchaseOrder);
             context.setVariable("type", invoice.getType());
             context.setVariable("invoiceSettings", invoiceSettings);
+            context.setVariable("currencyCode", currencyCode != null ? currencyCode : "");
             context.setVariable("publicInvoiceUrl", buildPublicInvoiceUrl(invoiceSettings, invoice.getInvoiceId()));
             context.setVariable("invoiceTermsList", splitTerms(invoiceSettings.getInvoiceTerms()));
             context.setVariable("items",

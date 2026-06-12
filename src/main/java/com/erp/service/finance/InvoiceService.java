@@ -824,6 +824,14 @@ public class InvoiceService {
                 .companyEmail(i.getCompany().getCompanyEmail())
                 .billingEmail(i.getCompany().getBillingEmail())
                 .companyWebsiteUrl(i.getCompany().getWebsiteUrl())
+                .currencyCode(
+                        i.getCompany().getCurrency() != null
+                                ? i.getCompany().getCurrency().getCurrencyCode()
+                                : null)
+                .currencySymbol(
+                        i.getCompany().getCurrency() != null
+                                ? i.getCompany().getCurrency().getCurrencySymbol()
+                                : null)
                 .toParty(i.getToParty())
                 .status(i.getStatus())
                 .archived(i.isArchived())

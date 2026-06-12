@@ -29,6 +29,9 @@ public class InvoiceResponse {
     private String billingEmail;
     private String companyWebsiteUrl;
 
+    private String currencyCode;
+    private String currencySymbol;
+
     private String toParty;
     private String status;
     private boolean archived;

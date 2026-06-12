@@ -421,7 +421,9 @@
 
                 <!-- UNIT PRICE -->
                 <td class="text-right">
-                <span th:text="${#numbers.formatDecimal(item.unitPrice, 1, 'COMMA', 2, 'POINT')}">
+                <span th:text="${#strings.isEmpty(currencyCode)
+                    ? #numbers.formatDecimal(item.unitPrice, 1, 'COMMA', 2, 'POINT')
+                    : currencyCode + ' ' + #numbers.formatDecimal(item.unitPrice, 1, 'COMMA', 2, 'POINT')}">
                     45,000.00
                 </span>
                 </td>
@@ -434,7 +436,9 @@
                 <!-- AMOUNT -->
                 <td class="text-right">
                     <strong
-                            th:text="${#numbers.formatDecimal(item.lineTotal, 1, 'COMMA', 2, 'POINT')}">
+                            th:text="${#strings.isEmpty(currencyCode)
+                                ? #numbers.formatDecimal(item.lineTotal, 1, 'COMMA', 2, 'POINT')
+                                : currencyCode + ' ' + #numbers.formatDecimal(item.lineTotal, 1, 'COMMA', 2, 'POINT')}">
                         45,000.00
                     </strong>
                 </td>
@@ -455,7 +459,9 @@
                 <tr>
                     <td class="total-label">Total Amount</td>
                     <td class="total-value"
-                        th:text="${invoice.amount}">
+                        th:text="${#strings.isEmpty(currencyCode)
+                            ? #numbers.formatDecimal(invoice.amount, 1, 'COMMA', 2, 'POINT')
+                            : currencyCode + ' ' + #numbers.formatDecimal(invoice.amount, 1, 'COMMA', 2, 'POINT')}">
                         0
                     </td>
                 </tr>
