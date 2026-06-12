@@ -723,10 +723,12 @@ public class TransactionService {
 
         if (tx.getCreditAccount() != null) {
             b.creditAccountId(tx.getCreditAccount().getId())
+                    .creditAccountCode(tx.getCreditAccount().getAccountCode())
                     .creditAccountName(tx.getCreditAccount().getAccountName());
         }
         if (tx.getDebitAccount() != null) {
             b.debitAccountId(tx.getDebitAccount().getId())
+                    .debitAccountCode(tx.getDebitAccount().getAccountCode())
                     .debitAccountName(tx.getDebitAccount().getAccountName());
         }
         if (tx.getCompany() != null) {

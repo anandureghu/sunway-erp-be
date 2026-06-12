@@ -21,8 +21,10 @@ public class TransactionResponseDTO {
 
     //    private String debitAccount;
     private Long creditAccountId;
+    private String creditAccountCode;
     private String creditAccountName;
     private Long debitAccountId;
+    private String debitAccountCode;
     private String debitAccountName;
 
     private Long companyId;
