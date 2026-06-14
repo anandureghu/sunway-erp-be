@@ -9,7 +9,10 @@ import com.erp.service.EmployeeService;
 import com.erp.dto.hr.HrPoliciesDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
 import com.erp.dto.hr.PayrollExportSettingsDTO;
+import com.erp.dto.hr.ProcessAccountDefaultDTO;
+import com.erp.dto.hr.ProcessAccountDefaultsUpdateDTO;
 import com.erp.service.hr.CompanyService;
+import com.erp.service.hr.ProcessAccountDefaultsService;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -24,10 +27,15 @@ public class CompanyController {
 
     private final CompanyService companyService;
     private final EmployeeService employeeService;
+    private final ProcessAccountDefaultsService processAccountDefaultsService;
 
-    public CompanyController(CompanyService companyService, EmployeeService employeeService) {
+    public CompanyController(
+            CompanyService companyService,
+            EmployeeService employeeService,
+            ProcessAccountDefaultsService processAccountDefaultsService) {
         this.companyService = companyService;
         this.employeeService = employeeService;
+        this.processAccountDefaultsService = processAccountDefaultsService;
     }
 
     @GetMapping
@@ -75,6 +83,19 @@ public class CompanyController {
             @PathVariable("id") Long id,
             @RequestBody AccountingDefaultsDTO body) {
         return companyService.updateAccountingDefaults(id, body);
+    }
+
+    @GetMapping("/{id}/process-account-defaults")
+    public ResponseEntity<List<ProcessAccountDefaultDTO>> getProcessAccountDefaults(
+            @PathVariable("id") Long id) {
+        return ResponseEntity.ok(processAccountDefaultsService.getProcessAccountDefaults(id));
+    }
+
+    @PutMapping("/{id}/process-account-defaults")
+    public ResponseEntity<List<ProcessAccountDefaultDTO>> updateProcessAccountDefaults(
+            @PathVariable("id") Long id,
+            @RequestBody ProcessAccountDefaultsUpdateDTO body) {
+        return ResponseEntity.ok(processAccountDefaultsService.updateProcessAccountDefaults(id, body));
     }
 
     @PutMapping("/{id}/invoice-branding")

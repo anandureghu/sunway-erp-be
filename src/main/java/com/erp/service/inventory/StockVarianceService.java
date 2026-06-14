@@ -1,6 +1,7 @@
 package com.erp.service.inventory;
 
 import com.erp.domain.User;
+import com.erp.domain.finance.AccountingProcessCode;
 import com.erp.domain.finance.COAType;
 import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.Transaction;
@@ -20,8 +21,10 @@ import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.StockVarianceRepository;
 import com.erp.repo.inventory.WarehouseRepository;
+import com.erp.dto.hr.ProcessAccountPair;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.TransactionService;
+import com.erp.service.hr.ProcessAccountDefaultsService;
 import com.erp.service.security.PermissionCheckService;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -48,6 +51,7 @@ public class StockVarianceService {
     private final TransactionService transactionService;
     private final ChartOfAccountsRepository coaRepo;
     private final PermissionCheckService permissionCheckService;
+    private final ProcessAccountDefaultsService processAccountDefaultsService;
 
     public StockVarianceService(
             StockVarianceRepository repo,
@@ -59,7 +63,8 @@ public class StockVarianceService {
             ItemWarehouseStockService stockService,
             TransactionService transactionService,
             ChartOfAccountsRepository coaRepo,
-            PermissionCheckService permissionCheckService
+            PermissionCheckService permissionCheckService,
+            ProcessAccountDefaultsService processAccountDefaultsService
     ) {
         this.repo = repo;
         this.itemRepo = itemRepo;
@@ -71,6 +76,7 @@ public class StockVarianceService {
         this.transactionService = transactionService;
         this.coaRepo = coaRepo;
         this.permissionCheckService = permissionCheckService;
+        this.processAccountDefaultsService = processAccountDefaultsService;
     }
 
     public StockVarianceResponseDTO create(StockVarianceCreateDTO dto) {
@@ -269,12 +275,23 @@ public class StockVarianceService {
 
         BigDecimal amount = unitCost.multiply(BigDecimal.valueOf(Math.abs(qtyChange)));
         Company company = variance.getCompany();
-        Long inventoryAccountId = company.getDefaultPurchaseDebitAccountId();
-        Long expenseAccountId = resolveVarianceExpenseAccountId(companyId, company);
+        Long inventoryAccountId;
+        Long expenseAccountId;
+
+        var varianceDefaults = processAccountDefaultsService.resolveProcessDefaults(
+                companyId, AccountingProcessCode.STOCK_VARIANCE);
+        if (varianceDefaults.isPresent()) {
+            ProcessAccountPair pair = varianceDefaults.get();
+            inventoryAccountId = pair.getDebitAccountId();
+            expenseAccountId = pair.getCreditAccountId();
+        } else {
+            inventoryAccountId = company.getDefaultPurchaseDebitAccountId();
+            expenseAccountId = resolveVarianceExpenseAccountId(companyId, company);
+        }
 
         if (inventoryAccountId == null || expenseAccountId == null) {
             throw new IllegalStateException(
-                    "Configure company default purchase debit account and an expense account for variance posting");
+                    "Configure stock variance debit and credit accounts under Global Settings → Default Accounts → Process account defaults");
         }
 
         boolean inventoryIncrease = qtyChange > 0;
