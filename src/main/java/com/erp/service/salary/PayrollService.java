@@ -8,7 +8,10 @@ import com.erp.domain.EmployeeStatus;
 import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.salary.EmployeeBankDetails;
 import com.erp.domain.salary.EmployeeCompensation;
+import com.erp.domain.finance.AccountingProcessCode;
+import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.salary.Payroll;
+import com.erp.dto.salary.PayrollAccountStatusDTO;
 import com.erp.dto.salary.PayrollBatchResponseDTO;
 import com.erp.dto.salary.PayrollGenerateRequestDTO;
 import com.erp.dto.salary.PayrollHistoryDTO;
@@ -21,7 +24,11 @@ import com.erp.repo.EmployeeTimesheetRepository;
 import com.erp.repo.salary.EmployeeBankDetailsRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
 import com.erp.repo.salary.PayrollRepository;
+import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.service.DocumentSequenceService;
+import com.erp.service.finance.CoaBalanceRules;
+import com.erp.service.finance.TransactionService;
+import com.erp.service.hr.ProcessAccountDefaultsService;
 import com.erp.service.hr.RetirementCompensationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,6 +38,7 @@ import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -65,6 +73,9 @@ public class PayrollService {
     private final PayrollRepository payrollRepo;
     private final DocumentSequenceService documentSequenceService;
     private final RetirementCompensationService retirementCompensationService;
+    private final ProcessAccountDefaultsService processAccountDefaultsService;
+    private final TransactionService transactionService;
+    private final ChartOfAccountsRepository chartOfAccountsRepository;
 
     @Transactional(readOnly = true)
     public PayrollPreviewDTO previewPayroll(Long employeeId, PayrollGenerateRequestDTO dto) {
@@ -80,7 +91,16 @@ public class PayrollService {
                 dto.getPayPeriodEnd()
         );
 
-        return toPreviewDTO(computation);
+        double grossPay = round2(computation.earnedGrossPay() + computation.endOfServiceCompensation());
+        PayrollAccountStatusDTO accountStatus = resolvePayrollAccountStatus(
+                employee.getCompanyId(), grossPay);
+
+        return toPreviewDTO(computation, grossPay, accountStatus);
+    }
+
+    @Transactional(readOnly = true)
+    public PayrollAccountStatusDTO getPayrollAccountStatus(Long companyId) {
+        return resolvePayrollAccountStatus(companyId, 0.0);
     }
 
     @Transactional
@@ -105,6 +125,7 @@ public class PayrollService {
         Payroll saved = payrollRepo.save(payroll);
 
         applyLoanRecovery(employee, computation.finalSettlement());
+        postPayrollToAccounting(saved, employee);
 
         return saved;
     }
@@ -132,9 +153,10 @@ public class PayrollService {
             );
 
             Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
-            payrollRepo.save(payroll);
+            Payroll saved = payrollRepo.save(payroll);
 
             applyLoanRecovery(employee, computation.finalSettlement());
+            postPayrollToAccounting(saved, employee);
             generatedCount++;
         }
 
@@ -222,6 +244,31 @@ public class PayrollService {
         payroll.setBankAccount(bankDetails.getAccountNo());
 
         return payroll;
+    }
+
+    private void postPayrollToAccounting(Payroll payroll, Employee employee) {
+        Long companyId = employee.getCompanyId();
+        if (companyId == null) {
+            throw new RuntimeException("Employee has no company");
+        }
+
+        Long debitAccountId = processAccountDefaultsService
+                .resolveProcessDebitAccount(companyId, AccountingProcessCode.PAYROLL)
+                .orElseThrow(() -> new RuntimeException(
+                        "Configure payroll debit account under Global Settings → Default Accounts"));
+
+        BigDecimal amount = BigDecimal.valueOf(payroll.getGrossPay());
+        String employeeLabel = employee.getEmployeeNo() != null && !employee.getEmployeeNo().isBlank()
+                ? employee.getEmployeeNo()
+                : String.valueOf(employee.getId());
+        String desc = "Payroll " + payroll.getPayrollCode() + " — " + employeeLabel;
+
+        transactionService.recordPayrollPosting(
+                companyId,
+                payroll.getId(),
+                amount,
+                debitAccountId,
+                desc);
     }
 
     private List<Employee> getActiveEmployeesByCompany(Long companyId) {
@@ -491,7 +538,10 @@ public class PayrollService {
         return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
     }
 
-    private PayrollPreviewDTO toPreviewDTO(PayrollComputation computation) {
+    private PayrollPreviewDTO toPreviewDTO(
+            PayrollComputation computation,
+            double grossPay,
+            PayrollAccountStatusDTO payrollAccount) {
         return new PayrollPreviewDTO(
                 computation.monthlyGross(),
                 computation.workingDays(),
@@ -508,8 +558,60 @@ public class PayrollService {
                 computation.netPayable(),
                 computation.earnedGrossPay(),
                 computation.endOfServiceCompensation(),
-                computation.finalSettlement()
+                computation.finalSettlement(),
+                grossPay,
+                payrollAccount
         );
+    }
+
+    private PayrollAccountStatusDTO resolvePayrollAccountStatus(Long companyId, double grossAmount) {
+        if (companyId == null) {
+            return PayrollAccountStatusDTO.builder()
+                    .status("NOT_CONFIGURED")
+                    .configured(false)
+                    .availableBalance(0)
+                    .payrollGrossAmount(grossAmount)
+                    .sufficientFunds(false)
+                    .build();
+        }
+
+        Optional<Long> debitAccountId = processAccountDefaultsService
+                .resolveProcessDebitAccount(companyId, AccountingProcessCode.PAYROLL);
+        if (debitAccountId.isEmpty()) {
+            return PayrollAccountStatusDTO.builder()
+                    .status("NOT_CONFIGURED")
+                    .configured(false)
+                    .availableBalance(0)
+                    .payrollGrossAmount(grossAmount)
+                    .sufficientFunds(false)
+                    .build();
+        }
+
+        ChartOfAccounts account = chartOfAccountsRepository.findById(debitAccountId.get())
+                .orElseThrow(() -> new RuntimeException("Payroll debit account not found"));
+        BigDecimal balance = account.getBalance() == null ? BigDecimal.ZERO : account.getBalance();
+        boolean sufficient = grossAmount <= 0;
+        if (grossAmount > 0) {
+            try {
+                CoaBalanceRules.assertSufficientBalance(account, BigDecimal.valueOf(grossAmount).negate());
+                sufficient = true;
+            } catch (Exception ex) {
+                sufficient = false;
+            }
+        } else {
+            sufficient = true;
+        }
+
+        return PayrollAccountStatusDTO.builder()
+                .status(sufficient ? "READY" : "INSUFFICIENT")
+                .configured(true)
+                .debitAccountId(account.getId())
+                .debitAccountCode(account.getAccountCode())
+                .debitAccountName(account.getAccountName())
+                .availableBalance(balance.doubleValue())
+                .payrollGrossAmount(grossAmount)
+                .sufficientFunds(sufficient)
+                .build();
     }
 
     private PayrollHistoryDTO toHistoryDTO(Payroll payroll) {

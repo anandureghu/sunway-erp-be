@@ -51,6 +51,7 @@ public class TransactionService {
     public static final String TYPE_PURCHASE_ORDER_CANCEL_REVERSAL = "PURCHASE_ORDER_CANCEL_REVERSAL";
     public static final String TYPE_SALES_ORDER_CANCEL_REVERSAL = "SALES_ORDER_CANCEL_REVERSAL";
     public static final String TYPE_STOCK_VARIANCE = "STOCK_VARIANCE";
+    public static final String TYPE_PAYROLL = "PAYROLL";
 
     private final TransactionRepository repo;
     private final CompanyRepository companyRepo;
@@ -307,6 +308,36 @@ public class TransactionService {
                 null,
                 null,
                 "TX-BUD");
+    }
+
+    /** Debit-only GL posting when payroll is generated. */
+    @Transactional
+    public void recordPayrollPosting(
+            Long companyId,
+            Long payrollId,
+            BigDecimal grossPay,
+            Long debitAccountId,
+            String description) {
+        if (grossPay == null || grossPay.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        if (repo.existsByRelatedIdAndTransactionType(payrollId, TYPE_PAYROLL)) {
+            return;
+        }
+        ChartOfAccounts debitAccount = coaRepo.findById(debitAccountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payroll debit account not found"));
+        Company company = companyRepo.findById(companyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
+        recordSingleAccountSignedDelta(
+                debitAccount,
+                company,
+                grossPay.negate(),
+                TYPE_PAYROLL,
+                description,
+                payrollId,
+                null,
+                "PAYROLL",
+                "TX-PAY");
     }
 
     /** Two-sided GL posting for budget distribution: debit budget account, credit target account. */

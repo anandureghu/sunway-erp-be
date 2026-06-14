@@ -23,4 +23,6 @@ public class PayrollPreviewDTO {
     private double earnedGrossPay;
     private double endOfServiceCompensation;
     private boolean finalSettlement;
+    private double grossPay;
+    private PayrollAccountStatusDTO payrollAccount;
 }

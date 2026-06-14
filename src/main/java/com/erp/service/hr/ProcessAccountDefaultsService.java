@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -26,7 +27,11 @@ public class ProcessAccountDefaultsService {
 
     private static final EnumSet<AccountingProcessCode> GL_BACKED_PROCESSES = EnumSet.of(
             AccountingProcessCode.MANUAL_JOURNAL,
-            AccountingProcessCode.STOCK_VARIANCE);
+            AccountingProcessCode.STOCK_VARIANCE,
+            AccountingProcessCode.PAYROLL);
+
+    private static final EnumSet<AccountingProcessCode> DEBIT_ONLY_PROCESSES = EnumSet.of(
+            AccountingProcessCode.PAYROLL);
 
     private final CompanyProcessAccountDefaultRepository repository;
     private final CompanyRepository companyRepository;
@@ -93,6 +98,13 @@ public class ProcessAccountDefaultsService {
                 .map(row -> new ProcessAccountPair(row.getDebitAccountId(), row.getCreditAccountId()));
     }
 
+    public Optional<Long> resolveProcessDebitAccount(
+            Long companyId, AccountingProcessCode processCode) {
+        return repository.findByCompanyIdAndProcessCode(companyId, processCode)
+                .map(CompanyProcessAccountDefault::getDebitAccountId)
+                .filter(Objects::nonNull);
+    }
+
     private void assertCompanyAccess(Long companyId) {
         Long currentCompanyId = authContext.getCurrentCompanyId();
         if (currentCompanyId == null || !currentCompanyId.equals(companyId)) {
@@ -114,6 +126,14 @@ public class ProcessAccountDefaultsService {
 
     private void validateAccountPair(
             AccountingProcessCode processCode, Long debitId, Long creditId) {
+        if (DEBIT_ONLY_PROCESSES.contains(processCode)) {
+            if (creditId != null) {
+                throw new RuntimeException(
+                        "Credit account is not used for " + processCode);
+            }
+            return;
+        }
+
         boolean hasDebit = debitId != null;
         boolean hasCredit = creditId != null;
         if (hasDebit != hasCredit) {
