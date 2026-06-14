@@ -29,7 +29,23 @@ public class BudgetHeader {
     @Column(nullable = false)
     private String fiscalYear;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "budget_type", nullable = false, length = 20)
+    @Builder.Default
+    private BudgetType budgetType = BudgetType.OPEX;
+
+    @ManyToOne
+    @JoinColumn(name = "budget_account_id")
+    private ChartOfAccounts budgetAccount;
+
+    @Column(name = "project_id")
+    private String projectId;
+
     private BigDecimal amount;
+
+    @Builder.Default
+    @Column(name = "distributed_amount", nullable = false)
+    private BigDecimal distributedAmount = BigDecimal.ZERO;
 
     private LocalDate startDate;
     private LocalDate endDate;

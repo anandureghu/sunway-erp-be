@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Data
@@ -20,8 +21,10 @@ public class TransactionResponseDTO {
 
     //    private String debitAccount;
     private Long creditAccountId;
+    private String creditAccountCode;
     private String creditAccountName;
     private Long debitAccountId;
+    private String debitAccountCode;
     private String debitAccountName;
 
     private Long companyId;
@@ -38,4 +41,12 @@ public class TransactionResponseDTO {
 
     private String source;
     private Boolean sourceLocked;
+
+    private Boolean archived;
+    private Instant archivedAt;
+    private Long archivedByUserId;
+    private String archivedByUserName;
+    private Long createdByUserId;
+    private String createdByUserName;
+    private Instant createdAt;
 }

@@ -390,19 +390,43 @@ public class InvoiceService {
     }
 
     private void createPendingPaymentEntry(Invoice invoice) {
-        if (paymentRepo.findByInvoiceIdOrderByCreatedAtDesc(invoice.getInvoiceId()).isEmpty()) {
-            Payment payment = Payment.builder()
-                    .paymentCode(documentSequenceService.generateNext("PAY-REQ"))
-                    .company(invoice.getCompany())
-                    .paymentMethod("PENDING_REQUEST")
-                    .amount(invoice.getAmount())
-                    .effectiveDate(invoice.getDueDate())
-                    .notes("Auto-created payment request entry for invoice " + invoice.getInvoiceId())
-                    .invoiceId(invoice.getInvoiceId())
-                    .createdBy(auth.getCurrentUserId())
-                    .build();
-            paymentRepo.save(payment);
+        ensurePendingPaymentRequestForOutstanding(invoice);
+    }
+
+    /**
+     * Creates a pending customer payment request for the invoice's remaining outstanding balance
+     * when none already exists (e.g. after a partial payment confirmation).
+     */
+    @Transactional
+    public void ensurePendingPaymentRequestForOutstanding(Invoice invoice) {
+        if (invoice == null || invoice.getInvoiceId() == null || invoice.getInvoiceId().isBlank()) {
+            return;
         }
+        String status = invoice.getStatus() == null ? "" : invoice.getStatus().trim();
+        if ("PAID".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status)) {
+            return;
+        }
+        if (paymentRepo.existsByInvoiceIdAndPaymentMethod(invoice.getInvoiceId(), "PENDING_REQUEST")) {
+            return;
+        }
+        BigDecimal outstanding = invoice.getOutstanding() != null
+                ? invoice.getOutstanding()
+                : invoice.getAmount();
+        if (outstanding == null || outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        Payment payment = Payment.builder()
+                .paymentCode(documentSequenceService.generateNext("PAY-REQ"))
+                .company(invoice.getCompany())
+                .paymentMethod("PENDING_REQUEST")
+                .amount(outstanding)
+                .effectiveDate(invoice.getDueDate())
+                .notes("Payment request for invoice " + invoice.getInvoiceId())
+                .invoiceId(invoice.getInvoiceId())
+                .paymentDirection(PaymentDirection.CUSTOMER)
+                .createdBy(auth.getCurrentUserId())
+                .build();
+        paymentRepo.save(payment);
     }
 
     public InvoiceResponse createInvoiceForConfirmedSalesOrder(Long salesOrderId) {
@@ -536,7 +560,22 @@ public class InvoiceService {
         Invoice inv = repo.findByInvoiceId(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
-        BigDecimal newOutstanding = inv.getOutstanding().subtract(amount);
+        if ("CANCELLED".equalsIgnoreCase(inv.getStatus())) {
+            throw new RuntimeException("Cannot apply payment to a cancelled invoice");
+        }
+
+        BigDecimal outstanding = inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount();
+        if (outstanding == null) {
+            outstanding = BigDecimal.ZERO;
+        }
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Payment amount must be greater than zero");
+        }
+        if (amount.compareTo(outstanding) > 0) {
+            throw new RuntimeException("Payment amount cannot exceed outstanding balance");
+        }
+
+        BigDecimal newOutstanding = outstanding.subtract(amount);
 
         if (newOutstanding.compareTo(BigDecimal.ZERO) <= 0) {
             inv.setOutstanding(BigDecimal.ZERO);
@@ -824,6 +863,14 @@ public class InvoiceService {
                 .companyEmail(i.getCompany().getCompanyEmail())
                 .billingEmail(i.getCompany().getBillingEmail())
                 .companyWebsiteUrl(i.getCompany().getWebsiteUrl())
+                .currencyCode(
+                        i.getCompany().getCurrency() != null
+                                ? i.getCompany().getCurrency().getCurrencyCode()
+                                : null)
+                .currencySymbol(
+                        i.getCompany().getCurrency() != null
+                                ? i.getCompany().getCurrency().getCurrencySymbol()
+                                : null)
                 .toParty(i.getToParty())
                 .status(i.getStatus())
                 .archived(i.isArchived())

@@ -147,9 +147,6 @@ public class PurchaseRequisitionService {
         if (dto.getRequiredDeliveryDate() == null) {
             throw new RuntimeException("Required delivery date is required");
         }
-        if (dto.getRequiredByDate() == null) {
-            throw new RuntimeException("Required-by date is required");
-        }
         if (dto.getRequisitionDescription() == null || dto.getRequisitionDescription().isBlank()) {
             throw new RuntimeException("Requisition description is required");
         }
@@ -218,7 +215,6 @@ public class PurchaseRequisitionService {
         pr.setProjectCode(trimToNull(dto.getProjectCode()));
         pr.setRequisitionDescription(dto.getRequisitionDescription().trim());
         pr.setUrgency(urgency);
-        pr.setRequiredByDate(dto.getRequiredByDate());
         pr.setDeliveryWarehouse(deliveryWarehouse);
         pr.setJustification(dto.getJustification().trim());
         pr.setItems(items);
@@ -618,7 +614,6 @@ public class PurchaseRequisitionService {
                 .projectCode(pr.getProjectCode())
                 .requisitionDescription(pr.getRequisitionDescription())
                 .urgency(pr.getUrgency() != null ? pr.getUrgency().name() : null)
-                .requiredByDate(pr.getRequiredByDate())
                 .justification(pr.getJustification());
         if (pr.getDeliveryWarehouse() != null) {
             b.deliveryWarehouseId(pr.getDeliveryWarehouse().getId())

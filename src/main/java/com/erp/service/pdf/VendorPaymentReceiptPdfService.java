@@ -45,6 +45,10 @@ public class VendorPaymentReceiptPdfService {
             context.setVariable(
                     "paymentMethodLabel",
                     PaymentMethodLabels.displayLabel(payment.getPaymentMethod()));
+            String currencyCode = company.getCurrency() != null
+                    ? company.getCurrency().getCurrencyCode()
+                    : "";
+            context.setVariable("currencyCode", currencyCode != null ? currencyCode : "");
 
             String html = templateEngine.process("vendor_payment_receipt", context);
 
