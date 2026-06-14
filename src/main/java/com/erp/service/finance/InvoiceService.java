@@ -19,6 +19,7 @@ import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.sales.SalesOrderResponseDTO;
 import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderStatus;
+import com.erp.domain.purchase.PurchaseRequisition;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
@@ -518,9 +519,8 @@ public class InvoiceService {
         req.setTaxAmount(BigDecimal.ZERO);
         req.setDebitAccount(company.getDefaultPurchaseDebitAccountId());
         req.setCreditAccount(company.getDefaultPurchaseCreditAccountId());
-        req.setItemDescription("Auto-generated from purchase order " + po.getOrderNumber());
-        req.setNotesRemarks(
-                "Auto-generated when purchase order was released to supplier (internal cross-check for AP matching).");
+        req.setItemDescription(resolvePurchaseInvoiceDescription(po));
+        req.setNotesRemarks(resolvePurchaseInvoiceNotes(po));
         req.setDocumentSource(InvoiceDocumentSource.GENERATED);
 
         InvoiceResponse response = createInvoice(req, null, false);
@@ -535,6 +535,36 @@ public class InvoiceService {
         Invoice persisted = repo.save(saved);
         linkPurchaseInvoiceToFinanceReferences(purchaseOrderId, persisted.getInvoiceId());
         return toDTO(persisted);
+    }
+
+    private String resolvePurchaseInvoiceDescription(PurchaseOrder po) {
+        PurchaseRequisition source = po.getSourceRequisition();
+        if (source != null) {
+            String description = trimToNull(source.getRequisitionDescription());
+            if (description != null) {
+                return description;
+            }
+        }
+        return "Auto-generated from purchase order " + po.getOrderNumber();
+    }
+
+    private String resolvePurchaseInvoiceNotes(PurchaseOrder po) {
+        PurchaseRequisition source = po.getSourceRequisition();
+        if (source != null) {
+            String justification = trimToNull(source.getJustification());
+            if (justification != null) {
+                return justification;
+            }
+        }
+        return "Auto-generated when purchase order was released to supplier (internal cross-check for AP matching).";
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void linkPurchaseInvoiceToFinanceReferences(Long purchaseOrderId, String invoiceCode) {
