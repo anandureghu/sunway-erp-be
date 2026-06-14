@@ -2,6 +2,7 @@ package com.erp.service.sales;
 
 import com.erp.domain.User;
 import com.erp.domain.finance.ChartOfAccounts;
+import com.erp.domain.finance.Invoice;
 import com.erp.domain.InvoiceType;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
@@ -403,6 +404,10 @@ public class SalesOrderService {
                 .debitAccountName(so.getDebitAccount() != null ? so.getDebitAccount().getAccountName() : null)
                 .creditAccountId(so.getCreditAccount() != null ? so.getCreditAccount().getId() : null)
                 .creditAccountName(so.getCreditAccount() != null ? so.getCreditAccount().getAccountName() : null)
+                .salesInvoiceId(
+                        invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
+                                .map(Invoice::getId)
+                                .orElse(null))
                 .items(
                         so.getItems().stream().map(i ->
                                 SalesOrderItemResponseDTO.builder()
