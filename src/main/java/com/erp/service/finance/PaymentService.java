@@ -553,6 +553,7 @@ public class PaymentService {
                 .paymentId(String.valueOf(payment.getId()))
                 .invoiceId(purchaseInvoiceCode)
                 .relatedId(po.getId())
+                .source(TransactionService.SOURCE_PURCHASE)
                 .transactionDescription(
                         encumbered
                                 ? "Vendor payment (AP settlement) — PO " + po.getOrderNumber()

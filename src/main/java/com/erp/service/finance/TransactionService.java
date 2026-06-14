@@ -1,9 +1,12 @@
 package com.erp.service.finance;
 
+import com.erp.domain.InvoiceType;
 import com.erp.domain.finance.BudgetLine;
 import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.finance.GLAccountBalance;
+import com.erp.domain.finance.Invoice;
 import com.erp.domain.finance.JournalEntry;
+import com.erp.domain.finance.Payment;
 import com.erp.domain.finance.Reconciliation;
 import com.erp.domain.finance.Transaction;
 import com.erp.domain.hr.Company;
@@ -14,6 +17,8 @@ import com.erp.dto.finance.UpdateTransactionDTO;
 import com.erp.dto.finance.UpdateTransactionSourceDTO;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.GLAccountBalanceRepository;
+import com.erp.repo.finance.InvoiceRepository;
+import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.finance.TransactionRepository;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
@@ -35,6 +40,8 @@ import java.util.stream.Collectors;
 public class TransactionService {
 
     public static final String SOURCE_UNKNOWN = "UNKNOWN";
+    public static final String SOURCE_SALE = "sale";
+    public static final String SOURCE_PURCHASE = "purchase";
     public static final String TYPE_OPENING_BALANCE = "OPENING_BALANCE";
     public static final String TYPE_PAYMENT = "PAYMENT";
     public static final String TYPE_MANUAL = "MANUAL";
@@ -60,6 +67,8 @@ public class TransactionService {
     private final GLAccountBalanceRepository glRepo;
     private final DocumentSequenceService documentSequenceService;
     private final UserRepository userRepository;
+    private final InvoiceRepository invoiceRepo;
+    private final PaymentRepository paymentRepo;
 
     public TransactionService(
             TransactionRepository repo,
@@ -68,7 +77,9 @@ public class TransactionService {
             ChartOfAccountsRepository coaRepo,
             GLAccountBalanceRepository glRepo,
             DocumentSequenceService documentSequenceService,
-            UserRepository userRepository
+            UserRepository userRepository,
+            InvoiceRepository invoiceRepo,
+            PaymentRepository paymentRepo
     ) {
         this.repo = repo;
         this.companyRepo = companyRepo;
@@ -77,6 +88,8 @@ public class TransactionService {
         this.glRepo = glRepo;
         this.documentSequenceService = documentSequenceService;
         this.userRepository = userRepository;
+        this.invoiceRepo = invoiceRepo;
+        this.paymentRepo = paymentRepo;
     }
 
     /**
@@ -493,6 +506,10 @@ public class TransactionService {
 
         boolean singleSided = isSingleSided(debitAccount, creditAccount);
 
+        String invoiceId = resolveInvoiceIdForCreate(
+                dto.getInvoiceId(), dto.getPaymentId(), dto.getRelatedId(), dto.getTransactionType());
+        String procSource = defaultSalePurchaseSource(dto.getTransactionType());
+
         Transaction.TransactionBuilder tb = Transaction.builder()
                 .transactionCode(documentSequenceService.generateNext("TX"))
                 .transactionType(dto.getTransactionType() != null ? dto.getTransactionType() : TYPE_MANUAL)
@@ -501,7 +518,7 @@ public class TransactionService {
                 .transactionDate(dto.getTransactionDate() != null ? dto.getTransactionDate() : LocalDate.now())
                 .creditAccount(creditAccount)
                 .debitAccount(debitAccount)
-                .invoiceId(dto.getInvoiceId())
+                .invoiceId(invoiceId)
                 .paymentId(dto.getPaymentId())
                 .transactionDescription(dto.getTransactionDescription())
                 .createdBy(auth.getCurrentUserId())
@@ -510,8 +527,10 @@ public class TransactionService {
                 .createdAt(Instant.now());
 
         if (singleSided) {
-            String source = normalizeSource(dto.getSource());
-            tb.source(source).sourceLocked(!SOURCE_UNKNOWN.equalsIgnoreCase(source));
+            String source = procSource != null ? procSource : normalizeSource(dto.getSource());
+            tb.source(source).sourceLocked(procSource != null || !SOURCE_UNKNOWN.equalsIgnoreCase(source));
+        } else if (procSource != null) {
+            tb.source(procSource).sourceLocked(true);
         } else {
             tb.source(null).sourceLocked(false);
         }
@@ -733,19 +752,22 @@ public class TransactionService {
     }
 
     private TransactionResponseDTO toDTO(Transaction tx) {
+        String procSource = defaultSalePurchaseSource(tx.getTransactionType());
         TransactionResponseDTO.TransactionResponseDTOBuilder b = TransactionResponseDTO.builder()
                 .id(tx.getId())
                 .transactionCode(tx.getTransactionCode())
                 .transactionType(tx.getTransactionType())
                 .transactionDate(tx.getTransactionDate())
                 .amount(tx.getAmount())
-                .invoiceId(tx.getInvoiceId())
+                .invoiceId(resolveDisplayInvoiceId(tx))
                 .paymentId(tx.getPaymentId())
                 .transactionDescription(tx.getTransactionDescription())
                 .relatedId(tx.getRelatedId())
                 .relatedSubId(tx.getRelatedSubId());
 
-        if (isSingleSided(tx)) {
+        if (procSource != null) {
+            b.source(procSource).sourceLocked(true);
+        } else if (isSingleSided(tx)) {
             b.source(tx.getSource() != null ? tx.getSource() : SOURCE_UNKNOWN)
                     .sourceLocked(Boolean.TRUE.equals(tx.getSourceLocked()));
         } else {
@@ -795,6 +817,10 @@ public class TransactionService {
         ChartOfAccounts debitAccount = coaRepo.findById(debitAccountId)
                 .orElseThrow(() -> new RuntimeException("Invalid debit account"));
 
+        String resolvedInvoiceId = resolveInvoiceIdForCreate(
+                invoiceId, paymentId != null ? String.valueOf(paymentId) : null, null, txType);
+        String procSource = defaultSalePurchaseSource(txType != null ? txType : TYPE_PAYMENT);
+
         Transaction tx = Transaction.builder()
                 .transactionCode(documentSequenceService.generateNext("TX"))
                 .transactionType(txType != null ? txType : TYPE_PAYMENT)
@@ -804,9 +830,9 @@ public class TransactionService {
                 .creditAccount(creditAccount)
                 .debitAccount(debitAccount)
                 .paymentId(paymentId != null ? String.valueOf(paymentId) : null)
-                .invoiceId(invoiceId)
-                .source(null)
-                .sourceLocked(false)
+                .invoiceId(resolvedInvoiceId)
+                .source(procSource)
+                .sourceLocked(procSource != null)
                 .createdAt(Instant.now())
                 .createdBy(null)
                 .build();
@@ -828,13 +854,15 @@ public class TransactionService {
         List<String> linkableTypes = List.of(
                 TYPE_PURCHASE_ORDER_ENCUMBRANCE,
                 TYPE_PURCHASE_ORDER_CANCEL_REVERSAL,
-                TYPE_VENDOR_PAYMENT);
+                TYPE_VENDOR_PAYMENT,
+                TYPE_PURCHASE_REQUISITION);
         List<Transaction> toUpdate = repo.findByRelatedIdAndInvoiceIdIsNull(purchaseOrderId).stream()
                 .filter(tx -> tx.getTransactionType() != null
                         && linkableTypes.contains(tx.getTransactionType()))
                 .toList();
         for (Transaction tx : toUpdate) {
             tx.setInvoiceId(invoiceId);
+            applyPurchaseSource(tx);
         }
         if (!toUpdate.isEmpty()) {
             repo.saveAll(toUpdate);
@@ -879,9 +907,11 @@ public class TransactionService {
                 .creditAccount(creditAccount)
                 .transactionDescription("Sales order cancellation reversal")
                 .relatedId(relatedSalesOrderId)
-                .invoiceId(invoiceId)
-                .source(null)
-                .sourceLocked(false)
+                .invoiceId(invoiceId != null && !invoiceId.isBlank()
+                        ? invoiceId
+                        : resolveSalesInvoiceCode(relatedSalesOrderId))
+                .source(SOURCE_SALE)
+                .sourceLocked(true)
                 .createdAt(Instant.now())
                 .createdBy(auth.getCurrentUserId())
                 .build();
@@ -933,8 +963,9 @@ public class TransactionService {
                 .creditAccount(creditAccount)
                 .transactionDescription(desc)
                 .relatedId(purchaseOrderId)
-                .source(null)
-                .sourceLocked(false)
+                .invoiceId(resolvePurchaseInvoiceCode(purchaseOrderId))
+                .source(SOURCE_PURCHASE)
+                .sourceLocked(true)
                 .createdAt(Instant.now())
                 .createdBy(auth.getCurrentUserId())
                 .build();
@@ -984,8 +1015,9 @@ public class TransactionService {
                 .creditAccount(creditAccount)
                 .transactionDescription(desc)
                 .relatedId(purchaseOrderId)
-                .source(null)
-                .sourceLocked(false)
+                .invoiceId(resolvePurchaseInvoiceCode(purchaseOrderId))
+                .source(SOURCE_PURCHASE)
+                .sourceLocked(true)
                 .createdAt(Instant.now())
                 .createdBy(auth.getCurrentUserId())
                 .build();
@@ -1047,5 +1079,94 @@ public class TransactionService {
         Transaction saved = repo.save(tx);
         applyPostingToCoa(saved);
         return saved;
+    }
+
+    private static String defaultSalePurchaseSource(String transactionType) {
+        if (transactionType == null) {
+            return null;
+        }
+        return switch (transactionType) {
+            case TYPE_PAYMENT, TYPE_SALES_ORDER_CANCEL_REVERSAL, "PAYMENT_REVERSAL" -> SOURCE_SALE;
+            case TYPE_VENDOR_PAYMENT, TYPE_PURCHASE_ORDER_ENCUMBRANCE,
+                    TYPE_PURCHASE_ORDER_CANCEL_REVERSAL, TYPE_PURCHASE_REQUISITION -> SOURCE_PURCHASE;
+            default -> null;
+        };
+    }
+
+    private static boolean isPurchaseLinkedType(String transactionType) {
+        return TYPE_VENDOR_PAYMENT.equals(transactionType)
+                || TYPE_PURCHASE_ORDER_ENCUMBRANCE.equals(transactionType)
+                || TYPE_PURCHASE_ORDER_CANCEL_REVERSAL.equals(transactionType)
+                || TYPE_PURCHASE_REQUISITION.equals(transactionType);
+    }
+
+    private String resolvePurchaseInvoiceCode(Long purchaseOrderId) {
+        if (purchaseOrderId == null) {
+            return null;
+        }
+        return invoiceRepo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
+                .map(Invoice::getInvoiceId)
+                .filter(id -> id != null && !id.isBlank())
+                .orElse(null);
+    }
+
+    private String resolveSalesInvoiceCode(Long salesOrderId) {
+        if (salesOrderId == null) {
+            return null;
+        }
+        return invoiceRepo.findByOrderIdAndType(salesOrderId, InvoiceType.SALES)
+                .map(Invoice::getInvoiceId)
+                .filter(id -> id != null && !id.isBlank())
+                .orElse(null);
+    }
+
+    private String resolveInvoiceFromPayment(String paymentId) {
+        if (paymentId == null || paymentId.isBlank()) {
+            return null;
+        }
+        try {
+            Long id = Long.parseLong(paymentId.trim());
+            return paymentRepo.findById(id)
+                    .map(Payment::getInvoiceId)
+                    .filter(invoice -> invoice != null && !invoice.isBlank())
+                    .orElse(null);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private String resolveInvoiceIdForCreate(
+            String invoiceId, String paymentId, Long relatedId, String transactionType) {
+        if (invoiceId != null && !invoiceId.isBlank()) {
+            return invoiceId.trim();
+        }
+        String fromPayment = resolveInvoiceFromPayment(paymentId);
+        if (fromPayment != null) {
+            return fromPayment;
+        }
+        if (relatedId != null && isPurchaseLinkedType(transactionType)) {
+            return resolvePurchaseInvoiceCode(relatedId);
+        }
+        if (relatedId != null && TYPE_SALES_ORDER_CANCEL_REVERSAL.equals(transactionType)) {
+            return resolveSalesInvoiceCode(relatedId);
+        }
+        return null;
+    }
+
+    private String resolveDisplayInvoiceId(Transaction tx) {
+        String resolved = resolveInvoiceIdForCreate(
+                tx.getInvoiceId(),
+                tx.getPaymentId(),
+                tx.getRelatedId(),
+                tx.getTransactionType());
+        return resolved != null ? resolved : tx.getInvoiceId();
+    }
+
+    private void applyPurchaseSource(Transaction tx) {
+        if (tx.getSource() == null || tx.getSource().isBlank()
+                || SOURCE_UNKNOWN.equalsIgnoreCase(tx.getSource())) {
+            tx.setSource(SOURCE_PURCHASE);
+            tx.setSourceLocked(true);
+        }
     }
 }
