@@ -90,4 +90,29 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("from") LocalDate from,
             @Param("to") LocalDate to,
             Pageable pageable);
+
+    /**
+     * Expense debits grouped by the department on the debit account.
+     * Payroll postings are excluded so salary cost is not mixed into departmental spend.
+     */
+    @Query("""
+            SELECT d.id, d.departmentName, d.departmentCode, COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            JOIN t.debitAccount a
+            JOIN a.department d
+            WHERE t.company.id = :companyId
+              AND a.type IN :types
+              AND t.transactionType <> :excludeType
+              AND (t.archived IS NULL OR t.archived = false)
+              AND (:from IS NULL OR t.transactionDate >= :from)
+              AND (:to IS NULL OR t.transactionDate <= :to)
+            GROUP BY d.id, d.departmentName, d.departmentCode
+            ORDER BY COALESCE(SUM(t.amount), 0) DESC
+            """)
+    List<Object[]> aggregateExpenseByDepartment(
+            @Param("companyId") Long companyId,
+            @Param("types") Collection<COAType> types,
+            @Param("excludeType") String excludeType,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 }

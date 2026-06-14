@@ -20,7 +20,6 @@ public class FinanceReportTotalsDTO {
     private BigDecimal totalPayables;
     private BigDecimal cashInflow;
     private BigDecimal cashOutflow;
-    private BigDecimal payrollCost;
 
     private long invoiceCount;
     private long paymentCount;
