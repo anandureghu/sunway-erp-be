@@ -9,7 +9,6 @@ import com.erp.repo.admin.AdminSystemLogRepository;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.classic.spi.ThrowableProxyUtil;
-import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import jakarta.persistence.criteria.Predicate;
@@ -59,10 +58,10 @@ public class AdminSystemLogService {
             return;
         }
 
-        Long userId = parseLong(MDC.get(MDC_USER_ID));
-        String email = trimToNull(MDC.get(MDC_USER_EMAIL));
-        String username = trimToNull(MDC.get(MDC_USER_USERNAME));
-        Long companyId = parseLong(MDC.get(MDC_COMPANY_ID));
+        Long userId = parseLong(mdcValue(event, MDC_USER_ID));
+        String email = trimToNull(mdcValue(event, MDC_USER_EMAIL));
+        String username = trimToNull(mdcValue(event, MDC_USER_USERNAME));
+        Long companyId = parseLong(mdcValue(event, MDC_COMPANY_ID));
 
         if (userId != null) {
             var userOpt = userRepository.findById(userId);
@@ -78,7 +77,7 @@ public class AdminSystemLogService {
             }
         }
 
-        String requestUri = trimToNull(MDC.get(MDC_REQUEST_URI));
+        String requestUri = trimToNull(mdcValue(event, MDC_REQUEST_URI));
         String loggerName = event.getLoggerName();
         String module = AdminLogModuleResolver.resolve(requestUri, loggerName);
 
@@ -95,7 +94,7 @@ public class AdminSystemLogService {
                 .userEmail(truncate(email, 255))
                 .userUsername(truncate(username, 255))
                 .companyId(companyId)
-                .requestMethod(truncate(trimToNull(MDC.get(MDC_REQUEST_METHOD)), 16))
+                .requestMethod(truncate(trimToNull(mdcValue(event, MDC_REQUEST_METHOD)), 16))
                 .requestUri(truncate(requestUri, 512))
                 .build();
 
@@ -106,7 +105,7 @@ public class AdminSystemLogService {
      * Skip framework startup/configuration noise; only record issues during real HTTP API traffic.
      */
     private static boolean shouldPersistToAdminTable(ILoggingEvent event) {
-        String requestUri = trimToNull(MDC.get(MDC_REQUEST_URI));
+        String requestUri = trimToNull(mdcValue(event, MDC_REQUEST_URI));
         if (requestUri == null) {
             return false;
         }
@@ -234,11 +233,12 @@ public class AdminSystemLogService {
     }
 
     private static Long parseLong(String value) {
-        if (value == null || value.isBlank()) {
+        String normalized = trimToNull(value);
+        if (normalized == null) {
             return null;
         }
         try {
-            return Long.parseLong(value.trim());
+            return Long.parseLong(normalized);
         } catch (NumberFormatException e) {
             return null;
         }
@@ -259,5 +259,15 @@ public class AdminSystemLogService {
             return value;
         }
         return value.substring(0, max);
+    }
+
+    private static String mdcValue(ILoggingEvent event, String key) {
+        if (event == null || key == null) {
+            return null;
+        }
+        if (event.getMDCPropertyMap() == null || event.getMDCPropertyMap().isEmpty()) {
+            return null;
+        }
+        return event.getMDCPropertyMap().get(key);
     }
 }
