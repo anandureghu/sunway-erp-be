@@ -554,6 +554,31 @@ public class PurchaseRequisitionService {
     }
 
     private PurchaseRequisitionResponseDTO toDTO(PurchaseRequisition pr, Long createdPurchaseOrderId) {
+        List<PurchaseRequisitionItemDTO> itemDTOs = pr.getItems().stream()
+                .map(i -> {
+                    BigDecimal unitCost = i.getEstimatedUnitCost();
+                    BigDecimal qty = i.getRequestedQty() != null
+                            ? BigDecimal.valueOf(i.getRequestedQty()) : BigDecimal.ZERO;
+                    BigDecimal lineTotal = (unitCost != null)
+                            ? unitCost.multiply(qty).setScale(2, RoundingMode.HALF_UP)
+                            : null;
+                    return new PurchaseRequisitionItemDTO(
+                            i.getItem().getId(),
+                            i.getItem().getName(),
+                            i.getRequestedQty(),
+                            i.getActualItemPrice(),
+                            i.getOtherUnitCost(),
+                            i.getEstimatedUnitCost(),
+                            lineTotal,
+                            i.getRemarks());
+                })
+                .toList();
+
+        BigDecimal totalAmount = itemDTOs.stream()
+                .filter(d -> d.getEstimatedTotal() != null)
+                .map(PurchaseRequisitionItemDTO::getEstimatedTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         PurchaseRequisitionResponseDTO.PurchaseRequisitionResponseDTOBuilder b =
                 PurchaseRequisitionResponseDTO.builder()
                         .id(pr.getId())
@@ -564,22 +589,8 @@ public class PurchaseRequisitionService {
                         .convertedAt(pr.getConvertedAt())
                         .archived(pr.isArchived())
                         .createdPurchaseOrderId(createdPurchaseOrderId)
-                        .items(
-                                pr.getItems().stream()
-                                        .map(i -> {
-                                            PurchaseRequisitionItemDTO line =
-                                                    new PurchaseRequisitionItemDTO(
-                                                            i.getItem().getId(),
-                                                            i.getItem().getName(),
-                                                            i.getRequestedQty(),
-                                                            i.getActualItemPrice(),
-                                                            i.getOtherUnitCost(),
-                                                            i.getEstimatedUnitCost(),
-                                                            i.getRemarks());
-                                            return line;
-                                        })
-                                        .toList()
-                        )
+                        .totalAmount(totalAmount.compareTo(BigDecimal.ZERO) > 0 ? totalAmount : null)
+                        .items(itemDTOs)
                         .documents(
                                 documentRepo.findByRequisitionIdOrderByUploadedAtDesc(pr.getId())
                                         .stream()
