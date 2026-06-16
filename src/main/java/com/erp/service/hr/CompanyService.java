@@ -180,6 +180,7 @@ public class CompanyService {
                 .orElseThrow(() -> new RuntimeException("Currency not found"));
 
         existing.setCompanyName(updated.getCompanyName());
+        existing.setCompanyCode(updated.getCompanyCode());
         existing.setNoOfEmployees(updated.getNoOfEmployees());
         existing.setCrNo(updated.getCrNo());
         existing.setComputerCard(updated.getComputerCard());
