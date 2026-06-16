@@ -37,7 +37,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -217,7 +219,13 @@ public class PurchaseRequisitionService {
         pr.setUrgency(urgency);
         pr.setDeliveryWarehouse(deliveryWarehouse);
         pr.setJustification(dto.getJustification().trim());
-        pr.setItems(items);
+        // Keep a mutable managed collection instance for Hibernate merge/update flows.
+        if (pr.getItems() == null) {
+            pr.setItems(new ArrayList<>());
+        } else {
+            pr.getItems().clear();
+        }
+        pr.getItems().addAll(items);
     }
 
     private List<PurchaseRequisitionItem> buildItemsFromDto(PurchaseRequisitionCreateDTO dto) {
@@ -236,7 +244,7 @@ public class PurchaseRequisitionService {
                     .estimatedUnitCost(r.appliedUnitCost())
                     .remarks(i.getRemarks())
                     .build();
-        }).toList();
+        }).collect(Collectors.toCollection(ArrayList::new));
     }
 
     public PurchaseRequisitionResponseDTO submit(Long id) {
