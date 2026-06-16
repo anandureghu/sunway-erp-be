@@ -323,13 +323,14 @@ public class TransactionService {
                 "TX-BUD");
     }
 
-    /** Debit-only GL posting when payroll is generated. */
+    /** Double-entry GL posting when payroll is generated: debit salary expense, credit payroll payable/bank. */
     @Transactional
     public void recordPayrollPosting(
             Long companyId,
             Long payrollId,
             BigDecimal grossPay,
             Long debitAccountId,
+            Long creditAccountId,
             String description) {
         if (grossPay == null || grossPay.compareTo(BigDecimal.ZERO) <= 0) {
             return;
@@ -339,18 +340,28 @@ public class TransactionService {
         }
         ChartOfAccounts debitAccount = coaRepo.findById(debitAccountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payroll debit account not found"));
+        ChartOfAccounts creditAccount = coaRepo.findById(creditAccountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payroll credit account not found"));
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
-        recordSingleAccountSignedDelta(
-                debitAccount,
-                company,
-                grossPay.negate(),
-                TYPE_PAYROLL,
-                description,
-                payrollId,
-                null,
-                "PAYROLL",
-                "TX-PAY");
+
+        Transaction tx = Transaction.builder()
+                .transactionCode(documentSequenceService.generateNext("TX-PAY"))
+                .transactionType(TYPE_PAYROLL)
+                .company(company)
+                .amount(grossPay)
+                .transactionDate(LocalDate.now())
+                .debitAccount(debitAccount)
+                .creditAccount(creditAccount)
+                .source("PAYROLL")
+                .sourceLocked(true)
+                .transactionDescription(description)
+                .relatedId(payrollId)
+                .createdAt(Instant.now())
+                .build();
+
+        Transaction saved = repo.save(tx);
+        applyPostingToCoa(saved);
     }
 
     /** Two-sided GL posting for budget distribution: debit budget account, credit target account. */

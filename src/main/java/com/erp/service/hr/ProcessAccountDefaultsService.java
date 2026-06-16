@@ -30,8 +30,8 @@ public class ProcessAccountDefaultsService {
             AccountingProcessCode.STOCK_VARIANCE,
             AccountingProcessCode.PAYROLL);
 
-    private static final EnumSet<AccountingProcessCode> DEBIT_ONLY_PROCESSES = EnumSet.of(
-            AccountingProcessCode.PAYROLL);
+    private static final EnumSet<AccountingProcessCode> DEBIT_ONLY_PROCESSES = EnumSet.noneOf(
+            AccountingProcessCode.class);
 
     private final CompanyProcessAccountDefaultRepository repository;
     private final CompanyRepository companyRepository;
@@ -102,6 +102,13 @@ public class ProcessAccountDefaultsService {
             Long companyId, AccountingProcessCode processCode) {
         return repository.findByCompanyIdAndProcessCode(companyId, processCode)
                 .map(CompanyProcessAccountDefault::getDebitAccountId)
+                .filter(Objects::nonNull);
+    }
+
+    public Optional<Long> resolveProcessCreditAccount(
+            Long companyId, AccountingProcessCode processCode) {
+        return repository.findByCompanyIdAndProcessCode(companyId, processCode)
+                .map(CompanyProcessAccountDefault::getCreditAccountId)
                 .filter(Objects::nonNull);
     }
 
