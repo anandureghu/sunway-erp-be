@@ -34,12 +34,13 @@ public class JournalEntryService {
     private final TransactionService transactionService;
 
 
-    public Page<JournalEntryResponse> getAll(Pageable pageable) {
+    public Page<JournalEntryResponse> getAll(Pageable pageable, Boolean archived) {
 
         Long companyId = authContext.getCurrentCompanyId();
+        boolean showArchived = Boolean.TRUE.equals(archived);
 
         Page<JournalEntry> page =
-                journalRepo.findAllByCompanyId(companyId, pageable);
+                journalRepo.findAllByCompanyIdAndArchived(companyId, showArchived, pageable);
 
         return page.map(this::map);
     }
@@ -95,6 +96,7 @@ public class JournalEntryService {
     public JournalEntryResponse approve(Long id) {
 
         JournalEntry entry = getEntry(id);
+        assertNotArchived(entry);
         Long approverId = authContext.getCurrentUserId();
 
         if (entry.getStatus() == JournalEntryStatus.APPROVED) {
@@ -126,6 +128,7 @@ public class JournalEntryService {
     public JournalEntryResponse reject(Long id) {
 
         JournalEntry entry = getEntry(id);
+        assertNotArchived(entry);
         Long userId = authContext.getCurrentUserId();
 
         User user = userRepo.findById(userId)
@@ -144,6 +147,7 @@ public class JournalEntryService {
 
         Long userId = authContext.getCurrentUserId();
         JournalEntry entry = getEntry(id);
+        assertNotArchived(entry);
 
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -161,6 +165,7 @@ public class JournalEntryService {
 
         Long userId = authContext.getCurrentUserId();
         JournalEntry entry = getEntry(id);
+        assertNotArchived(entry);
 
         if (request.getCreditAccountId().equals(request.getDebitAccountId())) {
             throw new RuntimeException("Debit and Credit accounts cannot be same");
@@ -196,6 +201,31 @@ public class JournalEntryService {
     }
 
     // ============================
+    // ARCHIVE
+    // ============================
+    public JournalEntryResponse archive(Long id) {
+        JournalEntry entry = getEntry(id);
+        Long userId = authContext.getCurrentUserId();
+
+        if (Boolean.TRUE.equals(entry.getArchived())) {
+            return map(entry);
+        }
+        if (entry.getStatus() == JournalEntryStatus.PENDING_APPROVAL) {
+            throw new RuntimeException("Pending journal entries must be approved, rejected, or held before archiving");
+        }
+
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        entry.setArchived(true);
+        entry.setArchivedAt(LocalDateTime.now());
+        entry.setArchivedBy(user);
+        entry.setUpdatedBy(user);
+
+        return map(journalRepo.save(entry));
+    }
+
+    // ============================
     // HELPER
     // ============================
     private void assertCoaBelongsToCompany(ChartOfAccounts coa, Long companyId) {
@@ -210,6 +240,12 @@ public class JournalEntryService {
 
         return journalRepo.findByIdAndCompanyId(id, companyId)
                 .orElseThrow(() -> new RuntimeException("Journal Entry not found"));
+    }
+
+    private void assertNotArchived(JournalEntry entry) {
+        if (Boolean.TRUE.equals(entry.getArchived())) {
+            throw new RuntimeException("Archived journal entries cannot be modified");
+        }
     }
 
     private JournalEntryResponse map(JournalEntry e) {
@@ -234,6 +270,10 @@ public class JournalEntryService {
                 .updatedByName(e.getUpdatedBy() != null ? e.getUpdatedBy().getFullName() : null)
                 .approvedById(e.getApprovedBy() != null ? e.getApprovedBy().getId() : null)
                 .approvedByName(e.getApprovedBy() != null ? e.getApprovedBy().getFullName() : null)
+                .archived(Boolean.TRUE.equals(e.getArchived()))
+                .archivedAt(e.getArchivedAt())
+                .archivedById(e.getArchivedBy() != null ? e.getArchivedBy().getId() : null)
+                .archivedByName(e.getArchivedBy() != null ? e.getArchivedBy().getFullName() : null)
                 .build();
     }
 }

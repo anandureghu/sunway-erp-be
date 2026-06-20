@@ -63,6 +63,17 @@ public class JournalEntry {
     private LocalDateTime approvedAt;
     private LocalDateTime updatedAt;
 
+    @Builder.Default
+    @Column(name = "archived", nullable = false)
+    private Boolean archived = false;
+
+    @Column(name = "archived_at")
+    private LocalDateTime archivedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "archived_by")
+    private User archivedBy;
+
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();

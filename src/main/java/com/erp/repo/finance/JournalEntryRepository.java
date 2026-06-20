@@ -13,4 +13,7 @@ public interface JournalEntryRepository
     Optional<JournalEntry> findByIdAndCompanyId(Long id, Long companyId);
     
     Page<JournalEntry> findAllByCompanyId(Long companyId, Pageable pageable);
+
+    Page<JournalEntry> findAllByCompanyIdAndArchived(
+            Long companyId, Boolean archived, Pageable pageable);
 }

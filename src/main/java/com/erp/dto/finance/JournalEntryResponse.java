@@ -39,4 +39,9 @@ public class JournalEntryResponse {
 
     private LocalDateTime createdAt;
     private LocalDateTime approvedAt;
+
+    private Boolean archived;
+    private LocalDateTime archivedAt;
+    private Long archivedById;
+    private String archivedByName;
 }

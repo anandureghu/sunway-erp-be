@@ -676,6 +676,24 @@ public class TransactionService {
     }
 
     @Transactional
+    public TransactionResponseDTO archiveTransaction(Long id) {
+        Transaction tx = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+        assertTransactionCompany(tx);
+        if (Boolean.TRUE.equals(tx.getArchived())) {
+            return toDTO(tx);
+        }
+
+        com.erp.domain.User user = userRepository.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        tx.setArchived(true);
+        tx.setArchivedAt(Instant.now());
+        tx.setArchivedByUser(user);
+        return toDTO(repo.save(tx));
+    }
+
+    @Transactional
     public TransactionResponseDTO postTransaction(Long id, String fiscalYear) {
         Transaction tx = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Transaction not found"));
