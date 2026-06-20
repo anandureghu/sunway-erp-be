@@ -81,7 +81,7 @@ public class AdminSystemLogService {
         String loggerName = event.getLoggerName();
         String module = AdminLogModuleResolver.resolve(requestUri, loggerName);
 
-        String message = truncate(event.getFormattedMessage(), MAX_MESSAGE);
+        String message = buildMessage(event, requestUri);
         String stack = buildStackTrace(event);
 
         AdminSystemLog row = AdminSystemLog.builder()
@@ -221,6 +221,53 @@ public class AdminSystemLogService {
                 .requestMethod(log.getRequestMethod())
                 .requestUri(log.getRequestUri())
                 .build();
+    }
+
+    private static String buildMessage(ILoggingEvent event, String requestUri) {
+        IThrowableProxy proxy = event.getThrowableProxy();
+        String formatted = trimToNull(event.getFormattedMessage());
+        String method = trimToNull(mdcValue(event, MDC_REQUEST_METHOD));
+
+        String core;
+        if (proxy != null) {
+            core = formatThrowableSummary(proxy);
+        } else if (formatted != null && !isGenericLogMessage(formatted)) {
+            core = formatted;
+        } else if (formatted != null) {
+            core = formatted;
+        } else {
+            core = event.getLevel() != null ? event.getLevel().toString() : "WARN";
+        }
+
+        if (method != null && requestUri != null) {
+            return truncate(core + " · " + method + " " + requestUri, MAX_MESSAGE);
+        }
+        return truncate(core, MAX_MESSAGE);
+    }
+
+    private static String formatThrowableSummary(IThrowableProxy proxy) {
+        if (proxy == null) {
+            return "Error";
+        }
+        String className = proxy.getClassName();
+        String shortName = className != null && className.contains(".")
+                ? className.substring(className.lastIndexOf('.') + 1)
+                : className;
+        String throwableMessage = trimToNull(proxy.getMessage());
+        if (shortName == null || shortName.isBlank()) {
+            return throwableMessage != null ? throwableMessage : "Error";
+        }
+        return throwableMessage != null ? shortName + ": " + throwableMessage : shortName;
+    }
+
+    private static boolean isGenericLogMessage(String message) {
+        if (message == null) {
+            return true;
+        }
+        String normalized = message.trim().toLowerCase();
+        return normalized.equals("unhandled exception")
+                || normalized.equals("unexpected error")
+                || normalized.equals("internal server error");
     }
 
     private static String buildStackTrace(ILoggingEvent event) {

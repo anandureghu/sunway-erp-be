@@ -29,7 +29,12 @@ public class AdminLogContextFilter extends OncePerRequestFilter {
             FilterChain chain
     ) throws ServletException, IOException {
         try {
-            MDC.put(AdminSystemLogService.MDC_REQUEST_URI, request.getRequestURI());
+            String uri = request.getRequestURI();
+            String query = request.getQueryString();
+            if (query != null && !query.isBlank()) {
+                uri = uri + "?" + query;
+            }
+            MDC.put(AdminSystemLogService.MDC_REQUEST_URI, uri);
             MDC.put(AdminSystemLogService.MDC_REQUEST_METHOD, request.getMethod());
 
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();

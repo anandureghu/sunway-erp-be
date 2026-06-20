@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -48,8 +50,14 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String,Object>> handleOther(Exception ex) {
-        log.error("Unhandled exception", ex);
+    public ResponseEntity<Map<String,Object>> handleOther(Exception ex, HttpServletRequest request) {
+        log.error(
+                "Unhandled exception on {} {}: {}",
+                request.getMethod(),
+                formatRequestUri(request),
+                ex.getMessage(),
+                ex
+        );
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("error", "Internal Server Error");
         body.put("message", ex.getMessage() != null ? ex.getMessage() : "Unexpected error");
@@ -94,5 +102,14 @@ public class GlobalExceptionHandler {
         body.put("message", ex.getMessage());
         body.put("details", ex.getDetails());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    private static String formatRequestUri(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        String query = request.getQueryString();
+        if (query != null && !query.isBlank()) {
+            return uri + "?" + query;
+        }
+        return uri;
     }
 }
