@@ -22,10 +22,12 @@ public class ImmigrationReportController {
     private final ImmigrationReportService reportService;
 
     /**
-     * Company-wide list of passports / residence permits that are expired or
-     * expiring within {@code withinDays}. Company-wide view → requires VIEW_ALL.
+     * Passports / residence permits that are expired or expiring within
+     * {@code withinDays}. Scope follows the caller's IMMIGRATION grant:
+     * VIEW_ALL → every employee in the company; VIEW_OWN → only the caller's
+     * own documents. The service resolves which based on the granted action.
      */
-    @RequiresPermission(module = AppModule.IMMIGRATION, action = {AppAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.IMMIGRATION, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/expiring")
     public ResponseEntity<List<ImmigrationExpiryItemDTO>> expiring(
             @RequestParam(value = "withinDays", defaultValue = "30") int withinDays

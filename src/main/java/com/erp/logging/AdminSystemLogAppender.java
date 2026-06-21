@@ -37,6 +37,8 @@ public class AdminSystemLogAppender extends AppenderBase<ILoggingEvent> {
             return;
         }
         try {
+            // Freeze MDC/arguments before async persistence on another thread.
+            event.prepareForDeferredProcessing();
             service.persistLogEvent(event);
         } catch (Exception ignored) {
             // Never fail the request thread because audit logging failed.

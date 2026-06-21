@@ -56,6 +56,12 @@ public class TransactionController {
         return txService.updateSource(id, dto);
     }
 
+    @RequiresPermission(module = AppModule.FINANCE_LEDGER, action = {AppAction.EDIT})
+    @PostMapping("/{id}/archive")
+    public TransactionResponseDTO archive(@PathVariable("id") Long id) {
+        return txService.archiveTransaction(id);
+    }
+
     @RequiresPermission(module = AppModule.FINANCE_LEDGER, action = {AppAction.APPROVE})
     @PostMapping("/{id}/post")
     public TransactionResponseDTO post(@PathVariable("id") Long id, @RequestParam String fiscalYear) {

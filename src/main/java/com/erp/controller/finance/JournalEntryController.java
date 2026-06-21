@@ -22,8 +22,10 @@ public class JournalEntryController {
 
     @RequiresPermission(module = AppModule.FINANCE_JOURNAL, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping
-    public Page<JournalEntryResponse> getAll(Pageable pageable) {
-        return service.getAll(pageable);
+    public Page<JournalEntryResponse> getAll(
+            Pageable pageable,
+            @RequestParam(value = "archived", required = false, defaultValue = "false") boolean archived) {
+        return service.getAll(pageable, archived);
     }
 
     // ============================
@@ -68,6 +70,14 @@ public class JournalEntryController {
             @PathVariable("id") Long id
     ) {
         return service.hold(id);
+    }
+
+    @RequiresPermission(module = AppModule.FINANCE_JOURNAL, action = {AppAction.EDIT})
+    @PostMapping("/{id}/archive")
+    public JournalEntryResponse archive(
+            @PathVariable("id") Long id
+    ) {
+        return service.archive(id);
     }
 
     @RequiresPermission(module = AppModule.FINANCE_JOURNAL, action = {AppAction.EDIT})

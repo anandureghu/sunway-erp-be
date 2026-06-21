@@ -34,5 +34,7 @@ public class FinanceReportSummaryDTO {
     private List<FinanceAccountAmountDTO> incomeByAccount;
     private List<FinanceAccountAmountDTO> expensesByAccount;
 
+    private List<FinanceDepartmentBudgetSpendDTO> departmentBudgetSpend;
+
     private Instant generatedAt;
 }

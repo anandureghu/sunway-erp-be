@@ -1,6 +1,6 @@
 -- Ensure baseline HR module permissions are present after the latest deployed
 -- migration version.
---
+-- 
 -- This intentionally mirrors the earlier HR permission backfill. It exists
 -- with a version greater than V20260627 because production environments that
 -- already applied V20260626/V20260627 will not run a later-added V20260625

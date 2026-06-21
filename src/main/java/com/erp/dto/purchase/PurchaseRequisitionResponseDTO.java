@@ -62,6 +62,9 @@ public class PurchaseRequisitionResponseDTO {
     /** Posted finance transaction when this PR was approved. */
     private Long financeTransactionId;
 
+    /** Sum of all line item estimated totals. */
+    private java.math.BigDecimal totalAmount;
+
     private List<PurchaseRequisitionItemDTO> items;
     private List<PurchaseRequisitionDocumentDTO> documents;
 }

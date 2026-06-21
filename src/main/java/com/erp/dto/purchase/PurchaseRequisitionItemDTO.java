@@ -24,5 +24,7 @@ public class PurchaseRequisitionItemDTO {
     private BigDecimal otherUnitCost;
     /** Applied estimated unit cost. */
     private BigDecimal estimatedUnitCost;
+    /** requestedQty × estimatedUnitCost (populated on read). */
+    private BigDecimal estimatedTotal;
     private String remarks;
 }

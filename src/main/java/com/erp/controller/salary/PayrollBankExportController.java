@@ -1,5 +1,6 @@
 package com.erp.controller.salary;
 
+import com.erp.dto.salary.PayrollAccountStatusDTO;
 import com.erp.dto.salary.PayrollBatchResponseDTO;
 import com.erp.dto.salary.PayrollGenerateRequestDTO;
 import com.erp.service.salary.PayrollBankFileExportService;
@@ -42,6 +43,13 @@ public class PayrollBankExportController {
                         HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"payroll-" + yearMonth + ".csv\"")
                 .body(body);
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).PAYROLL, T(com.erp.domain.security.AppAction).VIEW_ALL)")
+    @GetMapping("/account-status")
+    public ResponseEntity<PayrollAccountStatusDTO> getPayrollAccountStatus(
+            @PathVariable("companyId") Long companyId) {
+        return ResponseEntity.ok(payrollService.getPayrollAccountStatus(companyId));
     }
 
     /**

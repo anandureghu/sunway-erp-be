@@ -1,24 +1,28 @@
 package com.erp.service.finance.report;
 
 import com.erp.domain.InvoiceType;
+import com.erp.domain.finance.BudgetStatus;
 import com.erp.domain.finance.COAType;
 import com.erp.domain.finance.PaymentDirection;
+import com.erp.dto.finance.report.FinanceDepartmentBudgetSpendDTO;
 import com.erp.dto.finance.report.FinanceAccountAmountDTO;
 import com.erp.dto.finance.report.FinanceAgingBucketsDTO;
 import com.erp.dto.finance.report.FinanceMonthlyPointDTO;
 import com.erp.dto.finance.report.FinancePartyRowDTO;
 import com.erp.dto.finance.report.FinanceReportSummaryDTO;
 import com.erp.dto.finance.report.FinanceReportTotalsDTO;
+import com.erp.repo.finance.BudgetLineRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.finance.TransactionRepository;
-import com.erp.repo.salary.PayrollRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.finance.TransactionService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -37,20 +41,20 @@ public class FinanceReportService {
     private final InvoiceRepository invoiceRepo;
     private final PaymentRepository paymentRepo;
     private final TransactionRepository transactionRepo;
-    private final PayrollRepository payrollRepo;
+    private final BudgetLineRepository budgetLineRepo;
     private final AuthContext auth;
 
     public FinanceReportService(
             InvoiceRepository invoiceRepo,
             PaymentRepository paymentRepo,
             TransactionRepository transactionRepo,
-            PayrollRepository payrollRepo,
+            BudgetLineRepository budgetLineRepo,
             AuthContext auth
     ) {
         this.invoiceRepo = invoiceRepo;
         this.paymentRepo = paymentRepo;
         this.transactionRepo = transactionRepo;
-        this.payrollRepo = payrollRepo;
+        this.budgetLineRepo = budgetLineRepo;
         this.auth = auth;
     }
 
@@ -86,10 +90,6 @@ public class FinanceReportService {
         long inflowCount = toLong(valueAt(inflowRow, 1));
         long outflowCount = toLong(valueAt(outflowRow, 1));
 
-        Double payrollGross = payrollRepo.sumPayrollCostBetween(
-                companyId, effectiveFrom, effectiveTo);
-        BigDecimal payrollCost = BigDecimal.valueOf(payrollGross == null ? 0.0 : payrollGross);
-
         // Expenses for the netProfit number: prefer ledger-based expense from transactions
         // (more precise than purchase invoice totals which include unpaid + tax).
         List<Object[]> expenseAccountsRaw = transactionRepo.aggregateByDebitAccountTypes(
@@ -116,7 +116,6 @@ public class FinanceReportService {
                 .totalPayables(totalPayables)
                 .cashInflow(cashInflow)
                 .cashOutflow(cashOutflow)
-                .payrollCost(payrollCost)
                 .invoiceCount(invoiceCount)
                 .paymentCount(inflowCount + outflowCount)
                 .build();
@@ -160,6 +159,9 @@ public class FinanceReportService {
                         PageRequest.of(0, TOP_ACCOUNTS)));
         List<FinanceAccountAmountDTO> expensesByAccount = mapAccountRows(expenseAccountsRaw);
 
+        List<FinanceDepartmentBudgetSpendDTO> departmentBudgetSpend = buildDepartmentBudgetSpend(
+                companyId, effectiveFrom, effectiveTo);
+
         return FinanceReportSummaryDTO.builder()
                 .from(effectiveFrom)
                 .to(effectiveTo)
@@ -174,8 +176,69 @@ public class FinanceReportService {
                 .topVendors(topVendors)
                 .incomeByAccount(incomeByAccount)
                 .expensesByAccount(expensesByAccount)
+                .departmentBudgetSpend(departmentBudgetSpend)
                 .generatedAt(Instant.now())
                 .build();
+    }
+
+    private List<FinanceDepartmentBudgetSpendDTO> buildDepartmentBudgetSpend(
+            Long companyId,
+            LocalDate from,
+            LocalDate to) {
+        Map<Long, FinanceDepartmentBudgetSpendDTO.FinanceDepartmentBudgetSpendDTOBuilder> builders =
+                new HashMap<>();
+
+        for (Object[] row : budgetLineRepo.sumBudgetedByDepartment(
+                companyId, from, to, BudgetStatus.APPROVED)) {
+            Long deptId = ((Number) row[0]).longValue();
+            builders.computeIfAbsent(deptId, id -> FinanceDepartmentBudgetSpendDTO.builder()
+                            .departmentId(id)
+                            .departmentName((String) row[1])
+                            .departmentCode((String) row[2])
+                            .budgeted(BigDecimal.ZERO)
+                            .spent(BigDecimal.ZERO))
+                    .budgeted(toBigDecimal(row[3]));
+        }
+
+        for (Object[] row : transactionRepo.aggregateExpenseByDepartment(
+                companyId,
+                List.of(COAType.EXPENSE, COAType.COST),
+                TransactionService.TYPE_PAYROLL,
+                from,
+                to)) {
+            Long deptId = ((Number) row[0]).longValue();
+            builders.computeIfAbsent(deptId, id -> FinanceDepartmentBudgetSpendDTO.builder()
+                            .departmentId(id)
+                            .departmentName((String) row[1])
+                            .departmentCode((String) row[2])
+                            .budgeted(BigDecimal.ZERO)
+                            .spent(BigDecimal.ZERO))
+                    .spent(toBigDecimal(row[3]));
+        }
+
+        List<FinanceDepartmentBudgetSpendDTO> out = new ArrayList<>(builders.size());
+        for (FinanceDepartmentBudgetSpendDTO.FinanceDepartmentBudgetSpendDTOBuilder b : builders.values()) {
+            FinanceDepartmentBudgetSpendDTO dto = b.build();
+            BigDecimal budgeted = nz(dto.getBudgeted());
+            BigDecimal spent = nz(dto.getSpent());
+            BigDecimal remaining = budgeted.subtract(spent);
+            BigDecimal utilization = budgeted.signum() > 0
+                    ? spent.multiply(BigDecimal.valueOf(100))
+                            .divide(budgeted, 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            out.add(FinanceDepartmentBudgetSpendDTO.builder()
+                    .departmentId(dto.getDepartmentId())
+                    .departmentName(dto.getDepartmentName())
+                    .departmentCode(dto.getDepartmentCode())
+                    .budgeted(budgeted)
+                    .spent(spent)
+                    .remaining(remaining)
+                    .utilizationPercent(utilization)
+                    .build());
+        }
+
+        out.sort((a, b) -> b.getSpent().compareTo(a.getSpent()));
+        return out;
     }
 
     // ======================================================

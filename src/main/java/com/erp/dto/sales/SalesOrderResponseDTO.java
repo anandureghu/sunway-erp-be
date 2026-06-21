@@ -38,4 +38,6 @@ public class SalesOrderResponseDTO {
     private Long creditAccountId;
     private String creditAccountName;
     private List<SalesOrderItemResponseDTO> items;
+    /** Linked sales invoice (created when the order is confirmed). */
+    private Long salesInvoiceId;
 }
