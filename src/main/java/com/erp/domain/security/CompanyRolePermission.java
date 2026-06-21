@@ -37,4 +37,12 @@ public class CompanyRolePermission {
     private boolean editPermission;
     private boolean deletePermission;
     private boolean approve;
+
+    /**
+     * When false the rule is saved but not enforced — the resolver skips it and
+     * falls through to the next precedence layer. Defaults to true.
+     */
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean active = true;
 }

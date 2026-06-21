@@ -120,6 +120,7 @@ public class RolePermissionService {
 
             companyPerms.stream()
                     .filter(permission -> permission.getCompanyRole().getActive())  // Only if role is active
+                    .filter(CompanyRolePermission::isActive)  // Disabled rules fall through.
                     // Do NOT drop all-false rows here: an explicit row at this
                     // layer is an authoritative override (including a revocation)
                     // and must win over the enum-role grant — matching the
@@ -146,6 +147,7 @@ public class RolePermissionService {
             log.debug("   Found {} employee-specific permissions", empPerms.size());
 
             empPerms.stream()
+                    .filter(EmployeePermission::isActive)  // Disabled rules fall through.
                     // Employee overrides are authoritative even when all-false:
                     // a per-employee revocation must win over the role grant.
                     .map(this::toDto)
@@ -243,6 +245,27 @@ public class RolePermissionService {
             apply(permission, dto.getPermission());
             employeePermissionRepository.save(permission);
         }
+    }
+
+    /**
+     * Enable/disable every permission row for a company role. When inactive the
+     * rules are kept but ignored by the resolver (saved but not enforced).
+     */
+    public void setCompanyRolePermissionsActive(Long companyRoleId, boolean active) {
+        requireCompanyRoleAccess(companyRoleId);
+        List<CompanyRolePermission> rows =
+                companyRolePermissionRepository.findByCompanyRoleId(companyRoleId);
+        rows.forEach(row -> row.setActive(active));
+        companyRolePermissionRepository.saveAll(rows);
+    }
+
+    /** Enable/disable every permission row for an employee override. */
+    public void setEmployeePermissionsActive(Long employeeId, boolean active) {
+        requireEmployeeAccess(employeeId);
+        List<EmployeePermission> rows =
+                employeePermissionRepository.findByEmployeeId(employeeId);
+        rows.forEach(row -> row.setActive(active));
+        employeePermissionRepository.saveAll(rows);
     }
 
     public void removeEnumRolePermissions(Role role) {
@@ -364,6 +387,7 @@ public class RolePermissionService {
                 .editPermission(permission.isEditPermission())
                 .deletePermission(permission.isDeletePermission())
                 .approve(permission.isApprove())
+                .active(permission.isActive())
                 .build();
     }
 
@@ -377,6 +401,7 @@ public class RolePermissionService {
                 .editPermission(permission.isEditPermission())
                 .deletePermission(permission.isDeletePermission())
                 .approve(permission.isApprove())
+                .active(permission.isActive())
                 .build();
     }
 }

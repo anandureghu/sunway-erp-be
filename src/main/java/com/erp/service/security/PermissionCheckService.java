@@ -144,6 +144,11 @@ public class PermissionCheckService {
 
         EmployeePermission p = permission.get();
 
+        // Disabled rule: saved but not enforced — fall through to the next layer.
+        if (!p.isActive()) {
+            return Optional.empty();
+        }
+
         // Tenant guard: the Employee this permission belongs to must belong
         // to the caller's company. Stops a stale employeeId in a JWT from
         // granting access via another tenant's permission row.
@@ -176,6 +181,11 @@ public class PermissionCheckService {
         }
 
         CompanyRolePermission p = permission.get();
+
+        // Disabled rule: saved but not enforced — fall through to the next layer.
+        if (!p.isActive()) {
+            return Optional.empty();
+        }
 
         if (p.getCompanyRole() == null) {
             log.warn("CompanyRole is NULL for permissionId={}", p.getId());

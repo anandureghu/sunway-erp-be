@@ -15,4 +15,6 @@ public class PermissionRecordDTO {
     boolean editPermission;
     boolean deletePermission;
     boolean approve;
+    @lombok.Builder.Default
+    boolean active = true;
 }

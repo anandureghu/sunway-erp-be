@@ -111,4 +111,26 @@ public class RolePermissionController {
     public void removeEmployeePermissions(@PathVariable Long employeeId) {
         service.removeEmployeePermissions(employeeId);
     }
+
+    // ── Enable / disable a permission rule (saved but not enforced when off) ──
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PatchMapping("/company-roles/{companyRoleId}/active")
+    public void setCompanyRoleActive(
+            @PathVariable Long companyRoleId,
+            @RequestBody ActiveRequest body
+    ) {
+        service.setCompanyRolePermissionsActive(companyRoleId, body.active());
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PatchMapping("/employees/{employeeId}/active")
+    public void setEmployeeActive(
+            @PathVariable Long employeeId,
+            @RequestBody ActiveRequest body
+    ) {
+        service.setEmployeePermissionsActive(employeeId, body.active());
+    }
+
+    public record ActiveRequest(boolean active) {}
 }
