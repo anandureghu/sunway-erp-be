@@ -120,7 +120,11 @@ public class RolePermissionService {
 
             companyPerms.stream()
                     .filter(permission -> permission.getCompanyRole().getActive())  // Only if role is active
-                    .filter(this::hasAnyPermission)
+                    .filter(CompanyRolePermission::isActive)  // Disabled rules fall through.
+                    // Do NOT drop all-false rows here: an explicit row at this
+                    // layer is an authoritative override (including a revocation)
+                    // and must win over the enum-role grant — matching the
+                    // precedence in PermissionCheckService.hasAccess.
                     .map(this::toDto)
                     .forEach(permission -> {
                         log.debug("   + Overriding {}: viewOwn={}, viewAll={}",
@@ -143,7 +147,9 @@ public class RolePermissionService {
             log.debug("   Found {} employee-specific permissions", empPerms.size());
 
             empPerms.stream()
-                    .filter(this::hasAnyPermission)
+                    .filter(EmployeePermission::isActive)  // Disabled rules fall through.
+                    // Employee overrides are authoritative even when all-false:
+                    // a per-employee revocation must win over the role grant.
                     .map(this::toDto)
                     .forEach(permission -> {
                         log.debug("   + Overriding (employee-specific) {}: viewOwn={}, viewAll={}",
@@ -156,7 +162,12 @@ public class RolePermissionService {
             log.debug("   Skipped (no employeeId provided)");
         }
 
-        List<PermissionRecordDTO> result = merged.values().stream().toList();
+        // A module whose effective permission ends up all-false (e.g. revoked by
+        // an override) is dropped entirely, so the client treats it as no access
+        // — consistent with the deny from PermissionCheckService.hasAccess.
+        List<PermissionRecordDTO> result = merged.values().stream()
+                .filter(this::hasAnyGrant)
+                .toList();
         log.info("✅ Total permissions for user: {}", result.size());
         result.forEach(p -> log.debug("   * {}: viewOwn={}, viewAll={}",
                 p.getModule(), p.isViewOwn(), p.isViewAll()));
@@ -234,6 +245,27 @@ public class RolePermissionService {
             apply(permission, dto.getPermission());
             employeePermissionRepository.save(permission);
         }
+    }
+
+    /**
+     * Enable/disable every permission row for a company role. When inactive the
+     * rules are kept but ignored by the resolver (saved but not enforced).
+     */
+    public void setCompanyRolePermissionsActive(Long companyRoleId, boolean active) {
+        requireCompanyRoleAccess(companyRoleId);
+        List<CompanyRolePermission> rows =
+                companyRolePermissionRepository.findByCompanyRoleId(companyRoleId);
+        rows.forEach(row -> row.setActive(active));
+        companyRolePermissionRepository.saveAll(rows);
+    }
+
+    /** Enable/disable every permission row for an employee override. */
+    public void setEmployeePermissionsActive(Long employeeId, boolean active) {
+        requireEmployeeAccess(employeeId);
+        List<EmployeePermission> rows =
+                employeePermissionRepository.findByEmployeeId(employeeId);
+        rows.forEach(row -> row.setActive(active));
+        employeePermissionRepository.saveAll(rows);
     }
 
     public void removeEnumRolePermissions(Role role) {
@@ -323,6 +355,15 @@ public class RolePermissionService {
                 || permission.isApprove();
     }
 
+    private boolean hasAnyGrant(PermissionRecordDTO p) {
+        return p.isViewOwn()
+                || p.isViewAll()
+                || p.isCreatePermission()
+                || p.isEditPermission()
+                || p.isDeletePermission()
+                || p.isApprove();
+    }
+
     private PermissionRecordDTO toDto(EnumRolePermission permission) {
         return PermissionRecordDTO.builder()
                 .id(permission.getId())
@@ -346,6 +387,7 @@ public class RolePermissionService {
                 .editPermission(permission.isEditPermission())
                 .deletePermission(permission.isDeletePermission())
                 .approve(permission.isApprove())
+                .active(permission.isActive())
                 .build();
     }
 
@@ -359,6 +401,7 @@ public class RolePermissionService {
                 .editPermission(permission.isEditPermission())
                 .deletePermission(permission.isDeletePermission())
                 .approve(permission.isApprove())
+                .active(permission.isActive())
                 .build();
     }
 }
