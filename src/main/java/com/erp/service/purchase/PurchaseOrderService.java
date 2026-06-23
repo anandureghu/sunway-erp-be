@@ -397,7 +397,8 @@ public class PurchaseOrderService {
 
     private boolean isFundsCommitted(PurchaseOrder po) {
         return po.getFinanceTransactionId() != null
-                || transactionService.hasPurchaseOrderEncumbrance(po.getId());
+                || transactionService.hasPurchaseOrderEncumbrance(
+                        po.getCompany().getId(), po.getId());
     }
 
     private void releaseEncumbranceOnCancel(PurchaseOrder po) {

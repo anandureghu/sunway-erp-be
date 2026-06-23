@@ -508,7 +508,8 @@ public class PaymentService {
         Long debitAccountId;
         Long creditAccountId;
         boolean encumbered = po.getFinanceTransactionId() != null
-                || transactionService.hasPurchaseOrderEncumbrance(po.getId());
+                || transactionService.hasPurchaseOrderEncumbrance(
+                        po.getCompany().getId(), po.getId());
 
         if (encumbered) {
             if (pr == null || pr.getCreditAccount() == null) {
