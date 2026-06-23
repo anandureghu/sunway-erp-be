@@ -58,6 +58,7 @@ public class PurchaseOrderService {
     private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
+    private final PurchasePostingAccountsResolver postingAccountsResolver;
 
     public PurchaseOrderService(
             PurchaseOrderRepository repo,
@@ -71,7 +72,8 @@ public class PurchaseOrderService {
             ChartOfAccountsRepository coaRepo,
             InvoiceRepository invoiceRepo,
             AuthContext auth,
-            DocumentSequenceService documentSequenceService
+            DocumentSequenceService documentSequenceService,
+            PurchasePostingAccountsResolver postingAccountsResolver
     ) {
         this.repo = repo;
         this.vendorRepo = vendorRepo;
@@ -85,6 +87,7 @@ public class PurchaseOrderService {
         this.invoiceRepo = invoiceRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
+        this.postingAccountsResolver = postingAccountsResolver;
     }
 
     public PurchaseOrderResponseDTO create(PurchaseOrderCreateDTO dto) {
@@ -448,25 +451,11 @@ public class PurchaseOrderService {
         if (pr != null && pr.getDebitAccount() != null && pr.getCreditAccount() != null) {
             return new PostingAccounts(pr.getDebitAccount().getId(), pr.getCreditAccount().getId());
         }
-        Company company = po.getCompany();
-        Long debitId = company.getDefaultPurchaseDebitAccountId();
-        Long creditId = company.getDefaultPurchaseCreditAccountId();
-        if (debitId == null || creditId == null) {
-            throw new RuntimeException(
-                    "Set company default purchase debit and credit accounts, or create this PO from a requisition with posting accounts.");
-        }
-        ChartOfAccounts debit = coaRepo.findById(debitId)
-                .orElseThrow(() -> new RuntimeException("Default purchase debit account not found"));
-        ChartOfAccounts credit = coaRepo.findById(creditId)
-                .orElseThrow(() -> new RuntimeException("Default purchase credit account not found"));
-        if (!debit.getCompany().getId().equals(company.getId())
-                || !credit.getCompany().getId().equals(company.getId())) {
-            throw new RuntimeException("Default purchase accounts do not belong to this company");
-        }
-        if (debitId.equals(creditId)) {
-            throw new RuntimeException("Default purchase debit and credit accounts cannot be the same");
-        }
-        return new PostingAccounts(debitId, creditId);
+        PurchasePostingAccountsResolver.ResolvedAccounts accounts = postingAccountsResolver.resolve(
+                po.getCompany().getId(),
+                null,
+                null);
+        return new PostingAccounts(accounts.debitAccountId(), accounts.creditAccountId());
     }
 
     public PurchaseOrderResponseDTO archive(Long id) {
