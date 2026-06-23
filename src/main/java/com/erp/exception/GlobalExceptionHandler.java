@@ -86,6 +86,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
+    @ExceptionHandler(OtpException.class)
+    public ResponseEntity<Map<String, Object>> handleOtp(OtpException ex) {
+        Map<String, Object> body = Map.of(
+                "error", "OTP verification failed",
+                "message", ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
     @ExceptionHandler(PayrollExportException.class)
     public ResponseEntity<Map<String, Object>> handlePayrollExport(PayrollExportException ex) {
         Map<String, Object> body = new LinkedHashMap<>();
