@@ -27,7 +27,6 @@ import com.erp.repo.purchase.PurchaseRequisitionDocumentRepository;
 import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.service.file.FileStorageService;
 import com.erp.security.context.AuthContext;
-import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -260,8 +259,6 @@ public class PurchaseRequisitionService {
             throw new RuntimeException("Debit and credit accounts are required before submit");
         }
 
-        BigDecimal total = computeTotalForRequisition(pr);
-        validatePostingBalances(pr.getDebitAccount(), pr.getCreditAccount(), total);
         assertNoPendingProcurementForRequisition(pr, pr.getId());
 
         clearReviewFeedback(pr);
@@ -355,8 +352,6 @@ public class PurchaseRequisitionService {
         pr.setApprovedAt(Instant.now());
 
         PurchaseOrder po = createPurchaseOrderFromRequisition(pr, approver);
-
-        validatePostingBalances(pr.getDebitAccount(), pr.getCreditAccount(), po.getTotalAmount());
 
         pr.setStatus(PurchaseRequisitionStatus.CONVERTED);
         pr.setConvertedAt(Instant.now());
@@ -457,20 +452,6 @@ public class PurchaseRequisitionService {
         }
         String t = value.trim();
         return t.isEmpty() ? null : t;
-    }
-
-    /**
-     * Same deltas as {@link TransactionService#applyPostingToCoa}: debit -= amount, credit += amount.
-     */
-    private void validatePostingBalances(ChartOfAccounts debit, ChartOfAccounts credit, BigDecimal amount) {
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Requisition total must be positive for account validation");
-        }
-        if (debit.getId().equals(credit.getId())) {
-            throw new RuntimeException("Debit and credit accounts cannot be the same");
-        }
-        CoaBalanceRules.assertSufficientBalance(debit, amount.negate());
-        CoaBalanceRules.assertSufficientBalance(credit, amount);
     }
 
     private BigDecimal computeTotalFromItemDtos(List<PurchaseRequisitionItemDTO> lines) {

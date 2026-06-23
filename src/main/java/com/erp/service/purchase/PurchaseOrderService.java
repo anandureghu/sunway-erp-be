@@ -11,14 +11,12 @@ import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderItem;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
-import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.dto.purchase.PurchaseOrderAssignSupplierDTO;
 import com.erp.dto.purchase.PurchaseOrderCreateDTO;
 import com.erp.dto.purchase.PurchaseOrderItemDTO;
 import com.erp.dto.purchase.PurchaseOrderPostingPreviewDTO;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.purchase.PurchaseOrderUpdateDTO;
-import com.erp.service.finance.CoaBalanceRules;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.ItemRepository;
@@ -177,8 +175,6 @@ public class PurchaseOrderService {
             throw new RuntimeException("Assign a supplier before releasing this purchase order");
         }
 
-        postEncumbranceOnConfirm(po);
-
         po.setStatus(PurchaseOrderStatus.CONFIRMED);
         PurchaseOrder saved = repo.save(po);
         repo.flush();
@@ -262,29 +258,6 @@ public class PurchaseOrderService {
         releaseEncumbranceOnCancel(po);
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         return toDTO(repo.save(po));
-    }
-
-    private void postEncumbranceOnConfirm(PurchaseOrder po) {
-        if (po.getFinanceTransactionId() != null) {
-            return;
-        }
-        if (transactionService.hasPurchaseOrderVendorPaymentPosting(po.getId())) {
-            return;
-        }
-        BigDecimal amount = po.getTotalAmount();
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Purchase order total must be positive to release funds");
-        }
-        PostingAccounts accounts = resolvePostingAccounts(po);
-        Long companyId = po.getCompany().getId();
-        TransactionResponseDTO tx = transactionService.createPurchaseOrderEncumbrance(
-                companyId,
-                po.getId(),
-                amount,
-                accounts.debitAccountId(),
-                accounts.creditAccountId(),
-                po.getOrderNumber());
-        po.setFinanceTransactionId(tx.getId());
     }
 
     public PurchaseOrderPostingPreviewDTO getPostingPreview(Long id, String action) {
@@ -372,23 +345,31 @@ public class PurchaseOrderService {
             if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
                 throw new RuntimeException("Only draft purchase orders can be released");
             }
-            debitDelta = amount.negate();
-            creditDelta = amount;
-            summary = "Releasing will commit funds: debit account decreases and credit account increases by the order total.";
+            return PurchaseOrderPostingPreviewDTO.builder()
+                    .action(normalized)
+                    .amount(amount)
+                    .debitAccountId(debit.getId())
+                    .debitAccountCode(debit.getAccountCode())
+                    .debitAccountName(debit.getAccountName())
+                    .debitBalanceBefore(debitBefore)
+                    .debitBalanceAfter(debitBefore)
+                    .creditAccountId(credit.getId())
+                    .creditAccountCode(credit.getAccountCode())
+                    .creditAccountName(credit.getAccountName())
+                    .creditBalanceBefore(creditBefore)
+                    .creditBalanceAfter(creditBefore)
+                    .sufficientFunds(true)
+                    .fundsAlreadyCommitted(fundsCommitted)
+                    .willReleaseCommittedFunds(false)
+                    .summary(fundsCommitted
+                            ? "Funds are already committed for this purchase order."
+                            : "Releasing records the order and creates AP payable records. "
+                                    + "Chart of accounts balances change when vendor payment is confirmed in Accounts Payable.")
+                    .build();
         }
 
         BigDecimal debitAfter = debitBefore.add(debitDelta);
         BigDecimal creditAfter = creditBefore.add(creditDelta);
-
-        boolean sufficient = true;
-        String insufficientMessage = null;
-        try {
-            CoaBalanceRules.assertSufficientBalance(debit, debitDelta);
-            CoaBalanceRules.assertSufficientBalance(credit, creditDelta);
-        } catch (ResponseStatusException ex) {
-            sufficient = false;
-            insufficientMessage = ex.getReason();
-        }
 
         return PurchaseOrderPostingPreviewDTO.builder()
                 .action(normalized)
@@ -403,10 +384,9 @@ public class PurchaseOrderService {
                 .creditAccountName(credit.getAccountName())
                 .creditBalanceBefore(creditBefore)
                 .creditBalanceAfter(creditAfter)
-                .sufficientFunds(sufficient)
-                .insufficientFundsMessage(insufficientMessage)
-                .fundsAlreadyCommitted(fundsCommitted)
-                .willReleaseCommittedFunds("cancel".equals(normalized) && fundsCommitted)
+                .sufficientFunds(true)
+                .fundsAlreadyCommitted(true)
+                .willReleaseCommittedFunds(true)
                 .summary(summary)
                 .build();
     }
