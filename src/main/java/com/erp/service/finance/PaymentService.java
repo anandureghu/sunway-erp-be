@@ -1,8 +1,5 @@
 package com.erp.service.finance;
 
-import com.erp.domain.finance.COAType;
-import com.erp.domain.finance.ChartOfAccounts;
-import com.erp.domain.finance.Invoice;
 import com.erp.domain.finance.Payment;
 import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.purchase.PurchaseOrder;
@@ -17,7 +14,6 @@ import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
 import com.erp.util.PaymentMethodLabels;
 import com.erp.dto.finance.TransactionResponseDTO;
-import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.hr.CompanyRepository;
@@ -31,10 +27,13 @@ import com.erp.domain.inventory.Vendor;
 import com.erp.service.notification.CustomerEmailService;
 import com.erp.service.DocumentSequenceService;
 import com.erp.service.pdf.VendorPaymentReceiptPdfService;
+import com.erp.service.purchase.PurchasePostingAccountsResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -54,12 +53,12 @@ public class PaymentService {
     private final CompanyRepository companyRepo;
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final PurchaseRequisitionRepository purchaseRequisitionRepo;
-    private final ChartOfAccountsRepository coaRepo;
     private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
     private final VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService;
     private final VendorPayableService vendorPayableService;
+    private final CompanyAccountingDefaultsService accountingDefaults;
 
     public PaymentService(PaymentRepository paymentRepo,
                           TransactionService transactionService,
@@ -69,12 +68,12 @@ public class PaymentService {
                           CompanyRepository companyRepo,
                           PurchaseOrderRepository purchaseOrderRepo,
                           PurchaseRequisitionRepository purchaseRequisitionRepo,
-                          ChartOfAccountsRepository coaRepo,
                           InvoiceRepository invoiceRepo,
                           AuthContext auth,
                           DocumentSequenceService documentSequenceService,
                           VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService,
-                          VendorPayableService vendorPayableService) {
+                          VendorPayableService vendorPayableService,
+                          CompanyAccountingDefaultsService accountingDefaults) {
 
         this.paymentRepo = paymentRepo;
         this.transactionService = transactionService;
@@ -84,12 +83,12 @@ public class PaymentService {
         this.companyRepo = companyRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
         this.purchaseRequisitionRepo = purchaseRequisitionRepo;
-        this.coaRepo = coaRepo;
         this.invoiceRepo = invoiceRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
         this.vendorPaymentReceiptPdfService = vendorPaymentReceiptPdfService;
         this.vendorPayableService = vendorPayableService;
+        this.accountingDefaults = accountingDefaults;
     }
 
     @Transactional
@@ -491,9 +490,8 @@ public class PaymentService {
     }
 
     /**
-     * Posts vendor payment to the GL. When the PO was already released with an encumbrance
-     * (debit/credit purchase defaults), pays down the credit (AP) account and credits cash.
-     * Otherwise debits expense/inventory from the PR and credits cash (legacy path).
+     * Posts vendor payment to GL. When the PO has no prior encumbrance, accrues expense to AP first,
+     * then settles AP against cash (debit AP, credit cash).
      */
     private void postVendorPaymentToAccounting(Payment payment) {
         if (payment.getPurchaseOrderId() == null) {
@@ -502,41 +500,34 @@ public class PaymentService {
         PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
                 .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
         PurchaseRequisition pr = po.getSourceRequisition();
-        Long cashAccountId = resolveDefaultCashAccountId(payment.getCompany().getId());
         Long companyId = payment.getCompany().getId();
 
-        Long debitAccountId;
-        Long creditAccountId;
-        boolean encumbered = po.getFinanceTransactionId() != null
-                || transactionService.hasPurchaseOrderEncumbrance(
-                        po.getCompany().getId(), po.getId());
+        Long prDebitId = pr != null && pr.getDebitAccount() != null ? pr.getDebitAccount().getId() : null;
+        Long prCreditId = pr != null && pr.getCreditAccount() != null ? pr.getCreditAccount().getId() : null;
+        PurchasePostingAccountsResolver.ResolvedAccounts accounts =
+                accountingDefaults.resolvePurchaseAccounts(companyId, prDebitId, prCreditId);
 
-        if (encumbered) {
-            if (pr == null || pr.getCreditAccount() == null) {
-                Company company = po.getCompany();
-                Long apId = company.getDefaultPurchaseCreditAccountId();
-                if (apId == null) {
-                    throw new RuntimeException(
-                            "Cannot post vendor payment: purchase order has encumbrance but no credit (AP) account is available.");
-                }
-                debitAccountId = apId;
-            } else {
-                debitAccountId = pr.getCreditAccount().getId();
-            }
-            creditAccountId = cashAccountId;
-        } else {
-            if (pr == null || pr.getDebitAccount() == null) {
-                throw new RuntimeException(
-                        "Cannot post vendor payment to the chart of accounts: this purchase order has no source "
-                                + "requisition with a debit (expense/inventory) account. Create the PO from an approved PR.");
-            }
-            debitAccountId = pr.getDebitAccount().getId();
-            creditAccountId = cashAccountId;
+        boolean encumbered = po.getFinanceTransactionId() != null
+                || transactionService.hasPurchaseOrderEncumbrance(companyId, po.getId());
+
+        if (!encumbered) {
+            transactionService.createPurchaseOrderEncumbrance(
+                    companyId,
+                    po.getId(),
+                    payment.getAmount(),
+                    accounts.debitAccountId(),
+                    accounts.creditAccountId(),
+                    po.getOrderNumber());
         }
 
+        Long apAccountId = accounts.creditAccountId();
+        Long cashAccountId = accountingDefaults.requireCashGlAccountId(companyId);
+        accountingDefaults.assertDistinctAccounts(
+                "Vendor payment posting", apAccountId, cashAccountId, accounts.debitAccountId());
+
         transactionService.validateTwoSidedPostingBalances(
-                debitAccountId,
-                creditAccountId,
+                apAccountId,
+                cashAccountId,
                 payment.getAmount(),
                 companyId);
 
@@ -549,16 +540,13 @@ public class PaymentService {
                 .transactionType(TransactionService.TYPE_VENDOR_PAYMENT)
                 .transactionDate(payment.getEffectiveDate())
                 .amount(payment.getAmount())
-                .debitAccount(debitAccountId)
-                .creditAccount(creditAccountId)
+                .debitAccount(apAccountId)
+                .creditAccount(cashAccountId)
                 .paymentId(String.valueOf(payment.getId()))
                 .invoiceId(purchaseInvoiceCode)
                 .relatedId(po.getId())
                 .source(TransactionService.SOURCE_PURCHASE)
-                .transactionDescription(
-                        encumbered
-                                ? "Vendor payment (AP settlement) — PO " + po.getOrderNumber()
-                                : "Vendor payment (AP) — PO " + po.getOrderNumber())
+                .transactionDescription("Vendor payment (AP settlement) — PO " + po.getOrderNumber())
                 .build());
 
         if (pr != null) {
@@ -567,17 +555,6 @@ public class PaymentService {
                 purchaseRequisitionRepo.save(managed);
             });
         }
-    }
-
-    private Long resolveDefaultCashAccountId(Long companyId) {
-        List<ChartOfAccounts> list = coaRepo.findByCompanyIdOrderByCreatedAtDesc(companyId);
-        return list.stream()
-                .filter(a -> a.getType() == COAType.CASH)
-                .findFirst()
-                .or(() -> list.stream().filter(a -> a.getType() == COAType.ASSET).findFirst())
-                .map(ChartOfAccounts::getId)
-                .orElseThrow(() -> new RuntimeException(
-                        "Add a CASH (or ASSET) chart-of-accounts account for this company to post vendor payments."));
     }
 
     private void postPaymentToAccounting(Payment payment, Invoice invoice) {

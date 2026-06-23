@@ -46,7 +46,7 @@ public class PurchasePostingAccountsResolver {
 
         if (debitId == null || creditId == null) {
             throw new RuntimeException(
-                    "Configure default purchase debit and credit accounts under Global Settings → Default Accounts.");
+                    "Configure default purchase debit and credit accounts under Finance → Default accounts.");
         }
         if (debitId.equals(creditId)) {
             throw new RuntimeException("Debit and credit accounts cannot be the same");
