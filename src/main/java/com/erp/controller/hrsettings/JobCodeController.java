@@ -39,16 +39,27 @@ public class JobCodeController {
     }
 
     /**
-     * GET Active Job Codes
-     * Requires either VIEW_OWN or VIEW_ALL
+     * GET Active Job Codes.
+     *
+     * Active job codes are reference data (the designation/title list) that an
+     * employee needs to view or set their own Current Job and Profile. Allow
+     * anyone who can view HR Settings, their Current Job, or their Employee
+     * Profile (own or all) — not just HR Settings managers.
      */
     @PreAuthorize("""
-        @permissionChecker.has(authentication,
+        @permissionChecker.hasAny(authentication,
             T(com.erp.domain.security.AppModule).HR_SETTINGS,
-            T(com.erp.domain.security.AppAction).VIEW_OWN)
+            T(com.erp.domain.security.AppAction).VIEW_OWN,
+            T(com.erp.domain.security.AppAction).VIEW_ALL)
         or
-        @permissionChecker.has(authentication,
-            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+        @permissionChecker.hasAny(authentication,
+            T(com.erp.domain.security.AppModule).CURRENT_JOB,
+            T(com.erp.domain.security.AppAction).VIEW_OWN,
+            T(com.erp.domain.security.AppAction).VIEW_ALL)
+        or
+        @permissionChecker.hasAny(authentication,
+            T(com.erp.domain.security.AppModule).EMPLOYEE_PROFILE,
+            T(com.erp.domain.security.AppAction).VIEW_OWN,
             T(com.erp.domain.security.AppAction).VIEW_ALL)
     """)
     @GetMapping("/active")

@@ -301,107 +301,122 @@ public class RolePermissionService {
         }
     }
 
-    private void apply(EnumRolePermission permission, ModulePermissionDTO.PermissionDTO dto) {
-        permission.setViewOwn(dto.isViewOwn());
-        permission.setViewAll(dto.isViewAll());
-        permission.setCreatePermission(dto.isCreate());
-        permission.setEditPermission(dto.isEdit());
-        permission.setDeletePermission(dto.isDeletePermission());
-        permission.setApprove(dto.isApprove());
+    private void apply(EnumRolePermission p, ModulePermissionDTO.PermissionDTO dto) {
+        applyCommon(dto, p::setViewOwn, p::setViewAll, p::setCreateOwn, p::setCreateAll,
+                p::setEditOwn, p::setEditAll, p::setDeleteOwn, p::setDeleteAll, p::setApprove);
     }
 
-    private void apply(CompanyRolePermission permission, ModulePermissionDTO.PermissionDTO dto) {
-        permission.setViewOwn(dto.isViewOwn());
-        permission.setViewAll(dto.isViewAll());
-        permission.setCreatePermission(dto.isCreate());
-        permission.setEditPermission(dto.isEdit());
-        permission.setDeletePermission(dto.isDeletePermission());
-        permission.setApprove(dto.isApprove());
+    private void apply(CompanyRolePermission p, ModulePermissionDTO.PermissionDTO dto) {
+        applyCommon(dto, p::setViewOwn, p::setViewAll, p::setCreateOwn, p::setCreateAll,
+                p::setEditOwn, p::setEditAll, p::setDeleteOwn, p::setDeleteAll, p::setApprove);
     }
 
-    private void apply(EmployeePermission permission, ModulePermissionDTO.PermissionDTO dto) {
-        permission.setViewOwn(dto.isViewOwn());
-        permission.setViewAll(dto.isViewAll());
-        permission.setCreatePermission(dto.isCreate());
-        permission.setEditPermission(dto.isEdit());
-        permission.setDeletePermission(dto.isDeletePermission());
-        permission.setApprove(dto.isApprove());
+    private void apply(EmployeePermission p, ModulePermissionDTO.PermissionDTO dto) {
+        applyCommon(dto, p::setViewOwn, p::setViewAll, p::setCreateOwn, p::setCreateAll,
+                p::setEditOwn, p::setEditAll, p::setDeleteOwn, p::setDeleteAll, p::setApprove);
     }
 
-    private boolean hasAnyPermission(EnumRolePermission permission) {
-        return permission.isViewOwn()
-                || permission.isViewAll()
-                || permission.isCreatePermission()
-                || permission.isEditPermission()
-                || permission.isDeletePermission()
-                || permission.isApprove();
+    private void applyCommon(
+            ModulePermissionDTO.PermissionDTO dto,
+            java.util.function.Consumer<Boolean> viewOwn,
+            java.util.function.Consumer<Boolean> viewAll,
+            java.util.function.Consumer<Boolean> createOwn,
+            java.util.function.Consumer<Boolean> createAll,
+            java.util.function.Consumer<Boolean> editOwn,
+            java.util.function.Consumer<Boolean> editAll,
+            java.util.function.Consumer<Boolean> deleteOwn,
+            java.util.function.Consumer<Boolean> deleteAll,
+            java.util.function.Consumer<Boolean> approve) {
+        viewOwn.accept(dto.isViewOwn());
+        viewAll.accept(dto.isViewAll());
+        createOwn.accept(dto.isCreateOwn());
+        createAll.accept(dto.isCreateAll());
+        editOwn.accept(dto.isEditOwn());
+        editAll.accept(dto.isEditAll());
+        deleteOwn.accept(dto.isDeleteOwn());
+        deleteAll.accept(dto.isDeleteAll());
+        approve.accept(dto.isApprove());
     }
 
-    private boolean hasAnyPermission(CompanyRolePermission permission) {
-        return permission.isViewOwn()
-                || permission.isViewAll()
-                || permission.isCreatePermission()
-                || permission.isEditPermission()
-                || permission.isDeletePermission()
-                || permission.isApprove();
-    }
-
-    private boolean hasAnyPermission(EmployeePermission permission) {
-        return permission.isViewOwn()
-                || permission.isViewAll()
-                || permission.isCreatePermission()
-                || permission.isEditPermission()
-                || permission.isDeletePermission()
-                || permission.isApprove();
-    }
-
-    private boolean hasAnyGrant(PermissionRecordDTO p) {
-        return p.isViewOwn()
-                || p.isViewAll()
-                || p.isCreatePermission()
-                || p.isEditPermission()
-                || p.isDeletePermission()
+    private boolean hasAnyPermission(EnumRolePermission p) {
+        return p.isViewOwn() || p.isViewAll()
+                || p.isCreateOwn() || p.isCreateAll()
+                || p.isEditOwn() || p.isEditAll()
+                || p.isDeleteOwn() || p.isDeleteAll()
                 || p.isApprove();
     }
 
-    private PermissionRecordDTO toDto(EnumRolePermission permission) {
+    private boolean hasAnyPermission(CompanyRolePermission p) {
+        return p.isViewOwn() || p.isViewAll()
+                || p.isCreateOwn() || p.isCreateAll()
+                || p.isEditOwn() || p.isEditAll()
+                || p.isDeleteOwn() || p.isDeleteAll()
+                || p.isApprove();
+    }
+
+    private boolean hasAnyPermission(EmployeePermission p) {
+        return p.isViewOwn() || p.isViewAll()
+                || p.isCreateOwn() || p.isCreateAll()
+                || p.isEditOwn() || p.isEditAll()
+                || p.isDeleteOwn() || p.isDeleteAll()
+                || p.isApprove();
+    }
+
+    private boolean hasAnyGrant(PermissionRecordDTO p) {
+        return p.isViewOwn() || p.isViewAll()
+                || p.isCreateOwn() || p.isCreateAll()
+                || p.isEditOwn() || p.isEditAll()
+                || p.isDeleteOwn() || p.isDeleteAll()
+                || p.isApprove();
+    }
+
+    private PermissionRecordDTO toDto(EnumRolePermission p) {
         return PermissionRecordDTO.builder()
-                .id(permission.getId())
-                .module(permission.getModule())
-                .viewOwn(permission.isViewOwn())
-                .viewAll(permission.isViewAll())
-                .createPermission(permission.isCreatePermission())
-                .editPermission(permission.isEditPermission())
-                .deletePermission(permission.isDeletePermission())
-                .approve(permission.isApprove())
+                .id(p.getId())
+                .module(p.getModule())
+                .viewOwn(p.isViewOwn())
+                .viewAll(p.isViewAll())
+                .createOwn(p.isCreateOwn())
+                .createAll(p.isCreateAll())
+                .editOwn(p.isEditOwn())
+                .editAll(p.isEditAll())
+                .deleteOwn(p.isDeleteOwn())
+                .deleteAll(p.isDeleteAll())
+                .approve(p.isApprove())
                 .build();
     }
 
-    private PermissionRecordDTO toDto(CompanyRolePermission permission) {
+    private PermissionRecordDTO toDto(CompanyRolePermission p) {
         return PermissionRecordDTO.builder()
-                .id(permission.getId())
-                .module(permission.getModule())
-                .viewOwn(permission.isViewOwn())
-                .viewAll(permission.isViewAll())
-                .createPermission(permission.isCreatePermission())
-                .editPermission(permission.isEditPermission())
-                .deletePermission(permission.isDeletePermission())
-                .approve(permission.isApprove())
-                .active(permission.isActive())
+                .id(p.getId())
+                .module(p.getModule())
+                .viewOwn(p.isViewOwn())
+                .viewAll(p.isViewAll())
+                .createOwn(p.isCreateOwn())
+                .createAll(p.isCreateAll())
+                .editOwn(p.isEditOwn())
+                .editAll(p.isEditAll())
+                .deleteOwn(p.isDeleteOwn())
+                .deleteAll(p.isDeleteAll())
+                .approve(p.isApprove())
+                .active(p.isActive())
                 .build();
     }
 
-    private PermissionRecordDTO toDto(EmployeePermission permission) {
+    private PermissionRecordDTO toDto(EmployeePermission p) {
         return PermissionRecordDTO.builder()
-                .id(permission.getId())
-                .module(permission.getModule())
-                .viewOwn(permission.isViewOwn())
-                .viewAll(permission.isViewAll())
-                .createPermission(permission.isCreatePermission())
-                .editPermission(permission.isEditPermission())
-                .deletePermission(permission.isDeletePermission())
-                .approve(permission.isApprove())
-                .active(permission.isActive())
+                .id(p.getId())
+                .module(p.getModule())
+                .viewOwn(p.isViewOwn())
+                .viewAll(p.isViewAll())
+                .createOwn(p.isCreateOwn())
+                .createAll(p.isCreateAll())
+                .editOwn(p.isEditOwn())
+                .editAll(p.isEditAll())
+                .deleteOwn(p.isDeleteOwn())
+                .deleteAll(p.isDeleteAll())
+                .approve(p.isApprove())
+                .active(p.isActive())
                 .build();
     }
 }

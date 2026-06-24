@@ -15,8 +15,10 @@ public class PayslipController {
 
     private final PayslipDocumentService payslipDocumentService;
 
+    // Own payslip is always downloadable; others' require PAYROLL view.
     @PreAuthorize("""
-        @permissionChecker.hasAny(authentication,
+        #employeeId == authentication.principal.employeeId
+        or @permissionChecker.hasAny(authentication,
             T(com.erp.domain.security.AppModule).PAYROLL,
             T(com.erp.domain.security.AppAction).VIEW_OWN,
             T(com.erp.domain.security.AppAction).VIEW_ALL)
