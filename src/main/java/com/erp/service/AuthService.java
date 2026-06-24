@@ -7,11 +7,17 @@ import com.erp.domain.security.Role;
 import com.erp.dto.auth.CompanySummary;
 import com.erp.dto.auth.JwtResponse;
 import com.erp.dto.auth.LoginRequest;
+import com.erp.dto.auth.LoginResponse;
+import com.erp.dto.auth.LoginTwoFactorCompleteRequest;
 import com.erp.dto.auth.RegisterRequest;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.security.JwtService;
 import com.erp.security.context.AuthContext;
+import com.erp.domain.auth.OtpPurpose;
+import com.erp.service.auth.OtpService;
+import io.jsonwebtoken.Claims;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -26,17 +32,26 @@ public class AuthService {
     private final PasswordEncoder encoder;
     private final JwtService jwt;
     private final AuthContext authContext;
+    private final OtpService otpService;
+    private final boolean twoFactorEnabled;
+    private final long preAuthTokenMinutes;
 
     public AuthService(UserRepository userRepository,
                        EmployeeRepository employeeRepository,
                        PasswordEncoder encoder,
                        JwtService jwt,
-                       AuthContext authContext) {
+                       AuthContext authContext,
+                       OtpService otpService,
+                       @Value("${app.auth.two-factor-enabled:true}") boolean twoFactorEnabled,
+                       @Value("${app.auth.pre-auth-token-minutes:5}") long preAuthTokenMinutes) {
         this.userRepository     = userRepository;
         this.employeeRepository = employeeRepository;
         this.encoder            = encoder;
         this.jwt                = jwt;
         this.authContext        = authContext;
+        this.otpService         = otpService;
+        this.twoFactorEnabled   = twoFactorEnabled;
+        this.preAuthTokenMinutes = preAuthTokenMinutes;
     }
 
     public User register(RegisterRequest req) {
@@ -54,7 +69,7 @@ public class AuthService {
         return userRepository.save(u);
     }
 
-    public JwtResponse login(LoginRequest req) {
+    public LoginResponse login(LoginRequest req) {
         User u = userRepository.findByEmail(req.getLoginId())
                 .or(() -> userRepository.findByUsername(req.getLoginId()))
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
@@ -70,10 +85,62 @@ public class AuthService {
                 .map(this::toCompanySummary)
                 .toList();
 
+        boolean requiresSelection = memberships.size() > 1 && req.getPreferredCompanyId() == null;
+
+        if (twoFactorEnabled) {
+            String preAuthToken = issuePreAuthToken(u.getId(), u.getUsername());
+            return LoginResponse.twoFactorRequired(
+                    preAuthToken,
+                    maskEmail(u.getEmail()),
+                    companies,
+                    requiresSelection);
+        }
+
+        Employee active = resolveActiveEmployee(memberships, req.getPreferredCompanyId());
+        JwtResponse tokens = buildJwtResponse(u, active, companies, requiresSelection);
+        return LoginResponse.authenticated(
+                tokens.getAccessToken(),
+                tokens.getRefreshToken(),
+                companies,
+                requiresSelection);
+    }
+
+    public LoginResponse completeLoginTwoFactor(LoginTwoFactorCompleteRequest req) {
+        Claims claims;
+        try {
+            claims = jwt.parsePreAuthToken(req.getPreAuthToken());
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Invalid or expired login session. Please sign in again.");
+        }
+
+        Long userId = parseLong(claims.get("userId"));
+        if (userId == null) {
+            throw new IllegalArgumentException("Invalid or expired login session. Please sign in again.");
+        }
+
+        User u = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired login session. Please sign in again."));
+
+        otpService.consumeVerificationToken(u.getEmail(), OtpPurpose.LOGIN_2FA, req.getVerificationToken());
+
+        List<Employee> memberships = employeeRepository.findAllByUser_Id(u.getId());
+        if (memberships.isEmpty()) {
+            throw new IllegalArgumentException("Invalid credentials");
+        }
+
+        List<CompanySummary> companies = memberships.stream()
+                .map(this::toCompanySummary)
+                .toList();
+
         Employee active = resolveActiveEmployee(memberships, req.getPreferredCompanyId());
         boolean requiresSelection = memberships.size() > 1 && req.getPreferredCompanyId() == null;
 
-        return buildJwtResponse(u, active, companies, requiresSelection);
+        JwtResponse tokens = buildJwtResponse(u, active, companies, requiresSelection);
+        return LoginResponse.authenticated(
+                tokens.getAccessToken(),
+                tokens.getRefreshToken(),
+                companies,
+                requiresSelection);
     }
 
     public JwtResponse refresh(String refreshToken) {
@@ -184,5 +251,23 @@ public class AuthService {
         if (value instanceof Integer i) return i.longValue();
         if (value instanceof Long l) return l;
         return Long.parseLong(String.valueOf(value));
+    }
+
+    private String issuePreAuthToken(Long userId, String username) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put(JwtService.CLAIM_TOKEN_TYPE, JwtService.TOKEN_TYPE_PRE_AUTH);
+        return jwt.generatePreAuthToken(username, claims, preAuthTokenMinutes);
+    }
+
+    private static String maskEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return "***";
+        }
+        int at = email.indexOf('@');
+        if (at <= 1) {
+            return "***";
+        }
+        return email.charAt(0) + "***" + email.substring(at);
     }
 }

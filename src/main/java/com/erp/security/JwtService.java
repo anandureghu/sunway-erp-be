@@ -18,6 +18,9 @@ public class JwtService {
     private final long   accessMinutes;
     private final long   refreshDays;
 
+    public static final String CLAIM_TOKEN_TYPE = "tokenType";
+    public static final String TOKEN_TYPE_PRE_AUTH = "PRE_AUTH";
+
     public JwtService(
             @Value("${app.jwt.secret}")                String secret,
             @Value("${app.jwt.issuer}")                String issuer,
@@ -56,6 +59,27 @@ public class JwtService {
                 .setExpiration(Date.from(now.plusSeconds(refreshDays * 86400)))
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    public String generatePreAuthToken(String subject, Map<String, Object> claims, long ttlMinutes) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setIssuer(issuer)
+                .setIssuedAt(Date.from(now))
+                .setExpiration(Date.from(now.plusSeconds(ttlMinutes * 60)))
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public Claims parsePreAuthToken(String token) {
+        Claims claims = parse(token).getBody();
+        Object tokenType = claims.get(CLAIM_TOKEN_TYPE);
+        if (!TOKEN_TYPE_PRE_AUTH.equals(tokenType)) {
+            throw new IllegalArgumentException("Invalid pre-authentication token");
+        }
+        return claims;
     }
 
     public Jws<Claims> parse(String token) {
