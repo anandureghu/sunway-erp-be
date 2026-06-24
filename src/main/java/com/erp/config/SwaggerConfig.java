@@ -29,7 +29,10 @@ public class SwaggerConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("ERP System API")
-                        .description("Auto-generated API documentation for HR, Finance, Inventory modules")
+                        .description("""
+                                Auto-generated API documentation for HR, Finance, Inventory, and Auth modules.
+                                Email OTP endpoints live under OTP / Two-Factor Verification (POST /api/auth/otp/send, /verify).
+                                """)
                         .version("1.0.0")
                 )
                 .servers(List.of(localServer, prodServer))

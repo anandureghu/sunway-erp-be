@@ -33,9 +33,12 @@ public class EmployeePermission {
 
     private boolean viewOwn;
     private boolean viewAll;
-    private boolean createPermission;
-    private boolean editPermission;
-    private boolean deletePermission;
+    private boolean createOwn;
+    private boolean createAll;
+    private boolean editOwn;
+    private boolean editAll;
+    private boolean deleteOwn;
+    private boolean deleteAll;
     private boolean approve;
 
     /**

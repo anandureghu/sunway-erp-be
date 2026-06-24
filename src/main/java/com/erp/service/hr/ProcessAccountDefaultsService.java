@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class ProcessAccountDefaultsService {
@@ -66,7 +67,10 @@ public class ProcessAccountDefaultsService {
         List<ProcessAccountDefaultDTO> rows = dto.getDefaults() != null ? dto.getDefaults() : List.of();
         validateRows(rows);
 
-        repository.deleteByCompanyId(companyId);
+        Set<AccountingProcessCode> incoming = rows.stream()
+                .map(ProcessAccountDefaultDTO::getProcessCode)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(AccountingProcessCode.class)));
 
         Instant now = Instant.now();
         for (ProcessAccountDefaultDTO row : rows) {
@@ -77,16 +81,22 @@ public class ProcessAccountDefaultsService {
             Long creditId = resolveCoaId(companyId, row.getCreditAccountId(), "Credit account");
             validateAccountPair(row.getProcessCode(), debitId, creditId);
 
-            CompanyProcessAccountDefault entity = CompanyProcessAccountDefault.builder()
-                    .company(company)
-                    .processCode(row.getProcessCode())
-                    .debitAccountId(debitId)
-                    .creditAccountId(creditId)
-                    .createdAt(now)
-                    .updatedAt(now)
-                    .build();
+            CompanyProcessAccountDefault entity = repository
+                    .findByCompanyIdAndProcessCode(companyId, row.getProcessCode())
+                    .orElseGet(() -> CompanyProcessAccountDefault.builder()
+                            .company(company)
+                            .processCode(row.getProcessCode())
+                            .createdAt(now)
+                            .build());
+            entity.setDebitAccountId(debitId);
+            entity.setCreditAccountId(creditId);
+            entity.setUpdatedAt(now);
             repository.save(entity);
         }
+
+        repository.findByCompanyIdOrderByProcessCodeAsc(companyId).stream()
+                .filter(existing -> !incoming.contains(existing.getProcessCode()))
+                .forEach(repository::delete);
 
         return getProcessAccountDefaults(companyId);
     }

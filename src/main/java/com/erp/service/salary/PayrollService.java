@@ -255,12 +255,12 @@ public class PayrollService {
         Long debitAccountId = processAccountDefaultsService
                 .resolveProcessDebitAccount(companyId, AccountingProcessCode.PAYROLL)
                 .orElseThrow(() -> new RuntimeException(
-                        "Configure payroll debit account under Global Settings → Default Accounts"));
+                        "Configure payroll debit account under Finance → Default accounts → Process account defaults"));
 
         Long creditAccountId = processAccountDefaultsService
                 .resolveProcessCreditAccount(companyId, AccountingProcessCode.PAYROLL)
                 .orElseThrow(() -> new RuntimeException(
-                        "Configure payroll credit account under Global Settings → Default Accounts"));
+                        "Configure payroll credit account under Finance → Default accounts → Process account defaults"));
 
         BigDecimal amount = BigDecimal.valueOf(payroll.getGrossPay());
         String employeeLabel = employee.getEmployeeNo() != null && !employee.getEmployeeNo().isBlank()

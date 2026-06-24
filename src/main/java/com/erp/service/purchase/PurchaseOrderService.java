@@ -11,14 +11,12 @@ import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderItem;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
-import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.dto.purchase.PurchaseOrderAssignSupplierDTO;
 import com.erp.dto.purchase.PurchaseOrderCreateDTO;
 import com.erp.dto.purchase.PurchaseOrderItemDTO;
 import com.erp.dto.purchase.PurchaseOrderPostingPreviewDTO;
 import com.erp.dto.purchase.PurchaseOrderResponseDTO;
 import com.erp.dto.purchase.PurchaseOrderUpdateDTO;
-import com.erp.service.finance.CoaBalanceRules;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.ItemRepository;
@@ -58,6 +56,7 @@ public class PurchaseOrderService {
     private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
+    private final PurchasePostingAccountsResolver postingAccountsResolver;
 
     public PurchaseOrderService(
             PurchaseOrderRepository repo,
@@ -71,7 +70,8 @@ public class PurchaseOrderService {
             ChartOfAccountsRepository coaRepo,
             InvoiceRepository invoiceRepo,
             AuthContext auth,
-            DocumentSequenceService documentSequenceService
+            DocumentSequenceService documentSequenceService,
+            PurchasePostingAccountsResolver postingAccountsResolver
     ) {
         this.repo = repo;
         this.vendorRepo = vendorRepo;
@@ -85,6 +85,7 @@ public class PurchaseOrderService {
         this.invoiceRepo = invoiceRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
+        this.postingAccountsResolver = postingAccountsResolver;
     }
 
     public PurchaseOrderResponseDTO create(PurchaseOrderCreateDTO dto) {
@@ -174,8 +175,6 @@ public class PurchaseOrderService {
             throw new RuntimeException("Assign a supplier before releasing this purchase order");
         }
 
-        postEncumbranceOnConfirm(po);
-
         po.setStatus(PurchaseOrderStatus.CONFIRMED);
         PurchaseOrder saved = repo.save(po);
         repo.flush();
@@ -259,29 +258,6 @@ public class PurchaseOrderService {
         releaseEncumbranceOnCancel(po);
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         return toDTO(repo.save(po));
-    }
-
-    private void postEncumbranceOnConfirm(PurchaseOrder po) {
-        if (po.getFinanceTransactionId() != null) {
-            return;
-        }
-        if (transactionService.hasPurchaseOrderVendorPaymentPosting(po.getId())) {
-            return;
-        }
-        BigDecimal amount = po.getTotalAmount();
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Purchase order total must be positive to release funds");
-        }
-        PostingAccounts accounts = resolvePostingAccounts(po);
-        Long companyId = po.getCompany().getId();
-        TransactionResponseDTO tx = transactionService.createPurchaseOrderEncumbrance(
-                companyId,
-                po.getId(),
-                amount,
-                accounts.debitAccountId(),
-                accounts.creditAccountId(),
-                po.getOrderNumber());
-        po.setFinanceTransactionId(tx.getId());
     }
 
     public PurchaseOrderPostingPreviewDTO getPostingPreview(Long id, String action) {
@@ -369,23 +345,31 @@ public class PurchaseOrderService {
             if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
                 throw new RuntimeException("Only draft purchase orders can be released");
             }
-            debitDelta = amount.negate();
-            creditDelta = amount;
-            summary = "Releasing will commit funds: debit account decreases and credit account increases by the order total.";
+            return PurchaseOrderPostingPreviewDTO.builder()
+                    .action(normalized)
+                    .amount(amount)
+                    .debitAccountId(debit.getId())
+                    .debitAccountCode(debit.getAccountCode())
+                    .debitAccountName(debit.getAccountName())
+                    .debitBalanceBefore(debitBefore)
+                    .debitBalanceAfter(debitBefore)
+                    .creditAccountId(credit.getId())
+                    .creditAccountCode(credit.getAccountCode())
+                    .creditAccountName(credit.getAccountName())
+                    .creditBalanceBefore(creditBefore)
+                    .creditBalanceAfter(creditBefore)
+                    .sufficientFunds(true)
+                    .fundsAlreadyCommitted(fundsCommitted)
+                    .willReleaseCommittedFunds(false)
+                    .summary(fundsCommitted
+                            ? "Funds are already committed for this purchase order."
+                            : "Releasing records the order and creates AP payable records. "
+                                    + "Chart of accounts balances change when vendor payment is confirmed in Accounts Payable.")
+                    .build();
         }
 
         BigDecimal debitAfter = debitBefore.add(debitDelta);
         BigDecimal creditAfter = creditBefore.add(creditDelta);
-
-        boolean sufficient = true;
-        String insufficientMessage = null;
-        try {
-            CoaBalanceRules.assertSufficientBalance(debit, debitDelta);
-            CoaBalanceRules.assertSufficientBalance(credit, creditDelta);
-        } catch (ResponseStatusException ex) {
-            sufficient = false;
-            insufficientMessage = ex.getReason();
-        }
 
         return PurchaseOrderPostingPreviewDTO.builder()
                 .action(normalized)
@@ -400,10 +384,9 @@ public class PurchaseOrderService {
                 .creditAccountName(credit.getAccountName())
                 .creditBalanceBefore(creditBefore)
                 .creditBalanceAfter(creditAfter)
-                .sufficientFunds(sufficient)
-                .insufficientFundsMessage(insufficientMessage)
-                .fundsAlreadyCommitted(fundsCommitted)
-                .willReleaseCommittedFunds("cancel".equals(normalized) && fundsCommitted)
+                .sufficientFunds(true)
+                .fundsAlreadyCommitted(true)
+                .willReleaseCommittedFunds(true)
                 .summary(summary)
                 .build();
     }
@@ -414,7 +397,8 @@ public class PurchaseOrderService {
 
     private boolean isFundsCommitted(PurchaseOrder po) {
         return po.getFinanceTransactionId() != null
-                || transactionService.hasPurchaseOrderEncumbrance(po.getId());
+                || transactionService.hasPurchaseOrderEncumbrance(
+                        po.getCompany().getId(), po.getId());
     }
 
     private void releaseEncumbranceOnCancel(PurchaseOrder po) {
@@ -448,25 +432,11 @@ public class PurchaseOrderService {
         if (pr != null && pr.getDebitAccount() != null && pr.getCreditAccount() != null) {
             return new PostingAccounts(pr.getDebitAccount().getId(), pr.getCreditAccount().getId());
         }
-        Company company = po.getCompany();
-        Long debitId = company.getDefaultPurchaseDebitAccountId();
-        Long creditId = company.getDefaultPurchaseCreditAccountId();
-        if (debitId == null || creditId == null) {
-            throw new RuntimeException(
-                    "Set company default purchase debit and credit accounts, or create this PO from a requisition with posting accounts.");
-        }
-        ChartOfAccounts debit = coaRepo.findById(debitId)
-                .orElseThrow(() -> new RuntimeException("Default purchase debit account not found"));
-        ChartOfAccounts credit = coaRepo.findById(creditId)
-                .orElseThrow(() -> new RuntimeException("Default purchase credit account not found"));
-        if (!debit.getCompany().getId().equals(company.getId())
-                || !credit.getCompany().getId().equals(company.getId())) {
-            throw new RuntimeException("Default purchase accounts do not belong to this company");
-        }
-        if (debitId.equals(creditId)) {
-            throw new RuntimeException("Default purchase debit and credit accounts cannot be the same");
-        }
-        return new PostingAccounts(debitId, creditId);
+        PurchasePostingAccountsResolver.ResolvedAccounts accounts = postingAccountsResolver.resolve(
+                po.getCompany().getId(),
+                null,
+                null);
+        return new PostingAccounts(accounts.debitAccountId(), accounts.creditAccountId());
     }
 
     public PurchaseOrderResponseDTO archive(Long id) {

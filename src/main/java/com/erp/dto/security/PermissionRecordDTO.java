@@ -11,9 +11,12 @@ public class PermissionRecordDTO {
     AppModule module;
     boolean viewOwn;
     boolean viewAll;
-    boolean createPermission;
-    boolean editPermission;
-    boolean deletePermission;
+    boolean createOwn;
+    boolean createAll;
+    boolean editOwn;
+    boolean editAll;
+    boolean deleteOwn;
+    boolean deleteAll;
     boolean approve;
     @lombok.Builder.Default
     boolean active = true;

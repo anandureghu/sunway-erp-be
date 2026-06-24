@@ -260,16 +260,25 @@ public class CompanyService {
 
     private void applyAccountingDefaults(Company company, AccountingDefaultsDTO dto) {
         Long cid = company.getId();
-        company.setDefaultSalesDebitAccountId(
-                resolveCoaId(cid, dto.getDefaultSalesDebitAccountId(), "Default sales debit account"));
-        company.setDefaultSalesCreditAccountId(
-                resolveCoaId(cid, dto.getDefaultSalesCreditAccountId(), "Default sales credit account"));
-        company.setDefaultPurchaseDebitAccountId(
-                resolveCoaId(cid, dto.getDefaultPurchaseDebitAccountId(), "Default purchase debit account"));
-        company.setDefaultPurchaseCreditAccountId(
-                resolveCoaId(cid, dto.getDefaultPurchaseCreditAccountId(), "Default purchase credit account"));
-        company.setDefaultBankAccountId(
-                resolveBankId(cid, dto.getDefaultBankAccountId()));
+        if (dto.getDefaultSalesDebitAccountId() != null) {
+            company.setDefaultSalesDebitAccountId(
+                    resolveCoaId(cid, dto.getDefaultSalesDebitAccountId(), "Default sales debit account"));
+        }
+        if (dto.getDefaultSalesCreditAccountId() != null) {
+            company.setDefaultSalesCreditAccountId(
+                    resolveCoaId(cid, dto.getDefaultSalesCreditAccountId(), "Default sales credit account"));
+        }
+        if (dto.getDefaultPurchaseDebitAccountId() != null) {
+            company.setDefaultPurchaseDebitAccountId(
+                    resolveCoaId(cid, dto.getDefaultPurchaseDebitAccountId(), "Default purchase debit account"));
+        }
+        if (dto.getDefaultPurchaseCreditAccountId() != null) {
+            company.setDefaultPurchaseCreditAccountId(
+                    resolveCoaId(cid, dto.getDefaultPurchaseCreditAccountId(), "Default purchase credit account"));
+        }
+        if (dto.getDefaultBankAccountId() != null) {
+            company.setDefaultBankAccountId(resolveBankId(cid, dto.getDefaultBankAccountId()));
+        }
     }
 
     private void applyInvoiceBrandingSettings(CompanyInvoiceSettings settings, InvoiceBrandingSettingsDTO dto) {

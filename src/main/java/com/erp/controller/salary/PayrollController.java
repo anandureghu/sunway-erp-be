@@ -51,8 +51,11 @@ public class PayrollController {
     }
 
     /* ========= PAYROLL HISTORY ========= */
+    // An employee can always view their own payroll history, even without an
+    // explicit PAYROLL grant; viewing anyone else's requires PAYROLL view.
     @PreAuthorize("""
-        @permissionChecker.hasAny(authentication,
+        #employeeId == authentication.principal.employeeId
+        or @permissionChecker.hasAny(authentication,
             T(com.erp.domain.security.AppModule).PAYROLL,
             T(com.erp.domain.security.AppAction).VIEW_OWN,
             T(com.erp.domain.security.AppAction).VIEW_ALL)
@@ -68,7 +71,8 @@ public class PayrollController {
 
     /* ========= LATEST GENERATED PAYROLL IN A MONTH ========= */
     @PreAuthorize("""
-        @permissionChecker.hasAny(authentication,
+        #employeeId == authentication.principal.employeeId
+        or @permissionChecker.hasAny(authentication,
             T(com.erp.domain.security.AppModule).PAYROLL,
             T(com.erp.domain.security.AppAction).VIEW_OWN,
             T(com.erp.domain.security.AppAction).VIEW_ALL)

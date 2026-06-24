@@ -55,6 +55,58 @@ public class EmployeeAccessGuard {
         assertSameTenant(employee);
     }
 
+    /**
+     * Ownership-aware write check for a specific action. Passes if the caller is
+     * SUPER_ADMIN, has the *_ALL grant for the action, or has the *_OWN grant and
+     * the employee is the caller's own record. APPROVE is treated as an "all"
+     * action (you approve others' requests).
+     */
+    public void assertCanWrite(Employee employee, AppModule module, AppAction action) {
+        assertSameTenant(employee);
+        if (isSuperAdmin()) {
+            return;
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (action == AppAction.APPROVE) {
+            if (permissionCheckService.hasAccess(auth, module, AppAction.APPROVE)) {
+                return;
+            }
+            throw new AccessDeniedException("Access denied: missing approve permission");
+        }
+
+        AppAction all = allVariant(action);
+        AppAction own = ownVariant(action);
+        if (all != null && permissionCheckService.hasAccess(auth, module, all)) {
+            return;
+        }
+        if (own != null
+                && permissionCheckService.hasAccess(auth, module, own)
+                && isOwnEmployee(employee)) {
+            return;
+        }
+        throw new AccessDeniedException(
+                "Access denied: insufficient permission for this employee");
+    }
+
+    private AppAction allVariant(AppAction a) {
+        return switch (a) {
+            case CREATE, CREATE_OWN, CREATE_ALL -> AppAction.CREATE_ALL;
+            case EDIT, EDIT_OWN, EDIT_ALL -> AppAction.EDIT_ALL;
+            case DELETE, DELETE_OWN, DELETE_ALL -> AppAction.DELETE_ALL;
+            default -> null;
+        };
+    }
+
+    private AppAction ownVariant(AppAction a) {
+        return switch (a) {
+            case CREATE, CREATE_OWN, CREATE_ALL -> AppAction.CREATE_OWN;
+            case EDIT, EDIT_OWN, EDIT_ALL -> AppAction.EDIT_OWN;
+            case DELETE, DELETE_OWN, DELETE_ALL -> AppAction.DELETE_OWN;
+            default -> null;
+        };
+    }
+
     private void assertSameTenant(Employee employee) {
         if (isSuperAdmin()) {
             return;

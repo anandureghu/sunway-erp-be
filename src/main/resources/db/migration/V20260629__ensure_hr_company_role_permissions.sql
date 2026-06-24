@@ -1,10 +1,8 @@
 -- Ensure baseline HR module permissions are present after the latest deployed
 -- migration version.
 -- 
--- This intentionally mirrors the earlier HR permission backfill. It exists
--- with a version greater than V20260627 because production environments that
--- already applied V20260626/V20260627 will not run a later-added V20260625
--- while spring.flyway.out-of-order=false.
+-- Baseline HR permission backfill for existing company roles. Versioned after
+-- V20260627 so it runs on databases that already applied V20260626/V20260627.
 
 INSERT INTO company_role_permissions (
   company_role_id,

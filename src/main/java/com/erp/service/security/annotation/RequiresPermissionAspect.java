@@ -3,6 +3,7 @@ package com.erp.service.security.annotation;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.service.security.PermissionCheckService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
@@ -10,6 +11,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.servlet.HandlerMapping;
+
+import java.util.Map;
 
 @Aspect
 @Component
@@ -31,19 +37,73 @@ public class RequiresPermissionAspect {
         AppModule module = requiresPermission.module();
         AppAction[] actions = requiresPermission.action();
 
-        boolean allowed = false;
+        // Ownership context from the request path: /employees/{employeeId}/...
+        // When the endpoint isn't employee-scoped, an *_OWN grant behaves like a
+        // plain capability (there's no per-record owner to compare against).
+        String pathEmployeeId = currentPathVariable("employeeId");
+        boolean hasEmployeeScope = pathEmployeeId != null;
+        Long callerEmployeeId = permissionCheckService.getLoggedEmployeeId(auth);
+        boolean isOwn = hasEmployeeScope
+                && callerEmployeeId != null
+                && pathEmployeeId.equals(String.valueOf(callerEmployeeId));
 
         for (AppAction action : actions) {
-            if (permissionCheckService.hasAccess(auth, module, action)) {
-                allowed = true;
-                break;
+            if (allows(auth, module, action, hasEmployeeScope, isOwn)) {
+                return;
             }
         }
 
-        if (!allowed) {
-            throw new AccessDeniedException(
-                    "Access denied: missing required permission on [" + module + "]"
-            );
+        throw new AccessDeniedException(
+                "Access denied: missing required permission on [" + module + "]");
+    }
+
+    private boolean allows(Authentication auth, AppModule module, AppAction action,
+                           boolean hasEmployeeScope, boolean isOwn) {
+        return switch (action) {
+            case VIEW_ALL -> has(auth, module, AppAction.VIEW_ALL);
+            // Own view only covers the caller's own record on scoped endpoints.
+            case VIEW_OWN -> has(auth, module, AppAction.VIEW_OWN)
+                    && (!hasEmployeeScope || isOwn);
+            case CREATE, CREATE_OWN, CREATE_ALL -> scopedWrite(auth, module,
+                    AppAction.CREATE_ALL, AppAction.CREATE_OWN, hasEmployeeScope, isOwn);
+            case EDIT, EDIT_OWN, EDIT_ALL -> scopedWrite(auth, module,
+                    AppAction.EDIT_ALL, AppAction.EDIT_OWN, hasEmployeeScope, isOwn);
+            case DELETE, DELETE_OWN, DELETE_ALL -> scopedWrite(auth, module,
+                    AppAction.DELETE_ALL, AppAction.DELETE_OWN, hasEmployeeScope, isOwn);
+            case APPROVE -> has(auth, module, AppAction.APPROVE);
+        };
+    }
+
+    private boolean scopedWrite(Authentication auth, AppModule module,
+                                AppAction allAction, AppAction ownAction,
+                                boolean hasEmployeeScope, boolean isOwn) {
+        if (has(auth, module, allAction)) {
+            return true;
         }
+        // Own grant: requires the targeted record to be the caller's own.
+        if (has(auth, module, ownAction)) {
+            return !hasEmployeeScope || isOwn;
+        }
+        return false;
+    }
+
+    private boolean has(Authentication auth, AppModule module, AppAction action) {
+        return permissionCheckService.hasAccess(auth, module, action);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String currentPathVariable(String name) {
+        ServletRequestAttributes attrs =
+                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs == null) {
+            return null;
+        }
+        HttpServletRequest request = attrs.getRequest();
+        Object vars = request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+        if (vars instanceof Map<?, ?> map) {
+            Object value = ((Map<String, Object>) map).get(name);
+            return value != null ? String.valueOf(value) : null;
+        }
+        return null;
     }
 }

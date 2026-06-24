@@ -1,7 +1,7 @@
 -- Manual seed/backfill for HR company-role permissions.
 --
 -- Use this directly against production only if you need to patch permissions
--- before the Flyway migration V20260625__backfill_hr_company_role_permissions.sql
+-- before the Flyway migration V20260629__ensure_hr_company_role_permissions.sql
 -- has been deployed and executed.
 --
 -- Safe to run more than once:

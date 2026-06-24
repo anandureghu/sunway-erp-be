@@ -1,7 +1,6 @@
 package com.erp.dto.security;
 
 import com.erp.domain.security.AppModule;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 @Getter
@@ -18,24 +17,23 @@ public class ModulePermissionDTO {
 
         private boolean viewOwn;
         private boolean viewAll;
-
-        // ✅ Accept both "create" and "createPermission" from frontend
-        @JsonProperty("create")
-        private boolean create;
-
-        // ✅ Accept both "edit" and "editPermission" from frontend
-        @JsonProperty("edit")
-        private boolean edit;
-
-        private boolean deletePermission;
+        private boolean createOwn;
+        private boolean createAll;
+        private boolean editOwn;
+        private boolean editAll;
+        private boolean deleteOwn;
+        private boolean deleteAll;
         private boolean approve;
 
-        // ✅ Explicit getters to avoid Lombok bool naming issues
-        public boolean isCreate() { return create; }
-        public boolean isEdit() { return edit; }
+        // Explicit getters to avoid Lombok boolean naming surprises.
         public boolean isViewOwn() { return viewOwn; }
         public boolean isViewAll() { return viewAll; }
-        public boolean isDeletePermission() { return deletePermission; }
+        public boolean isCreateOwn() { return createOwn; }
+        public boolean isCreateAll() { return createAll; }
+        public boolean isEditOwn() { return editOwn; }
+        public boolean isEditAll() { return editAll; }
+        public boolean isDeleteOwn() { return deleteOwn; }
+        public boolean isDeleteAll() { return deleteAll; }
         public boolean isApprove() { return approve; }
     }
 }

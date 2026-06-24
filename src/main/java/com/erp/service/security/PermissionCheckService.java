@@ -228,57 +228,59 @@ public class PermissionCheckService {
     // EVALUATION
     // ======================================================
 
-    private boolean evaluate(EmployeePermission permission, AppAction action) {
+    private boolean evaluate(EmployeePermission p, AppAction action) {
         return evaluate(
-                permission.isViewOwn(),
-                permission.isViewAll(),
-                permission.isCreatePermission(),
-                permission.isEditPermission(),
-                permission.isDeletePermission(),
-                permission.isApprove(),
-                action
-        );
+                p.isViewOwn(), p.isViewAll(),
+                p.isCreateOwn(), p.isCreateAll(),
+                p.isEditOwn(), p.isEditAll(),
+                p.isDeleteOwn(), p.isDeleteAll(),
+                p.isApprove(), action);
     }
 
-    private boolean evaluate(CompanyRolePermission permission, AppAction action) {
+    private boolean evaluate(CompanyRolePermission p, AppAction action) {
         return evaluate(
-                permission.isViewOwn(),
-                permission.isViewAll(),
-                permission.isCreatePermission(),
-                permission.isEditPermission(),
-                permission.isDeletePermission(),
-                permission.isApprove(),
-                action
-        );
+                p.isViewOwn(), p.isViewAll(),
+                p.isCreateOwn(), p.isCreateAll(),
+                p.isEditOwn(), p.isEditAll(),
+                p.isDeleteOwn(), p.isDeleteAll(),
+                p.isApprove(), action);
     }
 
-    private boolean evaluate(EnumRolePermission permission, AppAction action) {
+    private boolean evaluate(EnumRolePermission p, AppAction action) {
         return evaluate(
-                permission.isViewOwn(),
-                permission.isViewAll(),
-                permission.isCreatePermission(),
-                permission.isEditPermission(),
-                permission.isDeletePermission(),
-                permission.isApprove(),
-                action
-        );
+                p.isViewOwn(), p.isViewAll(),
+                p.isCreateOwn(), p.isCreateAll(),
+                p.isEditOwn(), p.isEditAll(),
+                p.isDeleteOwn(), p.isDeleteAll(),
+                p.isApprove(), action);
     }
 
     private boolean evaluate(
             boolean viewOwn,
             boolean viewAll,
-            boolean create,
-            boolean edit,
-            boolean deletePermission,
+            boolean createOwn,
+            boolean createAll,
+            boolean editOwn,
+            boolean editAll,
+            boolean deleteOwn,
+            boolean deleteAll,
             boolean approve,
             AppAction action
     ) {
         return switch (action) {
             case VIEW_OWN -> viewOwn;
             case VIEW_ALL -> viewAll;
-            case CREATE -> create;
-            case EDIT -> edit;
-            case DELETE -> deletePermission;
+            // Coarse base actions: granted when either own or all is set.
+            case CREATE -> createOwn || createAll;
+            case EDIT -> editOwn || editAll;
+            case DELETE -> deleteOwn || deleteAll;
+            // Scoped variants.
+            case CREATE_OWN -> createOwn;
+            case CREATE_ALL -> createAll;
+            case EDIT_OWN -> editOwn;
+            case EDIT_ALL -> editAll;
+            case DELETE_OWN -> deleteOwn;
+            case DELETE_ALL -> deleteAll;
             case APPROVE -> approve;
         };
     }

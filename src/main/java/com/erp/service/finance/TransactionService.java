@@ -277,7 +277,8 @@ public class TransactionService {
         if (header.getBudgetAccount() == null || header.getAmount() == null) {
             return;
         }
-        if (repo.existsByRelatedIdAndTransactionType(header.getId(), TYPE_BUDGET)) {
+        if (repo.existsByCompanyIdAndRelatedIdAndTransactionType(
+                header.getCompany().getId(), header.getId(), TYPE_BUDGET)) {
             return;
         }
         ChartOfAccounts budgetAccount = coaRepo.findById(header.getBudgetAccount().getId())
@@ -335,7 +336,7 @@ public class TransactionService {
         if (grossPay == null || grossPay.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-        if (repo.existsByRelatedIdAndTransactionType(payrollId, TYPE_PAYROLL)) {
+        if (repo.existsByCompanyIdAndRelatedIdAndTransactionType(companyId, payrollId, TYPE_PAYROLL)) {
             return;
         }
         ChartOfAccounts debitAccount = coaRepo.findById(debitAccountId)
@@ -648,14 +649,18 @@ public class TransactionService {
         }
     }
 
-    public boolean hasPurchaseOrderVendorPaymentPosting(Long purchaseOrderId) {
-        return purchaseOrderId != null
-                && repo.existsByRelatedIdAndTransactionType(purchaseOrderId, TYPE_VENDOR_PAYMENT);
+    public boolean hasPurchaseOrderVendorPaymentPosting(Long companyId, Long purchaseOrderId) {
+        return companyId != null
+                && purchaseOrderId != null
+                && repo.existsByCompanyIdAndRelatedIdAndTransactionType(
+                        companyId, purchaseOrderId, TYPE_VENDOR_PAYMENT);
     }
 
-    public boolean hasPurchaseOrderEncumbrance(Long purchaseOrderId) {
-        return purchaseOrderId != null
-                && repo.existsByRelatedIdAndTransactionType(purchaseOrderId, TYPE_PURCHASE_ORDER_ENCUMBRANCE);
+    public boolean hasPurchaseOrderEncumbrance(Long companyId, Long purchaseOrderId) {
+        return companyId != null
+                && purchaseOrderId != null
+                && repo.existsByCompanyIdAndRelatedIdAndTransactionType(
+                        companyId, purchaseOrderId, TYPE_PURCHASE_ORDER_ENCUMBRANCE);
     }
 
     public TransactionResponseDTO get(Long id) {
@@ -913,7 +918,8 @@ public class TransactionService {
         if (originalDebitAccountId == null || originalCreditAccountId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sales order accounts are required");
         }
-        if (repo.existsByRelatedIdAndTransactionType(relatedSalesOrderId, TYPE_SALES_ORDER_CANCEL_REVERSAL)) {
+        if (repo.existsByCompanyIdAndRelatedIdAndTransactionType(
+                companyId, relatedSalesOrderId, TYPE_SALES_ORDER_CANCEL_REVERSAL)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Sales order cancellation reversal already exists");
         }
 
@@ -965,7 +971,8 @@ public class TransactionService {
         if (debitAccountId == null || creditAccountId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Purchase order posting accounts are required");
         }
-        if (repo.existsByRelatedIdAndTransactionType(purchaseOrderId, TYPE_PURCHASE_ORDER_ENCUMBRANCE)) {
+        if (repo.existsByCompanyIdAndRelatedIdAndTransactionType(
+                companyId, purchaseOrderId, TYPE_PURCHASE_ORDER_ENCUMBRANCE)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Purchase order encumbrance already posted");
         }
 
@@ -1019,7 +1026,8 @@ public class TransactionService {
         if (originalDebitAccountId == null || originalCreditAccountId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Purchase order accounts are required");
         }
-        if (repo.existsByRelatedIdAndTransactionType(purchaseOrderId, TYPE_PURCHASE_ORDER_CANCEL_REVERSAL)) {
+        if (repo.existsByCompanyIdAndRelatedIdAndTransactionType(
+                companyId, purchaseOrderId, TYPE_PURCHASE_ORDER_CANCEL_REVERSAL)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Purchase order cancellation reversal already exists");
         }
 

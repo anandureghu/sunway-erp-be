@@ -17,6 +17,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     List<Transaction> findByPaymentIdAndTransactionTypeOrderByCreatedAtDesc(String paymentId, String transactionType);
     boolean existsByPaymentId(String paymentId);
     boolean existsByRelatedIdAndTransactionType(Long relatedId, String transactionType);
+    boolean existsByCompanyIdAndRelatedIdAndTransactionType(
+            Long companyId, Long relatedId, String transactionType);
 
     List<Transaction> findByRelatedIdAndInvoiceIdIsNull(Long relatedId);
 

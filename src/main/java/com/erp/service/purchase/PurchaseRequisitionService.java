@@ -27,7 +27,6 @@ import com.erp.repo.purchase.PurchaseRequisitionDocumentRepository;
 import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.service.file.FileStorageService;
 import com.erp.security.context.AuthContext;
-import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +58,7 @@ public class PurchaseRequisitionService {
     private final PurchaseRequisitionDocumentRepository documentRepo;
     private final FileStorageService fileStorageService;
     private final PurchaseProcurementDuplicateGuard procurementDuplicateGuard;
+    private final PurchasePostingAccountsResolver postingAccountsResolver;
 
     public PurchaseRequisitionService(
             PurchaseRequisitionRepository repo,
@@ -74,7 +74,8 @@ public class PurchaseRequisitionService {
             DocumentSequenceService documentSequenceService,
             PurchaseRequisitionDocumentRepository documentRepo,
             FileStorageService fileStorageService,
-            PurchaseProcurementDuplicateGuard procurementDuplicateGuard
+            PurchaseProcurementDuplicateGuard procurementDuplicateGuard,
+            PurchasePostingAccountsResolver postingAccountsResolver
     ) {
         this.repo = repo;
         this.itemRepo = itemRepo;
@@ -90,6 +91,7 @@ public class PurchaseRequisitionService {
         this.documentRepo = documentRepo;
         this.fileStorageService = fileStorageService;
         this.procurementDuplicateGuard = procurementDuplicateGuard;
+        this.postingAccountsResolver = postingAccountsResolver;
     }
 
     public PurchaseRequisitionResponseDTO create(PurchaseRequisitionCreateDTO dto) {
@@ -97,9 +99,10 @@ public class PurchaseRequisitionService {
         assertNoPendingProcurementForDto(dto, null);
 
         Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
-        ChartOfAccounts debitAccount = resolveCoa(company.getId(), dto.getDebitAccountId());
-        ChartOfAccounts creditAccount = resolveCoa(company.getId(), dto.getCreditAccountId());
-        validatePostingBalances(debitAccount, creditAccount, computeTotalFromItemDtos(dto.getItems()));
+        PurchasePostingAccountsResolver.ResolvedAccounts accounts = postingAccountsResolver.resolve(
+                company.getId(),
+                dto.getDebitAccountId(),
+                dto.getCreditAccountId());
 
         PurchaseRequisition pr = PurchaseRequisition.builder()
                 .requisitionNumber(documentSequenceService.generateNext("PR"))
@@ -107,7 +110,7 @@ public class PurchaseRequisitionService {
                 .company(company)
                 .build();
 
-        applyDtoToRequisition(pr, dto, company, debitAccount, creditAccount);
+        applyDtoToRequisition(pr, dto, company, accounts.debitAccount(), accounts.creditAccount());
         return toDTO(repo.save(pr), null);
     }
 
@@ -140,10 +143,9 @@ public class PurchaseRequisitionService {
         if (dto.getItems() == null || dto.getItems().isEmpty()) {
             throw new RuntimeException("At least one line item is required");
         }
-        if (dto.getDebitAccountId() == null || dto.getCreditAccountId() == null) {
-            throw new RuntimeException("Debit and credit accounts are required");
-        }
-        if (dto.getDebitAccountId().equals(dto.getCreditAccountId())) {
+        if (dto.getDebitAccountId() != null
+                && dto.getCreditAccountId() != null
+                && dto.getDebitAccountId().equals(dto.getCreditAccountId())) {
             throw new RuntimeException("Debit and credit accounts cannot be the same");
         }
         if (dto.getRequiredDeliveryDate() == null) {
@@ -257,8 +259,6 @@ public class PurchaseRequisitionService {
             throw new RuntimeException("Debit and credit accounts are required before submit");
         }
 
-        BigDecimal total = computeTotalForRequisition(pr);
-        validatePostingBalances(pr.getDebitAccount(), pr.getCreditAccount(), total);
         assertNoPendingProcurementForRequisition(pr, pr.getId());
 
         clearReviewFeedback(pr);
@@ -276,11 +276,12 @@ public class PurchaseRequisitionService {
         assertNoPendingProcurementForDto(dto, id);
 
         Company company = pr.getCompany();
-        ChartOfAccounts debitAccount = resolveCoa(company.getId(), dto.getDebitAccountId());
-        ChartOfAccounts creditAccount = resolveCoa(company.getId(), dto.getCreditAccountId());
-        validatePostingBalances(debitAccount, creditAccount, computeTotalFromItemDtos(dto.getItems()));
+        PurchasePostingAccountsResolver.ResolvedAccounts accounts = postingAccountsResolver.resolve(
+                company.getId(),
+                dto.getDebitAccountId(),
+                dto.getCreditAccountId());
 
-        applyDtoToRequisition(pr, dto, company, debitAccount, creditAccount);
+        applyDtoToRequisition(pr, dto, company, accounts.debitAccount(), accounts.creditAccount());
         return toDTO(repo.save(pr), null);
     }
 
@@ -351,8 +352,6 @@ public class PurchaseRequisitionService {
         pr.setApprovedAt(Instant.now());
 
         PurchaseOrder po = createPurchaseOrderFromRequisition(pr, approver);
-
-        validatePostingBalances(pr.getDebitAccount(), pr.getCreditAccount(), po.getTotalAmount());
 
         pr.setStatus(PurchaseRequisitionStatus.CONVERTED);
         pr.setConvertedAt(Instant.now());
@@ -453,29 +452,6 @@ public class PurchaseRequisitionService {
         }
         String t = value.trim();
         return t.isEmpty() ? null : t;
-    }
-
-    private ChartOfAccounts resolveCoa(Long companyId, Long accountId) {
-        ChartOfAccounts a = coaRepo.findById(accountId)
-                .orElseThrow(() -> new RuntimeException("Account not found"));
-        if (!a.getCompany().getId().equals(companyId)) {
-            throw new RuntimeException("Account does not belong to this company");
-        }
-        return a;
-    }
-
-    /**
-     * Same deltas as {@link TransactionService#applyPostingToCoa}: debit -= amount, credit += amount.
-     */
-    private void validatePostingBalances(ChartOfAccounts debit, ChartOfAccounts credit, BigDecimal amount) {
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Requisition total must be positive for account validation");
-        }
-        if (debit.getId().equals(credit.getId())) {
-            throw new RuntimeException("Debit and credit accounts cannot be the same");
-        }
-        CoaBalanceRules.assertSufficientBalance(debit, amount.negate());
-        CoaBalanceRules.assertSufficientBalance(credit, amount);
     }
 
     private BigDecimal computeTotalFromItemDtos(List<PurchaseRequisitionItemDTO> lines) {
