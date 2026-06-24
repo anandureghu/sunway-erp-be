@@ -63,6 +63,9 @@ public class CompanyAccountingDefaultsService {
         return purchasePostingAccountsResolver.resolve(companyId, null, null);
     }
 
+    /**
+     * @deprecated for GL posting — use {@link #requirePurchaseAccounts(Long)} so only Finance → Default accounts apply.
+     */
     public PurchasePostingAccountsResolver.ResolvedAccounts resolvePurchaseAccounts(
             Long companyId, Long debitAccountId, Long creditAccountId) {
         return purchasePostingAccountsResolver.resolve(companyId, debitAccountId, creditAccountId);

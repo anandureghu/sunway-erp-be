@@ -25,6 +25,7 @@ import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.finance.CompanyAccountingDefaultsService;
 import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
 import com.erp.service.finance.TransactionService;
 import com.erp.service.finance.VendorPayableService;
@@ -56,7 +57,7 @@ public class PurchaseOrderService {
     private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
-    private final PurchasePostingAccountsResolver postingAccountsResolver;
+    private final CompanyAccountingDefaultsService accountingDefaults;
 
     public PurchaseOrderService(
             PurchaseOrderRepository repo,
@@ -71,7 +72,7 @@ public class PurchaseOrderService {
             InvoiceRepository invoiceRepo,
             AuthContext auth,
             DocumentSequenceService documentSequenceService,
-            PurchasePostingAccountsResolver postingAccountsResolver
+            CompanyAccountingDefaultsService accountingDefaults
     ) {
         this.repo = repo;
         this.vendorRepo = vendorRepo;
@@ -85,7 +86,7 @@ public class PurchaseOrderService {
         this.invoiceRepo = invoiceRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
-        this.postingAccountsResolver = postingAccountsResolver;
+        this.accountingDefaults = accountingDefaults;
     }
 
     public PurchaseOrderResponseDTO create(PurchaseOrderCreateDTO dto) {
@@ -428,14 +429,7 @@ public class PurchaseOrderService {
     private record PostingAccounts(Long debitAccountId, Long creditAccountId) {}
 
     private PostingAccounts resolvePostingAccounts(PurchaseOrder po) {
-        PurchaseRequisition pr = po.getSourceRequisition();
-        if (pr != null && pr.getDebitAccount() != null && pr.getCreditAccount() != null) {
-            return new PostingAccounts(pr.getDebitAccount().getId(), pr.getCreditAccount().getId());
-        }
-        PurchasePostingAccountsResolver.ResolvedAccounts accounts = postingAccountsResolver.resolve(
-                po.getCompany().getId(),
-                null,
-                null);
+        var accounts = accountingDefaults.requirePurchaseAccounts(po.getCompany().getId());
         return new PostingAccounts(accounts.debitAccountId(), accounts.creditAccountId());
     }
 

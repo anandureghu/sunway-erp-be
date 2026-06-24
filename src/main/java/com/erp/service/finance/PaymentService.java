@@ -502,15 +502,15 @@ public class PaymentService {
         PurchaseRequisition pr = po.getSourceRequisition();
         Long companyId = payment.getCompany().getId();
 
-        Long prDebitId = pr != null && pr.getDebitAccount() != null ? pr.getDebitAccount().getId() : null;
-        Long prCreditId = pr != null && pr.getCreditAccount() != null ? pr.getCreditAccount().getId() : null;
         PurchasePostingAccountsResolver.ResolvedAccounts accounts =
-                accountingDefaults.resolvePurchaseAccounts(companyId, prDebitId, prCreditId);
+                accountingDefaults.requirePurchaseAccounts(companyId);
 
         boolean encumbered = po.getFinanceTransactionId() != null
                 || transactionService.hasPurchaseOrderEncumbrance(companyId, po.getId());
 
         if (!encumbered) {
+            accountingDefaults.assertDistinctAccounts(
+                    "Purchase encumbrance", accounts.debitAccountId(), accounts.creditAccountId());
             transactionService.createPurchaseOrderEncumbrance(
                     companyId,
                     po.getId(),
@@ -523,7 +523,7 @@ public class PaymentService {
         Long apAccountId = accounts.creditAccountId();
         Long cashAccountId = accountingDefaults.requireCashGlAccountId(companyId);
         accountingDefaults.assertDistinctAccounts(
-                "Vendor payment posting", apAccountId, cashAccountId, accounts.debitAccountId());
+                "Vendor payment posting", apAccountId, cashAccountId);
 
         transactionService.validateTwoSidedPostingBalances(
                 apAccountId,
