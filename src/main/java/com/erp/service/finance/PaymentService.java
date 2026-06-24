@@ -490,7 +490,7 @@ public class PaymentService {
 
     /**
      * Posts vendor payment to GL. When the PO has no prior encumbrance, accrues expense to AP first,
-     * then settles AP against cash (debit AP, credit cash).
+     * then settles AP using purchase defaults only (Dr purchase credit, Cr purchase debit).
      */
     private void postVendorPaymentToAccounting(Payment payment) {
         if (payment.getPurchaseOrderId() == null) {
@@ -519,14 +519,14 @@ public class PaymentService {
                     po.getOrderNumber());
         }
 
-        Long apAccountId = accounts.creditAccountId();
-        Long cashAccountId = accountingDefaults.requireCashGlAccountId(companyId);
+        Long debitAccountId = accounts.creditAccountId();
+        Long creditAccountId = accounts.debitAccountId();
         accountingDefaults.assertDistinctAccounts(
-                "Vendor payment posting", apAccountId, cashAccountId);
+                "Vendor payment posting", debitAccountId, creditAccountId);
 
         transactionService.validateTwoSidedPostingBalances(
-                apAccountId,
-                cashAccountId,
+                debitAccountId,
+                creditAccountId,
                 payment.getAmount(),
                 companyId);
 
@@ -539,8 +539,8 @@ public class PaymentService {
                 .transactionType(TransactionService.TYPE_VENDOR_PAYMENT)
                 .transactionDate(payment.getEffectiveDate())
                 .amount(payment.getAmount())
-                .debitAccount(apAccountId)
-                .creditAccount(cashAccountId)
+                .debitAccount(debitAccountId)
+                .creditAccount(creditAccountId)
                 .paymentId(String.valueOf(payment.getId()))
                 .invoiceId(purchaseInvoiceCode)
                 .relatedId(po.getId())
@@ -556,6 +556,9 @@ public class PaymentService {
         }
     }
 
+    /**
+     * Posts customer (AR) payment to GL using sales defaults only (Dr sales debit, Cr sales credit).
+     */
     private void postPaymentToAccounting(Payment payment, Invoice invoice) {
         if (payment.getId() == null || invoice == null) {
             return;
@@ -567,16 +570,14 @@ public class PaymentService {
                 .orElseThrow(() -> new RuntimeException("Unable to post payment: sales order not found for invoice"));
 
         Long companyId = payment.getCompany().getId();
-        Long debitAccountId = accountingDefaults.requireCashGlAccountId(companyId);
-        Long creditAccountId = accountingDefaults.requireSalesCreditAccountId(companyId);
-        accountingDefaults.assertDistinctAccounts("Customer payment posting", debitAccountId, creditAccountId);
+        var accounts = accountingDefaults.requireSalesAccounts(companyId);
 
         transactionService.createTransactionForPayment(
                 payment.getId(),
                 companyId,
                 payment.getAmount(),
-                debitAccountId,
-                creditAccountId,
+                accounts.debitAccountId(),
+                accounts.creditAccountId(),
                 payment.getEffectiveDate(),
                 "PAYMENT",
                 invoice.getInvoiceId()

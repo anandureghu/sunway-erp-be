@@ -438,9 +438,7 @@ public class InvoiceService {
             throw new RuntimeException("Invoice already exists for this sales order");
         }
         Long companyId = order.getCompany().getId();
-        Long debitAccountId = accountingDefaults.requireSalesDebitAccountId(companyId);
-        Long creditAccountId = accountingDefaults.requireSalesCreditAccountId(companyId);
-        accountingDefaults.assertDistinctAccounts("Sales invoice posting", debitAccountId, creditAccountId);
+        var salesAccounts = accountingDefaults.requireSalesAccounts(companyId);
 
         if (order.getBankAccount() == null) {
             throw new RuntimeException("Sales order is missing bank account");
@@ -456,8 +454,8 @@ public class InvoiceService {
         req.setInvoiceDate(LocalDate.now());
         req.setDueDate(order.getInvoiceDueDate());
         req.setAmount(order.getTotalAmount());
-        req.setDebitAccount(debitAccountId);
-        req.setCreditAccount(creditAccountId);
+        req.setDebitAccount(salesAccounts.debitAccountId());
+        req.setCreditAccount(salesAccounts.creditAccountId());
         req.setBankAccountId(order.getBankAccount().getId());
         req.setItemDescription("Auto-generated from sales order " + order.getOrderNumber());
         req.setNotesRemarks("Invoice created on sales order confirmation.");
