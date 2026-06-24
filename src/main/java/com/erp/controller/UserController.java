@@ -4,6 +4,7 @@ import com.erp.domain.User;
 import com.erp.dto.security.AdminResetPasswordRequest;
 import com.erp.dto.security.ChangePasswordRequest;
 import com.erp.dto.security.ProfileResponse;
+import com.erp.dto.security.UpdateSecuritySettingsRequest;
 import com.erp.dto.hr.UserDetailsDTO;
 import com.erp.repo.UserRepository;
 import com.erp.security.context.AuthContext;
@@ -63,6 +64,13 @@ public class UserController {
             @Valid @RequestBody ChangePasswordRequest request) {
         userService.changePassword(id, request);
         return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/{id}/security-settings")
+    public ResponseEntity<ProfileResponse> updateSecuritySettings(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody UpdateSecuritySettingsRequest request) {
+        return ResponseEntity.ok(userService.updateSecuritySettings(id, request));
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).EDIT)")

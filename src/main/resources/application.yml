@@ -26,7 +26,6 @@ spring:
 app:
   public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:5173}
   auth:
-    two-factor-enabled: ${AUTH_TWO_FACTOR_ENABLED:true}
     pre-auth-token-minutes: ${AUTH_PRE_AUTH_TOKEN_MINUTES:5}
   mail:
     from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@sunwayerp.local}}

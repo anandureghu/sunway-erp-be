@@ -52,6 +52,9 @@ public class User {
     @Column(name = "force_password_reset", nullable = false)
     private Boolean forcePasswordReset = true;
 
+    @Column(name = "two_factor_enabled", nullable = false)
+    private Boolean twoFactorEnabled = false;
+
     // 🔹 Company relation
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id")

@@ -7,6 +7,7 @@ import com.erp.domain.security.AppModule;
 import com.erp.dto.security.AdminResetPasswordRequest;
 import com.erp.dto.security.ChangePasswordRequest;
 import com.erp.dto.security.ProfileResponse;
+import com.erp.dto.security.UpdateSecuritySettingsRequest;
 import com.erp.dto.hr.UserDetailsDTO;
 import com.erp.dto.hr.UserSearchResultDTO;
 import com.erp.domain.security.Role;
@@ -199,6 +200,24 @@ public class UserService {
         user.setForcePasswordReset(false);
 
         userRepo.save(user);
+    }
+
+    @Transactional
+    public ProfileResponse updateSecuritySettings(Long userId, UpdateSecuritySettingsRequest req) {
+        CustomUserPrincipal principal = currentPrincipal();
+
+        if (!principal.getId().equals(userId)) {
+            throw new AccessDeniedException("Access denied");
+        }
+
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+
+        user.setTwoFactorEnabled(Boolean.TRUE.equals(req.getTwoFactorEnabled()));
+        userRepo.save(user);
+
+        Employee emp = resolveEmployeeForContext(userId);
+        return ProfileResponse.from(user, emp);
     }
 
     // ======================================================

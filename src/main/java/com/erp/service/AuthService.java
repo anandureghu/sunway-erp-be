@@ -33,7 +33,6 @@ public class AuthService {
     private final JwtService jwt;
     private final AuthContext authContext;
     private final OtpService otpService;
-    private final boolean twoFactorEnabled;
     private final long preAuthTokenMinutes;
 
     public AuthService(UserRepository userRepository,
@@ -42,7 +41,6 @@ public class AuthService {
                        JwtService jwt,
                        AuthContext authContext,
                        OtpService otpService,
-                       @Value("${app.auth.two-factor-enabled:true}") boolean twoFactorEnabled,
                        @Value("${app.auth.pre-auth-token-minutes:5}") long preAuthTokenMinutes) {
         this.userRepository     = userRepository;
         this.employeeRepository = employeeRepository;
@@ -50,7 +48,6 @@ public class AuthService {
         this.jwt                = jwt;
         this.authContext        = authContext;
         this.otpService         = otpService;
-        this.twoFactorEnabled   = twoFactorEnabled;
         this.preAuthTokenMinutes = preAuthTokenMinutes;
     }
 
@@ -87,7 +84,7 @@ public class AuthService {
 
         boolean requiresSelection = memberships.size() > 1 && req.getPreferredCompanyId() == null;
 
-        if (twoFactorEnabled) {
+        if (Boolean.TRUE.equals(u.getTwoFactorEnabled())) {
             String preAuthToken = issuePreAuthToken(u.getId(), u.getUsername());
             return LoginResponse.twoFactorRequired(
                     preAuthToken,

@@ -39,9 +39,9 @@ public class AuthController {
     @Operation(
             summary = "Sign in",
             description = """
-                    Validates username/email and password. When app.auth.two-factor-enabled is true,
-                    returns requiresTwoFactor with preAuthToken, email, and maskedEmail instead of JWTs.
-                    The client must then:
+                    Validates username/email and password. When the user has two-factor authentication
+                    enabled in profile security settings, returns requiresTwoFactor with preAuthToken,
+                    email, and maskedEmail instead of JWTs. The client must then:
                     1) POST /api/auth/otp/send (LOGIN_2FA) using email from the login response
                     2) POST /api/auth/otp/verify
                     3) POST /api/auth/login/verify-2fa with preAuthToken + verificationToken

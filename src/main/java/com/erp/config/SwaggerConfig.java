@@ -31,7 +31,8 @@ public class SwaggerConfig {
                         .title("ERP System API")
                         .description("""
                                 Auto-generated API documentation for HR, Finance, Inventory, and Auth modules.
-                                Login may require email 2FA (POST /api/auth/login → OTP → /login/verify-2fa).
+                                Login may require email 2FA when enabled in the user's profile security settings
+                                (POST /api/auth/login → OTP → /login/verify-2fa).
                                 Password recovery: POST /api/auth/forgot-password → /reset-password (email + OTP code).
                                 """)
                         .version("1.0.0")
