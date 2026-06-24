@@ -76,6 +76,7 @@ public class InvoiceService {
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final CustomerEmailService customerEmailService;
     private final TransactionService transactionService;
+    private final CompanyAccountingDefaultsService accountingDefaults;
     private final DocumentSequenceService documentSequenceService;
 
     @Transactional
@@ -436,12 +437,11 @@ public class InvoiceService {
         if (repo.findByOrderIdAndType(order.getId(), InvoiceType.SALES).isPresent()) {
             throw new RuntimeException("Invoice already exists for this sales order");
         }
-        if (order.getDebitAccount() == null) {
-            throw new RuntimeException("Sales order is missing debit account");
-        }
-        if (order.getCreditAccount() == null) {
-            throw new RuntimeException("Sales order is missing credit account");
-        }
+        Long companyId = order.getCompany().getId();
+        Long debitAccountId = accountingDefaults.requireSalesDebitAccountId(companyId);
+        Long creditAccountId = accountingDefaults.requireSalesCreditAccountId(companyId);
+        accountingDefaults.assertDistinctAccounts("Sales invoice posting", debitAccountId, creditAccountId);
+
         if (order.getBankAccount() == null) {
             throw new RuntimeException("Sales order is missing bank account");
         }
@@ -456,8 +456,8 @@ public class InvoiceService {
         req.setInvoiceDate(LocalDate.now());
         req.setDueDate(order.getInvoiceDueDate());
         req.setAmount(order.getTotalAmount());
-        req.setDebitAccount(order.getDebitAccount().getId());
-        req.setCreditAccount(order.getCreditAccount().getId());
+        req.setDebitAccount(debitAccountId);
+        req.setCreditAccount(creditAccountId);
         req.setBankAccountId(order.getBankAccount().getId());
         req.setItemDescription("Auto-generated from sales order " + order.getOrderNumber());
         req.setNotesRemarks("Invoice created on sales order confirmation.");
@@ -498,11 +498,12 @@ public class InvoiceService {
             throw new RuntimeException("Assign a supplier before generating the purchase invoice");
         }
 
-        Company company = po.getCompany();
-        if (company.getDefaultPurchaseDebitAccountId() == null
-                || company.getDefaultPurchaseCreditAccountId() == null) {
-            throw new RuntimeException("Company is missing default purchase debit or credit account");
-        }
+        Long companyId = po.getCompany().getId();
+        var purchaseAccounts = accountingDefaults.requirePurchaseAccounts(companyId);
+        accountingDefaults.assertDistinctAccounts(
+                "Purchase invoice posting",
+                purchaseAccounts.debitAccountId(),
+                purchaseAccounts.creditAccountId());
 
         BigDecimal total = po.getTotalAmount() != null ? po.getTotalAmount() : BigDecimal.ZERO;
 
@@ -517,8 +518,8 @@ public class InvoiceService {
         req.setSubtotalAmount(total);
         req.setDiscountAmount(BigDecimal.ZERO);
         req.setTaxAmount(BigDecimal.ZERO);
-        req.setDebitAccount(company.getDefaultPurchaseDebitAccountId());
-        req.setCreditAccount(company.getDefaultPurchaseCreditAccountId());
+        req.setDebitAccount(purchaseAccounts.debitAccountId());
+        req.setCreditAccount(purchaseAccounts.creditAccountId());
         req.setItemDescription(resolvePurchaseInvoiceDescription(po));
         req.setNotesRemarks(resolvePurchaseInvoiceNotes(po));
         req.setDocumentSource(InvoiceDocumentSource.GENERATED);

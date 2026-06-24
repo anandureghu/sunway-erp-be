@@ -6,7 +6,6 @@ import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
 import com.erp.exception.ConflictException;
-import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.hr.Company;
 import com.erp.dto.finance.ConfirmPaymentDTO;
 import com.erp.dto.finance.CreatePaymentDTO;
@@ -564,18 +563,13 @@ public class PaymentService {
         if (invoice.getOrderId() == null) {
             throw new RuntimeException("Unable to post payment: sales order reference is missing on invoice");
         }
-        SalesOrder salesOrder = salesOrderRepo.findById(invoice.getOrderId())
+        salesOrderRepo.findById(invoice.getOrderId())
                 .orElseThrow(() -> new RuntimeException("Unable to post payment: sales order not found for invoice"));
 
         Long companyId = payment.getCompany().getId();
-        Long debitAccountId = salesOrder.getDebitAccount() != null ? salesOrder.getDebitAccount().getId() : null;
-        Long creditAccountId = salesOrder.getCreditAccount() != null ? salesOrder.getCreditAccount().getId() : null;
-        if (debitAccountId == null) {
-            throw new RuntimeException("Unable to post payment: debit account is missing on sales order");
-        }
-        if (creditAccountId == null) {
-            throw new RuntimeException("Unable to post payment: credit account is missing on sales order");
-        }
+        Long debitAccountId = accountingDefaults.requireCashGlAccountId(companyId);
+        Long creditAccountId = accountingDefaults.requireSalesCreditAccountId(companyId);
+        accountingDefaults.assertDistinctAccounts("Customer payment posting", debitAccountId, creditAccountId);
 
         transactionService.createTransactionForPayment(
                 payment.getId(),
