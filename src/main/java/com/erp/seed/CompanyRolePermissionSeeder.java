@@ -35,8 +35,11 @@ public class CompanyRolePermissionSeeder implements ApplicationRunner {
                 StandardCharsets.UTF_8
         );
 
-        Arrays.stream(sql.split(";"))
-                .map(CompanyRolePermissionSeeder::stripComments)
+        // Strip comments BEFORE splitting on ';'. A comment line may itself
+        // contain a ';' — splitting first would slice the comment in two and
+        // leave the tail as a bogus statement (the rest no longer starts with
+        // '--', so it survives the per-statement strip).
+        Arrays.stream(stripComments(sql).split(";"))
                 .map(String::trim)
                 .filter(statement -> !statement.isEmpty())
                 .forEach(statement -> entityManager.createNativeQuery(statement).executeUpdate());
