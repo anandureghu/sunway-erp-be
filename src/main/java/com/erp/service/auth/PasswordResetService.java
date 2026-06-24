@@ -45,7 +45,7 @@ public class PasswordResetService {
             throw new OtpException("Passwords do not match");
         }
 
-        otpService.verifyAndConsumeOtpCode(email, OtpPurpose.PASSWORD_RESET, request.getCode());
+        otpService.consumeVerifiedPasswordReset(email);
 
         User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new OtpException("Invalid or expired verification token"));

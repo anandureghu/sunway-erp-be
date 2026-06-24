@@ -142,14 +142,20 @@ public class OtpService {
     }
 
     /**
-     * Validates an OTP code and marks the challenge consumed in one step.
-     * Used by password reset so the client does not need a separate verify + token round-trip.
+     * Validates and consumes a prior PASSWORD_RESET OTP verify for this email.
+     * The client does not pass a token — reset is allowed only after otp/verify succeeded recently.
      */
     @Transactional
-    public void verifyAndConsumeOtpCode(String email, OtpPurpose purpose, String code) {
-        EmailOtpChallenge challenge = validateOtpCode(email, purpose, code);
+    public void consumeVerifiedPasswordReset(String email) {
+        String normalizedEmail = normalizeEmail(email);
         Instant now = Instant.now();
-        challenge.setVerifiedAt(now);
+
+        EmailOtpChallenge challenge = challengeRepository
+                .findTopByEmailIgnoreCaseAndPurposeAndVerifiedAtIsNotNullAndVerificationTokenIsNotNullAndVerificationTokenExpiresAtAfterOrderByVerifiedAtDesc(
+                        normalizedEmail, OtpPurpose.PASSWORD_RESET, now)
+                .orElseThrow(() -> new OtpException(
+                        "Invalid or expired verification. Please verify your email code again."));
+
         challenge.setVerificationToken(null);
         challenge.setVerificationTokenExpiresAt(now);
         challengeRepository.save(challenge);

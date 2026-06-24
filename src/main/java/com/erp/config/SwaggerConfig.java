@@ -33,7 +33,7 @@ public class SwaggerConfig {
                                 Auto-generated API documentation for HR, Finance, Inventory, and Auth modules.
                                 Login may require email 2FA when enabled in the user's profile security settings
                                 (POST /api/auth/login → OTP → /login/verify-2fa).
-                                Password recovery: POST /api/auth/forgot-password → /reset-password (email + OTP code).
+                                Password recovery: POST /api/auth/forgot-password → otp/verify → /reset-password.
                                 """)
                         .version("1.0.0")
                 )

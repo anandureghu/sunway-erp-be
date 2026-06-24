@@ -19,4 +19,10 @@ public interface EmailOtpChallengeRepository extends JpaRepository<EmailOtpChall
             String verificationToken,
             Instant now
     );
+
+    Optional<EmailOtpChallenge> findTopByEmailIgnoreCaseAndPurposeAndVerifiedAtIsNotNullAndVerificationTokenIsNotNullAndVerificationTokenExpiresAtAfterOrderByVerifiedAtDesc(
+            String email,
+            OtpPurpose purpose,
+            Instant now
+    );
 }

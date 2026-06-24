@@ -72,7 +72,8 @@ public class AuthController {
             description = """
                     Starts password recovery by emailing a one-time code (purpose PASSWORD_RESET).
                     Always returns the same message whether or not the email is registered.
-                    Next: POST /api/auth/reset-password with email, code, and new password.
+                    Next: POST /api/auth/otp/verify (PASSWORD_RESET), then POST /api/auth/reset-password
+                    with email and new password. User signs in again afterward.
                     """
     )
     @PostMapping("/forgot-password")
@@ -81,10 +82,11 @@ public class AuthController {
     }
 
     @Operation(
-            summary = "Reset password with emailed OTP code",
+            summary = "Reset password after OTP verify",
             description = """
-                    Verifies the PASSWORD_RESET OTP and sets a new password in one step.
-                    Does not issue a session — user must log in (including 2FA when enabled).
+                    Sets a new password for the email that completed POST /api/auth/otp/verify
+                    (purpose PASSWORD_RESET) within the verification window. Does not issue a session —
+                    the user must sign in again afterward.
                     """
     )
     @PostMapping("/reset-password")
