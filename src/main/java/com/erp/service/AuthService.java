@@ -9,6 +9,8 @@ import com.erp.dto.auth.JwtResponse;
 import com.erp.dto.auth.LoginRequest;
 import com.erp.dto.auth.LoginResponse;
 import com.erp.dto.auth.LoginTwoFactorCompleteRequest;
+import com.erp.dto.auth.OtpVerifyRequest;
+import com.erp.dto.auth.OtpVerifyResponse;
 import com.erp.dto.auth.RegisterRequest;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
@@ -139,6 +141,50 @@ public class AuthService {
                 tokens.getRefreshToken(),
                 companies,
                 requiresSelection);
+    }
+
+    /**
+     * After a successful LOGIN_2FA OTP verify, issues JWTs. Other OTP purposes must not receive tokens.
+     */
+    public OtpVerifyResponse enrichLogin2faOtpVerify(OtpVerifyRequest request, OtpVerifyResponse verified) {
+        if (request.getPreAuthToken() == null || request.getPreAuthToken().isBlank()) {
+            throw new IllegalArgumentException("preAuthToken is required when purpose is LOGIN_2FA");
+        }
+
+        Claims claims;
+        try {
+            claims = jwt.parsePreAuthToken(request.getPreAuthToken());
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Invalid or expired login session. Please sign in again.");
+        }
+
+        Long userId = parseLong(claims.get("userId"));
+        User u = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired login session. Please sign in again."));
+
+        if (!u.getEmail().equalsIgnoreCase(verified.getEmail())) {
+            throw new IllegalArgumentException("Email does not match the login session");
+        }
+
+        LoginTwoFactorCompleteRequest complete = new LoginTwoFactorCompleteRequest();
+        complete.setPreAuthToken(request.getPreAuthToken());
+        complete.setVerificationToken(verified.getVerificationToken());
+        complete.setPreferredCompanyId(request.getPreferredCompanyId());
+
+        LoginResponse login = completeLoginTwoFactor(complete);
+
+        return OtpVerifyResponse.builder()
+                .verified(verified.isVerified())
+                .email(verified.getEmail())
+                .purpose(verified.getPurpose())
+                .verificationToken(verified.getVerificationToken())
+                .verificationTokenExpiresAt(verified.getVerificationTokenExpiresAt())
+                .message(verified.getMessage())
+                .accessToken(login.getAccessToken())
+                .refreshToken(login.getRefreshToken())
+                .companies(login.getCompanies())
+                .requiresCompanySelection(login.isRequiresCompanySelection())
+                .build();
     }
 
     public JwtResponse refresh(String refreshToken) {

@@ -31,4 +31,13 @@ public class OtpVerifyRequest {
     @Pattern(regexp = "^[0-9]{4,8}$", message = "Code must be 4-8 digits")
     @Schema(description = "Numeric OTP received by email", example = "123456")
     private String code;
+
+    @Schema(
+            description = "Required when purpose is LOGIN_2FA — pre-auth token from POST /api/auth/login",
+            example = "eyJhbGciOiJIUzI1NiJ9..."
+    )
+    private String preAuthToken;
+
+    @Schema(description = "Optional company to activate when the user belongs to multiple tenants (LOGIN_2FA)")
+    private Long preferredCompanyId;
 }

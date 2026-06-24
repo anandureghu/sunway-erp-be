@@ -4,6 +4,8 @@ import com.erp.dto.auth.OtpSendRequest;
 import com.erp.dto.auth.OtpSendResponse;
 import com.erp.dto.auth.OtpVerifyRequest;
 import com.erp.dto.auth.OtpVerifyResponse;
+import com.erp.domain.auth.OtpPurpose;
+import com.erp.service.AuthService;
 import com.erp.service.auth.OtpService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class OtpController {
 
     private final OtpService otpService;
+    private final AuthService authService;
 
     @Operation(
             summary = "Send OTP to user email",
@@ -57,8 +60,10 @@ public class OtpController {
             summary = "Verify OTP code",
             description = """
                     Verifies the OTP sent to the user's email. On success, returns a short-lived
-                    verificationToken that downstream flows (password reset, 2FA completion, etc.)
-                    can validate via OtpService.consumeVerificationToken.
+                    verificationToken for follow-up flows (e.g. password reset).
+
+                    When purpose is LOGIN_2FA, also include preAuthToken from POST /api/auth/login;
+                    the response includes accessToken and refreshToken. Other purposes do not return JWTs.
                     """
     )
     @ApiResponses({
@@ -71,6 +76,10 @@ public class OtpController {
     })
     @PostMapping("/verify")
     public ResponseEntity<OtpVerifyResponse> verifyOtp(@RequestBody @Valid OtpVerifyRequest request) {
-        return ResponseEntity.ok(otpService.verifyOtp(request));
+        OtpVerifyResponse verified = otpService.verifyOtp(request);
+        if (request.getPurpose() == OtpPurpose.LOGIN_2FA) {
+            verified = authService.enrichLogin2faOtpVerify(request, verified);
+        }
+        return ResponseEntity.ok(verified);
     }
 }

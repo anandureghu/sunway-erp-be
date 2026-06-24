@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.Instant;
+import java.util.List;
 
 @Getter
 @Builder
@@ -22,7 +23,7 @@ public class OtpVerifyResponse {
     private OtpPurpose purpose;
 
     @Schema(
-            description = "Short-lived token to pass into follow-up flows (password reset, 2FA login, etc.)",
+            description = "Short-lived token to pass into follow-up flows (password reset, etc.)",
             example = "a1b2c3d4e5f6478990abcdef12345678"
     )
     private String verificationToken;
@@ -32,4 +33,22 @@ public class OtpVerifyResponse {
 
     @Schema(description = "Human-readable status message", example = "Verification successful")
     private String message;
+
+    @Schema(
+            description = "JWT access token — only returned when purpose is LOGIN_2FA",
+            example = "eyJhbGciOiJIUzI1NiJ9..."
+    )
+    private String accessToken;
+
+    @Schema(
+            description = "JWT refresh token — only returned when purpose is LOGIN_2FA",
+            example = "eyJhbGciOiJIUzI1NiJ9..."
+    )
+    private String refreshToken;
+
+    @Schema(description = "Companies the user can access — only returned when purpose is LOGIN_2FA")
+    private List<CompanySummary> companies;
+
+    @Schema(description = "Whether the client must pick a company — only returned when purpose is LOGIN_2FA")
+    private Boolean requiresCompanySelection;
 }
