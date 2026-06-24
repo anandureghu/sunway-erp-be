@@ -91,6 +91,7 @@ public class AuthService {
             String preAuthToken = issuePreAuthToken(u.getId(), u.getUsername());
             return LoginResponse.twoFactorRequired(
                     preAuthToken,
+                    u.getEmail(),
                     maskEmail(u.getEmail()),
                     companies,
                     requiresSelection);

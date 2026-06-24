@@ -20,6 +20,9 @@ public class LoginResponse {
     @Schema(description = "Masked account email for OTP UI (only when requiresTwoFactor is true)")
     private String maskedEmail;
 
+    @Schema(description = "Account email for OTP send/verify calls (only when requiresTwoFactor is true)")
+    private String email;
+
     private String accessToken;
     private String refreshToken;
     private final String tokenType = "Bearer";
@@ -30,6 +33,7 @@ public class LoginResponse {
 
     public static LoginResponse twoFactorRequired(
             String preAuthToken,
+            String email,
             String maskedEmail,
             List<CompanySummary> companies,
             boolean requiresCompanySelection
@@ -37,6 +41,7 @@ public class LoginResponse {
         LoginResponse response = new LoginResponse();
         response.requiresTwoFactor = true;
         response.preAuthToken = preAuthToken;
+        response.email = email;
         response.maskedEmail = maskedEmail;
         response.companies = companies;
         response.requiresCompanySelection = requiresCompanySelection;

@@ -10,20 +10,18 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@Schema(description = "Complete password reset after OTP verification")
+@Schema(description = "Complete password reset with the emailed OTP code")
 public class ResetPasswordRequest {
 
     @NotBlank
     @Email
-    @Schema(description = "Account email used for OTP", example = "user@example.com")
+    @Schema(description = "Account email the OTP was sent to", example = "user@example.com")
     private String email;
 
     @NotBlank
-    @Schema(
-            description = "Verification token from POST /api/auth/otp/verify (purpose PASSWORD_RESET)",
-            example = "a1b2c3d4e5f6..."
-    )
-    private String verificationToken;
+    @Pattern(regexp = "^[0-9]{4,8}$", message = "Code must be 4-8 digits")
+    @Schema(description = "Numeric OTP received by email", example = "123456")
+    private String code;
 
     @NotBlank(message = "New password is required")
     @Size(min = 8, max = 64, message = "Password must be 8–64 characters")

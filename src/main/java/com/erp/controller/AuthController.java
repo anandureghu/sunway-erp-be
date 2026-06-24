@@ -40,8 +40,9 @@ public class AuthController {
             summary = "Sign in",
             description = """
                     Validates username/email and password. When app.auth.two-factor-enabled is true,
-                    returns requiresTwoFactor with a preAuthToken instead of JWTs. The client must then:
-                    1) POST /api/auth/otp/send (LOGIN_2FA)
+                    returns requiresTwoFactor with preAuthToken, email, and maskedEmail instead of JWTs.
+                    The client must then:
+                    1) POST /api/auth/otp/send (LOGIN_2FA) using email from the login response
                     2) POST /api/auth/otp/verify
                     3) POST /api/auth/login/verify-2fa with preAuthToken + verificationToken
                     """
@@ -71,7 +72,7 @@ public class AuthController {
             description = """
                     Starts password recovery by emailing a one-time code (purpose PASSWORD_RESET).
                     Always returns the same message whether or not the email is registered.
-                    Next: POST /api/auth/otp/verify, then POST /api/auth/reset-password.
+                    Next: POST /api/auth/reset-password with email, code, and new password.
                     """
     )
     @PostMapping("/forgot-password")
@@ -80,9 +81,9 @@ public class AuthController {
     }
 
     @Operation(
-            summary = "Reset password with OTP verification token",
+            summary = "Reset password with emailed OTP code",
             description = """
-                    Sets a new password after PASSWORD_RESET OTP verification.
+                    Verifies the PASSWORD_RESET OTP and sets a new password in one step.
                     Does not issue a session — user must log in (including 2FA when enabled).
                     """
     )

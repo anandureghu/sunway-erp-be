@@ -95,25 +95,9 @@ public class OtpService {
     public OtpVerifyResponse verifyOtp(OtpVerifyRequest request) {
         String email = normalizeEmail(request.getEmail());
         OtpPurpose purpose = request.getPurpose();
-        String code = request.getCode().trim();
         Instant now = Instant.now();
 
-        EmailOtpChallenge challenge = challengeRepository
-                .findTopByEmailIgnoreCaseAndPurposeAndVerifiedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
-                        email, purpose, now
-                )
-                .orElseThrow(() -> new OtpException("Invalid or expired verification code"));
-
-        if (challenge.getAttemptCount() >= maxAttempts) {
-            throw new OtpException("Maximum verification attempts exceeded. Request a new code");
-        }
-
-        if (!passwordEncoder.matches(code, challenge.getCodeHash())) {
-            challenge.setAttemptCount(challenge.getAttemptCount() + 1);
-            challengeRepository.save(challenge);
-            int remaining = maxAttempts - challenge.getAttemptCount();
-            throw new OtpException("Invalid verification code. " + remaining + " attempt(s) remaining");
-        }
+        EmailOtpChallenge challenge = validateOtpCode(email, purpose, request.getCode());
 
         String verificationToken = UUID.randomUUID().toString().replace("-", "");
         challenge.setVerifiedAt(now);
@@ -133,7 +117,7 @@ public class OtpService {
 
     /**
      * Validates and consumes a one-time verification token issued after a successful OTP verify.
-     * Call this from password-reset, login-2FA, or other flows that require prior OTP proof.
+     * Call this from login-2FA or other flows that require prior OTP proof via verification token.
      */
     @Transactional
     public EmailOtpChallenge consumeVerificationToken(String email, OtpPurpose purpose, String verificationToken) {
@@ -154,6 +138,45 @@ public class OtpService {
         challenge.setVerificationToken(null);
         challenge.setVerificationTokenExpiresAt(now);
         challengeRepository.save(challenge);
+        return challenge;
+    }
+
+    /**
+     * Validates an OTP code and marks the challenge consumed in one step.
+     * Used by password reset so the client does not need a separate verify + token round-trip.
+     */
+    @Transactional
+    public void verifyAndConsumeOtpCode(String email, OtpPurpose purpose, String code) {
+        EmailOtpChallenge challenge = validateOtpCode(email, purpose, code);
+        Instant now = Instant.now();
+        challenge.setVerifiedAt(now);
+        challenge.setVerificationToken(null);
+        challenge.setVerificationTokenExpiresAt(now);
+        challengeRepository.save(challenge);
+    }
+
+    private EmailOtpChallenge validateOtpCode(String email, OtpPurpose purpose, String code) {
+        String normalizedEmail = normalizeEmail(email);
+        String trimmedCode = code.trim();
+        Instant now = Instant.now();
+
+        EmailOtpChallenge challenge = challengeRepository
+                .findTopByEmailIgnoreCaseAndPurposeAndVerifiedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
+                        normalizedEmail, purpose, now
+                )
+                .orElseThrow(() -> new OtpException("Invalid or expired verification code"));
+
+        if (challenge.getAttemptCount() >= maxAttempts) {
+            throw new OtpException("Maximum verification attempts exceeded. Request a new code");
+        }
+
+        if (!passwordEncoder.matches(trimmedCode, challenge.getCodeHash())) {
+            challenge.setAttemptCount(challenge.getAttemptCount() + 1);
+            challengeRepository.save(challenge);
+            int remaining = maxAttempts - challenge.getAttemptCount();
+            throw new OtpException("Invalid verification code. " + remaining + " attempt(s) remaining");
+        }
+
         return challenge;
     }
 
