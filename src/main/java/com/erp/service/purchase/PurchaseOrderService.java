@@ -24,6 +24,7 @@ import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
+import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CompanyAccountingDefaultsService;
 import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
@@ -58,6 +59,7 @@ public class PurchaseOrderService {
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
     private final CompanyAccountingDefaultsService accountingDefaults;
+    private final PurchaseRequisitionRepository requisitionRepo;
 
     public PurchaseOrderService(
             PurchaseOrderRepository repo,
@@ -72,7 +74,8 @@ public class PurchaseOrderService {
             InvoiceRepository invoiceRepo,
             AuthContext auth,
             DocumentSequenceService documentSequenceService,
-            CompanyAccountingDefaultsService accountingDefaults
+            CompanyAccountingDefaultsService accountingDefaults,
+            PurchaseRequisitionRepository requisitionRepo
     ) {
         this.repo = repo;
         this.vendorRepo = vendorRepo;
@@ -87,6 +90,7 @@ public class PurchaseOrderService {
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
         this.accountingDefaults = accountingDefaults;
+        this.requisitionRepo = requisitionRepo;
     }
 
     public PurchaseOrderResponseDTO create(PurchaseOrderCreateDTO dto) {
@@ -443,7 +447,15 @@ public class PurchaseOrderService {
             throw new RuntimeException("Only RECEIVED or CANCELLED purchase orders can be archived");
         }
         po.setArchived(true);
-        return toDTO(repo.save(po));
+        repo.save(po);
+
+        PurchaseRequisition sourceRequisition = po.getSourceRequisition();
+        if (sourceRequisition != null && !sourceRequisition.isArchived()) {
+            sourceRequisition.setArchived(true);
+            requisitionRepo.save(sourceRequisition);
+        }
+
+        return toDTO(po);
     }
 
     private PurchaseOrder getEntity(Long id) {
