@@ -218,6 +218,7 @@ public class PurchaseRequisitionService {
         pr.setUrgency(urgency);
         pr.setDeliveryWarehouse(deliveryWarehouse);
         pr.setJustification(dto.getJustification().trim());
+        pr.setNotes(trimToNull(dto.getNotes()));
         // Keep a mutable managed collection instance for Hibernate merge/update flows.
         if (pr.getItems() == null) {
             pr.setItems(new ArrayList<>());
@@ -607,7 +608,8 @@ public class PurchaseRequisitionService {
                 .projectCode(pr.getProjectCode())
                 .requisitionDescription(pr.getRequisitionDescription())
                 .urgency(pr.getUrgency() != null ? pr.getUrgency().name() : null)
-                .justification(pr.getJustification());
+                .justification(pr.getJustification())
+                .notes(pr.getNotes());
         if (pr.getDeliveryWarehouse() != null) {
             b.deliveryWarehouseId(pr.getDeliveryWarehouse().getId())
                     .deliveryWarehouseName(pr.getDeliveryWarehouse().getName());
