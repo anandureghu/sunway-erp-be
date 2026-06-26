@@ -12,6 +12,11 @@ import java.util.Optional;
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Long> {
     List<PurchaseOrder> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
+    List<PurchaseOrder> findBySupplier_IdAndArchivedFalseAndStatusInOrderByCreatedAtDesc(
+            Long supplierId,
+            List<PurchaseOrderStatus> statuses
+    );
+
     Optional<PurchaseOrder> findBySourceRequisition_Id(Long requisitionId);
 
     @Query("""

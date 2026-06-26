@@ -28,6 +28,27 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     boolean existsByPurchaseOrderIdAndPaymentDirectionAndPaymentMethod(
             Long purchaseOrderId, PaymentDirection paymentDirection, String paymentMethod);
 
+    @Query("""
+            SELECT COUNT(p) FROM Payment p, PurchaseOrder po
+            WHERE p.purchaseOrderId = po.id
+              AND po.supplier.id = :supplierId
+              AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.VENDOR
+              AND UPPER(p.paymentMethod) = 'PENDING_VENDOR_PAYMENT'
+              AND p.archived = false
+            """)
+    long countPendingVendorPaymentsForSupplier(@Param("supplierId") Long supplierId);
+
+    @Query("""
+            SELECT p.paymentCode FROM Payment p, PurchaseOrder po
+            WHERE p.purchaseOrderId = po.id
+              AND po.supplier.id = :supplierId
+              AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.VENDOR
+              AND UPPER(p.paymentMethod) = 'PENDING_VENDOR_PAYMENT'
+              AND p.archived = false
+            ORDER BY p.createdAt DESC
+            """)
+    List<String> findPendingVendorPaymentCodesForSupplier(@Param("supplierId") Long supplierId);
+
     // ======================================================
     //  Finance report aggregations
     // ======================================================
