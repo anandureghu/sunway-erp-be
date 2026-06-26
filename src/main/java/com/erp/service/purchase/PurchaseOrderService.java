@@ -99,6 +99,7 @@ public class PurchaseOrderService {
 
         Vendor supplier = vendorRepo.findById(dto.getSupplierId())
                 .orElseThrow(() -> new RuntimeException("Supplier not found"));
+        assertVendorEligibleForPurchase(supplier);
 
         Company company = companyRepo.findById(companyId).orElseThrow();
         User user = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
@@ -155,6 +156,17 @@ public class PurchaseOrderService {
         return toDTO(repo.save(po));
     }
 
+    private void assertVendorEligibleForPurchase(Vendor supplier) {
+        if (!supplier.isActive()) {
+            throw new RuntimeException(
+                    "Only active suppliers can be used on purchase orders");
+        }
+        if (!supplier.isApproved() || supplier.isRejected()) {
+            throw new RuntimeException(
+                    "Only approved suppliers can be used on purchase orders");
+        }
+    }
+
     private void applyDraftSupplierChange(PurchaseOrder po, Long supplierId) {
         Long companyId = po.getCompany().getId();
         Vendor supplier = vendorRepo.findById(supplierId)
@@ -162,6 +174,7 @@ public class PurchaseOrderService {
         if (!supplier.getCompany().getId().equals(companyId)) {
             throw new RuntimeException("Supplier does not belong to this company");
         }
+        assertVendorEligibleForPurchase(supplier);
         boolean changed = po.getSupplier() == null
                 || !po.getSupplier().getId().equals(supplierId);
         po.setSupplier(supplier);
@@ -179,6 +192,7 @@ public class PurchaseOrderService {
         if (po.getSupplier() == null) {
             throw new RuntimeException("Assign a supplier before releasing this purchase order");
         }
+        assertVendorEligibleForPurchase(po.getSupplier());
 
         po.setStatus(PurchaseOrderStatus.CONFIRMED);
         PurchaseOrder saved = repo.save(po);
