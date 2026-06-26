@@ -924,6 +924,10 @@ public class InvoiceService {
                 .createdAt(i.getCreatedAt())
                 .orderId(i.getOrderId())
                 .orderNumber(orderNumber)
+                .supplierId(purchaseOrder != null ? purchaseOrder.getSupplierId() : null)
+                .supplierName(purchaseOrder != null
+                        ? purchaseOrder.getSupplierName()
+                        : (i.getType() == InvoiceType.PURCHASE ? i.getToParty() : null))
                 .type(i.getType())
                 .salesOrder(salesOrder)
                 .purchaseOrder(purchaseOrder)

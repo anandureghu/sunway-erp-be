@@ -175,7 +175,13 @@ public class PaymentService {
                 .createdAt(p.getCreatedAt());
         if (p.getPurchaseOrderId() != null) {
             purchaseOrderRepo.findById(p.getPurchaseOrderId())
-                    .ifPresent(po -> b.purchaseOrderNumber(po.getOrderNumber()));
+                    .ifPresent(po -> {
+                        b.purchaseOrderNumber(po.getOrderNumber());
+                        if (po.getSupplier() != null) {
+                            b.supplierId(po.getSupplier().getId());
+                            b.supplierName(po.getSupplier().getVendorName());
+                        }
+                    });
         }
         enrichInvoiceAmounts(b, p);
         return b.build();

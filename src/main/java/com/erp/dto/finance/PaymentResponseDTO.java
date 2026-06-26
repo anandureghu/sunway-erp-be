@@ -19,6 +19,10 @@ public class PaymentResponseDTO {
     private Long purchaseOrderId;
     /** Business PO number when {@link #purchaseOrderId} is set. */
     private String purchaseOrderNumber;
+    /** Vendor id when linked to a purchase order (AP vendor payments). */
+    private Long supplierId;
+    /** Vendor name when linked to a purchase order (AP vendor payments). */
+    private String supplierName;
     /** Business SO number for customer payments linked to a sales invoice. */
     private String salesOrderNumber;
     private String pdfUrl;

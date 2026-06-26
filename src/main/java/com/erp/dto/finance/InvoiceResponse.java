@@ -63,6 +63,10 @@ public class InvoiceResponse {
     private Long orderId;
     /** Sales or purchase order business number for list/detail display. */
     private String orderNumber;
+    /** Purchase vendor id when {@link #type} is PURCHASE. */
+    private Long supplierId;
+    /** Purchase vendor name when {@link #type} is PURCHASE. */
+    private String supplierName;
 
     private Long creditAccountId;
     private Long debitAccountId;
