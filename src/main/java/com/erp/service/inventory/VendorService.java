@@ -156,12 +156,12 @@ public class VendorService {
         return toDTO(vendorRepo.save(v));
     }
 
-    // ---------------- DELETE ----------------
+    // ---------------- DEACTIVATE (soft delete) ----------------
     public void deleteVendor(Long id) {
         Vendor v = getVendorById(id);
         validateCompany(v.getCompany().getId());
-        assertVendorDeletable(v);
-        vendorRepo.delete(v);
+        v.setActive(false);
+        vendorRepo.save(v);
     }
 
     private void assertVendorDeletable(Vendor vendor) {
