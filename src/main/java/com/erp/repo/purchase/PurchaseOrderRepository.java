@@ -47,4 +47,21 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
                 companyId, warehouseId, itemId, statuses);
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
     }
+
+    @Query("""
+            SELECT COALESCE(SUM(poi.quantity), 0)
+            FROM PurchaseOrder po
+            JOIN po.items poi
+            WHERE po.company.id = :companyId
+              AND po.archived = false
+              AND (
+                po.status IN :releasedStatuses
+                OR (po.status = com.erp.domain.purchase.PurchaseOrderStatus.DRAFT
+                    AND po.sourceRequisition IS NOT NULL)
+              )
+            """)
+    Long sumOnOrderQuantity(
+            @Param("companyId") Long companyId,
+            @Param("releasedStatuses") List<PurchaseOrderStatus> releasedStatuses
+    );
 }

@@ -617,7 +617,25 @@ public class InvoiceService {
             inv.setStatus("PARTIALLY_PAID");
         }
 
-        return repo.save(inv);
+        Invoice saved = repo.save(inv);
+        completeLinkedSalesOrderWhenPaid(saved);
+        return saved;
+    }
+
+    private void completeLinkedSalesOrderWhenPaid(Invoice invoice) {
+        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+            return;
+        }
+        if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
+            return;
+        }
+        salesOrderRepo.findById(invoice.getOrderId()).ifPresent(order -> {
+            if ("CANCELLED".equals(order.getStatus()) || "COMPLETED".equals(order.getStatus())) {
+                return;
+            }
+            order.setStatus("COMPLETED");
+            salesOrderRepo.save(order);
+        });
     }
 
     /**
