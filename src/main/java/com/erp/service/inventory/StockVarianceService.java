@@ -201,13 +201,28 @@ public class StockVarianceService {
     }
 
     @Transactional(readOnly = true)
-    public List<StockVarianceResponseDTO> listHistory() {
-        return repo.findByCompanyIdAndVarianceStatusInOrderByCreatedAtDesc(
+    public List<StockVarianceResponseDTO> listHistory(Boolean archived) {
+        boolean showArchived = Boolean.TRUE.equals(archived);
+        return repo.findByCompanyIdAndVarianceStatusInAndArchivedOrderByCreatedAtDesc(
                         auth.getCurrentCompanyId(),
-                        List.of(StockVarianceStatus.APPROVED, StockVarianceStatus.REJECTED))
+                        List.of(StockVarianceStatus.APPROVED, StockVarianceStatus.REJECTED),
+                        showArchived)
                 .stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    public StockVarianceResponseDTO archive(Long id) {
+        StockVariance variance = getEntity(id);
+        if (variance.isArchived()) {
+            return toDTO(variance);
+        }
+        if (variance.getVarianceStatus() != StockVarianceStatus.APPROVED
+                && variance.getVarianceStatus() != StockVarianceStatus.REJECTED) {
+            throw new IllegalArgumentException("Only approved or rejected variances can be archived");
+        }
+        variance.setArchived(true);
+        return toDTO(repo.save(variance));
     }
 
     @Transactional(readOnly = true)
@@ -382,6 +397,7 @@ public class StockVarianceService {
                 .rejectedById(v.getRejectedBy() != null ? v.getRejectedBy().getId() : null)
                 .rejectedByName(v.getRejectedBy() != null ? v.getRejectedBy().getFullName() : null)
                 .rejectedAt(v.getRejectedAt())
+                .archived(v.isArchived())
                 .build();
     }
 

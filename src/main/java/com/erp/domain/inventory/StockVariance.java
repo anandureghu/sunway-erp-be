@@ -92,6 +92,10 @@ public class StockVariance {
     @Column(name = "rejected_at")
     private Instant rejectedAt;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean archived = false;
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) {
