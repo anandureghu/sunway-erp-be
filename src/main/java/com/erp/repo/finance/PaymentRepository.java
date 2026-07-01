@@ -2,6 +2,8 @@ package com.erp.repo.finance;
 
 import com.erp.domain.finance.Payment;
 import com.erp.domain.finance.PaymentDirection;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,6 +17,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findByPaymentCode(String code);
     List<Payment> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
     List<Payment> findByCompany_IdAndPaymentDirectionOrderByCreatedAtDesc(Long companyId, PaymentDirection paymentDirection);
+
+    Page<Payment> findByCompany_IdAndArchivedTrueAndPaymentDirectionOrderByCreatedAtDesc(
+            Long companyId, PaymentDirection paymentDirection, Pageable pageable);
+
+    List<Payment> findByCompany_IdAndArchivedTrueAndPaymentDirection(
+            Long companyId, PaymentDirection paymentDirection);
     List<Payment> findByInvoiceIdOrderByCreatedAtDesc(String invoiceId);
 
     Optional<Payment> findFirstByPurchaseOrderIdAndPaymentDirection(

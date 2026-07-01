@@ -2,6 +2,8 @@ package com.erp.repo.inventory;
 
 import com.erp.domain.inventory.StockVariance;
 import com.erp.domain.inventory.StockVarianceStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -18,4 +20,8 @@ public interface StockVarianceRepository extends JpaRepository<StockVariance, Lo
             List<StockVarianceStatus> statuses,
             boolean archived
     );
+
+    Page<StockVariance> findByCompanyIdAndArchivedTrueOrderByCreatedAtDesc(Long companyId, Pageable pageable);
+
+    List<StockVariance> findByCompanyIdAndArchivedTrue(Long companyId);
 }

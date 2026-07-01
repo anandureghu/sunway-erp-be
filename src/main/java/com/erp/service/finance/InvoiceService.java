@@ -829,6 +829,12 @@ public class InvoiceService {
     // DELETE
     // ============================================================
     public void deleteInvoice(Long id) {
+        Invoice inv = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
+        if (!inv.isArchived()) {
+            throw new RuntimeException("Only archived invoices can be permanently deleted");
+        }
         repo.deleteById(id);
     }
 

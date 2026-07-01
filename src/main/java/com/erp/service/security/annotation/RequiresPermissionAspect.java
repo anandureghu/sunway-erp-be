@@ -59,19 +59,32 @@ public class RequiresPermissionAspect {
 
     private boolean allows(Authentication auth, AppModule module, AppAction action,
                            boolean hasEmployeeScope, boolean isOwn) {
-        return switch (action) {
-            case VIEW_ALL -> has(auth, module, AppAction.VIEW_ALL);
-            // Own view only covers the caller's own record on scoped endpoints.
-            case VIEW_OWN -> has(auth, module, AppAction.VIEW_OWN)
+        if (action == AppAction.VIEW_ALL) {
+            return has(auth, module, AppAction.VIEW_ALL);
+        }
+        if (action == AppAction.VIEW_OWN) {
+            return has(auth, module, AppAction.VIEW_OWN)
                     && (!hasEmployeeScope || isOwn);
-            case CREATE, CREATE_OWN, CREATE_ALL -> scopedWrite(auth, module,
-                    AppAction.CREATE_ALL, AppAction.CREATE_OWN, hasEmployeeScope, isOwn);
-            case EDIT, EDIT_OWN, EDIT_ALL -> scopedWrite(auth, module,
-                    AppAction.EDIT_ALL, AppAction.EDIT_OWN, hasEmployeeScope, isOwn);
-            case DELETE, DELETE_OWN, DELETE_ALL -> scopedWrite(auth, module,
-                    AppAction.DELETE_ALL, AppAction.DELETE_OWN, hasEmployeeScope, isOwn);
-            case APPROVE -> has(auth, module, AppAction.APPROVE);
-        };
+        }
+        if (action == AppAction.CREATE || action == AppAction.CREATE_OWN
+                || action == AppAction.CREATE_ALL) {
+            return scopedWrite(auth, module, AppAction.CREATE_ALL, AppAction.CREATE_OWN,
+                    hasEmployeeScope, isOwn);
+        }
+        if (action == AppAction.EDIT || action == AppAction.EDIT_OWN
+                || action == AppAction.EDIT_ALL) {
+            return scopedWrite(auth, module, AppAction.EDIT_ALL, AppAction.EDIT_OWN,
+                    hasEmployeeScope, isOwn);
+        }
+        if (action == AppAction.DELETE || action == AppAction.DELETE_OWN
+                || action == AppAction.DELETE_ALL) {
+            return scopedWrite(auth, module, AppAction.DELETE_ALL, AppAction.DELETE_OWN,
+                    hasEmployeeScope, isOwn);
+        }
+        if (action == AppAction.APPROVE) {
+            return has(auth, module, AppAction.APPROVE);
+        }
+        return false;
     }
 
     private boolean scopedWrite(Authentication auth, AppModule module,

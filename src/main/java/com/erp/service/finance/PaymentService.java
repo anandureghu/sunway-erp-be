@@ -594,6 +594,9 @@ public class PaymentService {
         Payment p = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
         assertPaymentInTenant(p);
+        if (!p.isArchived()) {
+            throw new RuntimeException("Only archived payments can be permanently deleted");
+        }
         paymentRepo.delete(p);
     }
 
