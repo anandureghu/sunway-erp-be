@@ -8,10 +8,12 @@ import com.erp.dto.inventory.ItemStockAdjustDTO;
 import com.erp.dto.inventory.ItemStockReceiveDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
 import com.erp.dto.inventory.ItemWarehouseStockRowDTO;
+import com.erp.dto.inventory.StockBatchResponseDTO;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.inventory.ItemService;
 import com.erp.service.inventory.ItemWarehouseStockService;
+import com.erp.service.inventory.StockBatchService;
 import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -25,16 +27,19 @@ public class ItemController {
 
     private final ItemService service;
     private final ItemWarehouseStockService itemWarehouseStockService;
+    private final StockBatchService stockBatchService;
     private final AuthContext auth;
 
     public ItemController(
             ItemService service,
             FileStorageService fileStorageService,
             ItemWarehouseStockService itemWarehouseStockService,
+            StockBatchService stockBatchService,
             AuthContext auth
     ) {
         this.service = service;
         this.itemWarehouseStockService = itemWarehouseStockService;
+        this.stockBatchService = stockBatchService;
         this.auth = auth;
     }
 
@@ -91,6 +96,30 @@ public class ItemController {
     @GetMapping("/{id}/warehouse-stock")
     public List<ItemWarehouseStockRowDTO> listWarehouseStock(@PathVariable("id") Long id) {
         return itemWarehouseStockService.listStockForItem(id, auth.getCurrentCompanyId());
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/{id}/batches")
+    public List<StockBatchResponseDTO> listBatches(
+            @PathVariable("id") Long id,
+            @RequestParam(required = false) Long warehouseId
+    ) {
+        return stockBatchService.listBatchesForItem(id, warehouseId, auth.getCurrentCompanyId());
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/{id}/batch-movements")
+    public com.erp.dto.inventory.StockBatchMovementReportDTO listBatchMovements(
+            @PathVariable("id") Long id,
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(defaultValue = "100") int limit
+    ) {
+        return stockBatchService.buildMovementReport(
+                auth.getCurrentCompanyId(),
+                warehouseId,
+                id,
+                limit
+        );
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.CREATE, AppAction.EDIT})

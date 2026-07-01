@@ -5,6 +5,8 @@ import com.erp.domain.inventory.Warehouse;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -32,4 +34,13 @@ public class GoodsReceiptItem {
     private Integer rejectedQty;
 
     private String remarks;
+
+    @Column(name = "batch_no", length = 100)
+    private String batchNo;
+
+    @Column(name = "lot_no", length = 100)
+    private String lotNo;
+
+    @Column(name = "unit_cost", precision = 18, scale = 2)
+    private BigDecimal unitCost;
 }

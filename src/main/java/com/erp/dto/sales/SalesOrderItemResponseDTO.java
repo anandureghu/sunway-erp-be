@@ -22,6 +22,8 @@ public class SalesOrderItemResponseDTO {
     private BigDecimal taxRate;
     private BigDecimal taxAmount;
     private BigDecimal lineTotal;
+    private BigDecimal cogsAmount;
+    private BigDecimal fifoUnitCost;
     private Long warehouseId;
     private String warehouseName;
 }

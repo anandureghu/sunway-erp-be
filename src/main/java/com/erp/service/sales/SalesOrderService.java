@@ -27,6 +27,7 @@ import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.inventory.ItemWarehouseStockService;
+import com.erp.service.inventory.StockBatchService;
 import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,7 @@ public class SalesOrderService {
     private final ItemRepository itemRepo;
     private final WarehouseRepository warehouseRepo;
     private final ItemWarehouseStockService itemWarehouseStockService;
+    private final StockBatchService stockBatchService;
     private final CompanyRepository companyRepo;
     private final BankAccountRepository bankAccountRepo;
     private final ChartOfAccountsRepository coaRepo;
@@ -58,6 +60,7 @@ public class SalesOrderService {
             ItemRepository itemRepo,
             WarehouseRepository warehouseRepo,
             ItemWarehouseStockService itemWarehouseStockService,
+            StockBatchService stockBatchService,
             CompanyRepository companyRepo,
             BankAccountRepository bankAccountRepo,
             ChartOfAccountsRepository coaRepo,
@@ -71,6 +74,7 @@ public class SalesOrderService {
         this.itemRepo = itemRepo;
         this.warehouseRepo = warehouseRepo;
         this.itemWarehouseStockService = itemWarehouseStockService;
+        this.stockBatchService = stockBatchService;
         this.companyRepo = companyRepo;
         this.bankAccountRepo = bankAccountRepo;
         this.coaRepo = coaRepo;
@@ -151,7 +155,6 @@ public class SalesOrderService {
             taxTotal = taxTotal.add(li.getTaxAmount() == null ? BigDecimal.ZERO : li.getTaxAmount());
             total = total.add(li.getLineTotal());
         }
-        validateSufficientBalanceForSalesOrder(debitAccount, total);
 
         SalesOrder order = SalesOrder.builder()
                 .orderNumber(generateOrderNumber())
@@ -186,15 +189,31 @@ public class SalesOrderService {
             throw new RuntimeException("Only DRAFT orders can be confirmed");
         }
 
+        ChartOfAccounts debitAccount = order.getDebitAccount();
+        if (debitAccount != null) {
+            debitAccount = coaRepo.findById(debitAccount.getId())
+                    .orElseThrow(() -> new RuntimeException("Debit account not found"));
+            validateSufficientBalanceForSalesOrder(debitAccount, order.getTotalAmount());
+        }
+
         order.setStatus("CONFIRMED");
         Long companyId = auth.getCurrentCompanyId();
-        order.getItems().forEach(i -> {
+        SalesOrder saved = repo.save(order);
+        saved.getItems().forEach(i -> {
             Warehouse wh = i.getWarehouse() != null ? i.getWarehouse() : i.getItem().getWarehouse();
-            itemWarehouseStockService.decreaseForConfirmedSale(
-                    i.getItem().getId(), wh.getId(), i.getQuantity(), companyId);
+            StockBatchService.ConsumptionResult consumption = stockBatchService.consumeFifo(
+                    i.getItem().getId(),
+                    wh.getId(),
+                    i.getQuantity(),
+                    StockBatchService.REF_SALES_ORDER_ITEM,
+                    i.getId(),
+                    companyId
+            );
+            i.setCogsAmount(consumption.totalCost());
+            i.setFifoUnitCost(consumption.weightedUnitCost());
         });
 
-        return toDTO(repo.save(order));
+        return toDTO(repo.save(saved));
     }
 
     // --------------------------
@@ -314,12 +333,13 @@ public class SalesOrderService {
         }
 
         if ("CONFIRMED".equals(order.getStatus())) {
-            Long companyId = auth.getCurrentCompanyId();
-            order.getItems().forEach(i -> {
-                Warehouse wh = i.getWarehouse() != null ? i.getWarehouse() : i.getItem().getWarehouse();
-                itemWarehouseStockService.restoreForCancelledSale(
-                        i.getItem().getId(), wh.getId(), i.getQuantity(), companyId);
-            });
+            order.getItems().forEach(i ->
+                    stockBatchService.restoreByReference(
+                            StockBatchService.REF_SALES_ORDER_ITEM,
+                            i.getId(),
+                            auth.getCurrentCompanyId()
+                    )
+            );
         }
 
         order.setStatus("CANCELLED");
@@ -379,7 +399,7 @@ public class SalesOrderService {
     }
 
     private SalesOrderResponseDTO toDTO(SalesOrder so) {
-        return SalesOrderResponseDTO.builder()
+        SalesOrderResponseDTO.SalesOrderResponseDTOBuilder builder = SalesOrderResponseDTO.builder()
                 .id(so.getId())
                 .orderNumber(so.getOrderNumber())
                 .customerId(so.getCustomer().getId())
@@ -420,12 +440,50 @@ public class SalesOrderService {
                                         .taxRate(i.getTaxRate() == null ? BigDecimal.ZERO : i.getTaxRate())
                                         .taxAmount(i.getTaxAmount() == null ? BigDecimal.ZERO : i.getTaxAmount())
                                         .lineTotal(i.getLineTotal())
+                                        .cogsAmount(i.getCogsAmount())
+                                        .fifoUnitCost(i.getFifoUnitCost())
                                         .warehouseId(resolveLineWarehouseId(i))
                                         .warehouseName(resolveLineWarehouseName(i))
                                         .build()
                         ).toList()
-                )
-                .build();
+                );
+        applyDebitBalanceInfo(builder, so);
+        return builder.build();
+    }
+
+    private void applyDebitBalanceInfo(
+            SalesOrderResponseDTO.SalesOrderResponseDTOBuilder builder,
+            SalesOrder so
+    ) {
+        if (!"DRAFT".equals(so.getStatus()) || so.getDebitAccount() == null) {
+            builder.sufficientDebitBalance(true);
+            return;
+        }
+        ChartOfAccounts debitAccount = so.getDebitAccount();
+        BigDecimal current = debitAccount.getBalance() == null ? BigDecimal.ZERO : debitAccount.getBalance();
+        BigDecimal total = so.getTotalAmount() == null ? BigDecimal.ZERO : so.getTotalAmount();
+        builder.debitAccountBalance(current);
+        boolean sufficient = hasSufficientDebitBalance(debitAccount, total);
+        builder.sufficientDebitBalance(sufficient);
+        if (!sufficient) {
+            BigDecimal shortage = total.subtract(current);
+            if (shortage.compareTo(BigDecimal.ZERO) < 0) {
+                shortage = BigDecimal.ZERO;
+            }
+            builder.debitBalanceShortage(shortage.setScale(2, RoundingMode.HALF_UP));
+        }
+    }
+
+    private boolean hasSufficientDebitBalance(ChartOfAccounts debitAccount, BigDecimal totalAmount) {
+        if (debitAccount == null || totalAmount == null || totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return true;
+        }
+        try {
+            CoaBalanceRules.assertSufficientBalance(debitAccount, totalAmount.negate());
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private BigDecimal resolveCompanyTaxRate(Company company) {

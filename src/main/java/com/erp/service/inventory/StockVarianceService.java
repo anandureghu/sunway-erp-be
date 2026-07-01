@@ -45,6 +45,7 @@ public class StockVarianceService {
     private final UserRepository userRepo;
     private final AuthContext auth;
     private final ItemWarehouseStockService stockService;
+    private final StockBatchService stockBatchService;
     private final TransactionService transactionService;
     private final PermissionCheckService permissionCheckService;
     private final CompanyAccountingDefaultsService accountingDefaults;
@@ -57,6 +58,7 @@ public class StockVarianceService {
             UserRepository userRepo,
             AuthContext auth,
             ItemWarehouseStockService stockService,
+            StockBatchService stockBatchService,
             TransactionService transactionService,
             PermissionCheckService permissionCheckService,
             CompanyAccountingDefaultsService accountingDefaults
@@ -68,6 +70,7 @@ public class StockVarianceService {
         this.userRepo = userRepo;
         this.auth = auth;
         this.stockService = stockService;
+        this.stockBatchService = stockBatchService;
         this.transactionService = transactionService;
         this.permissionCheckService = permissionCheckService;
         this.accountingDefaults = accountingDefaults;
@@ -163,8 +166,8 @@ public class StockVarianceService {
         }
 
         Long companyId = auth.getCurrentCompanyId();
-        applyStockChange(variance, companyId);
-        postFinanceIfNeeded(variance, companyId);
+        BigDecimal fifoAmount = applyStockChange(variance, companyId);
+        postFinanceIfNeeded(variance, companyId, fifoAmount);
 
         variance.setVarianceStatus(StockVarianceStatus.APPROVED);
         variance.setApprovedBy(approver);
@@ -234,55 +237,88 @@ public class StockVarianceService {
         return user != null && hasElevatedApprovalRole(user);
     }
 
-    private void applyStockChange(StockVariance variance, Long companyId) {
+    private BigDecimal applyStockChange(StockVariance variance, Long companyId) {
         Long itemId = variance.getItem().getId();
         Long fromWhId = variance.getFromWarehouse().getId();
 
         if ("transfer".equals(variance.getVarianceType())) {
-            stockService.transferBetweenWarehouses(
+            stockBatchService.transferFifo(
                     itemId,
                     fromWhId,
                     variance.getToWarehouse().getId(),
                     variance.getTransferQuantity(),
+                    variance.getId(),
                     companyId);
-            return;
+            return BigDecimal.ZERO;
         }
 
+        int delta;
         if ("set".equals(variance.getAdjustmentMode())) {
-            stockService.adjustRowToAbsoluteQuantity(
-                    itemId,
-                    fromWhId,
-                    variance.getQuantityAfter(),
-                    companyId);
-            return;
+            int current = stockService.getQuantityOnHand(itemId, fromWhId, companyId);
+            delta = variance.getQuantityAfter() - current;
+        } else {
+            delta = variance.getAdjustmentQuantity() != null ? variance.getAdjustmentQuantity() : 0;
         }
 
-        stockService.applyDelta(
-                itemId,
-                fromWhId,
-                variance.getAdjustmentQuantity(),
-                companyId);
-    }
-
-    private void postFinanceIfNeeded(StockVariance variance, Long companyId) {
-        if ("transfer".equals(variance.getVarianceType())) {
-            return;
-        }
-
-        int qtyChange = variance.getAdjustmentQuantity() != null ? variance.getAdjustmentQuantity() : 0;
-        if (qtyChange == 0) {
-            return;
+        if (delta == 0) {
+            return BigDecimal.ZERO;
         }
 
         BigDecimal unitCost = variance.getItem().getCostPrice();
         if (unitCost == null || unitCost.compareTo(BigDecimal.ZERO) <= 0) {
             unitCost = variance.getItem().getSellingPrice();
         }
-        if (unitCost == null || unitCost.compareTo(BigDecimal.ZERO) <= 0) {
+        if (unitCost == null) {
+            unitCost = BigDecimal.ZERO;
+        }
+
+        if (delta < 0) {
+            StockBatchService.ConsumptionResult consumed = stockBatchService.consumeFifoForVariance(
+                    itemId, fromWhId, Math.abs(delta), variance.getId(), companyId);
+            return consumed.totalCost();
+        }
+
+        stockBatchService.receiveIntoBatch(
+                itemId,
+                fromWhId,
+                delta,
+                unitCost,
+                null,
+                null,
+                com.erp.domain.inventory.StockBatchSourceType.ADJUSTMENT,
+                variance.getId(),
+                companyId
+        );
+        return unitCost.multiply(BigDecimal.valueOf(delta));
+    }
+
+    private void postFinanceIfNeeded(StockVariance variance, Long companyId, BigDecimal fifoAmount) {
+        if ("transfer".equals(variance.getVarianceType())) {
             return;
         }
 
-        BigDecimal amount = unitCost.multiply(BigDecimal.valueOf(Math.abs(qtyChange)));
+        int qtyChange = variance.getAdjustmentQuantity() != null ? variance.getAdjustmentQuantity() : 0;
+        if ("set".equals(variance.getAdjustmentMode())) {
+            qtyChange = (variance.getQuantityAfter() != null ? variance.getQuantityAfter() : 0)
+                    - (variance.getQuantityBefore() != null ? variance.getQuantityBefore() : 0);
+        }
+        if (qtyChange == 0) {
+            return;
+        }
+
+        BigDecimal amount = fifoAmount != null && fifoAmount.compareTo(BigDecimal.ZERO) > 0
+                ? fifoAmount
+                : BigDecimal.ZERO;
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            BigDecimal unitCost = variance.getItem().getCostPrice();
+            if (unitCost == null || unitCost.compareTo(BigDecimal.ZERO) <= 0) {
+                unitCost = variance.getItem().getSellingPrice();
+            }
+            if (unitCost == null || unitCost.compareTo(BigDecimal.ZERO) <= 0) {
+                return;
+            }
+            amount = unitCost.multiply(BigDecimal.valueOf(Math.abs(qtyChange)));
+        }
         ProcessAccountPair varianceAccounts = accountingDefaults.requireProcessAccounts(
                 companyId, AccountingProcessCode.STOCK_VARIANCE);
         Long inventoryAccountId = varianceAccounts.getDebitAccountId();

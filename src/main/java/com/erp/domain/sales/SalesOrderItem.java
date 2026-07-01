@@ -48,4 +48,10 @@ public class SalesOrderItem {
 
     @Column(precision = 18, scale = 2)
     private BigDecimal lineTotal;
+
+    @Column(name = "cogs_amount", precision = 18, scale = 2)
+    private BigDecimal cogsAmount;
+
+    @Column(name = "fifo_unit_cost", precision = 18, scale = 2)
+    private BigDecimal fifoUnitCost;
 }

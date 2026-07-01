@@ -37,6 +37,12 @@ public class SalesOrderResponseDTO {
     private String debitAccountName;
     private Long creditAccountId;
     private String creditAccountName;
+    /** Current balance on the sales debit account (draft confirmation check). */
+    private BigDecimal debitAccountBalance;
+    /** False when draft order total exceeds available debit account balance. */
+    private Boolean sufficientDebitBalance;
+    /** Amount short on debit account when {@link #sufficientDebitBalance} is false. */
+    private BigDecimal debitBalanceShortage;
     private List<SalesOrderItemResponseDTO> items;
     /** Linked sales invoice (created when the order is confirmed). */
     private Long salesInvoiceId;
