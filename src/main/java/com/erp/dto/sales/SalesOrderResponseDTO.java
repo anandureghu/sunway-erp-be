@@ -21,6 +21,7 @@ public class SalesOrderResponseDTO {
     private String customerName;
     private String customerEmail;
     private String customerPhone;
+    private String customerAddress;
     private LocalDate orderDate;
     private LocalDate invoiceDueDate;
     private String shippingAddress;

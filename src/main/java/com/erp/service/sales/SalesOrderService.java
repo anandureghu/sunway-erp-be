@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -406,6 +407,7 @@ public class SalesOrderService {
                 .customerName(so.getCustomer().getCustomerName())
                 .customerEmail(so.getCustomer().getEmail())
                 .customerPhone(so.getCustomer().getPhoneNo())
+                .customerAddress(formatCustomerAddress(so.getCustomer()))
                 .orderDate(so.getOrderDate())
                 .invoiceDueDate(so.getInvoiceDueDate())
                 .shippingAddress(so.getShippingAddress())
@@ -449,6 +451,26 @@ public class SalesOrderService {
                 );
         applyDebitBalanceInfo(builder, so);
         return builder.build();
+    }
+
+    private String formatCustomerAddress(Customer customer) {
+        if (customer == null) {
+            return null;
+        }
+        List<String> parts = new ArrayList<>();
+        if (customer.getStreet() != null && !customer.getStreet().isBlank()) {
+            parts.add(customer.getStreet().trim());
+        }
+        if (customer.getCity() != null && !customer.getCity().isBlank()) {
+            parts.add(customer.getCity().trim());
+        }
+        if (customer.getState() != null && !customer.getState().isBlank()) {
+            parts.add(customer.getState().trim());
+        }
+        if (customer.getCountry() != null && !customer.getCountry().isBlank()) {
+            parts.add(customer.getCountry().trim());
+        }
+        return parts.isEmpty() ? null : String.join(", ", parts);
     }
 
     private void applyDebitBalanceInfo(
