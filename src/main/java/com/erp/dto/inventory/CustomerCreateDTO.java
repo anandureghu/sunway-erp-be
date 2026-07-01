@@ -21,6 +21,8 @@ public class CustomerCreateDTO {
 
     private BigDecimal creditLimit;
 
+    private Boolean isActive;
+
     private String street;
     private String city;
     private String state;

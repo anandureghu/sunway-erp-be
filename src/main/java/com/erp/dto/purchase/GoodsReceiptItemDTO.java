@@ -16,4 +16,7 @@ public class GoodsReceiptItemDTO {
     private Integer acceptedQty;
     private Integer rejectedQty;
     private String remarks;
+    private String batchNo;
+    private String lotNo;
+    private java.math.BigDecimal unitCost;
 }

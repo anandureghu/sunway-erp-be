@@ -7,7 +7,9 @@ import com.erp.domain.inventory.Warehouse;
 import com.erp.domain.purchase.GoodsReceipt;
 import com.erp.domain.purchase.GoodsReceiptItem;
 import com.erp.domain.purchase.PurchaseOrder;
+import com.erp.domain.purchase.PurchaseOrderItem;
 import com.erp.domain.purchase.PurchaseOrderStatus;
+import com.erp.domain.inventory.StockBatchSourceType;
 import com.erp.dto.purchase.GoodsReceiptCreateDTO;
 import com.erp.dto.purchase.GoodsReceiptItemDTO;
 import com.erp.dto.purchase.GoodsReceiptResponseDTO;
@@ -19,6 +21,7 @@ import com.erp.repo.purchase.GoodsReceiptRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.inventory.ItemWarehouseStockService;
+import com.erp.service.inventory.StockBatchService;
 import com.erp.service.pdf.GoodsReceiptPdfService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +40,7 @@ public class GoodsReceiptService {
     private final ItemRepository itemRepo;
     private final WarehouseRepository warehouseRepo;
     private final ItemWarehouseStockService itemWarehouseStockService;
+    private final StockBatchService stockBatchService;
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
     private final AuthContext auth;
@@ -48,6 +52,7 @@ public class GoodsReceiptService {
             ItemRepository itemRepo,
             WarehouseRepository warehouseRepo,
             ItemWarehouseStockService itemWarehouseStockService,
+            StockBatchService stockBatchService,
             CompanyRepository companyRepo,
             UserRepository userRepo,
             AuthContext auth,
@@ -58,6 +63,7 @@ public class GoodsReceiptService {
         this.itemRepo = itemRepo;
         this.warehouseRepo = warehouseRepo;
         this.itemWarehouseStockService = itemWarehouseStockService;
+        this.stockBatchService = stockBatchService;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
         this.auth = auth;
@@ -93,9 +99,19 @@ public class GoodsReceiptService {
                     .orElseThrow(() -> new RuntimeException("Warehouse not found"));
 
             int accepted = i.getAcceptedQty() == null ? 0 : i.getAcceptedQty();
+            java.math.BigDecimal lineUnitCost = resolveUnitCost(i, po, item);
             if (accepted > 0) {
-                itemWarehouseStockService.addIncomingStock(
-                        item.getId(), wh.getId(), accepted, companyId);
+                stockBatchService.receiveIntoBatch(
+                        item.getId(),
+                        wh.getId(),
+                        accepted,
+                        lineUnitCost,
+                        i.getBatchNo(),
+                        null,
+                        StockBatchSourceType.GOODS_RECEIPT,
+                        null,
+                        companyId
+                );
                 item.setDateReceived(LocalDate.now());
                 itemRepo.save(item);
             }
@@ -107,6 +123,9 @@ public class GoodsReceiptService {
                     .acceptedQty(i.getAcceptedQty())
                     .rejectedQty(i.getRejectedQty())
                     .remarks(i.getRemarks())
+                    .batchNo(i.getBatchNo())
+                    .lotNo(i.getLotNo())
+                    .unitCost(lineUnitCost)
                     .build();
         }).collect(Collectors.toCollection(ArrayList::new));
 
@@ -182,9 +201,27 @@ public class GoodsReceiptService {
                                         .acceptedQty(i.getAcceptedQty())
                                         .rejectedQty(i.getRejectedQty())
                                         .remarks(i.getRemarks())
+                                        .batchNo(i.getBatchNo())
+                                        .lotNo(i.getLotNo())
+                                        .unitCost(i.getUnitCost())
                                         .build()
                         ).toList()
                 )
                 .build();
+    }
+
+    private java.math.BigDecimal resolveUnitCost(
+            GoodsReceiptItemDTO dto,
+            PurchaseOrder po,
+            Item item
+    ) {
+        if (dto.getUnitCost() != null) {
+            return dto.getUnitCost();
+        }
+        return po.getItems().stream()
+                .filter(line -> line.getItem().getId().equals(item.getId()))
+                .map(PurchaseOrderItem::getUnitCost)
+                .findFirst()
+                .orElse(item.getCostPrice() != null ? item.getCostPrice() : java.math.BigDecimal.ZERO);
     }
 }

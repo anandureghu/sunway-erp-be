@@ -18,6 +18,7 @@ public class InventoryReportTotalsDTO {
 
     private long totalQuantityOnHand;
 
+    /** Units committed on confirmed sales orders not yet completed. */
     private long totalReserved;
 
     /** Sum over stock rows of max(0, onHand - reserved). */
@@ -28,4 +29,7 @@ public class InventoryReportTotalsDTO {
 
     /** Sum of quantityOnHand * sellingPrice per row (optional insight). */
     private BigDecimal stockValueAtSelling;
+
+    /** Total units in approved purchase orders not yet fully received. */
+    private long totalOnOrder;
 }

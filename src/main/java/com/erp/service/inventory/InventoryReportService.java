@@ -2,9 +2,12 @@ package com.erp.service.inventory;
 
 import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.ItemWarehouseStock;
+import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.dto.inventory.*;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.ItemWarehouseStockRepository;
+import com.erp.repo.purchase.PurchaseOrderRepository;
+import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -24,16 +27,25 @@ public class InventoryReportService {
 
     private final ItemWarehouseStockRepository stockRepo;
     private final ItemRepository itemRepo;
+    private final PurchaseOrderRepository purchaseOrderRepo;
+    private final SalesOrderRepository salesOrderRepo;
     private final AuthContext auth;
+    private final StockBatchService stockBatchService;
 
     public InventoryReportService(
             ItemWarehouseStockRepository stockRepo,
             ItemRepository itemRepo,
-            AuthContext auth
+            PurchaseOrderRepository purchaseOrderRepo,
+            SalesOrderRepository salesOrderRepo,
+            AuthContext auth,
+            StockBatchService stockBatchService
     ) {
         this.stockRepo = stockRepo;
         this.itemRepo = itemRepo;
+        this.purchaseOrderRepo = purchaseOrderRepo;
+        this.salesOrderRepo = salesOrderRepo;
         this.auth = auth;
+        this.stockBatchService = stockBatchService;
     }
 
     public InventoryReportSummaryDTO buildSummary(Long warehouseId, String category) {
@@ -44,10 +56,23 @@ public class InventoryReportService {
 
         Object[] totalsRow = normalizeRow(stockRepo.sumTotalsForReport(companyId, warehouseId, cat));
         long totalOnHand = toLong(valueAt(totalsRow, 0));
-        long totalReserved = toLong(valueAt(totalsRow, 1));
         long totalAvailable = toLong(valueAt(totalsRow, 2));
         BigDecimal valueCost = toBigDecimal(valueAt(totalsRow, 3));
+        BigDecimal batchValueCost = stockBatchService.sumBatchValueForReport(companyId, warehouseId, cat);
+        if (batchValueCost.compareTo(BigDecimal.ZERO) > 0) {
+            valueCost = batchValueCost;
+        }
         BigDecimal valueSelling = toBigDecimal(valueAt(totalsRow, 4));
+
+        List<PurchaseOrderStatus> releasedStatuses = List.of(
+                PurchaseOrderStatus.CONFIRMED,
+                PurchaseOrderStatus.PARTIALLY_RECEIVED
+        );
+        Long rawOnOrder = purchaseOrderRepo.sumOnOrderQuantity(companyId, releasedStatuses);
+        long totalOnOrder = rawOnOrder != null ? rawOnOrder : 0L;
+
+        Long rawOnReserve = salesOrderRepo.sumConfirmedOrderQuantity(companyId);
+        long totalReserved = rawOnReserve != null ? rawOnReserve : 0L;
 
         InventoryReportTotalsDTO totals = InventoryReportTotalsDTO.builder()
                 .distinctSkuCount(distinctSkus)
@@ -56,6 +81,7 @@ public class InventoryReportService {
                 .totalAvailable(totalAvailable)
                 .stockValueAtCost(valueCost)
                 .stockValueAtSelling(valueSelling)
+                .totalOnOrder(totalOnOrder)
                 .build();
 
         List<InventoryWarehouseBreakdownDTO> byWh = new ArrayList<>();
@@ -174,5 +200,38 @@ public class InventoryReportService {
             return BigDecimal.valueOf(n.doubleValue());
         }
         return BigDecimal.ZERO;
+    }
+
+    public StockBatchReportDTO buildBatchReport(Long warehouseId, Long itemId, String batchNo) {
+        return stockBatchService.buildBatchReport(
+                auth.getCurrentCompanyId(),
+                warehouseId,
+                itemId,
+                batchNo
+        );
+    }
+
+    public com.erp.dto.inventory.StockBatchMovementReportDTO buildBatchMovementReport(
+            Long warehouseId,
+            Long itemId,
+            int limit
+    ) {
+        return stockBatchService.buildMovementReport(
+                auth.getCurrentCompanyId(),
+                warehouseId,
+                itemId,
+                limit
+        );
+    }
+
+    public com.erp.dto.inventory.StockBatchInsightsDTO buildBatchInsights(
+            Long warehouseId,
+            Long itemId
+    ) {
+        return stockBatchService.buildInsights(
+                auth.getCurrentCompanyId(),
+                warehouseId,
+                itemId
+        );
     }
 }

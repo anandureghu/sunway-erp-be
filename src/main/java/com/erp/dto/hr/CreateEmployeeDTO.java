@@ -20,6 +20,7 @@ public class CreateEmployeeDTO {
     // BASIC EMPLOYEE DETAILS
     // =======================
     private String firstName;
+    private String middleName;
     private String lastName;
 
     private String gender;

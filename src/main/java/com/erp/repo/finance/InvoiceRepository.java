@@ -2,6 +2,7 @@ package com.erp.repo.finance;
 
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.InvoiceType;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -19,6 +20,11 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Invoice> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     List<Invoice> findByCompany_IdAndTypeOrderByCreatedAtDesc(Long companyId, InvoiceType type);
+
+    Page<Invoice> findByCompany_IdAndArchivedTrueAndTypeOrderByCreatedAtDesc(
+            Long companyId, InvoiceType type, Pageable pageable);
+
+    List<Invoice> findByCompany_IdAndArchivedTrueAndType(Long companyId, InvoiceType type);
 
     Invoice findByOrderId(Long orderId);
     Optional<Invoice> findByOrderIdAndType(Long orderId, InvoiceType type);

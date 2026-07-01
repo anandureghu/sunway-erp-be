@@ -6,7 +6,6 @@ import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
 import com.erp.exception.ConflictException;
-import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.hr.Company;
 import com.erp.dto.finance.ConfirmPaymentDTO;
 import com.erp.dto.finance.CreatePaymentDTO;
@@ -176,7 +175,13 @@ public class PaymentService {
                 .createdAt(p.getCreatedAt());
         if (p.getPurchaseOrderId() != null) {
             purchaseOrderRepo.findById(p.getPurchaseOrderId())
-                    .ifPresent(po -> b.purchaseOrderNumber(po.getOrderNumber()));
+                    .ifPresent(po -> {
+                        b.purchaseOrderNumber(po.getOrderNumber());
+                        if (po.getSupplier() != null) {
+                            b.supplierId(po.getSupplier().getId());
+                            b.supplierName(po.getSupplier().getVendorName());
+                        }
+                    });
         }
         enrichInvoiceAmounts(b, p);
         return b.build();
@@ -491,7 +496,7 @@ public class PaymentService {
 
     /**
      * Posts vendor payment to GL. When the PO has no prior encumbrance, accrues expense to AP first,
-     * then settles AP against cash (debit AP, credit cash).
+     * then settles AP using purchase defaults only (Dr purchase credit, Cr purchase debit).
      */
     private void postVendorPaymentToAccounting(Payment payment) {
         if (payment.getPurchaseOrderId() == null) {
@@ -502,15 +507,15 @@ public class PaymentService {
         PurchaseRequisition pr = po.getSourceRequisition();
         Long companyId = payment.getCompany().getId();
 
-        Long prDebitId = pr != null && pr.getDebitAccount() != null ? pr.getDebitAccount().getId() : null;
-        Long prCreditId = pr != null && pr.getCreditAccount() != null ? pr.getCreditAccount().getId() : null;
         PurchasePostingAccountsResolver.ResolvedAccounts accounts =
-                accountingDefaults.resolvePurchaseAccounts(companyId, prDebitId, prCreditId);
+                accountingDefaults.requirePurchaseAccounts(companyId);
 
         boolean encumbered = po.getFinanceTransactionId() != null
                 || transactionService.hasPurchaseOrderEncumbrance(companyId, po.getId());
 
         if (!encumbered) {
+            accountingDefaults.assertDistinctAccounts(
+                    "Purchase encumbrance", accounts.debitAccountId(), accounts.creditAccountId());
             transactionService.createPurchaseOrderEncumbrance(
                     companyId,
                     po.getId(),
@@ -520,14 +525,14 @@ public class PaymentService {
                     po.getOrderNumber());
         }
 
-        Long apAccountId = accounts.creditAccountId();
-        Long cashAccountId = accountingDefaults.requireCashGlAccountId(companyId);
+        Long debitAccountId = accounts.creditAccountId();
+        Long creditAccountId = accounts.debitAccountId();
         accountingDefaults.assertDistinctAccounts(
-                "Vendor payment posting", apAccountId, cashAccountId, accounts.debitAccountId());
+                "Vendor payment posting", debitAccountId, creditAccountId);
 
         transactionService.validateTwoSidedPostingBalances(
-                apAccountId,
-                cashAccountId,
+                debitAccountId,
+                creditAccountId,
                 payment.getAmount(),
                 companyId);
 
@@ -540,8 +545,8 @@ public class PaymentService {
                 .transactionType(TransactionService.TYPE_VENDOR_PAYMENT)
                 .transactionDate(payment.getEffectiveDate())
                 .amount(payment.getAmount())
-                .debitAccount(apAccountId)
-                .creditAccount(cashAccountId)
+                .debitAccount(debitAccountId)
+                .creditAccount(creditAccountId)
                 .paymentId(String.valueOf(payment.getId()))
                 .invoiceId(purchaseInvoiceCode)
                 .relatedId(po.getId())
@@ -557,6 +562,9 @@ public class PaymentService {
         }
     }
 
+    /**
+     * Posts customer (AR) payment to GL using sales defaults only (Dr sales debit, Cr sales credit).
+     */
     private void postPaymentToAccounting(Payment payment, Invoice invoice) {
         if (payment.getId() == null || invoice == null) {
             return;
@@ -564,25 +572,18 @@ public class PaymentService {
         if (invoice.getOrderId() == null) {
             throw new RuntimeException("Unable to post payment: sales order reference is missing on invoice");
         }
-        SalesOrder salesOrder = salesOrderRepo.findById(invoice.getOrderId())
+        salesOrderRepo.findById(invoice.getOrderId())
                 .orElseThrow(() -> new RuntimeException("Unable to post payment: sales order not found for invoice"));
 
         Long companyId = payment.getCompany().getId();
-        Long debitAccountId = salesOrder.getDebitAccount() != null ? salesOrder.getDebitAccount().getId() : null;
-        Long creditAccountId = salesOrder.getCreditAccount() != null ? salesOrder.getCreditAccount().getId() : null;
-        if (debitAccountId == null) {
-            throw new RuntimeException("Unable to post payment: debit account is missing on sales order");
-        }
-        if (creditAccountId == null) {
-            throw new RuntimeException("Unable to post payment: credit account is missing on sales order");
-        }
+        var accounts = accountingDefaults.requireSalesAccounts(companyId);
 
         transactionService.createTransactionForPayment(
                 payment.getId(),
                 companyId,
                 payment.getAmount(),
-                debitAccountId,
-                creditAccountId,
+                accounts.debitAccountId(),
+                accounts.creditAccountId(),
                 payment.getEffectiveDate(),
                 "PAYMENT",
                 invoice.getInvoiceId()
@@ -593,6 +594,9 @@ public class PaymentService {
         Payment p = paymentRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
         assertPaymentInTenant(p);
+        if (!p.isArchived()) {
+            throw new RuntimeException("Only archived payments can be permanently deleted");
+        }
         paymentRepo.delete(p);
     }
 

@@ -1,4 +1,4 @@
-CREATE TABLE email_otp_challenges (
+CREATE TABLE IF NOT EXISTS email_otp_challenges (
     id                           BIGINT AUTO_INCREMENT PRIMARY KEY,
     email                        VARCHAR(255) NOT NULL,
     purpose                      VARCHAR(64)  NOT NULL,

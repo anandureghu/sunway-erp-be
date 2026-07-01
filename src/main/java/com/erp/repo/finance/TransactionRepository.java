@@ -2,6 +2,7 @@ package com.erp.repo.finance;
 
 import com.erp.domain.finance.COAType;
 import com.erp.domain.finance.Transaction;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +14,18 @@ import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
     List<Transaction> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
+
+    Page<Transaction> findByCompany_IdAndArchivedTrueAndTransactionTypeNotOrderByCreatedAtDesc(
+            Long companyId, String transactionType, Pageable pageable);
+
+    List<Transaction> findByCompany_IdAndArchivedTrueAndTransactionTypeNot(
+            Long companyId, String transactionType);
+
+    Page<Transaction> findByCompany_IdAndArchivedTrueAndTransactionTypeOrderByCreatedAtDesc(
+            Long companyId, String transactionType, Pageable pageable);
+
+    List<Transaction> findByCompany_IdAndArchivedTrueAndTransactionType(
+            Long companyId, String transactionType);
     List<Transaction> findByPaymentIdOrderByCreatedAtDesc(String paymentId);
     List<Transaction> findByPaymentIdAndTransactionTypeOrderByCreatedAtDesc(String paymentId, String transactionType);
     boolean existsByPaymentId(String paymentId);

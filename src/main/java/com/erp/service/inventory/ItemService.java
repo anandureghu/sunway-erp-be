@@ -4,6 +4,7 @@ import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.ItemWarehouseStock;
+import com.erp.domain.inventory.StockBatchSourceType;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -39,6 +40,7 @@ public class ItemService {
     private final AuthContext auth;
     private final FileStorageService fileStorageService;
     private final ItemWarehouseStockService itemWarehouseStockService;
+    private final StockBatchService stockBatchService;
 
     public ItemService(
             ItemRepository itemRepo,
@@ -47,7 +49,8 @@ public class ItemService {
             AuthContext auth,
             WarehouseRepository warehouseRepo,
             FileStorageService fileStorageService,
-            ItemWarehouseStockService itemWarehouseStockService
+            ItemWarehouseStockService itemWarehouseStockService,
+            StockBatchService stockBatchService
     ) {
         this.itemRepo = itemRepo;
         this.userRepo = userRepo;
@@ -56,6 +59,7 @@ public class ItemService {
         this.warehouseRepo = warehouseRepo;
         this.fileStorageService = fileStorageService;
         this.itemWarehouseStockService = itemWarehouseStockService;
+        this.stockBatchService = stockBatchService;
     }
 
     // --------------------------
@@ -253,17 +257,22 @@ public class ItemService {
         }
 
         Long whId = dto.getWarehouseId() != null ? dto.getWarehouseId() : item.getWarehouse().getId();
-        itemWarehouseStockService.addIncomingStock(
+        Long companyId = auth.getCurrentCompanyId();
+
+        stockBatchService.receiveIntoBatch(
                 item.getId(),
                 whId,
                 dto.getQuantityReceived(),
-                auth.getCurrentCompanyId());
+                dto.getCostPrice() != null ? dto.getCostPrice() : item.getCostPrice(),
+                dto.getBatchNo(),
+                dto.getExpiryDate() != null ? parseOptionalDate(dto.getExpiryDate()) : null,
+                StockBatchSourceType.DIRECT_RECEIVE,
+                null,
+                companyId
+        );
 
         item = itemRepo.findById(item.getId()).orElseThrow();
 
-        if (dto.getCostPrice() != null) {
-            item.setCostPrice(dto.getCostPrice());
-        }
         if (dto.getUnitPrice() != null) {
             item.setSellingPrice(dto.getUnitPrice());
         }

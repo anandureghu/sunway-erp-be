@@ -28,4 +28,33 @@ public class InventoryReportController {
     ) {
         return inventoryReportService.buildSummary(warehouseId, category);
     }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/batches")
+    public com.erp.dto.inventory.StockBatchReportDTO batchReport(
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) Long itemId,
+            @RequestParam(required = false) String batchNo
+    ) {
+        return inventoryReportService.buildBatchReport(warehouseId, itemId, batchNo);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/batch-movements")
+    public com.erp.dto.inventory.StockBatchMovementReportDTO batchMovements(
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) Long itemId,
+            @RequestParam(defaultValue = "150") int limit
+    ) {
+        return inventoryReportService.buildBatchMovementReport(warehouseId, itemId, limit);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/batch-insights")
+    public com.erp.dto.inventory.StockBatchInsightsDTO batchInsights(
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) Long itemId
+    ) {
+        return inventoryReportService.buildBatchInsights(warehouseId, itemId);
+    }
 }

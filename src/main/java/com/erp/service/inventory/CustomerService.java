@@ -71,6 +71,10 @@ public class CustomerService {
                 .company(Company.builder().id(companyId).build())
                 .build();
 
+        if (dto.getIsActive() != null) {
+            c.setActive(dto.getIsActive());
+        }
+
         return toDTO(customerRepo.save(c));
     }
 
@@ -89,10 +93,10 @@ public class CustomerService {
         if (dto.getCreditLimit() != null) existing.setCreditLimit(dto.getCreditLimit());
         if (dto.getIsActive() != null) existing.setActive(dto.getIsActive());
 
-        if (dto.getStreet() != null) existing.setStreet(dto.getStreet());
-        if (dto.getCity() != null) existing.setCity(dto.getCity());
-        if (dto.getState() != null) existing.setState(dto.getState());
-        if (dto.getCountry() != null) existing.setCountry(dto.getCountry());
+        existing.setStreet(dto.getStreet());
+        existing.setCity(dto.getCity());
+        existing.setState(dto.getState());
+        existing.setCountry(dto.getCountry());
         if (dto.getPhoneNo() != null) existing.setPhoneNo(dto.getPhoneNo());
         if (dto.getEmail() != null) existing.setEmail(dto.getEmail());
 
@@ -103,13 +107,14 @@ public class CustomerService {
         return toDTO(customerRepo.save(existing));
     }
 
-    // ---------------- DELETE ----------------
+    // ---------------- DEACTIVATE (soft delete) ----------------
     public void deleteCustomer(Long id) {
         Customer existing = getCustomerById(id);
         if (!existing.getCompany().getId().equals(authContext.getCurrentCompanyId())) {
             throw new RuntimeException("Access denied");
         }
-        customerRepo.delete(existing);
+        existing.setActive(false);
+        customerRepo.save(existing);
     }
 
     // ---------------- MAPPER ----------------

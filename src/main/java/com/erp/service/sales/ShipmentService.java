@@ -109,6 +109,7 @@ public class ShipmentService {
                 .vehicleNumber(dto.getVehicleNumber())
                 .driverName(dto.getDriverName())
                 .driverPhone(dto.getDriverPhone())
+                .customerPhone(dto.getCustomerPhone())
                 .estimatedDeliveryDate(dto.getEstimatedDeliveryDate())
                 .deliveryAddress(resolveDeliveryAddress(dto.getDeliveryAddress(), picklist))
                 .notes(dto.getNotes())
@@ -242,6 +243,7 @@ public class ShipmentService {
         if (dto.getVehicleNumber() != null) s.setVehicleNumber(blankToNull(dto.getVehicleNumber()));
         if (dto.getDriverName() != null) s.setDriverName(blankToNull(dto.getDriverName()));
         if (dto.getDriverPhone() != null) s.setDriverPhone(blankToNull(dto.getDriverPhone()));
+        if (dto.getCustomerPhone() != null) s.setCustomerPhone(blankToNull(dto.getCustomerPhone()));
         if (dto.getEstimatedDeliveryDate() != null) s.setEstimatedDeliveryDate(blankToNull(dto.getEstimatedDeliveryDate()));
         if (dto.getDeliveryAddress() != null) s.setDeliveryAddress(blankToNull(dto.getDeliveryAddress()));
         if (dto.getNotes() != null) s.setNotes(blankToNull(dto.getNotes()));
@@ -321,6 +323,7 @@ public class ShipmentService {
                 .vehicleNumber(s.getVehicleNumber())
                 .driverName(s.getDriverName())
                 .driverPhone(s.getDriverPhone())
+                .customerPhone(s.getCustomerPhone())
                 .estimatedDeliveryDate(s.getEstimatedDeliveryDate())
                 .deliveryAddress(s.getDeliveryAddress())
                 .notes(s.getNotes())

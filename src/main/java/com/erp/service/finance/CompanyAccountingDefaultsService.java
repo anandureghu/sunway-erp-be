@@ -39,13 +39,13 @@ public class CompanyAccountingDefaultsService {
     }
 
     /**
-     * Asset / cash GL account configured as the sales debit default (receipts and disbursements).
+     * Cash / receipt GL for customer payments (sales debit default).
      */
     public Long requireCashGlAccountId(Long companyId) {
         return requireConfiguredCoa(
                 companyId,
                 requireCompany(companyId).getDefaultSalesDebitAccountId(),
-                "Configure the sales debit account under Finance → Default accounts (used as the cash GL account for payments).");
+                "Configure the sales debit account under Finance → Default accounts (used for customer payment receipts).");
     }
 
     public Long requireSalesDebitAccountId(Long companyId) {
@@ -59,10 +59,23 @@ public class CompanyAccountingDefaultsService {
                 "Configure the sales credit account under Finance → Default accounts.");
     }
 
+    public record SalesPostingAccounts(Long debitAccountId, Long creditAccountId) {}
+
+    /** Sales / AR defaults for invoices and customer payments (no purchase accounts). */
+    public SalesPostingAccounts requireSalesAccounts(Long companyId) {
+        Long debitAccountId = requireSalesDebitAccountId(companyId);
+        Long creditAccountId = requireSalesCreditAccountId(companyId);
+        assertDistinctAccounts("Sales defaults", debitAccountId, creditAccountId);
+        return new SalesPostingAccounts(debitAccountId, creditAccountId);
+    }
+
     public PurchasePostingAccountsResolver.ResolvedAccounts requirePurchaseAccounts(Long companyId) {
         return purchasePostingAccountsResolver.resolve(companyId, null, null);
     }
 
+    /**
+     * @deprecated for GL posting — use {@link #requirePurchaseAccounts(Long)} so only Finance → Default accounts apply.
+     */
     public PurchasePostingAccountsResolver.ResolvedAccounts resolvePurchaseAccounts(
             Long companyId, Long debitAccountId, Long creditAccountId) {
         return purchasePostingAccountsResolver.resolve(companyId, debitAccountId, creditAccountId);

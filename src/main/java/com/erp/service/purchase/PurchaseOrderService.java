@@ -24,7 +24,9 @@ import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
+import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.finance.CompanyAccountingDefaultsService;
 import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
 import com.erp.service.finance.TransactionService;
 import com.erp.service.finance.VendorPayableService;
@@ -56,7 +58,8 @@ public class PurchaseOrderService {
     private final InvoiceRepository invoiceRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
-    private final PurchasePostingAccountsResolver postingAccountsResolver;
+    private final CompanyAccountingDefaultsService accountingDefaults;
+    private final PurchaseRequisitionRepository requisitionRepo;
 
     public PurchaseOrderService(
             PurchaseOrderRepository repo,
@@ -71,7 +74,8 @@ public class PurchaseOrderService {
             InvoiceRepository invoiceRepo,
             AuthContext auth,
             DocumentSequenceService documentSequenceService,
-            PurchasePostingAccountsResolver postingAccountsResolver
+            CompanyAccountingDefaultsService accountingDefaults,
+            PurchaseRequisitionRepository requisitionRepo
     ) {
         this.repo = repo;
         this.vendorRepo = vendorRepo;
@@ -85,7 +89,8 @@ public class PurchaseOrderService {
         this.invoiceRepo = invoiceRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
-        this.postingAccountsResolver = postingAccountsResolver;
+        this.accountingDefaults = accountingDefaults;
+        this.requisitionRepo = requisitionRepo;
     }
 
     public PurchaseOrderResponseDTO create(PurchaseOrderCreateDTO dto) {
@@ -94,6 +99,7 @@ public class PurchaseOrderService {
 
         Vendor supplier = vendorRepo.findById(dto.getSupplierId())
                 .orElseThrow(() -> new RuntimeException("Supplier not found"));
+        assertVendorEligibleForPurchase(supplier);
 
         Company company = companyRepo.findById(companyId).orElseThrow();
         User user = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
@@ -150,6 +156,17 @@ public class PurchaseOrderService {
         return toDTO(repo.save(po));
     }
 
+    private void assertVendorEligibleForPurchase(Vendor supplier) {
+        if (!supplier.isActive()) {
+            throw new RuntimeException(
+                    "Only active suppliers can be used on purchase orders");
+        }
+        if (!supplier.isApproved() || supplier.isRejected()) {
+            throw new RuntimeException(
+                    "Only approved suppliers can be used on purchase orders");
+        }
+    }
+
     private void applyDraftSupplierChange(PurchaseOrder po, Long supplierId) {
         Long companyId = po.getCompany().getId();
         Vendor supplier = vendorRepo.findById(supplierId)
@@ -157,6 +174,7 @@ public class PurchaseOrderService {
         if (!supplier.getCompany().getId().equals(companyId)) {
             throw new RuntimeException("Supplier does not belong to this company");
         }
+        assertVendorEligibleForPurchase(supplier);
         boolean changed = po.getSupplier() == null
                 || !po.getSupplier().getId().equals(supplierId);
         po.setSupplier(supplier);
@@ -174,6 +192,7 @@ public class PurchaseOrderService {
         if (po.getSupplier() == null) {
             throw new RuntimeException("Assign a supplier before releasing this purchase order");
         }
+        assertVendorEligibleForPurchase(po.getSupplier());
 
         po.setStatus(PurchaseOrderStatus.CONFIRMED);
         PurchaseOrder saved = repo.save(po);
@@ -364,7 +383,7 @@ public class PurchaseOrderService {
                     .summary(fundsCommitted
                             ? "Funds are already committed for this purchase order."
                             : "Releasing records the order and creates AP payable records. "
-                                    + "Chart of accounts balances change when vendor payment is confirmed in Accounts Payable.")
+                            + "Chart of accounts balances change when vendor payment is confirmed in Accounts Payable.")
                     .build();
         }
 
@@ -398,7 +417,7 @@ public class PurchaseOrderService {
     private boolean isFundsCommitted(PurchaseOrder po) {
         return po.getFinanceTransactionId() != null
                 || transactionService.hasPurchaseOrderEncumbrance(
-                        po.getCompany().getId(), po.getId());
+                po.getCompany().getId(), po.getId());
     }
 
     private void releaseEncumbranceOnCancel(PurchaseOrder po) {
@@ -428,14 +447,7 @@ public class PurchaseOrderService {
     private record PostingAccounts(Long debitAccountId, Long creditAccountId) {}
 
     private PostingAccounts resolvePostingAccounts(PurchaseOrder po) {
-        PurchaseRequisition pr = po.getSourceRequisition();
-        if (pr != null && pr.getDebitAccount() != null && pr.getCreditAccount() != null) {
-            return new PostingAccounts(pr.getDebitAccount().getId(), pr.getCreditAccount().getId());
-        }
-        PurchasePostingAccountsResolver.ResolvedAccounts accounts = postingAccountsResolver.resolve(
-                po.getCompany().getId(),
-                null,
-                null);
+        var accounts = accountingDefaults.requirePurchaseAccounts(po.getCompany().getId());
         return new PostingAccounts(accounts.debitAccountId(), accounts.creditAccountId());
     }
 
@@ -449,7 +461,15 @@ public class PurchaseOrderService {
             throw new RuntimeException("Only RECEIVED or CANCELLED purchase orders can be archived");
         }
         po.setArchived(true);
-        return toDTO(repo.save(po));
+        repo.save(po);
+
+        PurchaseRequisition sourceRequisition = po.getSourceRequisition();
+        if (sourceRequisition != null && !sourceRequisition.isArchived()) {
+            sourceRequisition.setArchived(true);
+            requisitionRepo.save(sourceRequisition);
+        }
+
+        return toDTO(po);
     }
 
     private PurchaseOrder getEntity(Long id) {

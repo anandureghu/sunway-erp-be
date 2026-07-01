@@ -143,6 +143,7 @@ public class EmployeeService {
         Employee employee = Employee.builder()
                 .employeeNo(employeeNo)
                 .firstName(dto.getFirstName())
+                .middleName(dto.getMiddleName())
                 .lastName(dto.getLastName())
                 .gender(dto.getGender())
                 .prefix(dto.getPrefix())
@@ -201,6 +202,7 @@ public class EmployeeService {
         if (dto.getEmployeeNo()     != null) employee.setEmployeeNo(dto.getEmployeeNo());
         if (dto.getPrefix()         != null) employee.setPrefix(dto.getPrefix());
         if (dto.getFirstName()      != null) employee.setFirstName(dto.getFirstName());
+        if (dto.getMiddleName()     != null) employee.setMiddleName(dto.getMiddleName());
         if (dto.getLastName()       != null) employee.setLastName(dto.getLastName());
         if (dto.getGender()         != null) employee.setGender(dto.getGender());
         if (dto.getStatus()         != null) employee.setStatus(dto.getStatus());
@@ -500,6 +502,7 @@ public class EmployeeService {
                 .id(e.getId())
                 .employeeNo(e.getEmployeeNo())
                 .firstName(e.getFirstName())
+                .middleName(e.getMiddleName())
                 .lastName(e.getLastName())
                 .gender(e.getGender())
                 .prefix(e.getPrefix())

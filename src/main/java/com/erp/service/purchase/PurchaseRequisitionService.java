@@ -28,6 +28,7 @@ import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.service.file.FileStorageService;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
+import com.erp.service.finance.CompanyAccountingDefaultsService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -58,7 +59,7 @@ public class PurchaseRequisitionService {
     private final PurchaseRequisitionDocumentRepository documentRepo;
     private final FileStorageService fileStorageService;
     private final PurchaseProcurementDuplicateGuard procurementDuplicateGuard;
-    private final PurchasePostingAccountsResolver postingAccountsResolver;
+    private final CompanyAccountingDefaultsService accountingDefaults;
 
     public PurchaseRequisitionService(
             PurchaseRequisitionRepository repo,
@@ -75,7 +76,7 @@ public class PurchaseRequisitionService {
             PurchaseRequisitionDocumentRepository documentRepo,
             FileStorageService fileStorageService,
             PurchaseProcurementDuplicateGuard procurementDuplicateGuard,
-            PurchasePostingAccountsResolver postingAccountsResolver
+            CompanyAccountingDefaultsService accountingDefaults
     ) {
         this.repo = repo;
         this.itemRepo = itemRepo;
@@ -91,7 +92,7 @@ public class PurchaseRequisitionService {
         this.documentRepo = documentRepo;
         this.fileStorageService = fileStorageService;
         this.procurementDuplicateGuard = procurementDuplicateGuard;
-        this.postingAccountsResolver = postingAccountsResolver;
+        this.accountingDefaults = accountingDefaults;
     }
 
     public PurchaseRequisitionResponseDTO create(PurchaseRequisitionCreateDTO dto) {
@@ -99,10 +100,11 @@ public class PurchaseRequisitionService {
         assertNoPendingProcurementForDto(dto, null);
 
         Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
-        PurchasePostingAccountsResolver.ResolvedAccounts accounts = postingAccountsResolver.resolve(
-                company.getId(),
-                dto.getDebitAccountId(),
-                dto.getCreditAccountId());
+        var accounts = accountingDefaults.requirePurchaseAccounts(company.getId());
+        accountingDefaults.assertDistinctAccounts(
+                "Purchase requisition",
+                accounts.debitAccountId(),
+                accounts.creditAccountId());
 
         PurchaseRequisition pr = PurchaseRequisition.builder()
                 .requisitionNumber(documentSequenceService.generateNext("PR"))
@@ -142,11 +144,6 @@ public class PurchaseRequisitionService {
     private void validateCreateDto(PurchaseRequisitionCreateDTO dto) {
         if (dto.getItems() == null || dto.getItems().isEmpty()) {
             throw new RuntimeException("At least one line item is required");
-        }
-        if (dto.getDebitAccountId() != null
-                && dto.getCreditAccountId() != null
-                && dto.getDebitAccountId().equals(dto.getCreditAccountId())) {
-            throw new RuntimeException("Debit and credit accounts cannot be the same");
         }
         if (dto.getRequiredDeliveryDate() == null) {
             throw new RuntimeException("Required delivery date is required");
@@ -221,6 +218,7 @@ public class PurchaseRequisitionService {
         pr.setUrgency(urgency);
         pr.setDeliveryWarehouse(deliveryWarehouse);
         pr.setJustification(dto.getJustification().trim());
+        pr.setNotes(trimToNull(dto.getNotes()));
         // Keep a mutable managed collection instance for Hibernate merge/update flows.
         if (pr.getItems() == null) {
             pr.setItems(new ArrayList<>());
@@ -276,10 +274,11 @@ public class PurchaseRequisitionService {
         assertNoPendingProcurementForDto(dto, id);
 
         Company company = pr.getCompany();
-        PurchasePostingAccountsResolver.ResolvedAccounts accounts = postingAccountsResolver.resolve(
-                company.getId(),
-                dto.getDebitAccountId(),
-                dto.getCreditAccountId());
+        var accounts = accountingDefaults.requirePurchaseAccounts(company.getId());
+        accountingDefaults.assertDistinctAccounts(
+                "Purchase requisition",
+                accounts.debitAccountId(),
+                accounts.creditAccountId());
 
         applyDtoToRequisition(pr, dto, company, accounts.debitAccount(), accounts.creditAccount());
         return toDTO(repo.save(pr), null);
@@ -609,7 +608,8 @@ public class PurchaseRequisitionService {
                 .projectCode(pr.getProjectCode())
                 .requisitionDescription(pr.getRequisitionDescription())
                 .urgency(pr.getUrgency() != null ? pr.getUrgency().name() : null)
-                .justification(pr.getJustification());
+                .justification(pr.getJustification())
+                .notes(pr.getNotes());
         if (pr.getDeliveryWarehouse() != null) {
             b.deliveryWarehouseId(pr.getDeliveryWarehouse().getId())
                     .deliveryWarehouseName(pr.getDeliveryWarehouse().getName());

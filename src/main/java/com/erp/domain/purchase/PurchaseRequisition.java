@@ -88,6 +88,8 @@ public class PurchaseRequisition {
 
     private String justification;
 
+    private String notes;
+
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "requisition_id")
     private List<PurchaseRequisitionItem> items;

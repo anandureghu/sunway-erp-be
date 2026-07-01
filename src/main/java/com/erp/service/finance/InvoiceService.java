@@ -76,6 +76,7 @@ public class InvoiceService {
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final CustomerEmailService customerEmailService;
     private final TransactionService transactionService;
+    private final CompanyAccountingDefaultsService accountingDefaults;
     private final DocumentSequenceService documentSequenceService;
 
     @Transactional
@@ -436,12 +437,9 @@ public class InvoiceService {
         if (repo.findByOrderIdAndType(order.getId(), InvoiceType.SALES).isPresent()) {
             throw new RuntimeException("Invoice already exists for this sales order");
         }
-        if (order.getDebitAccount() == null) {
-            throw new RuntimeException("Sales order is missing debit account");
-        }
-        if (order.getCreditAccount() == null) {
-            throw new RuntimeException("Sales order is missing credit account");
-        }
+        Long companyId = order.getCompany().getId();
+        var salesAccounts = accountingDefaults.requireSalesAccounts(companyId);
+
         if (order.getBankAccount() == null) {
             throw new RuntimeException("Sales order is missing bank account");
         }
@@ -456,8 +454,8 @@ public class InvoiceService {
         req.setInvoiceDate(LocalDate.now());
         req.setDueDate(order.getInvoiceDueDate());
         req.setAmount(order.getTotalAmount());
-        req.setDebitAccount(order.getDebitAccount().getId());
-        req.setCreditAccount(order.getCreditAccount().getId());
+        req.setDebitAccount(salesAccounts.debitAccountId());
+        req.setCreditAccount(salesAccounts.creditAccountId());
         req.setBankAccountId(order.getBankAccount().getId());
         req.setItemDescription("Auto-generated from sales order " + order.getOrderNumber());
         req.setNotesRemarks("Invoice created on sales order confirmation.");
@@ -498,11 +496,12 @@ public class InvoiceService {
             throw new RuntimeException("Assign a supplier before generating the purchase invoice");
         }
 
-        Company company = po.getCompany();
-        if (company.getDefaultPurchaseDebitAccountId() == null
-                || company.getDefaultPurchaseCreditAccountId() == null) {
-            throw new RuntimeException("Company is missing default purchase debit or credit account");
-        }
+        Long companyId = po.getCompany().getId();
+        var purchaseAccounts = accountingDefaults.requirePurchaseAccounts(companyId);
+        accountingDefaults.assertDistinctAccounts(
+                "Purchase invoice posting",
+                purchaseAccounts.debitAccountId(),
+                purchaseAccounts.creditAccountId());
 
         BigDecimal total = po.getTotalAmount() != null ? po.getTotalAmount() : BigDecimal.ZERO;
 
@@ -517,8 +516,8 @@ public class InvoiceService {
         req.setSubtotalAmount(total);
         req.setDiscountAmount(BigDecimal.ZERO);
         req.setTaxAmount(BigDecimal.ZERO);
-        req.setDebitAccount(company.getDefaultPurchaseDebitAccountId());
-        req.setCreditAccount(company.getDefaultPurchaseCreditAccountId());
+        req.setDebitAccount(purchaseAccounts.debitAccountId());
+        req.setCreditAccount(purchaseAccounts.creditAccountId());
         req.setItemDescription(resolvePurchaseInvoiceDescription(po));
         req.setNotesRemarks(resolvePurchaseInvoiceNotes(po));
         req.setDocumentSource(InvoiceDocumentSource.GENERATED);
@@ -618,7 +617,25 @@ public class InvoiceService {
             inv.setStatus("PARTIALLY_PAID");
         }
 
-        return repo.save(inv);
+        Invoice saved = repo.save(inv);
+        completeLinkedSalesOrderWhenPaid(saved);
+        return saved;
+    }
+
+    private void completeLinkedSalesOrderWhenPaid(Invoice invoice) {
+        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+            return;
+        }
+        if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
+            return;
+        }
+        salesOrderRepo.findById(invoice.getOrderId()).ifPresent(order -> {
+            if ("CANCELLED".equals(order.getStatus()) || "COMPLETED".equals(order.getStatus())) {
+                return;
+            }
+            order.setStatus("COMPLETED");
+            salesOrderRepo.save(order);
+        });
     }
 
     /**
@@ -812,6 +829,12 @@ public class InvoiceService {
     // DELETE
     // ============================================================
     public void deleteInvoice(Long id) {
+        Invoice inv = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
+        if (!inv.isArchived()) {
+            throw new RuntimeException("Only archived invoices can be permanently deleted");
+        }
         repo.deleteById(id);
     }
 
@@ -925,6 +948,10 @@ public class InvoiceService {
                 .createdAt(i.getCreatedAt())
                 .orderId(i.getOrderId())
                 .orderNumber(orderNumber)
+                .supplierId(purchaseOrder != null ? purchaseOrder.getSupplierId() : null)
+                .supplierName(purchaseOrder != null
+                        ? purchaseOrder.getSupplierName()
+                        : (i.getType() == InvoiceType.PURCHASE ? i.getToParty() : null))
                 .type(i.getType())
                 .salesOrder(salesOrder)
                 .purchaseOrder(purchaseOrder)

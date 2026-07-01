@@ -6,6 +6,7 @@ import com.erp.domain.security.Role;
 import com.erp.dto.leave.LeaveHistoryDTO;
 import com.erp.dto.leave.LeavePreviewDTO;
 import com.erp.dto.leave.LeaveRequestDTO;
+import com.erp.dto.leave.LeaveReturnRequest;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.security.context.AuthContext;
@@ -185,6 +186,31 @@ public class EmployeeLeaveController {
         }
     }
 
+    @PostMapping("/employees/{employeeId}/leaves/{leaveId}/return")
+    public ResponseEntity<?> confirmReturn(
+            @PathVariable Long employeeId,
+            @PathVariable Long leaveId,
+            @RequestBody LeaveReturnRequest body) {
+        try {
+            // Authorization (owner or HR/department approver) is enforced in the
+            // service, so no validateSelfAccess here — an approver may not be the
+            // owning employee.
+            LeaveHistoryDTO dto = leaveService.confirmReturn(
+                    employeeId, leaveId, body != null ? body.getReportedDate() : null);
+
+            log.info("Leave return confirmed for employee {}: leaveId={}, reportedDate={}",
+                    employeeId, leaveId, body != null ? body.getReportedDate() : null);
+
+            return ResponseEntity.ok(dto);
+        } catch (IllegalArgumentException e) {
+            return badRequest(e);
+        } catch (AccessDeniedException e) {
+            return forbidden(e);
+        } catch (RuntimeException e) {
+            return badRequest(e);
+        }
+    }
+
     @GetMapping("/leaves/approvals/can-approve")
     public ResponseEntity<?> canApproveLeaves() {
         boolean canApprove = leaveService.canCurrentUserApproveLeaves();
@@ -195,6 +221,18 @@ public class EmployeeLeaveController {
     public ResponseEntity<?> pendingApprovals() {
         try {
             List<LeaveHistoryDTO> approvals = leaveService.getPendingApprovalsForCurrentApprover();
+            return ResponseEntity.ok(Map.of("approvals", approvals));
+        } catch (AccessDeniedException e) {
+            return forbidden(e);
+        } catch (RuntimeException e) {
+            return badRequest(e);
+        }
+    }
+
+    @GetMapping("/leaves/approvals/history")
+    public ResponseEntity<?> leaveApprovalsHistory() {
+        try {
+            List<LeaveHistoryDTO> approvals = leaveService.getCompanyLeaveApprovals();
             return ResponseEntity.ok(Map.of("approvals", approvals));
         } catch (AccessDeniedException e) {
             return forbidden(e);

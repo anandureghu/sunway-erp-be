@@ -35,8 +35,10 @@ public class StockVarianceController {
 
     @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/history")
-    public List<StockVarianceResponseDTO> listHistory() {
-        return service.listHistory();
+    public List<StockVarianceResponseDTO> listHistory(
+            @RequestParam(value = "archived", required = false, defaultValue = "false") boolean archived
+    ) {
+        return service.listHistory(archived);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN, AppAction.APPROVE})
@@ -55,5 +57,11 @@ public class StockVarianceController {
     @PostMapping("/{id}/reject")
     public StockVarianceResponseDTO reject(@PathVariable("id") Long id) {
         return service.reject(id);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.DELETE})
+    @PostMapping("/{id}/archive")
+    public StockVarianceResponseDTO archive(@PathVariable("id") Long id) {
+        return service.archive(id);
     }
 }

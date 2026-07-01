@@ -2,6 +2,8 @@ package com.erp.repo.purchase;
 
 import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,6 +13,15 @@ import java.util.Optional;
 
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Long> {
     List<PurchaseOrder> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
+
+    Page<PurchaseOrder> findByCompanyIdAndArchivedTrueOrderByCreatedAtDesc(Long companyId, Pageable pageable);
+
+    List<PurchaseOrder> findByCompanyIdAndArchivedTrue(Long companyId);
+
+    List<PurchaseOrder> findBySupplier_IdAndArchivedFalseAndStatusInOrderByCreatedAtDesc(
+            Long supplierId,
+            List<PurchaseOrderStatus> statuses
+    );
 
     Optional<PurchaseOrder> findBySourceRequisition_Id(Long requisitionId);
 
@@ -42,4 +53,21 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
                 companyId, warehouseId, itemId, statuses);
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
     }
+
+    @Query("""
+            SELECT COALESCE(SUM(poi.quantity), 0)
+            FROM PurchaseOrder po
+            JOIN po.items poi
+            WHERE po.company.id = :companyId
+              AND po.archived = false
+              AND (
+                po.status IN :releasedStatuses
+                OR (po.status = com.erp.domain.purchase.PurchaseOrderStatus.DRAFT
+                    AND po.sourceRequisition IS NOT NULL)
+              )
+            """)
+    Long sumOnOrderQuantity(
+            @Param("companyId") Long companyId,
+            @Param("releasedStatuses") List<PurchaseOrderStatus> releasedStatuses
+    );
 }

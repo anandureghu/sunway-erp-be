@@ -2,11 +2,16 @@ package com.erp.service.inventory;
 
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Vendor;
+import com.erp.domain.purchase.PurchaseOrder;
+import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.dto.inventory.VendorCreateDTO;
 import com.erp.dto.inventory.VendorFilterDTO;
 import com.erp.dto.inventory.VendorResponseDTO;
 import com.erp.dto.inventory.VendorUpdateDTO;
+import com.erp.exception.ConflictException;
+import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.inventory.VendorRepository;
+import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
@@ -17,16 +22,32 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
 public class VendorService {
 
+    private static final List<PurchaseOrderStatus> OPEN_PO_STATUSES = List.of(
+            PurchaseOrderStatus.DRAFT,
+            PurchaseOrderStatus.CONFIRMED,
+            PurchaseOrderStatus.PARTIALLY_RECEIVED
+    );
+
     private final VendorRepository vendorRepo;
+    private final PurchaseOrderRepository purchaseOrderRepo;
+    private final PaymentRepository paymentRepo;
     private final AuthContext authContext;
 
-    public VendorService(VendorRepository vendorRepo, AuthContext authContext) {
+    public VendorService(
+            VendorRepository vendorRepo,
+            PurchaseOrderRepository purchaseOrderRepo,
+            PaymentRepository paymentRepo,
+            AuthContext authContext
+    ) {
         this.vendorRepo = vendorRepo;
+        this.purchaseOrderRepo = purchaseOrderRepo;
+        this.paymentRepo = paymentRepo;
         this.authContext = authContext;
     }
 
@@ -135,11 +156,62 @@ public class VendorService {
         return toDTO(vendorRepo.save(v));
     }
 
-    // ---------------- DELETE ----------------
+    // ---------------- DELETE (blocked when the vendor has open orders/payments) ----------------
     public void deleteVendor(Long id) {
         Vendor v = getVendorById(id);
         validateCompany(v.getCompany().getId());
+        assertVendorDeletable(v);
         vendorRepo.delete(v);
+    }
+
+    private void assertVendorDeletable(Vendor vendor) {
+        List<PurchaseOrder> openOrders = purchaseOrderRepo
+                .findBySupplier_IdAndArchivedFalseAndStatusInOrderByCreatedAtDesc(
+                        vendor.getId(),
+                        OPEN_PO_STATUSES
+                );
+        long pendingPayments = paymentRepo.countPendingVendorPaymentsForSupplier(vendor.getId());
+
+        if (openOrders.isEmpty() && pendingPayments == 0) {
+            return;
+        }
+
+        List<String> reasons = new ArrayList<>();
+        if (!openOrders.isEmpty()) {
+            String orderRefs = openOrders.stream()
+                    .map(PurchaseOrder::getOrderNumber)
+                    .limit(5)
+                    .collect(Collectors.joining(", "));
+            if (openOrders.size() > 5) {
+                orderRefs = orderRefs + ", …";
+            }
+            reasons.add(
+                    openOrders.size() + " open purchase order(s)"
+                            + (orderRefs.isBlank() ? "" : " (" + orderRefs + ")")
+            );
+        }
+        if (pendingPayments > 0) {
+            List<String> paymentCodes = paymentRepo.findPendingVendorPaymentCodesForSupplier(vendor.getId());
+            String paymentRefs = paymentCodes.stream()
+                    .limit(5)
+                    .filter(code -> code != null && !code.isBlank())
+                    .collect(Collectors.joining(", "));
+            if (pendingPayments > 5 && !paymentRefs.isBlank()) {
+                paymentRefs = paymentRefs + ", …";
+            }
+            reasons.add(
+                    pendingPayments + " pending vendor payment(s)"
+                            + (paymentRefs.isBlank() ? "" : " (" + paymentRefs + ")")
+            );
+        }
+
+        throw new ConflictException(
+                "Cannot delete supplier \""
+                        + vendor.getVendorName()
+                        + "\". "
+                        + String.join(" and ", reasons)
+                        + ". Complete or cancel these orders and payments before deleting."
+        );
     }
 
     // ---------------- MAPPER ----------------

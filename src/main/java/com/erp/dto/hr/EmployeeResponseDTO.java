@@ -14,6 +14,7 @@ public class EmployeeResponseDTO {
     private Long id;
     private String employeeNo;
     private String firstName;
+    private String middleName;
     private String lastName;
 
     private String gender;

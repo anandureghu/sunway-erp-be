@@ -23,6 +23,9 @@ public interface EmployeeLoanRepository extends JpaRepository<EmployeeLoan, Long
 
     List<EmployeeLoan> findByEmployeeAndStatus(Employee employee, String active);
 
+    /** True if the employee has any loan in one of the given statuses. */
+    boolean existsByEmployeeIdAndStatusIn(Long employeeId, List<String> statuses);
+
     @Query("""
         select l from EmployeeLoan l
         where l.employee.company.id = :companyId
@@ -32,5 +35,17 @@ public interface EmployeeLoanRepository extends JpaRepository<EmployeeLoan, Long
     List<EmployeeLoan> findByCompanyAndStatus(
             @Param("companyId") Long companyId,
             @Param("status") String status
+    );
+
+    /** All loans in a company whose status is one of the given set (for reports). */
+    @Query("""
+        select l from EmployeeLoan l
+        where l.employee.company.id = :companyId
+          and l.status in :statuses
+        order by l.startDate desc
+    """)
+    List<EmployeeLoan> findByCompanyAndStatusIn(
+            @Param("companyId") Long companyId,
+            @Param("statuses") List<String> statuses
     );
 }

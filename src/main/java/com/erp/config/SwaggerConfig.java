@@ -31,7 +31,9 @@ public class SwaggerConfig {
                         .title("ERP System API")
                         .description("""
                                 Auto-generated API documentation for HR, Finance, Inventory, and Auth modules.
-                                Email OTP endpoints live under OTP / Two-Factor Verification (POST /api/auth/otp/send, /verify).
+                                Login may require email 2FA when enabled in the user's profile security settings
+                                (POST /api/auth/login → OTP → /login/verify-2fa).
+                                Password recovery: POST /api/auth/forgot-password → otp/verify → /reset-password.
                                 """)
                         .version("1.0.0")
                 )

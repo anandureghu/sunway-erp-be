@@ -37,4 +37,5 @@ public class StockVarianceResponseDTO {
     private Long rejectedById;
     private String rejectedByName;
     private Instant rejectedAt;
+    private boolean archived;
 }

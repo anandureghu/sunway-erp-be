@@ -49,6 +49,7 @@ public class PurchaseRequisitionResponseDTO {
     private Long deliveryWarehouseId;
     private String deliveryWarehouseName;
     private String justification;
+    private String notes;
 
     /** Populated when approval creates a purchase order in the same request. */
     private Long createdPurchaseOrderId;

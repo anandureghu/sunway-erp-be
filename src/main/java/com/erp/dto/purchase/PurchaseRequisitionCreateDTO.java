@@ -34,6 +34,7 @@ public class PurchaseRequisitionCreateDTO {
     private String urgency;
     private Long deliveryWarehouseId;
     private String justification;
+    private String notes;
 
     private List<PurchaseRequisitionItemDTO> items;
 }

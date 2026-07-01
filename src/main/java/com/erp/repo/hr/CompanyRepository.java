@@ -5,9 +5,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface CompanyRepository extends JpaRepository<Company, Long> {
     // Fetch all companies created by a given user
     List<Company> findByCreatedBy(String createdBy);
+
+    Optional<Company> findByCompanyCodeIgnoreCase(String companyCode);
 }

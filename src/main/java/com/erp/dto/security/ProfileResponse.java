@@ -19,6 +19,7 @@ public class ProfileResponse {
     private Long    companyRoleId;
     private String  companyRole;
     private Instant createdAt;
+    private boolean twoFactorEnabled;
 
     // from Employee (nullable)
     private Long   employeeId;
@@ -48,6 +49,7 @@ public class ProfileResponse {
                 .companyRole(emp != null && emp.getCompanyRole() != null
                         ? emp.getCompanyRole() : user.getCompanyRole())
                 .createdAt(user.getCreatedAt())
+                .twoFactorEnabled(Boolean.TRUE.equals(user.getTwoFactorEnabled()))
                 .employeeId(emp != null ? emp.getId() : null)
                 .employeeNo(emp != null ? emp.getEmployeeNo() : null)
                 .firstName(emp != null ? emp.getFirstName() : null)

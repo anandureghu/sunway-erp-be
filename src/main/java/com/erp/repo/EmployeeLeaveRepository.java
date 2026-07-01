@@ -14,6 +14,33 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
 
     List<EmployeeLeave> findByEmployeeIdOrderByDateReportedDesc(Long employeeId);
 
+    /** Employee ids that have an approved leave covering the given date. */
+    @Query("""
+        select distinct l.employee.id from EmployeeLeave l
+        where l.leaveStatus = com.erp.domain.LeaveStatus.APPROVED
+          and l.startDate <= :onDate
+          and l.endDate >= :onDate
+    """)
+    List<Long> findEmployeeIdsOnApprovedLeave(@Param("onDate") LocalDate onDate);
+
+    /** Overlap check that ignores one leave (the one being edited). */
+    @Query("""
+        select case when count(l) > 0 then true else false end
+        from EmployeeLeave l
+        where l.employee.id = :employeeId
+          and l.id <> :excludeLeaveId
+          and l.leaveStatus = :status
+          and l.startDate <= :periodEnd
+          and l.endDate >= :periodStart
+    """)
+    boolean existsOtherLeaveForPeriod(
+            @Param("employeeId") Long employeeId,
+            @Param("excludeLeaveId") Long excludeLeaveId,
+            @Param("status") LeaveStatus status,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd
+    );
+
     Optional<EmployeeLeave> findByIdAndEmployeeId(Long id, Long employeeId);
 
     @Query("""
@@ -30,6 +57,18 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
     List<EmployeeLeave> findByEmployeeDepartmentIdAndLeaveStatusOrderByDateReportedDesc(
             Long departmentId,
             LeaveStatus leaveStatus
+    );
+
+    /** All leaves in a company whose status is one of the given set (for reports). */
+    @Query("""
+        select l from EmployeeLeave l
+        where l.employee.company.id = :companyId
+          and l.leaveStatus in :statuses
+        order by l.dateReported desc
+    """)
+    List<EmployeeLeave> findByCompanyAndStatuses(
+            @Param("companyId") Long companyId,
+            @Param("statuses") List<LeaveStatus> statuses
     );
 
     @Query("""

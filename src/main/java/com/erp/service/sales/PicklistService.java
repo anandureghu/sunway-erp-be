@@ -60,8 +60,8 @@ public class PicklistService {
                 .filter(o -> o.getCompany().getId().equals(companyId))
                 .orElseThrow(() -> new RuntimeException("Sales order not found"));
 
-        if (!"CONFIRMED".equals(so.getStatus())) {
-            throw new RuntimeException("Picklist can be generated only for CONFIRMED sales orders");
+        if (!"CONFIRMED".equals(so.getStatus()) && !"COMPLETED".equals(so.getStatus())) {
+            throw new RuntimeException("Picklist can be generated only for confirmed or completed sales orders");
         }
         var invoice = invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this sales order"));

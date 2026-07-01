@@ -2,6 +2,8 @@ package com.erp.repo.purchase;
 
 import com.erp.domain.purchase.PurchaseRequisition;
 import com.erp.domain.purchase.PurchaseRequisitionStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,6 +13,10 @@ import java.util.Optional;
 
 public interface PurchaseRequisitionRepository extends JpaRepository<PurchaseRequisition, Long> {
     List<PurchaseRequisition> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
+
+    Page<PurchaseRequisition> findByCompanyIdAndArchivedTrueOrderByCreatedAtDesc(Long companyId, Pageable pageable);
+
+    List<PurchaseRequisition> findByCompanyIdAndArchivedTrue(Long companyId);
 
     @Query("""
             SELECT pr FROM PurchaseRequisition pr
