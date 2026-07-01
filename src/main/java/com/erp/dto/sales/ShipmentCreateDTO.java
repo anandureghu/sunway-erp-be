@@ -13,6 +13,7 @@ public class ShipmentCreateDTO {
     private String vehicleNumber;
     private String driverName;
     private String driverPhone;
+    private String customerPhone;
     private String estimatedDeliveryDate;
     private String deliveryAddress;
     private String notes;
