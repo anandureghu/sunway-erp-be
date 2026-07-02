@@ -4,6 +4,7 @@ import com.erp.domain.CompanyLeavePolicy;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLeave;
 import com.erp.domain.EmployeeLeaveBalance;
+import com.erp.domain.EmployeeStatus;
 import com.erp.domain.LeaveStatus;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
@@ -127,8 +128,18 @@ public class LeaveService {
         validateDates(dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
         validateReturnDate(dto.getEndDate(), dto.getReturnDate());
 
+        // A leave can't be requested for a date that has already passed.
+        if (dto.getStartDate() != null && dto.getStartDate().isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Leave cannot be requested for a past date");
+        }
+
         Employee employee = getEmployee(employeeId);
         validateEmployeeOwnership(employeeId, employee);
+
+        // Realtime overlap guard: an employee can't hold two leaves over the
+        // same dates. They may still book a future, non-overlapping leave even
+        // while currently on leave.
+        validateNoOverlappingLeave(employeeId, null, dto.getStartDate(), dto.getEndDate());
 
         boolean includeWeekends = Boolean.TRUE.equals(dto.getIncludeWeekends());
         int totalDays = calculateDays(dto.getStartDate(), dto.getEndDate(), includeWeekends);
@@ -173,6 +184,37 @@ public class LeaveService {
         }
 
         return mapToHistoryDTO(leave);
+    }
+
+    /**
+     * Block a new leave that overlaps an existing pending or approved leave for
+     * the same employee. Evaluated live at apply time so two leaves can never
+     * cover the same dates; non-overlapping future leaves are still allowed.
+     */
+    private void validateNoOverlappingLeave(
+            Long employeeId, Long excludeLeaveId, LocalDate start, LocalDate end) {
+        if (overlapsExisting(employeeId, excludeLeaveId, LeaveStatus.APPROVED, start, end)) {
+            throw new IllegalArgumentException(
+                    "This employee already has an approved leave that overlaps these dates. "
+                            + "A leave can't overlap an existing leave period.");
+        }
+        if (overlapsExisting(employeeId, excludeLeaveId, LeaveStatus.PENDING, start, end)) {
+            throw new IllegalArgumentException(
+                    "This employee already has a pending leave request overlapping these dates. "
+                            + "Wait for it to be decided, or edit that request instead.");
+        }
+    }
+
+    /**
+     * True if another leave of the given status overlaps [start, end]. When
+     * editing, {@code excludeLeaveId} is the leave being changed so it doesn't
+     * count as overlapping itself; for a new application it is null.
+     */
+    private boolean overlapsExisting(
+            Long employeeId, Long excludeLeaveId, LeaveStatus status, LocalDate start, LocalDate end) {
+        return excludeLeaveId == null
+                ? leaveRepo.existsLeavesForPayrollPeriod(employeeId, status, start, end)
+                : leaveRepo.existsOtherLeaveForPeriod(employeeId, excludeLeaveId, status, start, end);
     }
 
     public List<LeaveHistoryDTO> history(Long employeeId) {
@@ -220,6 +262,31 @@ public class LeaveService {
                 .toList();
     }
 
+    /**
+     * Company-wide history of decided leaves (approved, completed, rejected) for
+     * the HR Reports "Leave Approvals" view. Scoped to the approver's company and
+     * gated the same way as pending approvals.
+     */
+    public List<LeaveHistoryDTO> getCompanyLeaveApprovals() {
+        Employee approver = getCurrentEmployee();
+
+        if (!canActAsApprover(approver)) {
+            throw new AccessDeniedException("Access denied: no permission to view leave approvals");
+        }
+
+        Long approverCompanyId = approver.getCompany() != null ? approver.getCompany().getId() : null;
+        if (approverCompanyId == null) {
+            throw new AccessDeniedException("Approver is not linked to a company");
+        }
+
+        return leaveRepo.findByCompanyAndStatuses(
+                        approverCompanyId,
+                        List.of(LeaveStatus.APPROVED, LeaveStatus.COMPLETED, LeaveStatus.REJECTED))
+                .stream()
+                .map(this::mapToHistoryDTO)
+                .toList();
+    }
+
     @Transactional
     public LeaveHistoryDTO approveLeave(Long leaveId) {
         Employee approver = getCurrentEmployee();
@@ -253,27 +320,37 @@ public class LeaveService {
         enforceAccrualRules(leave.getEmployee(), policy);
 
         if (Boolean.TRUE.equals(policy.getPaid())) {
+            // Do NOT deduct here. The balance is consumed only when the employee
+            // confirms their return (see confirmReturn) because the actual days
+            // taken can differ from the planned span — an employee may come back
+            // early or have their return delayed. We still verify the planned
+            // span fits the current balance so an unaffordable leave isn't approved.
             EmployeeLeaveBalance balance = getOrCreateBalance(leave.getEmployee(), policy);
-
             if (balance.getRemainingLeaves() < leave.getTotalDays()) {
                 throw new RuntimeException(
                         insufficientBalanceMessage(leave.getEmployee(), policy, leave.getTotalDays()));
-            }
-
-            balance.setRemainingLeaves(balance.getRemainingLeaves() - leave.getTotalDays());
-            try {
-                // saveAndFlush triggers the @Version check synchronously so we
-                // can translate concurrent-modification into a clear error
-                // rather than a generic commit-time 500.
-                balanceRepo.saveAndFlush(balance);
-            } catch (org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
-                throw new IllegalStateException(
-                        "Leave balance was modified by another approval — please retry", ex);
             }
         }
 
         leave.setLeaveStatus(LeaveStatus.APPROVED);
         leave = leaveRepo.save(leave);
+
+        // Reflect an in-progress leave on the employee's status so the company
+        // can see who is currently away. Only flip an ACTIVE employee — never
+        // override INACTIVE / resigned / terminated states. The daily
+        // reconciliation job (EmployeeLeaveStatusJob) reverts this to ACTIVE
+        // when the leave ends, and flips a future leave to ON_LEAVE when it
+        // begins.
+        Employee leaveEmployee = leave.getEmployee();
+        LocalDate today = LocalDate.now();
+        if (leaveEmployee.getStatus() == EmployeeStatus.ACTIVE
+                && leave.getStartDate() != null
+                && leave.getEndDate() != null
+                && !leave.getStartDate().isAfter(today)
+                && !leave.getEndDate().isBefore(today)) {
+            leaveEmployee.setStatus(EmployeeStatus.ON_LEAVE);
+            employeeRepo.save(leaveEmployee);
+        }
 
         return mapToHistoryDTO(leave);
     }
@@ -309,6 +386,84 @@ public class LeaveService {
 
         leave.setLeaveStatus(LeaveStatus.REJECTED);
         leave = leaveRepo.save(leave);
+
+        return mapToHistoryDTO(leave);
+    }
+
+    /**
+     * Confirms an employee's return to office for an approved leave. This is the
+     * point at which the balance is actually consumed: the days deducted are the
+     * real days taken (start date up to the day before they resumed duties), so
+     * an early or delayed return is reflected accurately. The leave moves to
+     * COMPLETED and the employee's status returns to ACTIVE.
+     *
+     * Permitted for the leave's owner or an HR / department approver.
+     */
+    @Transactional
+    public LeaveHistoryDTO confirmReturn(Long employeeId, Long leaveId, LocalDate reportedDate) {
+        if (reportedDate == null) {
+            throw new IllegalArgumentException("Reported-to-office date is required");
+        }
+
+        EmployeeLeave leave = leaveRepo.findById(leaveId)
+                .orElseThrow(() -> new RuntimeException("Leave not found"));
+
+        if (leave.getEmployee() == null || leave.getEmployee().getId() == null) {
+            throw new RuntimeException("Leave employee not found");
+        }
+        if (!leave.getEmployee().getId().equals(employeeId)) {
+            throw new AccessDeniedException("Leave does not belong to this employee");
+        }
+
+        Employee currentEmployee = getCurrentEmployee();
+        boolean isOwner = currentEmployee.getId() != null
+                && currentEmployee.getId().equals(employeeId);
+        if (!isOwner && !canActAsApprover(currentEmployee)) {
+            throw new AccessDeniedException(
+                    "Only the employee or an HR / department approver can confirm a return");
+        }
+
+        if (leave.getLeaveStatus() != LeaveStatus.APPROVED) {
+            throw new IllegalArgumentException("Only approved leaves can be marked as returned");
+        }
+
+        if (leave.getStartDate() == null || !reportedDate.isAfter(leave.getStartDate())) {
+            throw new IllegalArgumentException(
+                    "Reported-to-office date must be after the leave start date");
+        }
+
+        // Actual leave taken runs from the start date through the day before the
+        // employee resumed duties — supports both early and delayed returns.
+        boolean includeWeekends = Boolean.TRUE.equals(leave.getIncludeWeekends());
+        int actualDays = calculateDays(
+                leave.getStartDate(), reportedDate.minusDays(1), includeWeekends);
+
+        Employee employee = leave.getEmployee();
+        CompanyLeavePolicy policy = getPolicy(employee, leave.getLeaveType());
+
+        if (Boolean.TRUE.equals(policy.getPaid()) && actualDays > 0) {
+            EmployeeLeaveBalance balance = getOrCreateBalance(employee, policy);
+            balance.setRemainingLeaves(balance.getRemainingLeaves() - actualDays);
+            try {
+                // saveAndFlush surfaces the @Version check synchronously so a
+                // concurrent change becomes a clear retry error, not a 500.
+                balanceRepo.saveAndFlush(balance);
+            } catch (org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+                throw new IllegalStateException(
+                        "Leave balance was modified concurrently — please retry", ex);
+            }
+        }
+
+        leave.setReturnDate(reportedDate);
+        leave.setTotalDays(actualDays);
+        leave.setLeaveStatus(LeaveStatus.COMPLETED);
+        leave = leaveRepo.save(leave);
+
+        // The employee is back — flip them off ON_LEAVE.
+        if (employee.getStatus() == EmployeeStatus.ON_LEAVE) {
+            employee.setStatus(EmployeeStatus.ACTIVE);
+            employeeRepo.save(employee);
+        }
 
         return mapToHistoryDTO(leave);
     }
@@ -364,6 +519,10 @@ public class LeaveService {
         if (leave.getLeaveStatus() != LeaveStatus.PENDING) {
             throw new IllegalArgumentException("Only pending leaves can be updated");
         }
+
+        // Editing must not move this leave onto dates already covered by another
+        // of the employee's leaves (this leave itself is excluded).
+        validateNoOverlappingLeave(employeeId, leaveId, dto.getStartDate(), dto.getEndDate());
 
         Employee employee = leave.getEmployee();
         boolean includeWeekends = Boolean.TRUE.equals(dto.getIncludeWeekends());

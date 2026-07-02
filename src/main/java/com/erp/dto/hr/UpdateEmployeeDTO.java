@@ -18,6 +18,7 @@ public class UpdateEmployeeDTO {
     // ── Core ──────────────────────────────────────────────────────────────────
     private String         employeeNo;
     private String         firstName;
+    private String         middleName;
     private String         lastName;
     private String         prefix;
     private String         gender;

@@ -339,7 +339,6 @@ public class PayrollService {
                 unpaidLeaveDays += leaveDays;
             }
         }
-    
 
         double payableDays = Math.min(workedDays + paidLeaveDays, workingDays);
         double lopDays = Math.max(workingDays - payableDays, 0.0);

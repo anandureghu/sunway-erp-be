@@ -4,5 +4,7 @@ public enum LeaveStatus {
     PENDING,
     APPROVED,
     REJECTED,
-    CANCELLED
+    CANCELLED,
+    /** Employee has returned to office; actual leave days have been deducted. */
+    COMPLETED
 }

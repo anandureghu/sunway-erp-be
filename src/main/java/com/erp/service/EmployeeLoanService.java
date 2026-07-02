@@ -63,6 +63,16 @@ public class EmployeeLoanService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
+        // One open loan per employee: block a new request while another loan is
+        // still pending approval or active (not yet fully repaid).
+        if (loanRepo.existsByEmployeeIdAndStatusIn(
+                employeeId, List.of("PENDING_APPROVAL", "ACTIVE"))) {
+            throw new RuntimeException(
+                    "This employee already has a pending or active loan. Only one loan "
+                            + "at a time is allowed — wait for the current one to be rejected "
+                            + "or fully repaid (closed) before requesting another.");
+        }
+
         validateLoanPolicy(employee, dto.getLoanPeriod());
         validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
 
@@ -215,6 +225,35 @@ public class EmployeeLoanService {
         }
 
         return loanRepo.findByCompanyAndStatus(approverCompanyId, "PENDING_APPROVAL")
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Company-wide history of decided loans (active, closed, rejected) for the HR
+     * Reports "Loan Approvals" view. Scoped to the caller's company.
+     */
+    public List<LoanResponseDTO> getCompanyLoanApprovals() {
+        Long userId = authContext.getCurrentUserId();
+        if (userId == null) {
+            throw new AccessDeniedException("Unauthorized");
+        }
+
+        Employee approver = authContext.getCurrentEmployee();
+        if (approver == null) {
+            approver = employeeRepo.findByUser_Id(userId)
+                    .orElseThrow(() -> new AccessDeniedException(
+                            "User is not linked to an employee record"));
+        }
+
+        Long companyId = approver.getCompany() != null ? approver.getCompany().getId() : null;
+        if (companyId == null) {
+            throw new AccessDeniedException("User is not linked to a company");
+        }
+
+        return loanRepo.findByCompanyAndStatusIn(
+                        companyId, List.of("ACTIVE", "CLOSED", "REJECTED"))
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());

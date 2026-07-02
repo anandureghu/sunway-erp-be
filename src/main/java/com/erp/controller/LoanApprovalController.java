@@ -28,4 +28,12 @@ public class LoanApprovalController {
     public ResponseEntity<List<LoanResponseDTO>> pendingApprovals() {
         return ResponseEntity.ok(loanService.getPendingLoanApprovalsForCurrentCompany());
     }
+
+    // Company-wide history of decided loans (active / closed / rejected) for the
+    // HR Reports "Loan Approvals" view. Visible to loan viewers and approvers.
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.VIEW_ALL, AppAction.APPROVE})
+    @GetMapping("/approvals-history")
+    public ResponseEntity<List<LoanResponseDTO>> approvalsHistory() {
+        return ResponseEntity.ok(loanService.getCompanyLoanApprovals());
+    }
 }

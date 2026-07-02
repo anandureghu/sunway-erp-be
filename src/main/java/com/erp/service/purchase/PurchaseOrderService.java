@@ -383,7 +383,7 @@ public class PurchaseOrderService {
                     .summary(fundsCommitted
                             ? "Funds are already committed for this purchase order."
                             : "Releasing records the order and creates AP payable records. "
-                                    + "Chart of accounts balances change when vendor payment is confirmed in Accounts Payable.")
+                            + "Chart of accounts balances change when vendor payment is confirmed in Accounts Payable.")
                     .build();
         }
 
@@ -417,7 +417,7 @@ public class PurchaseOrderService {
     private boolean isFundsCommitted(PurchaseOrder po) {
         return po.getFinanceTransactionId() != null
                 || transactionService.hasPurchaseOrderEncumbrance(
-                        po.getCompany().getId(), po.getId());
+                po.getCompany().getId(), po.getId());
     }
 
     private void releaseEncumbranceOnCancel(PurchaseOrder po) {

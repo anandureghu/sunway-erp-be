@@ -1,11 +1,14 @@
 package com.erp.service;
 
+import com.erp.domain.Employee;
+import com.erp.domain.EmployeeStatus;
 import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.TimesheetStatus;
 import com.erp.dto.timesheet.AttendanceHistoryItemResponse;
 import com.erp.dto.timesheet.MonthlySummaryResponse;
 import com.erp.dto.timesheet.TimesheetDashboardResponse;
 import com.erp.dto.timesheet.TimesheetTodayResponse;
+import com.erp.repo.EmployeeRepository;
 import com.erp.repo.EmployeeTimesheetRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,14 +27,28 @@ public class EmployeeTimesheetService {
     private static final long MIN_WORKED_MINUTES_FOR_DAY = 360L;
 
     private final EmployeeTimesheetRepository repository;
+    private final EmployeeRepository employeeRepository;
 
-    public EmployeeTimesheetService(EmployeeTimesheetRepository repository) {
+    public EmployeeTimesheetService(
+            EmployeeTimesheetRepository repository,
+            EmployeeRepository employeeRepository) {
         this.repository = repository;
+        this.employeeRepository = employeeRepository;
     }
 
     @Transactional
     public TimesheetTodayResponse checkIn(Long employeeId) {
         LocalDate today = LocalDate.now();
+
+        // Only active employees may record attendance — a non-active employee
+        // (inactive / on leave / resigned …) cannot check in.
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
+            throw new RuntimeException(
+                    "Check-in is only available for active employees (current status: "
+                            + employee.getStatus() + ").");
+        }
 
         EmployeeTimesheet timesheet = repository
                 .findByEmployeeIdAndAttendanceDate(employeeId, today)

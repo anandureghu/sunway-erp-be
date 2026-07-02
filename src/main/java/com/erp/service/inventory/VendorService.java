@@ -156,12 +156,12 @@ public class VendorService {
         return toDTO(vendorRepo.save(v));
     }
 
-    // ---------------- DEACTIVATE (soft delete) ----------------
+    // ---------------- DELETE (blocked when the vendor has open orders/payments) ----------------
     public void deleteVendor(Long id) {
         Vendor v = getVendorById(id);
         validateCompany(v.getCompany().getId());
-        v.setActive(false);
-        vendorRepo.save(v);
+        assertVendorDeletable(v);
+        vendorRepo.delete(v);
     }
 
     private void assertVendorDeletable(Vendor vendor) {
