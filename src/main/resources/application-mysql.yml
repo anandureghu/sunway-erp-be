@@ -29,4 +29,8 @@ spring:
     locations: classpath:db/migration
     validate-on-migrate: true
     out-of-order: false
-    ignore-migration-patterns: "*:ignored"
+    # Skip validation errors for migrations already superseded on advanced DBs
+    # (e.g. V20260625) and for explicitly ignored entries.
+    ignore-migration-patterns:
+      - "*:ignored"
+      - "*:pending"
