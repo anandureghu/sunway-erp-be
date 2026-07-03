@@ -11,6 +11,8 @@ import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderItem;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
+import com.erp.domain.purchase.PurchaseRequisitionReviewAction;
+import com.erp.domain.purchase.PurchaseRequisitionStatus;
 import com.erp.dto.purchase.PurchaseOrderAssignSupplierDTO;
 import com.erp.dto.purchase.PurchaseOrderCreateDTO;
 import com.erp.dto.purchase.PurchaseOrderItemDTO;
@@ -277,7 +279,22 @@ public class PurchaseOrderService {
         }
         releaseEncumbranceOnCancel(po);
         po.setStatus(PurchaseOrderStatus.CANCELLED);
-        return toDTO(repo.save(po));
+        PurchaseOrder saved = repo.save(po);
+
+        PurchaseRequisition sourcePr = po.getSourceRequisition();
+        if (sourcePr != null
+                && sourcePr.getStatus() != PurchaseRequisitionStatus.REJECTED) {
+            User actor = userRepo.findById(auth.getCurrentUserId()).orElse(null);
+            sourcePr.setStatus(PurchaseRequisitionStatus.REJECTED);
+            sourcePr.setReviewAction(PurchaseRequisitionReviewAction.REJECT);
+            sourcePr.setRejectionReason(
+                    "Linked purchase order " + po.getOrderNumber() + " was cancelled.");
+            sourcePr.setRejectedAt(java.time.Instant.now());
+            sourcePr.setRejectedBy(actor);
+            requisitionRepo.save(sourcePr);
+        }
+
+        return toDTO(saved);
     }
 
     public PurchaseOrderPostingPreviewDTO getPostingPreview(Long id, String action) {
