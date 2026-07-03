@@ -49,6 +49,11 @@ public class VendorPaymentReceiptPdfService {
                     ? company.getCurrency().getCurrencyCode()
                     : "";
             context.setVariable("currencyCode", currencyCode != null ? currencyCode : "");
+            String paymentDateFormatted = payment.getEffectiveDate() != null
+                    ? payment.getEffectiveDate()
+                            .format(java.time.format.DateTimeFormatter.ofPattern("dd MMMM yyyy"))
+                    : "—";
+            context.setVariable("paymentDateFormatted", paymentDateFormatted);
 
             String html = templateEngine.process("vendor_payment_receipt", context);
 

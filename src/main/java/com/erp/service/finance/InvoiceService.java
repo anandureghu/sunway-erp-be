@@ -39,6 +39,7 @@ import com.erp.service.hr.InvoiceSettingsDefaults;
 import com.erp.service.DocumentSequenceService;
 import com.erp.util.InMemoryMultipartFile;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class InvoiceService {
@@ -166,6 +168,7 @@ public class InvoiceService {
 
         Invoice invoice = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(invoice);
 
         if (invoice.getDocumentSource() == InvoiceDocumentSource.SUPPLIER_UPLOAD
                 && invoice.getPdfUrl() != null && !invoice.getPdfUrl().isBlank()) {
@@ -180,7 +183,31 @@ public class InvoiceService {
             }
         }
 
-        return generateAndUploadInvoicePdf(invoice);
+        // Fully paid → receipt PDF; otherwise keep/generate the original invoice PDF.
+        if (isFullyPaid(invoice)) {
+            return getOrCreateReceiptPdfUrl(invoice);
+        }
+        return getOrCreateOriginalInvoicePdfUrl(invoice);
+    }
+
+    private boolean isFullyPaid(Invoice invoice) {
+        return "PAID".equalsIgnoreCase(invoice.getStatus() == null ? "" : invoice.getStatus().trim());
+    }
+
+    /** Original pre-payment invoice document (never overwritten after payment). */
+    private String getOrCreateOriginalInvoicePdfUrl(Invoice invoice) {
+        if (invoice.getPdfUrl() != null && !invoice.getPdfUrl().isBlank()) {
+            return invoice.getPdfUrl();
+        }
+        return generateAndUploadInvoicePdf(invoice, false);
+    }
+
+    /** Post-payment receipt document. */
+    private String getOrCreateReceiptPdfUrl(Invoice invoice) {
+        if (invoice.getReceiptPdfUrl() != null && !invoice.getReceiptPdfUrl().isBlank()) {
+            return invoice.getReceiptPdfUrl();
+        }
+        return generateAndUploadInvoicePdf(invoice, true);
     }
 
     // ============================================================
@@ -357,7 +384,16 @@ public class InvoiceService {
             throw new RuntimeException("Generated purchase invoices require a purchase order (orderId)");
         }
         Invoice refreshed = repo.findById(saved.getId()).orElse(saved);
-        generateAndUploadInvoicePdf(refreshed);
+        try {
+            generateAndUploadInvoicePdf(refreshed, false);
+        } catch (Exception e) {
+            // Invoice row must remain even when PDF rendering/upload fails.
+            log.error(
+                    "Invoice created but PDF generation failed for invoiceId={}: {}",
+                    refreshed.getInvoiceId(),
+                    e.getMessage(),
+                    e);
+        }
     }
 
     public InvoiceResponse attachSupplierDocument(Long invoiceId, MultipartFile file) {
@@ -619,6 +655,16 @@ public class InvoiceService {
 
         Invoice saved = repo.save(inv);
         completeLinkedSalesOrderWhenPaid(saved);
+        if (isFullyPaid(saved) && saved.getDocumentSource() == InvoiceDocumentSource.GENERATED) {
+            try {
+                generateAndUploadInvoicePdf(saved, true);
+            } catch (Exception e) {
+                log.warn(
+                        "Failed to generate receipt PDF for invoice {}: {}",
+                        saved.getInvoiceId(),
+                        e.getMessage());
+            }
+        }
         return saved;
     }
 
@@ -653,8 +699,8 @@ public class InvoiceService {
     }
 
     /**
-     * Regenerates the ERP-generated purchase invoice PDF after vendor payment so the document
-     * shows PAID / receipt styling (same pattern as sales receipts).
+     * Ensures a receipt PDF exists for a fully paid generated purchase invoice.
+     * The original invoice PDF ({@code pdfUrl}) is left unchanged.
      */
     public void regenerateGeneratedPurchaseInvoicePdfAfterVendorPayment(Long purchaseOrderId) {
         if (purchaseOrderId == null) {
@@ -662,11 +708,8 @@ public class InvoiceService {
         }
         repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
                 .filter(inv -> inv.getDocumentSource() == InvoiceDocumentSource.GENERATED)
-                .filter(inv -> {
-                    String st = inv.getStatus() == null ? "" : inv.getStatus().trim();
-                    return "PAID".equalsIgnoreCase(st) || "PARTIALLY_PAID".equalsIgnoreCase(st);
-                })
-                .ifPresent(this::generateAndUploadInvoicePdf);
+                .filter(this::isFullyPaid)
+                .ifPresent(inv -> generateAndUploadInvoicePdf(inv, true));
     }
 
     // ============================================================
@@ -841,7 +884,10 @@ public class InvoiceService {
     // ============================================================
     // PRIVATE: PDF GENERATION + UPLOAD (SINGLE SOURCE OF TRUTH)
     // ============================================================
-    private String generateAndUploadInvoicePdf(Invoice invoice) {
+    /**
+     * @param receipt when true, stores under {@code receiptPdfUrl}; otherwise under {@code pdfUrl}
+     */
+    private String generateAndUploadInvoicePdf(Invoice invoice, boolean receipt) {
 
         InvoiceDocumentSource src = invoice.getDocumentSource();
         if (src != null && src != InvoiceDocumentSource.GENERATED) {
@@ -851,16 +897,23 @@ public class InvoiceService {
         try {
             byte[] pdfBytes = pdfService.generateInvoicePdf(invoice);
 
+            String fileName = receipt
+                    ? invoice.getInvoiceId() + "-receipt.pdf"
+                    : invoice.getInvoiceId() + ".pdf";
+            String storageKey = receipt
+                    ? invoice.getId() + "/receipt"
+                    : invoice.getId() + "/invoice";
+
             MultipartFile pdfFile = new InMemoryMultipartFile(
                     pdfBytes,
-                    invoice.getInvoiceId() + ".pdf",
+                    fileName,
                     "application/pdf"
             );
 
             FileUploadResult uploadResult = fileStorageService.upload(
                     pdfFile,
                     FileCategory.INVOICE_PDF,
-                    invoice.getId().toString(),
+                    storageKey,
                     true
             );
 
@@ -868,7 +921,11 @@ public class InvoiceService {
                     uploadResult.getBlobPath()
             );
 
-            invoice.setPdfUrl(pdfUrl);
+            if (receipt) {
+                invoice.setReceiptPdfUrl(pdfUrl);
+            } else {
+                invoice.setPdfUrl(pdfUrl);
+            }
             repo.save(invoice);
 
             return pdfUrl;
@@ -942,6 +999,7 @@ public class InvoiceService {
                 .interestRate(i.getInterestRate())
                 .partyClassification(i.getPartyClassification())
                 .pdfUrl(i.getPdfUrl())
+                .receiptPdfUrl(i.getReceiptPdfUrl())
                 .supplierInvoiceNumber(i.getSupplierInvoiceNumber())
                 .documentSource(i.getDocumentSource())
                 .externalDocumentUrl(i.getExternalDocumentUrl())

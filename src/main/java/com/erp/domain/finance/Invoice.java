@@ -68,6 +68,13 @@ public class Invoice {
     private String pdfUrl;
 
     /**
+     * Generated receipt PDF after the invoice is fully paid.
+     * Kept separate from {@link #pdfUrl} so the original unpaid invoice document is preserved.
+     */
+    @Column(name = "receipt_pdf_url", length = 1024)
+    private String receiptPdfUrl;
+
+    /**
      * Vendor's own invoice number (for duplicate checks and display). Optional.
      */
     @Column(name = "supplier_invoice_number", length = 120)
