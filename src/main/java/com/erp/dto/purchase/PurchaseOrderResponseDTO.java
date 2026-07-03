@@ -22,6 +22,7 @@ public class PurchaseOrderResponseDTO {
     private Long supplierId;
     private String supplierName;
     private LocalDate orderDate;
+    private LocalDate requiredDeliveryDate;
     private String status;
     private boolean archived;
     private BigDecimal totalAmount;
@@ -29,8 +30,15 @@ public class PurchaseOrderResponseDTO {
     private String createdAt;
     private Long createdById;
     private String createdByName;
+    private Long requestedById;
+    private String requestedByName;
     /** True after vendor payment is confirmed in Accounts Payable. */
     private Boolean vendorPaymentSettled;
+    /**
+     * Payment status from the linked purchase invoice (UNPAID, PARTIALLY_PAID, PAID, …).
+     * Defaults to UNPAID when no purchase invoice exists yet.
+     */
+    private String paymentStatus;
     /** ERP purchase invoice linked to this PO (for receipt after payment). */
     private Long purchaseInvoiceId;
     /** Vendor payable / payment row in AP (for payment receipt PDF). */

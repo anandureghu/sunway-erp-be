@@ -40,6 +40,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -483,31 +484,40 @@ public class PurchaseOrderService {
     }
 
     private PurchaseOrderResponseDTO toDTO(PurchaseOrder po) {
+        var purchaseInvoice = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE);
+        PurchaseRequisition sourcePr = po.getSourceRequisition();
+        LocalDate requiredDeliveryDate = po.getRequiredDeliveryDate() != null
+                ? po.getRequiredDeliveryDate()
+                : (sourcePr != null ? sourcePr.getRequiredDeliveryDate() : null);
+        User requestedBy = po.getRequestedBy() != null
+                ? po.getRequestedBy()
+                : (sourcePr != null ? sourcePr.getRequestedBy() : null);
         return PurchaseOrderResponseDTO.builder()
                 .id(po.getId())
                 .orderNumber(po.getOrderNumber())
                 .sourceRequisitionId(
-                        po.getSourceRequisition() != null
-                                ? po.getSourceRequisition().getId()
+                        sourcePr != null
+                                ? sourcePr.getId()
                                 : null)
                 .sourceRequisitionNumber(
-                        po.getSourceRequisition() != null
-                                ? po.getSourceRequisition().getRequisitionNumber()
+                        sourcePr != null
+                                ? sourcePr.getRequisitionNumber()
                                 : null)
                 .supplierId(po.getSupplier() != null ? po.getSupplier().getId() : null)
                 .supplierName(po.getSupplier() != null ? po.getSupplier().getVendorName() : null)
                 .orderDate(po.getOrderDate())
+                .requiredDeliveryDate(requiredDeliveryDate)
                 .status(po.getStatus().name())
                 .archived(po.isArchived())
                 .createdAt(po.getCreatedAt().toString())
                 .createdById(po.getCreatedBy().getId())
                 .createdByName(po.getCreatedBy().getFullName())
+                .requestedById(requestedBy != null ? requestedBy.getId() : null)
+                .requestedByName(requestedBy != null ? requestedBy.getFullName() : null)
                 .totalAmount(po.getTotalAmount())
                 .vendorPaymentSettled(vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId()))
-                .purchaseInvoiceId(
-                        invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
-                                .map(Invoice::getId)
-                                .orElse(null))
+                .paymentStatus(purchaseInvoice.map(Invoice::getStatus).orElse("UNPAID"))
+                .purchaseInvoiceId(purchaseInvoice.map(Invoice::getId).orElse(null))
                 .vendorPaymentId(
                         vendorPayableService.findVendorPaymentIdForPurchaseOrder(po.getId())
                                 .orElse(null))

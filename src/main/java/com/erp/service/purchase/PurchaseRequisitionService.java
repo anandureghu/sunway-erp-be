@@ -523,10 +523,12 @@ public class PurchaseRequisitionService {
                 .orderNumber(documentSequenceService.generateNext("PO"))
                 .supplier(null)
                 .orderDate(LocalDate.now())
+                .requiredDeliveryDate(pr.getRequiredDeliveryDate())
                 .status(PurchaseOrderStatus.DRAFT)
                 .totalAmount(total)
                 .company(company)
                 .createdBy(actor)
+                .requestedBy(pr.getRequestedBy())
                 .items(poItems)
                 .sourceRequisition(pr)
                 .build();
