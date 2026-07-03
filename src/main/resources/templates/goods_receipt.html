@@ -3,71 +3,275 @@
       xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8"/>
-    <title>Goods Receipt</title>
+    <title th:text="'Goods Receipt – GR-' + ${receipt.id}">Goods Receipt</title>
     <style type="text/css">
-        @page { size: A4; margin: 24px; }
-        body { font-family: Helvetica, Arial, sans-serif; color: #1F2937; font-size: 12px; }
-        h1 { font-size: 20px; margin: 0 0 8px 0; }
-        .muted { color: #6B7280; font-size: 11px; }
-        table.meta { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
-        table.meta td { padding: 4px 8px 4px 0; vertical-align: top; }
-        table.lines { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        table.lines th, table.lines td {
-            border: 1px solid #E5E7EB; padding: 8px; text-align: left;
+        @page { size: A4 portrait; margin: 14mm 12mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            color: #1e293b;
+            background: #fff;
         }
-        table.lines th { background: #F3F4F6; font-size: 11px; text-transform: uppercase; }
+        .page { width: 100%; padding: 4mm 2mm; }
+        .header {
+            width: 100%;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 14px;
+            margin-bottom: 20px;
+        }
+        .header-table { width: 100%; border-collapse: collapse; }
+        .header-table td { vertical-align: top; }
+        .header-right { text-align: right; }
+        .brand-name { font-size: 20px; font-weight: 800; color: #1e40af; }
+        .brand-sub {
+            font-size: 10px; color: #64748b; text-transform: uppercase;
+            letter-spacing: 0.08em; margin-top: 2px;
+        }
+        .doc-title {
+            font-size: 16px; font-weight: 800; color: #0f172a;
+            text-transform: uppercase; letter-spacing: 0.06em;
+        }
+        .doc-code { font-size: 12px; color: #64748b; margin-top: 4px; font-family: monospace; }
+        .status-badge {
+            display: inline-block; margin-top: 6px;
+            padding: 3px 12px; border-radius: 20px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            color: #fff; background: #16a34a;
+        }
+        .section { margin-bottom: 18px; }
+        .section-title {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.12em; color: #3b82f6;
+            border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;
+        }
+        .info-table { width: 100%; border-collapse: collapse; }
+        .info-table td { padding: 5px 8px 5px 0; width: 33.33%; vertical-align: top; }
+        .info-label {
+            font-size: 9px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 2px;
+        }
+        .info-value { font-size: 12px; font-weight: 600; color: #0f172a; }
+        .lines-table {
+            width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; font-size: 11px;
+        }
+        .lines-table thead tr { background: #1e40af; }
+        .lines-table thead th {
+            padding: 8px 8px; text-align: left;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.06em; color: #fff;
+        }
+        .lines-table thead th.center { text-align: center; }
+        .lines-table thead th.right { text-align: right; }
+        .lines-table td {
+            padding: 7px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top;
+        }
+        .lines-table td.center { text-align: center; color: #64748b; }
+        .lines-table td.right { text-align: right; }
+        .row-even { background: #f8fafc; }
+        .row-odd { background: #fff; }
+        .item-name { font-weight: 600; color: #0f172a; }
+        .item-meta { font-size: 10px; color: #64748b; margin-top: 2px; }
+        .sig-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        .sig-table td { width: 33.33%; padding: 0 10px; vertical-align: bottom; text-align: center; }
+        .sig-line { margin-top: 48px; border-top: 2px solid #0f172a; padding-top: 8px; }
+        .sig-label { font-size: 11px; font-weight: 700; color: #0f172a; }
+        .sig-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+        .footer-table {
+            width: 100%; border-collapse: collapse; border-top: 1px solid #e2e8f0; margin-top: 24px;
+        }
+        .footer-table td { font-size: 9px; color: #94a3b8; padding-top: 8px; }
+        .footer-table td.right { text-align: right; }
+        .summary-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        .summary-table td { padding: 4px 0; }
+        .summary-table td.right { text-align: right; font-weight: 700; color: #1e40af; }
+        .summary-label { color: #64748b; font-size: 11px; }
     </style>
 </head>
 <body>
-<div>
-    <h1>Goods receipt</h1>
-    <p class="muted" th:text="${company?.companyName}">Company</p>
+<div class="page">
+
+    <div class="header">
+        <table class="header-table">
+            <tr>
+                <td>
+                    <div class="brand-name" th:text="${company?.companyName} ?: 'Sunway ERP'">Company</div>
+                    <div class="brand-sub">Inventory &amp; Procurement</div>
+                </td>
+                <td class="header-right">
+                    <div class="doc-title">Goods Receipt Certificate</div>
+                    <div class="doc-code" th:text="'GR-' + ${receipt.id}">GR-1</div>
+                    <span class="status-badge">Completed</span>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Receipt Details</div>
+        <table class="info-table">
+            <tr>
+                <td>
+                    <div class="info-label">Receipt No</div>
+                    <div class="info-value" th:text="'GR-' + ${receipt.id}">GR-1</div>
+                </td>
+                <td>
+                    <div class="info-label">Received At</div>
+                    <div class="info-value" th:text="${receivedAtFormatted}">—</div>
+                </td>
+                <td>
+                    <div class="info-label">Purchase Order</div>
+                    <div class="info-value"
+                         th:text="${purchaseOrder?.orderNumber} ?: '—'">PO-1</div>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="info-label">Supplier</div>
+                    <div class="info-value"
+                         th:text="${purchaseOrder?.supplier?.vendorName} ?: '—'">Supplier</div>
+                </td>
+                <td>
+                    <div class="info-label">Supplier Code</div>
+                    <div class="info-value"
+                         th:text="${purchaseOrder?.supplier?.id} ?: '—'">—</div>
+                </td>
+                <td>
+                    <div class="info-label">Received By</div>
+                    <div class="info-value"
+                         th:text="${receipt.receivedBy?.fullName} ?: '—'">User</div>
+                </td>
+            </tr>
+            <tr th:if="${purchaseOrder?.sourceRequisition != null}">
+                <td>
+                    <div class="info-label">Source Requisition</div>
+                    <div class="info-value"
+                         th:text="${purchaseOrder.sourceRequisition.requisitionNumber} ?: '—'">PR-1</div>
+                </td>
+                <td>
+                    <div class="info-label">Requested By</div>
+                    <div class="info-value"
+                         th:text="${purchaseOrder.requestedBy?.fullName
+                             ?: purchaseOrder.sourceRequisition.requestedBy?.fullName
+                             ?: '—'}">—</div>
+                </td>
+                <td>
+                    <div class="info-label">Required Delivery</div>
+                    <div class="info-value" th:text="${requiredDeliveryFormatted}">—</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Inspection Line Items</div>
+        <table class="lines-table">
+            <thead>
+            <tr>
+                <th class="center">#</th>
+                <th>Item</th>
+                <th>Warehouse</th>
+                <th class="right">Received</th>
+                <th class="right">Accepted</th>
+                <th class="right">Rejected</th>
+                <th>Batch / Lot</th>
+                <th>Remarks</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="line, iter : ${items}"
+                th:class="${iter.even} ? 'row-even' : 'row-odd'">
+                <td class="center" th:text="${iter.count}">1</td>
+                <td>
+                    <div class="item-name" th:text="${line.item?.name} ?: '—'">Item</div>
+                    <div class="item-meta"
+                         th:if="${line.item?.sku != null and !#strings.isEmpty(line.item.sku)}"
+                         th:text="'SKU: ' + ${line.item.sku}">SKU</div>
+                </td>
+                <td th:text="${line.warehouse?.name
+                    ?: (line.item?.warehouse?.name ?: '—')}">Warehouse</td>
+                <td class="right" th:text="${line.receivedQty} ?: 0">0</td>
+                <td class="right" th:text="${line.acceptedQty} ?: 0">0</td>
+                <td class="right" th:text="${line.rejectedQty} ?: 0">0</td>
+                <td>
+                    <span th:if="${line.batchNo != null and !#strings.isEmpty(line.batchNo)}"
+                          th:text="${line.batchNo}">Batch</span>
+                    <span th:if="${line.batchNo != null and !#strings.isEmpty(line.batchNo)
+                        and line.lotNo != null and !#strings.isEmpty(line.lotNo)}"> / </span>
+                    <span th:if="${line.lotNo != null and !#strings.isEmpty(line.lotNo)}"
+                          th:text="${line.lotNo}">Lot</span>
+                    <span th:if="${(line.batchNo == null or #strings.isEmpty(line.batchNo))
+                        and (line.lotNo == null or #strings.isEmpty(line.lotNo))}">—</span>
+                </td>
+                <td th:text="${line.remarks != null and !#strings.isEmpty(line.remarks) ? line.remarks : '—'}">—</td>
+            </tr>
+            <tr th:if="${items == null or #lists.isEmpty(items)}">
+                <td colspan="8" class="center" style="padding: 16px; color: #94a3b8;">
+                    No line items on this receipt
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <table class="summary-table">
+            <tr>
+                <td class="summary-label">Total lines</td>
+                <td class="right" th:text="${totalLines}">0</td>
+            </tr>
+            <tr>
+                <td class="summary-label">Total received qty</td>
+                <td class="right" th:text="${totalReceived}">0</td>
+            </tr>
+            <tr>
+                <td class="summary-label">Total accepted qty</td>
+                <td class="right" th:text="${totalAccepted}">0</td>
+            </tr>
+            <tr>
+                <td class="summary-label">Total rejected qty</td>
+                <td class="right" th:text="${totalRejected}">0</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Signatures</div>
+        <table class="sig-table">
+            <tr>
+                <td>
+                    <div class="sig-line">
+                        <div class="sig-label"
+                             th:text="${receipt.receivedBy?.fullName} ?: 'Received By'">Received By</div>
+                        <div class="sig-sub">Received By &amp; Date</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="sig-line">
+                        <div class="sig-label"
+                             th:text="${receipt.inspectedBy?.fullName} ?: 'Inspected By'">Inspected By</div>
+                        <div class="sig-sub">Quality Inspection &amp; Date</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="sig-line">
+                        <div class="sig-label"
+                             th:text="${receipt.authorizedBy?.fullName} ?: 'Authorized By'">Authorized By</div>
+                        <div class="sig-sub">Authorized Signatory &amp; Date</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <table class="footer-table">
+        <tr>
+            <td>This is a system-generated goods receipt certificate.</td>
+            <td class="right"
+                th:text="'Ref: GR-' + ${receipt.id} + ' | ' + (${company?.companyName} ?: 'Sunway ERP')">
+                Ref
+            </td>
+        </tr>
+    </table>
+
 </div>
-
-<table class="meta">
-    <tr>
-        <td><strong>Receipt #</strong></td>
-        <td th:text="'GR-' + ${receipt.id}">GR-1</td>
-    </tr>
-    <tr>
-        <td><strong>Received at</strong></td>
-        <td th:text="${receipt.receivedAt}">—</td>
-    </tr>
-    <tr th:if="${purchaseOrder != null}">
-        <td><strong>Purchase order</strong></td>
-        <td th:text="${purchaseOrder.orderNumber}">PO-1</td>
-    </tr>
-    <tr th:if="${purchaseOrder != null && purchaseOrder.supplier != null}">
-        <td><strong>Supplier</strong></td>
-        <td th:text="${purchaseOrder.supplier.vendorName}">Supplier</td>
-    </tr>
-    <tr th:if="${receipt.receivedBy != null}">
-        <td><strong>Received by</strong></td>
-        <td th:text="${receipt.receivedBy.fullName}">User</td>
-    </tr>
-</table>
-
-<table class="lines">
-    <thead>
-    <tr>
-        <th>SKU</th>
-        <th>Item</th>
-        <th>Received</th>
-        <th>Accepted</th>
-        <th>Rejected</th>
-        <th>Remarks</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr th:each="line : ${items}">
-        <td th:text="${line.item?.sku}">—</td>
-        <td th:text="${line.item?.name}">—</td>
-        <td th:text="${line.receivedQty}">0</td>
-        <td th:text="${line.acceptedQty}">0</td>
-        <td th:text="${line.rejectedQty}">0</td>
-        <td th:text="${line.remarks}">—</td>
-    </tr>
-    </tbody>
-</table>
 </body>
 </html>

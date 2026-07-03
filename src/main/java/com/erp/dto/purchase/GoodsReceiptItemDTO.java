@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class GoodsReceiptItemDTO {
     private Long itemId;
     private Long warehouseId;
+    private String warehouseName;
     private Integer receivedQty;
     private Integer acceptedQty;
     private Integer rejectedQty;

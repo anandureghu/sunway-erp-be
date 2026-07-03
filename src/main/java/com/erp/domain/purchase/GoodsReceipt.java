@@ -31,6 +31,17 @@ public class GoodsReceipt {
     @JoinColumn(name = "received_by")
     private User receivedBy;
 
+    @ManyToOne
+    @JoinColumn(name = "inspected_by")
+    private User inspectedBy;
+
+    @Column(name = "inspected_at")
+    private Instant inspectedAt;
+
+    @ManyToOne
+    @JoinColumn(name = "authorized_by")
+    private User authorizedBy;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")
     private Company company;

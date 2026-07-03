@@ -17,6 +17,13 @@ public class GoodsReceiptResponseDTO {
     private Long id;
     private Long purchaseOrderId;
     private Instant receivedAt;
+    private Long receivedById;
+    private String receivedByName;
+    private Long inspectedById;
+    private String inspectedByName;
+    private Instant inspectedAt;
+    private Long authorizedById;
+    private String authorizedByName;
     private String documentPdfUrl;
     private List<GoodsReceiptItemDTO> items;
 }
