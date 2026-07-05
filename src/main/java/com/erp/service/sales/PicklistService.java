@@ -6,6 +6,7 @@ import com.erp.domain.hr.Company;
 import com.erp.domain.sales.Picklist;
 import com.erp.domain.sales.PicklistItem;
 import com.erp.domain.sales.SalesOrder;
+import com.erp.domain.sales.SalesOrderItem;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.dto.sales.PicklistItemDTO;
 import com.erp.dto.sales.PicklistResponseDTO;
@@ -155,12 +156,23 @@ public class PicklistService {
     }
 
     private PicklistResponseDTO toDTO(Picklist p) {
+        Long warehouseId = null;
+        String warehouseName = null;
+        SalesOrder salesOrder = p.getSalesOrder();
+        if (salesOrder != null && salesOrder.getItems() != null && !salesOrder.getItems().isEmpty()) {
+            SalesOrderItem line = salesOrder.getItems().get(0);
+            warehouseId = resolveLineWarehouseId(line);
+            warehouseName = resolveLineWarehouseName(line);
+        }
+
         return PicklistResponseDTO.builder()
                 .id(p.getId())
                 .picklistNumber(p.getPicklistNumber())
                 .salesOrderId(p.getSalesOrder().getId())
                 .status(p.getStatus())
                 .createdAt(p.getCreatedAt())
+                .warehouseId(warehouseId)
+                .warehouseName(warehouseName)
                 .items(
                         p.getItems().stream()
                                 .map(i -> PicklistItemDTO.builder()
@@ -171,5 +183,25 @@ public class PicklistService {
                                 .toList()
                 )
                 .build();
+    }
+
+    private Long resolveLineWarehouseId(SalesOrderItem line) {
+        if (line.getWarehouse() != null) {
+            return line.getWarehouse().getId();
+        }
+        if (line.getItem() != null && line.getItem().getWarehouse() != null) {
+            return line.getItem().getWarehouse().getId();
+        }
+        return null;
+    }
+
+    private String resolveLineWarehouseName(SalesOrderItem line) {
+        if (line.getWarehouse() != null) {
+            return line.getWarehouse().getName();
+        }
+        if (line.getItem() != null && line.getItem().getWarehouse() != null) {
+            return line.getItem().getWarehouse().getName();
+        }
+        return null;
     }
 }

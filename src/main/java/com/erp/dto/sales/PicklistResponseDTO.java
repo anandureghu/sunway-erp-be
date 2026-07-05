@@ -20,4 +20,6 @@ public class PicklistResponseDTO {
     private String status;
     private Instant createdAt;
     private List<PicklistItemDTO> items;
+    private Long warehouseId;
+    private String warehouseName;
 }
