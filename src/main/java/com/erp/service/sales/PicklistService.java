@@ -10,6 +10,7 @@ import com.erp.domain.sales.SalesOrderItem;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.dto.sales.PicklistItemDTO;
 import com.erp.dto.sales.PicklistResponseDTO;
+import com.erp.exception.ConflictException;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.sales.PicklistRepository;
@@ -131,6 +132,21 @@ public class PicklistService {
     }
 
     // --------------------------
+    // Archive
+    // --------------------------
+    public PicklistResponseDTO archive(Long id) {
+        Picklist p = getEntity(id);
+        if (p.isArchived()) {
+            return toDTO(p);
+        }
+        if (!"PICKED".equals(p.getStatus()) && !"CANCELLED".equals(p.getStatus())) {
+            throw new ConflictException("Only picked or cancelled picklists can be archived");
+        }
+        p.setArchived(true);
+        return toDTO(repo.save(p));
+    }
+
+    // --------------------------
     // Get / List
     // --------------------------
     public PicklistResponseDTO get(Long id) {
@@ -170,6 +186,7 @@ public class PicklistService {
                 .picklistNumber(p.getPicklistNumber())
                 .salesOrderId(p.getSalesOrder().getId())
                 .status(p.getStatus())
+                .archived(p.isArchived())
                 .createdAt(p.getCreatedAt())
                 .warehouseId(warehouseId)
                 .warehouseName(warehouseName)
