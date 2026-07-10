@@ -572,6 +572,49 @@ public class InvoiceService {
         return toDTO(persisted);
     }
 
+    /**
+     * Reduces a purchase order's system-generated (cross-check) invoice when goods are
+     * rejected at inspection and the invoice has not yet been fully settled. Only applies
+     * to {@link InvoiceDocumentSource#GENERATED} invoices, priced purely off {@code po.totalAmount};
+     * manually-entered supplier invoices (independent tax/discount amounts) are left untouched.
+     * No-op (with a warning log) when no generated purchase invoice exists for the PO.
+     */
+    @Transactional
+    public void reduceForRejectedGoods(Long purchaseOrderId, BigDecimal rejectedAmount, String reason) {
+        if (rejectedAmount == null || rejectedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        Optional<Invoice> existing = repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
+        if (existing.isEmpty() || existing.get().getDocumentSource() != InvoiceDocumentSource.GENERATED) {
+            log.warn("No generated purchase invoice found for PO {} to reduce for rejected goods ({}); {}",
+                    purchaseOrderId, rejectedAmount, reason);
+            return;
+        }
+
+        Invoice invoice = existing.get();
+        BigDecimal amount = clampNonNegative(nullToZero(invoice.getAmount()).subtract(rejectedAmount));
+        BigDecimal subtotal = clampNonNegative(nullToZero(invoice.getSubtotalAmount()).subtract(rejectedAmount));
+        BigDecimal outstanding = clampNonNegative(nullToZero(invoice.getOutstanding()).subtract(rejectedAmount));
+        BigDecimal openAmount = clampNonNegative(nullToZero(invoice.getOpenAmount()).subtract(rejectedAmount));
+
+        invoice.setAmount(amount);
+        invoice.setSubtotalAmount(subtotal);
+        invoice.setOutstanding(outstanding);
+        invoice.setOpenAmount(openAmount);
+        if (outstanding.compareTo(BigDecimal.ZERO) == 0) {
+            invoice.setStatus("ADJUSTED");
+        }
+        repo.save(invoice);
+    }
+
+    private static BigDecimal nullToZero(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    private static BigDecimal clampNonNegative(BigDecimal value) {
+        return value.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : value;
+    }
+
     private String resolvePurchaseInvoiceDescription(PurchaseOrder po) {
         PurchaseRequisition source = po.getSourceRequisition();
         if (source != null) {

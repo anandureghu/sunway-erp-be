@@ -16,6 +16,8 @@ public class GoodsReceiptResponseDTO {
 
     private Long id;
     private Long purchaseOrderId;
+    private String status;
+    private boolean archived;
     private Instant receivedAt;
     private Long receivedById;
     private String receivedByName;

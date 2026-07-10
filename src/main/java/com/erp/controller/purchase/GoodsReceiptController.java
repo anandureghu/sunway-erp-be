@@ -4,6 +4,8 @@ import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.purchase.GoodsReceiptCreateDTO;
 import com.erp.dto.purchase.GoodsReceiptResponseDTO;
+import com.erp.dto.purchase.InspectionConfirmDTO;
+import com.erp.dto.purchase.StockPostingDTO;
 import com.erp.service.purchase.GoodsReceiptService;
 import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +26,32 @@ public class GoodsReceiptController {
     @PostMapping
     public GoodsReceiptResponseDTO receive(@RequestBody GoodsReceiptCreateDTO dto) {
         return service.receive(dto);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.APPROVE})
+    @PostMapping("/{id}/confirm-inspection")
+    public GoodsReceiptResponseDTO confirmInspection(
+            @PathVariable("id") Long id, @RequestBody InspectionConfirmDTO dto) {
+        return service.confirmInspection(id, dto);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.CREATE})
+    @PostMapping("/{id}/post-stock")
+    public GoodsReceiptResponseDTO postStock(
+            @PathVariable("id") Long id, @RequestBody StockPostingDTO dto) {
+        return service.postItemsToStock(id, dto);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/awaiting-stock")
+    public List<GoodsReceiptResponseDTO> listAwaitingStock() {
+        return service.listAwaitingStock();
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.DELETE})
+    @PostMapping("/{id}/archive")
+    public GoodsReceiptResponseDTO archive(@PathVariable("id") Long id) {
+        return service.archive(id);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_RECEIPT, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})

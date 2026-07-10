@@ -1,6 +1,7 @@
 package com.erp.domain.finance;
 
 import com.erp.domain.hr.Company;
+import com.erp.domain.purchase.GoodsReceipt;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -48,6 +49,16 @@ public class CreditNote {
     private BigDecimal remainingAmount;
 
     private String project;
+
+    /** "MANUAL" (default, user-entered) or "AUTO_REJECTION" (system-generated on inspection rejection). */
+    @Column(nullable = false)
+    @Builder.Default
+    private String source = "MANUAL";
+
+    /** The goods receipt/inspection event that generated this credit note, when auto-created. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "goods_receipt_id")
+    private GoodsReceipt goodsReceipt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
