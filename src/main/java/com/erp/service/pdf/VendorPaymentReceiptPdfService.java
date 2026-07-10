@@ -29,7 +29,8 @@ public class VendorPaymentReceiptPdfService {
             Company company,
             PurchaseOrder purchaseOrder,
             String supplierName,
-            String purchaseInvoiceCode
+            String purchaseInvoiceCode,
+            String vendorInvoiceNumber
     ) {
         try {
             Context context = new Context();
@@ -42,6 +43,9 @@ public class VendorPaymentReceiptPdfService {
             context.setVariable("poOrderNumber", poNumber);
             context.setVariable("supplierName", supplierName != null ? supplierName : "—");
             context.setVariable("purchaseInvoiceCode", purchaseInvoiceCode);
+            context.setVariable("vendorInvoiceNumber", vendorInvoiceNumber);
+            context.setVariable("showVendorInvoiceNumber",
+                    vendorInvoiceNumber != null && !vendorInvoiceNumber.isBlank());
             context.setVariable(
                     "paymentMethodLabel",
                     PaymentMethodLabels.displayLabel(payment.getPaymentMethod()));
@@ -74,9 +78,11 @@ public class VendorPaymentReceiptPdfService {
             Company company,
             PurchaseOrder purchaseOrder,
             String supplierName,
-            String purchaseInvoiceCode
+            String purchaseInvoiceCode,
+            String vendorInvoiceNumber
     ) {
-        byte[] pdfBytes = generatePdf(payment, company, purchaseOrder, supplierName, purchaseInvoiceCode);
+        byte[] pdfBytes = generatePdf(
+                payment, company, purchaseOrder, supplierName, purchaseInvoiceCode, vendorInvoiceNumber);
         MultipartFile pdfFile = new InMemoryMultipartFile(
                 pdfBytes,
                 payment.getPaymentCode() + "-receipt.pdf",

@@ -534,6 +534,7 @@ public class PurchaseOrderService {
                 .totalAmount(po.getTotalAmount())
                 .vendorPaymentSettled(vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId()))
                 .paymentStatus(purchaseInvoice.map(Invoice::getStatus).orElse("UNPAID"))
+                .outstandingAmount(purchaseInvoice.map(Invoice::getOutstanding).orElse(null))
                 .purchaseInvoiceId(purchaseInvoice.map(Invoice::getId).orElse(null))
                 .vendorPaymentId(
                         vendorPayableService.findVendorPaymentIdForPurchaseOrder(po.getId())

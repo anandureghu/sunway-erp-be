@@ -60,6 +60,9 @@ public class InvoiceResponse {
     private String supplierInvoiceNumber;
     private InvoiceDocumentSource documentSource;
     private String externalDocumentUrl;
+    /** Vendor's own invoice document attached via "Match Vendor Invoice". */
+    private String vendorInvoiceDocumentUrl;
+    private Instant vendorInvoiceMatchedAt;
 
     private InvoiceType type;
     private Long orderId;

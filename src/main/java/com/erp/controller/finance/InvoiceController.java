@@ -55,6 +55,16 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.attachSupplierDocument(id, file));
     }
 
+    @RequiresPermission(module = AppModule.FINANCE_INVOICE, action = {AppAction.EDIT})
+    @PostMapping(value = "/{id}/match-vendor-invoice", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<InvoiceResponse> matchVendorInvoice(
+            @PathVariable("id") Long id,
+            @RequestPart("vendorInvoiceNumber") String vendorInvoiceNumber,
+            @RequestPart(value = "file", required = false) MultipartFile file
+    ) {
+        return ResponseEntity.ok(invoiceService.matchVendorInvoice(id, vendorInvoiceNumber, file));
+    }
+
     @RequiresPermission(module = AppModule.FINANCE_INVOICE, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @PostMapping(value = "/preview-pdf-text", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<InvoicePdfTextPreviewResponse> previewPdfText(

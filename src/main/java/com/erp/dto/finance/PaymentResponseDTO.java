@@ -32,4 +32,6 @@ public class PaymentResponseDTO {
     private BigDecimal invoiceOutstanding;
     /** Total amount on the linked invoice (for confirm dialog). */
     private BigDecimal invoiceTotal;
+    /** Vendor's own invoice number recorded via "Match Vendor Invoice", when present. */
+    private String supplierInvoiceNumber;
 }

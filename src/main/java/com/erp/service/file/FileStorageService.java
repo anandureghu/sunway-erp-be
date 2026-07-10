@@ -151,6 +151,19 @@ public class FileStorageService {
                 }
             }
 
+            case VENDOR_INVOICE_MATCH_DOCUMENT -> {
+                String contentType = Objects.requireNonNull(file.getContentType());
+                boolean isPdf = Objects.equals(contentType, "application/pdf");
+                boolean isImage = contentType.startsWith("image/");
+
+                if (!isPdf && !isImage) {
+                    throw new IllegalArgumentException("Only PDF, JPG, JPEG, or PNG allowed");
+                }
+                if (file.getSize() > 15 * 1024 * 1024) {
+                    throw new IllegalArgumentException("Vendor invoice document size > 15MB");
+                }
+            }
+
             case CONTRACT_ATTACHMENT, PURCHASE_REQUISITION_DOCUMENT -> {
                 String contentType = Objects.requireNonNull(file.getContentType());
                 boolean isPdf = Objects.equals(contentType, "application/pdf");
@@ -192,6 +205,9 @@ public class FileStorageService {
                     + UUID.randomUUID() + ".pdf";
 
             case LEAVE_SUPPORTING_DOCUMENT -> "leaves/" + entityId + "/supporting-document." + extension;
+
+            case VENDOR_INVOICE_MATCH_DOCUMENT -> "invoices/" + entityId + "/vendor-match-"
+                    + UUID.randomUUID() + "." + extension;
 
             case CONTRACT_ATTACHMENT -> "contracts/" + entityId + "/attachment." + extension;
 

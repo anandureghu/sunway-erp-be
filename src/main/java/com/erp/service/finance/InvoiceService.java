@@ -396,6 +396,34 @@ public class InvoiceService {
         }
     }
 
+    public InvoiceResponse matchVendorInvoice(Long invoiceId, String vendorInvoiceNumber, MultipartFile file) {
+        if (vendorInvoiceNumber == null || vendorInvoiceNumber.isBlank()) {
+            throw new RuntimeException("Vendor invoice number is required");
+        }
+        Invoice inv = repo.findById(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        if (inv.getType() != InvoiceType.PURCHASE) {
+            throw new RuntimeException("Vendor invoice matching applies only to purchase invoices");
+        }
+        try {
+            inv.setSupplierInvoiceNumber(vendorInvoiceNumber.trim());
+            if (file != null && !file.isEmpty()) {
+                FileUploadResult uploadResult = fileStorageService.upload(
+                        file,
+                        FileCategory.VENDOR_INVOICE_MATCH_DOCUMENT,
+                        inv.getId().toString(),
+                        true
+                );
+                inv.setVendorInvoiceDocumentUrl(fileStorageService.getPublicUrl(uploadResult.getBlobPath()));
+            }
+            inv.setVendorInvoiceMatchedAt(Instant.now());
+            repo.save(inv);
+        } catch (Exception e) {
+            throw new RuntimeException("Vendor invoice document upload failed", e);
+        }
+        return toDTO(repo.findById(inv.getId()).orElse(inv));
+    }
+
     public InvoiceResponse attachSupplierDocument(Long invoiceId, MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new RuntimeException("File is required");
@@ -1046,6 +1074,8 @@ public class InvoiceService {
                 .supplierInvoiceNumber(i.getSupplierInvoiceNumber())
                 .documentSource(i.getDocumentSource())
                 .externalDocumentUrl(i.getExternalDocumentUrl())
+                .vendorInvoiceDocumentUrl(i.getVendorInvoiceDocumentUrl())
+                .vendorInvoiceMatchedAt(i.getVendorInvoiceMatchedAt())
                 .createdAt(i.getCreatedAt())
                 .orderId(i.getOrderId())
                 .orderNumber(orderNumber)
