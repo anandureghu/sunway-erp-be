@@ -186,11 +186,26 @@ public class GoodsReceiptService {
             int received = item.getReceivedQty() == null ? 0 : item.getReceivedQty();
             int accepted = line != null && line.getAcceptedQty() != null ? line.getAcceptedQty() : received;
             int rejected = line != null && line.getRejectedQty() != null ? line.getRejectedQty() : 0;
+            int orderedQuantity = item.getOrderedQuantity() == null ? 0 : item.getOrderedQuantity();
 
             if (accepted < 0 || rejected < 0) {
                 throw new ConflictException("acceptedQty/rejectedQty must be zero or greater");
             }
-            if (accepted + rejected != received) {
+            if (received == 0) {
+                // Nothing physically arrived for this line. Accepted must stay zero,
+                // but the inspector may write off up to the full remaining ordered
+                // quantity as rejected (e.g. supplier short-shipment/cancellation)
+                // instead of leaving it open indefinitely for a future receipt.
+                if (accepted != 0) {
+                    throw new ConflictException(
+                            "acceptedQty must be zero when nothing was received for item " + item.getItem().getId());
+                }
+                if (rejected > orderedQuantity) {
+                    throw new ConflictException(
+                            "rejectedQty (" + rejected + ") cannot exceed ordered quantity (" + orderedQuantity
+                                    + ") for item " + item.getItem().getId());
+                }
+            } else if (accepted + rejected != received) {
                 throw new ConflictException(
                         "accepted (" + accepted + ") + rejected (" + rejected + ") must equal received (" + received
                                 + ") for item " + item.getItem().getId());
