@@ -10,6 +10,7 @@ import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
+import com.erp.dto.leave.LeaveBalanceSummaryDTO;
 import com.erp.dto.leave.LeaveHistoryDTO;
 import com.erp.dto.leave.LeavePreviewDTO;
 import com.erp.dto.leave.LeaveRequestDTO;
@@ -88,6 +89,34 @@ public class LeaveService {
                 })
                 .map(CompanyLeavePolicy::getLeaveType)
                 .distinct()
+                .toList();
+    }
+
+    public List<LeaveBalanceSummaryDTO> listBalances(Long employeeId) {
+        Employee employee = getEmployee(employeeId);
+
+        return getAvailableLeaveTypes(employeeId)
+                .stream()
+                .distinct()
+                .map(leaveType -> {
+                    CompanyLeavePolicy policy = getPolicy(employee, leaveType);
+                    if (!policy.isPaid()) {
+                        return LeaveBalanceSummaryDTO.builder()
+                                .leaveType(policy.getLeaveType())
+                                .paid(false)
+                                .totalLeaves(0)
+                                .remainingLeaves(0)
+                                .build();
+                    }
+
+                    EmployeeLeaveBalance balance = getOrCreateBalance(employee, policy);
+                    return LeaveBalanceSummaryDTO.builder()
+                            .leaveType(policy.getLeaveType())
+                            .paid(true)
+                            .totalLeaves(balance.getTotalLeaves())
+                            .remainingLeaves(balance.getRemainingLeaves())
+                            .build();
+                })
                 .toList();
     }
 

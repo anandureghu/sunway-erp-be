@@ -43,6 +43,12 @@ app:
     refresh-token-days: 7
   cors:
     allowed-origins: "http://localhost:5173,http://localhost:3001,http://localhost:3000,https://api.picominds.com,https://sunway-erp.vercel.app,https://sunwayerp.com,https://demo.sunwayerp.com,https://api.sunwayerp.com"
+assistant:
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    model: ${OPENAI_MODEL:gpt-4.1-mini}
+    timeout-seconds: ${OPENAI_TIMEOUT_SECONDS:45}
 server:
   port: 8080
   error:
