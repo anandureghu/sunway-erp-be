@@ -81,67 +81,26 @@ public class StockVarianceService {
         User creator = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (dto.getItemId() == null || dto.getWarehouseId() == null) {
-            throw new IllegalArgumentException("Item and warehouse are required");
-        }
         if (dto.getReason() == null || dto.getReason().isBlank()) {
             throw new IllegalArgumentException("Reason is required");
         }
 
-        Item item = loadItem(dto.getItemId(), companyId);
-        Warehouse fromWarehouse = loadWarehouse(dto.getWarehouseId(), companyId);
-        String varianceType = normalizeType(dto.getVarianceType());
-        String adjustmentMode = normalizeMode(dto.getAdjustmentMode(), varianceType);
-
-        int quantityBefore = stockService.getQuantityOnHand(item.getId(), fromWarehouse.getId(), companyId);
-        Integer quantityAfter = null;
-        Integer adjustmentQuantity = null;
-        Integer transferQuantity = null;
-        Warehouse toWarehouse = null;
-
-        if ("transfer".equals(varianceType)) {
-            if (dto.getToWarehouseId() == null) {
-                throw new IllegalArgumentException("Destination warehouse is required for transfer");
-            }
-            transferQuantity = requirePositive(dto.getTransferQuantity(), "Transfer quantity");
-            toWarehouse = loadWarehouse(dto.getToWarehouseId(), companyId);
-            if (fromWarehouse.getId().equals(toWarehouse.getId())) {
-                throw new IllegalArgumentException("Source and destination warehouse must differ");
-            }
-            if (transferQuantity > quantityBefore) {
-                throw new IllegalArgumentException("Transfer quantity exceeds on-hand stock");
-            }
-            quantityAfter = quantityBefore - transferQuantity;
-            adjustmentMode = "transfer";
-        } else if ("set".equals(adjustmentMode)) {
-            quantityAfter = requireNonNegative(dto.getNewQuantity(), "New quantity");
-            adjustmentQuantity = quantityAfter - quantityBefore;
-        } else {
-            adjustmentQuantity = dto.getAdjustmentQuantity();
-            if (adjustmentQuantity == null || adjustmentQuantity == 0) {
-                throw new IllegalArgumentException("Adjustment quantity cannot be zero");
-            }
-            quantityAfter = quantityBefore + adjustmentQuantity;
-            if (quantityAfter < 0) {
-                throw new IllegalArgumentException("Resulting quantity cannot be negative");
-            }
-        }
-
+        ComputedVariance c = computeVarianceFields(dto, companyId);
         Company company = companyRepo.findById(companyId).orElseThrow();
         LocalDate varianceDate = parseDate(dto.getVarianceDate());
 
         StockVariance variance = StockVariance.builder()
                 .company(company)
-                .item(item)
-                .fromWarehouse(fromWarehouse)
-                .toWarehouse(toWarehouse)
-                .varianceType(varianceType)
+                .item(c.item)
+                .fromWarehouse(c.fromWarehouse)
+                .toWarehouse(c.toWarehouse)
+                .varianceType(c.varianceType)
                 .varianceStatus(StockVarianceStatus.PENDING)
-                .adjustmentMode(adjustmentMode)
-                .quantityBefore(quantityBefore)
-                .quantityAfter(quantityAfter)
-                .adjustmentQuantity(adjustmentQuantity)
-                .transferQuantity(transferQuantity)
+                .adjustmentMode(c.adjustmentMode)
+                .quantityBefore(c.quantityBefore)
+                .quantityAfter(c.quantityAfter)
+                .adjustmentQuantity(c.adjustmentQuantity)
+                .transferQuantity(c.transferQuantity)
                 .reason(dto.getReason().trim())
                 .notes(dto.getNotes())
                 .varianceDate(varianceDate)
@@ -150,6 +109,101 @@ public class StockVarianceService {
                 .build();
 
         return toDTO(repo.save(variance));
+    }
+
+    /**
+     * Revises and resubmits a variance that was previously sent back to its requester,
+     * putting it back into {@link StockVarianceStatus#PENDING}. Only the original
+     * requester may resubmit; the send-back reason/reviewer are kept for context.
+     */
+    public StockVarianceResponseDTO resubmit(Long id, StockVarianceCreateDTO dto) {
+        StockVariance variance = getEntity(id);
+        Long currentUserId = auth.getCurrentUserId();
+
+        if (variance.getVarianceStatus() != StockVarianceStatus.SENT_BACK) {
+            throw new IllegalArgumentException("Only sent-back variances can be resubmitted");
+        }
+        if (!variance.getCreatedBy().getId().equals(currentUserId)) {
+            throw new AccessDeniedException("Only the original requester can resubmit this variance");
+        }
+        if (dto.getReason() == null || dto.getReason().isBlank()) {
+            throw new IllegalArgumentException("Reason is required");
+        }
+
+        Long companyId = auth.getCurrentCompanyId();
+        ComputedVariance c = computeVarianceFields(dto, companyId);
+
+        variance.setItem(c.item);
+        variance.setFromWarehouse(c.fromWarehouse);
+        variance.setToWarehouse(c.toWarehouse);
+        variance.setVarianceType(c.varianceType);
+        variance.setAdjustmentMode(c.adjustmentMode);
+        variance.setQuantityBefore(c.quantityBefore);
+        variance.setQuantityAfter(c.quantityAfter);
+        variance.setAdjustmentQuantity(c.adjustmentQuantity);
+        variance.setTransferQuantity(c.transferQuantity);
+        variance.setReason(dto.getReason().trim());
+        variance.setNotes(dto.getNotes());
+        variance.setVarianceDate(parseDate(dto.getVarianceDate()));
+        variance.setVarianceStatus(StockVarianceStatus.PENDING);
+
+        return toDTO(repo.save(variance));
+    }
+
+    private static class ComputedVariance {
+        Item item;
+        Warehouse fromWarehouse;
+        Warehouse toWarehouse;
+        String varianceType;
+        String adjustmentMode;
+        int quantityBefore;
+        Integer quantityAfter;
+        Integer adjustmentQuantity;
+        Integer transferQuantity;
+    }
+
+    private ComputedVariance computeVarianceFields(StockVarianceCreateDTO dto, Long companyId) {
+        if (dto.getItemId() == null || dto.getWarehouseId() == null) {
+            throw new IllegalArgumentException("Item and warehouse are required");
+        }
+
+        ComputedVariance c = new ComputedVariance();
+        c.item = loadItem(dto.getItemId(), companyId);
+        c.fromWarehouse = loadWarehouse(dto.getWarehouseId(), companyId);
+        c.varianceType = normalizeType(dto.getVarianceType());
+        c.adjustmentMode = normalizeMode(dto.getAdjustmentMode(), c.varianceType);
+
+        c.quantityBefore = stockService.getQuantityOnHand(c.item.getId(), c.fromWarehouse.getId(), companyId);
+
+        if ("transfer".equals(c.varianceType)) {
+            if (dto.getToWarehouseId() == null) {
+                throw new IllegalArgumentException("Destination warehouse is required for transfer");
+            }
+            c.transferQuantity = requirePositive(dto.getTransferQuantity(), "Transfer quantity");
+            c.toWarehouse = loadWarehouse(dto.getToWarehouseId(), companyId);
+            if (c.fromWarehouse.getId().equals(c.toWarehouse.getId())) {
+                throw new IllegalArgumentException("Source and destination warehouse must differ");
+            }
+            if (c.transferQuantity > c.quantityBefore) {
+                throw new IllegalArgumentException("Transfer quantity exceeds on-hand stock");
+            }
+            c.quantityAfter = c.quantityBefore - c.transferQuantity;
+            c.adjustmentMode = "transfer";
+        } else if ("set".equals(c.adjustmentMode)) {
+            c.quantityAfter = requireNonNegative(dto.getNewQuantity(), "New quantity");
+            c.adjustmentQuantity = c.quantityAfter - c.quantityBefore;
+        } else {
+            c.adjustmentQuantity = dto.getAdjustmentQuantity();
+            if (c.adjustmentQuantity == null || c.adjustmentQuantity == 0) {
+                throw new IllegalArgumentException("Adjustment quantity cannot be zero");
+            }
+            c.quantityAfter = c.quantityBefore + c.adjustmentQuantity;
+            if (c.quantityAfter < 0) {
+                throw new IllegalArgumentException("Resulting quantity cannot be negative");
+            }
+        }
+
+        return c;
     }
 
     public StockVarianceResponseDTO approve(Long id) {
@@ -194,10 +248,47 @@ public class StockVarianceService {
         return toDTO(repo.save(variance));
     }
 
+    /**
+     * Returns a pending variance to its requester with a reason, instead of a terminal
+     * rejection. The requester sees it under "sent back to you" and can revise and
+     * resubmit it via {@link #resubmit}.
+     */
+    public StockVarianceResponseDTO sendBack(Long id, String reason) {
+        StockVariance variance = getEntity(id);
+        User sender = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (variance.getVarianceStatus() != StockVarianceStatus.PENDING) {
+            throw new IllegalArgumentException("Only pending variances can be sent back");
+        }
+        if (!canApprove(sender, variance)) {
+            throw new AccessDeniedException(
+                    "Only warehouse manager, finance manager, or CEO can send back variances");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required to send this variance back");
+        }
+
+        variance.setVarianceStatus(StockVarianceStatus.SENT_BACK);
+        variance.setSentBackBy(sender);
+        variance.setSentBackAt(Instant.now());
+        variance.setSentBackReason(reason.trim());
+        return toDTO(repo.save(variance));
+    }
+
     @Transactional(readOnly = true)
     public List<StockVarianceResponseDTO> listPending() {
         return repo.findByCompanyIdAndVarianceStatusOrderByCreatedAtDesc(
                         auth.getCurrentCompanyId(), StockVarianceStatus.PENDING)
+                .stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<StockVarianceResponseDTO> listSentBackToMe() {
+        return repo.findByCompanyIdAndVarianceStatusAndCreatedBy_IdOrderByCreatedAtDesc(
+                        auth.getCurrentCompanyId(), StockVarianceStatus.SENT_BACK, auth.getCurrentUserId())
                 .stream()
                 .map(this::toDTO)
                 .toList();
@@ -433,6 +524,10 @@ public class StockVarianceService {
                 .rejectedById(v.getRejectedBy() != null ? v.getRejectedBy().getId() : null)
                 .rejectedByName(v.getRejectedBy() != null ? v.getRejectedBy().getFullName() : null)
                 .rejectedAt(v.getRejectedAt())
+                .sentBackById(v.getSentBackBy() != null ? v.getSentBackBy().getId() : null)
+                .sentBackByName(v.getSentBackBy() != null ? v.getSentBackBy().getFullName() : null)
+                .sentBackAt(v.getSentBackAt())
+                .sentBackReason(v.getSentBackReason())
                 .archived(v.isArchived())
                 .build();
     }

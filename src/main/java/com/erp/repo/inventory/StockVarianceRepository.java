@@ -15,6 +15,12 @@ public interface StockVarianceRepository extends JpaRepository<StockVariance, Lo
             StockVarianceStatus status
     );
 
+    List<StockVariance> findByCompanyIdAndVarianceStatusAndCreatedBy_IdOrderByCreatedAtDesc(
+            Long companyId,
+            StockVarianceStatus status,
+            Long createdById
+    );
+
     List<StockVariance> findByCompanyIdAndVarianceStatusInAndArchivedOrderByCreatedAtDesc(
             Long companyId,
             List<StockVarianceStatus> statuses,
