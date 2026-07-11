@@ -39,11 +39,8 @@ public class PurchaseOrderResponseDTO {
      * Defaults to UNPAID when no purchase invoice exists yet.
      */
     private String paymentStatus;
-<<<<<<< Updated upstream
     /** Remaining balance on the linked purchase invoice, when partially paid. */
     private BigDecimal outstandingAmount;
-=======
->>>>>>> Stashed changes
     /** ERP purchase invoice linked to this PO (for receipt after payment). */
     private Long purchaseInvoiceId;
     /** Vendor payable / payment row in AP (for payment receipt PDF). */
