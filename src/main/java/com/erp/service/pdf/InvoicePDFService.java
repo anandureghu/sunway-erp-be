@@ -154,13 +154,10 @@ public class InvoicePDFService {
             context.setVariable("partyAddress", partyAddress);
             context.setVariable("orderLabel", orderLabel);
             context.setVariable("orderNumber", orderNumber);
-<<<<<<< Updated upstream
             context.setVariable("supplierInvoiceNumber", invoice.getSupplierInvoiceNumber());
             context.setVariable("showSupplierInvoiceNumber",
                     !isSales && invoice.getSupplierInvoiceNumber() != null
                             && !invoice.getSupplierInvoiceNumber().isBlank());
-=======
->>>>>>> Stashed changes
             context.setVariable("lines", lines);
             context.setVariable("notesText", notesText);
             context.setVariable("subtotalFormatted", formatMoney(invoice.getSubtotalAmount(), currencyCode));

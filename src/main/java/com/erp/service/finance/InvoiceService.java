@@ -394,7 +394,6 @@ public class InvoiceService {
                     e.getMessage(),
                     e);
         }
-<<<<<<< Updated upstream
     }
 
     public InvoiceResponse matchVendorInvoice(Long invoiceId, String vendorInvoiceNumber, MultipartFile file) {
@@ -423,8 +422,6 @@ public class InvoiceService {
             throw new RuntimeException("Vendor invoice document upload failed", e);
         }
         return toDTO(repo.findById(inv.getId()).orElse(inv));
-=======
->>>>>>> Stashed changes
     }
 
     public InvoiceResponse attachSupplierDocument(Long invoiceId, MultipartFile file) {
