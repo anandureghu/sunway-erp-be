@@ -44,4 +44,8 @@ public class EmployeeLeave {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private LeaveStatus leaveStatus;
+
+    /** Approver's reason when the leave is rejected. */
+    @Column(length = 1000)
+    private String rejectionComment;
 }

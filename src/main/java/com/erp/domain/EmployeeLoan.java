@@ -45,6 +45,10 @@ public class EmployeeLoan {
     @Column(length = 1000)
     private String notes;
 
+    /** Approver's reason when the loan is rejected. */
+    @Column(length = 1000)
+    private String rejectionComment;
+
     @Column(nullable = false)
     private LocalDate startDate;
 

@@ -181,7 +181,7 @@ public class EmployeeLoanService {
     /* ================= APPROVE / REJECT LOAN ================= */
 
     @Transactional
-    public LoanResponseDTO decideLoan(Long loanId, boolean approve) {
+    public LoanResponseDTO decideLoan(Long loanId, boolean approve, String rejectionComment) {
 
         EmployeeLoan loan = loanRepo.findById(loanId)
                 .orElseThrow(() -> new RuntimeException("Loan not found"));
@@ -192,6 +192,10 @@ public class EmployeeLoanService {
         }
 
         loan.setStatus(approve ? "ACTIVE" : "REJECTED");
+        loan.setRejectionComment(
+                !approve && rejectionComment != null && !rejectionComment.isBlank()
+                        ? rejectionComment.trim()
+                        : null);
         loan = loanRepo.save(loan);
 
         return toDTO(loan);
@@ -399,6 +403,7 @@ public class EmployeeLoanService {
         dto.setStartDate(loan.getStartDate());
         dto.setEndDate(loan.getEndDate());
         dto.setNotes(loan.getNotes());
+        dto.setRejectionComment(loan.getRejectionComment());
 
         Employee employee = loan.getEmployee();
         if (employee != null) {

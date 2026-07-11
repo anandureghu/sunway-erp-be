@@ -61,6 +61,7 @@ public class EmployeeService {
     private final PasswordEncoder passwordEncoder;
     private final FileStorageService fileStorageService;
     private final PermissionCheckService permissionCheckService;
+    private final DocumentSequenceService documentSequenceService;
 
     public EmployeeService(
             EmployeeRepository employeeRepository,
@@ -76,7 +77,8 @@ public class EmployeeService {
             AuthContext authContext,
             PasswordEncoder passwordEncoder,
             FileStorageService fileStorageService,
-            PermissionCheckService permissionCheckService
+            PermissionCheckService permissionCheckService,
+            DocumentSequenceService documentSequenceService
     ) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
@@ -92,6 +94,7 @@ public class EmployeeService {
         this.passwordEncoder = passwordEncoder;
         this.fileStorageService = fileStorageService;
         this.permissionCheckService = permissionCheckService;
+        this.documentSequenceService = documentSequenceService;
     }
     // ======================================================
     // CREATE EMPLOYEE
@@ -115,9 +118,8 @@ public class EmployeeService {
         Role role = dto.getRole() == null ? Role.USER : dto.getRole();
         CompanyRole companyRole = resolveCompanyRole(company, dto.getCompanyRoleId(), dto.getCompanyRole());
 
-        // ✅ Generate values
-        employeeRepository.incrementEmployeeNo();
-        String employeeNo = String.valueOf(employeeRepository.getCurrentEmployeeNo());
+        // ✅ Generate values — per-company employee number (starts at 1000).
+        String employeeNo = documentSequenceService.nextEmployeeNo(company.getId());
 
         String username = EmployeeUserUtil.generateUsername(dto.getFirstName(), dto.getLastName());
         String email = EmployeeUserUtil.generateEmail(username, company);
@@ -488,9 +490,16 @@ public class EmployeeService {
 
         Company             c  = e.getCompany();
 
-        String imageUrl = e.getImageUrl() != null
-                ? fileStorageService.getPublicUrl(e.getImageUrl())
-                : null;
+        // Append a version derived from updatedAt so re-uploaded photos (stored
+        // at the same path) bust the browser cache everywhere the avatar shows.
+        String imageUrl = null;
+        if (e.getImageUrl() != null) {
+            imageUrl = fileStorageService.getPublicUrl(e.getImageUrl());
+            if (imageUrl != null && e.getUpdatedAt() != null) {
+                imageUrl += (imageUrl.contains("?") ? "&" : "?")
+                        + "v=" + e.getUpdatedAt().toEpochMilli();
+            }
+        }
 
         String designation = e.getId() != null
                 ? currentJobRepo.findByEmployee_Id(e.getId())
@@ -603,8 +612,7 @@ public class EmployeeService {
             lastName = parts.length > 1 ? parts[1] : "";
         }
 
-        employeeRepository.incrementEmployeeNo();
-        String employeeNo = String.valueOf(employeeRepository.getCurrentEmployeeNo());
+        String employeeNo = documentSequenceService.nextEmployeeNo(company.getId());
 
         Employee employee = Employee.builder()
                 .employeeNo(employeeNo)

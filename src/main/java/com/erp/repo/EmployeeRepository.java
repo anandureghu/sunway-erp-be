@@ -7,20 +7,22 @@ import com.erp.domain.security.Role;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
-    @Modifying
-    @Transactional
-    @Query(value = "INSERT INTO employee_no_seq VALUES (NULL)", nativeQuery = true)
-    void incrementEmployeeNo();
-
-    @Query(value = "SELECT LAST_INSERT_ID()", nativeQuery = true)
-    Long getCurrentEmployeeNo();
+    /**
+     * Highest numeric employee number already used within a company (non-numeric
+     * values such as "ADMIN" cast to 0 and are ignored). Used to seed the
+     * per-company employee-number sequence. Returns 0 when the company has none.
+     */
+    @Query(value = "SELECT COALESCE(MAX(CASE WHEN employee_no REGEXP '^[0-9]+$' "
+            + "THEN CAST(employee_no AS UNSIGNED) END), 0) "
+            + "FROM employees WHERE company_id = :companyId", nativeQuery = true)
+    long findMaxNumericEmployeeNo(@Param("companyId") Long companyId);
 
     List<Employee> findByCompany_IdOrderByCreatedAtDesc(Long companyId);
 

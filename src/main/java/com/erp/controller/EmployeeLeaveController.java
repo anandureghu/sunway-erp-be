@@ -256,9 +256,12 @@ public class EmployeeLeaveController {
     }
 
     @PostMapping("/leaves/{leaveId}/reject")
-    public ResponseEntity<?> rejectLeave(@PathVariable Long leaveId) {
+    public ResponseEntity<?> rejectLeave(
+            @PathVariable Long leaveId,
+            @RequestBody(required = false) Map<String, String> body) {
         try {
-            LeaveHistoryDTO history = leaveService.rejectLeave(leaveId);
+            String comment = body != null ? body.get("comment") : null;
+            LeaveHistoryDTO history = leaveService.rejectLeave(leaveId, comment);
             return ResponseEntity.ok(history);
         } catch (IllegalArgumentException e) {
             return badRequest(e);

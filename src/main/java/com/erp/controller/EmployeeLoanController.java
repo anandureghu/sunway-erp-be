@@ -97,7 +97,7 @@ public class EmployeeLoanController {
             @PathVariable("employeeId") Long employeeId,
             @PathVariable("loanId") Long loanId,
             @Valid @RequestBody LoanDecisionDTO body) {
-        return ResponseEntity.ok(loanService.decideLoan(loanId, body.isApprove()));
+        return ResponseEntity.ok(loanService.decideLoan(loanId, body.isApprove(), body.getComment()));
     }
 
     // ======================================================
@@ -144,5 +144,6 @@ public class EmployeeLoanController {
     @lombok.Data
     static class LoanDecisionDTO {
         private boolean approve;
+        private String comment;
     }
 }
