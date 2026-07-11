@@ -6,9 +6,11 @@ import com.erp.domain.hr.Company;
 import com.erp.domain.sales.Picklist;
 import com.erp.domain.sales.PicklistItem;
 import com.erp.domain.sales.SalesOrder;
+import com.erp.domain.sales.SalesOrderItem;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.dto.sales.PicklistItemDTO;
 import com.erp.dto.sales.PicklistResponseDTO;
+import com.erp.exception.ConflictException;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.sales.PicklistRepository;
@@ -130,6 +132,21 @@ public class PicklistService {
     }
 
     // --------------------------
+    // Archive
+    // --------------------------
+    public PicklistResponseDTO archive(Long id) {
+        Picklist p = getEntity(id);
+        if (p.isArchived()) {
+            return toDTO(p);
+        }
+        if (!"PICKED".equals(p.getStatus()) && !"CANCELLED".equals(p.getStatus())) {
+            throw new ConflictException("Only picked or cancelled picklists can be archived");
+        }
+        p.setArchived(true);
+        return toDTO(repo.save(p));
+    }
+
+    // --------------------------
     // Get / List
     // --------------------------
     public PicklistResponseDTO get(Long id) {
@@ -155,12 +172,24 @@ public class PicklistService {
     }
 
     private PicklistResponseDTO toDTO(Picklist p) {
+        Long warehouseId = null;
+        String warehouseName = null;
+        SalesOrder salesOrder = p.getSalesOrder();
+        if (salesOrder != null && salesOrder.getItems() != null && !salesOrder.getItems().isEmpty()) {
+            SalesOrderItem line = salesOrder.getItems().get(0);
+            warehouseId = resolveLineWarehouseId(line);
+            warehouseName = resolveLineWarehouseName(line);
+        }
+
         return PicklistResponseDTO.builder()
                 .id(p.getId())
                 .picklistNumber(p.getPicklistNumber())
                 .salesOrderId(p.getSalesOrder().getId())
                 .status(p.getStatus())
+                .archived(p.isArchived())
                 .createdAt(p.getCreatedAt())
+                .warehouseId(warehouseId)
+                .warehouseName(warehouseName)
                 .items(
                         p.getItems().stream()
                                 .map(i -> PicklistItemDTO.builder()
@@ -171,5 +200,25 @@ public class PicklistService {
                                 .toList()
                 )
                 .build();
+    }
+
+    private Long resolveLineWarehouseId(SalesOrderItem line) {
+        if (line.getWarehouse() != null) {
+            return line.getWarehouse().getId();
+        }
+        if (line.getItem() != null && line.getItem().getWarehouse() != null) {
+            return line.getItem().getWarehouse().getId();
+        }
+        return null;
+    }
+
+    private String resolveLineWarehouseName(SalesOrderItem line) {
+        if (line.getWarehouse() != null) {
+            return line.getWarehouse().getName();
+        }
+        if (line.getItem() != null && line.getItem().getWarehouse() != null) {
+            return line.getItem().getWarehouse().getName();
+        }
+        return null;
     }
 }

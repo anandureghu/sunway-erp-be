@@ -18,6 +18,9 @@ public class PicklistResponseDTO {
     private String picklistNumber;
     private Long salesOrderId;
     private String status;
+    private boolean archived;
     private Instant createdAt;
     private List<PicklistItemDTO> items;
+    private Long warehouseId;
+    private String warehouseName;
 }

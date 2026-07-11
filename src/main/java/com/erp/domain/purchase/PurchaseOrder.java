@@ -39,6 +39,10 @@ public class PurchaseOrder {
     @Column(nullable = false)
     private LocalDate orderDate;
 
+    /** Required delivery date, copied from the source PR when converted. */
+    @Column(name = "required_delivery_date")
+    private LocalDate requiredDeliveryDate;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PurchaseOrderStatus status;
@@ -57,6 +61,11 @@ public class PurchaseOrder {
     @ManyToOne
     @JoinColumn(name = "created_by")
     private User createdBy;
+
+    /** Original PR requester, copied from the source PR when converted. */
+    @ManyToOne
+    @JoinColumn(name = "requested_by")
+    private User requestedBy;
 
     private Instant createdAt;
 

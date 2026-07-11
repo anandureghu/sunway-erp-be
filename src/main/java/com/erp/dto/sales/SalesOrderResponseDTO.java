@@ -28,6 +28,8 @@ public class SalesOrderResponseDTO {
     private String status;
     private boolean archived;
     private String paymentStatus;
+    /** Remaining balance on the linked sales invoice, when partially paid. */
+    private BigDecimal outstandingAmount;
     private BigDecimal subtotalAmount;
     private BigDecimal discountAmount;
     private BigDecimal taxAmount;

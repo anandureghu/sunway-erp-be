@@ -17,10 +17,17 @@ import java.time.LocalDate;
 @Entity
 @Table(
         name = "employees",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_employee_user_company",
-                columnNames = {"user_id", "company_id"}
-        )
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_employee_user_company",
+                        columnNames = {"user_id", "company_id"}
+                ),
+                // Employee numbers are unique per company, not globally.
+                @UniqueConstraint(
+                        name = "uk_employee_company_no",
+                        columnNames = {"company_id", "employee_no"}
+                )
+        }
 )
 public class Employee {
 
@@ -28,7 +35,7 @@ public class Employee {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "employee_no", unique = true, nullable = false)
+    @Column(name = "employee_no", nullable = false)
     private String employeeNo;
 
     @Column(name = "first_name", length = 50, nullable = false)

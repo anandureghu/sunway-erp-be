@@ -10,8 +10,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GoodsReceiptItemDTO {
+    private Long id;
     private Long itemId;
+    private Long purchaseOrderItemId;
+    private Integer orderedQuantity;
     private Long warehouseId;
+    private String warehouseName;
     private Integer receivedQty;
     private Integer acceptedQty;
     private Integer rejectedQty;
@@ -19,4 +23,5 @@ public class GoodsReceiptItemDTO {
     private String batchNo;
     private String lotNo;
     private java.math.BigDecimal unitCost;
+    private java.time.Instant stockedAt;
 }

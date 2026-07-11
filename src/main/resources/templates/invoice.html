@@ -3,474 +3,230 @@
       xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8"/>
-    <title>Invoice</title>
-
+    <title th:text="${invoice.invoiceId}">Invoice</title>
     <style type="text/css">
-
-        @page {
-            size: A4;
-            margin: 0;
-        }
-
-        /* ===== INVOICE META ===== */
-
-.invoice-meta {
-    display: table;
-    width: 100%;
-    border-bottom: 2px solid #E5E7EB;
-    padding-bottom: 24px;
-    margin-bottom: 30px;
-}
-
-.invoice-meta-col {
-    display: table-cell;
-    width: 33.33%;
-    vertical-align: top;
-    padding-right: 20px;
-}
-
-.meta-title {
-    font-size: 11px;
-    font-weight: bold;
-    text-transform: uppercase;
-    color: #6B7280;
-    margin-bottom: 8px;
-}
-
-.meta-strong {
-    font-weight: 600;
-    color: #111827;
-}
-
-.meta-muted {
-    color: #6B7280;
-    font-size: 13px;
-    line-height: 18px;
-}
-
-.meta-status {
-    margin-top: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #DC2626;
-}
-
-
+        @page { size: A4 portrait; margin: 14mm 12mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background-color: #FFFFF;
             font-family: Helvetica, Arial, sans-serif;
-            color: #1F2937;
+            font-size: 12px;
+            color: #1e293b;
+            background: #fff;
         }
-
-        .container {
-            width: 100%;
-            margin: 0 auto;
-            background-color: #FFFFFF;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        /* ===== HEADER ===== */
-
+        .page { width: 100%; padding: 4mm 2mm; }
         .header {
-            background-color: #1a1a1a;
-            color: #FFFFFF;
-            padding: 30px;
-        }
-
-        .header-table {
             width: 100%;
-            border-collapse: collapse;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 14px;
+            margin-bottom: 20px;
         }
-
-        .company-name {
-            font-size: 22px;
-            font-weight: bold;
-            margin-bottom: 6px;
+        .header-table { width: 100%; border-collapse: collapse; }
+        .header-table td { vertical-align: top; }
+        .header-right { text-align: right; }
+        .brand-name { font-size: 20px; font-weight: 800; color: #1e40af; }
+        .brand-sub {
+            font-size: 10px; color: #64748b; text-transform: uppercase;
+            letter-spacing: 0.08em; margin-top: 2px;
         }
-
-        .company-sub {
-            font-size: 12px;
-            color: #D1D5DB;
-            line-height: 16px;
+        .doc-title {
+            font-size: 16px; font-weight: 800; color: #0f172a;
+            text-transform: uppercase; letter-spacing: 0.06em;
         }
-
-        .badge {
-            background-color: #E67E22;
-            padding: 10px 16px;
-            border-radius: 6px;
-            text-align: center;
+        .doc-code { font-size: 12px; color: #64748b; margin-top: 4px; font-family: monospace; }
+        .status-badge {
+            display: inline-block; margin-top: 6px;
+            padding: 3px 12px; border-radius: 20px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            color: #fff;
         }
-
-        .badge-title {
-            font-size: 16px;
-            font-weight: bold;
+        .section { margin-bottom: 18px; }
+        .section-title {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.12em; color: #3b82f6;
+            border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;
         }
-
-        .badge-id {
-            font-size: 12px;
-            margin-top: 4px;
+        .info-table { width: 100%; border-collapse: collapse; }
+        .info-table td { padding: 5px 8px 5px 0; width: 33.33%; vertical-align: top; }
+        .info-label {
+            font-size: 9px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 2px;
         }
-
-        /* ===== BODY ===== */
-
-        .body {
-            padding: 30px;
+        .info-value { font-size: 12px; font-weight: 600; color: #0f172a; }
+        .info-muted { font-size: 11px; color: #64748b; margin-top: 2px; }
+        .lines-table {
+            width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; font-size: 11px;
         }
-
-        .items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 30px;
+        .lines-table thead tr { background: #1e40af; }
+        .lines-table thead th {
+            padding: 8px; text-align: left;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.06em; color: #fff;
         }
-
-        .items-table th {
-            background-color: #F9FAFB;
-            font-size: 11px;
-            text-transform: uppercase;
-            color: #6B7280;
-            padding: 10px;
-            border-bottom: 2px solid #E5E7EB;
-            text-align: left;
+        .lines-table thead th.center { text-align: center; }
+        .lines-table thead th.right { text-align: right; }
+        .lines-table td {
+            padding: 7px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top;
         }
-
-        .items-table td {
-            padding: 14px 10px;
-            border-bottom: 1px solid #E5E7EB;
-            font-size: 13px;
+        .lines-table td.center { text-align: center; color: #64748b; }
+        .lines-table td.right { text-align: right; }
+        .row-even { background: #f8fafc; }
+        .row-odd { background: #fff; }
+        .item-name { font-weight: 600; color: #0f172a; }
+        .item-meta { font-size: 10px; color: #64748b; margin-top: 2px; }
+        .totals-wrap { width: 100%; margin-top: 12px; }
+        .totals-table {
+            width: 42%; margin-left: auto; border-collapse: collapse;
+            border: 1px solid #e2e8f0;
         }
-
-        .text-right {
-            text-align: right;
+        .totals-table td { padding: 7px 10px; border-bottom: 1px solid #e2e8f0; }
+        .totals-table td.right { text-align: right; font-weight: 600; }
+        .totals-label { color: #64748b; font-size: 11px; }
+        .totals-due td {
+            background: #eff6ff; font-weight: 700; color: #1e40af;
+            border-top: 2px solid #3b82f6; border-bottom: none;
         }
-
-        /* ===== TOTAL ===== */
-
-        .total-box {
-            width: 100%;
-            margin-left: auto;
-            margin-top: 30px;
-            background-color: #F9FAFB;
-            padding: 20px;
-            border-radius: 6px;
+        .box {
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+            padding: 12px; font-size: 11px; color: #475569; line-height: 1.6;
+            white-space: pre-wrap;
         }
-
-        .total-row {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .total-label {
-            font-size: 13px;
-            color: #6B7280;
-        }
-
-        .total-value {
-            font-size: 18px;
-            font-weight: bold;
-            text-align: right;
-        }
-
-        /* ===== FOOTER ===== */
-
-
-        .notes{
-            margin-top: 30px;
-            padding: 15px;
-            border-radius: 15px;
-            background: #F9FAFB;
-        }
-
-        .notes h4{
-            color: #6C7280;
-            text-transform: uppercase;
-            font-size: 14px;
-        }
-
-        .terms {
-    margin-top: 24px;
-    padding: 20px;
-    border: 2px solid #E5E7EB;
-    border-radius: 16px;
-    background: #FFFFFF;
-}
-
-.terms h4 {
-    font-size: 14px;
-    text-transform: uppercase;
-    color: #6B7280;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 16px;
-}
-
-.terms ol {
-    margin: 0;
-    padding-left: 20px;
-}
-
-.terms li {
-    margin-bottom: 14px;
-    line-height: 1.6;
-    font-size: 13px;
-    color: #1F2937;
-}
-
-.terms li::marker {
-    color: #E67E22;
-    font-weight: bold;
-}
-
+        .box p { margin-bottom: 4px; white-space: normal; }
+        .terms-list { margin: 0; padding-left: 18px; }
+        .terms-list li { margin-bottom: 8px; line-height: 1.5; color: #475569; }
+        .sig-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        .sig-table td { width: 50%; padding: 0 12px; vertical-align: bottom; text-align: center; }
+        .sig-line { margin-top: 48px; border-top: 2px solid #0f172a; padding-top: 8px; }
+        .sig-label { font-size: 11px; font-weight: 700; color: #0f172a; }
+        .sig-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
         .footer-table {
-    width: 100%;
-    border-top: 2px solid #E5E7EB;
-    padding: 20px;
-    font-size: 12px;
-    color: #6B7280;
-    background: #F9FAFB;
-}
-
-.footer-left {
-    width: 70%;
-    vertical-align: top;
-}
-
-.footer-right {
-    width: 30%;
-    text-align: center;
-    vertical-align: top;
-}
-
-.footer-company {
-    font-weight: 600;
-    color: #111827;
-    margin-bottom: 6px;
-}
-
-.footer-muted {
-    color: #9CA3AF;
-    margin-top: 6px;
-}
-
-.qr-box {
-    width: 120px;
-    height: 120px;
-    border: 2px solid #E5E7EB;
-    border-radius: 12px;
-    margin: 0 auto 8px;
-}
-
-.qr-label {
-    font-size: 11px;
-    color: #6B7280;
-}
-
-
+            width: 100%; border-collapse: collapse; border-top: 1px solid #e2e8f0; margin-top: 22px;
+        }
+        .footer-table td { font-size: 9px; color: #94a3b8; padding-top: 8px; vertical-align: top; }
+        .footer-table td.right { text-align: right; }
     </style>
 </head>
-
 <body>
-<div class="container">
+<div class="page">
 
-    <!-- HEADER -->
     <div class="header">
         <table class="header-table">
             <tr>
                 <td>
-                    <div class="company-name" th:text="${company.companyName}">MyWeb Systems QFZ LLC</div>
-                    <div class="company-sub"
-                         th:if="${invoiceSettings.invoiceHeaderSubtitle != null and !#strings.isEmpty(invoiceSettings.invoiceHeaderSubtitle)}"
-                         th:text="${invoiceSettings.invoiceHeaderSubtitle}"
-                         style="margin-top:8px;font-size:12px;color:#D1D5DB;line-height:16px;">
-                        Invoice generated by ERP system
+                    <div class="brand-name" th:text="${company.companyName}">Company</div>
+                    <div class="brand-sub"
+                         th:text="${invoiceSettings.invoiceHeaderSubtitle != null and !#strings.isEmpty(invoiceSettings.invoiceHeaderSubtitle)
+                             ? invoiceSettings.invoiceHeaderSubtitle
+                             : (isSales ? 'Accounts Receivable' : 'Accounts Payable')}">
+                        Accounts Receivable
                     </div>
                 </td>
-                <td style="text-align:right;">
-                    <div class="badge">
-                        <div class="badge-title"
-                             th:text="${invoice.status == 'PAID'
-                             ? 'RECEIPT'
-                             : (type.name() == 'PURCHASE' ? 'PURCHASE' : 'INVOICE')}">INVOICE</div>
-                        <div class="badge-id"
-                             th:text="${invoice.invoiceId}">
-                            INV-0000
-                        </div>
-                    </div>
+                <td class="header-right">
+                    <div class="doc-title" th:text="${docTitle}">Sales Invoice</div>
+                    <div class="doc-code" th:text="${invoice.invoiceId}">INV-0000</div>
+                    <span class="status-badge"
+                          th:style="'background:' + ${statusColor}"
+                          th:text="${statusText}">UNPAID</span>
                 </td>
             </tr>
         </table>
     </div>
 
-    <!-- ===== INVOICE META SECTION ===== -->
-    <div class="invoice-meta">
-
-        <!-- BILL TO / SUPPLIER -->
-        <div class="invoice-meta-col">
-            <div class="meta-title"
-                 th:text="${type.name() == 'SALES' ? 'Bill To' : 'Supplier'}">
-                Bill To
-            </div>
-
-            <div th:if="${type.name() == 'SALES'}">
-                <div class="meta-strong"
-                     th:text="${salesOrder.customerName}">
-                    Customer Name
-                </div>
-                <div class="meta-muted"
-                     th:text="${salesOrder.customerEmail}">
-                    email@example.com
-                </div>
-                <div class="meta-muted"
-                     th:text="${salesOrder.customerPhone}">
-                    +1 000 000 0000
-                </div>
-            </div>
-
-            <div class="meta-status">
-                Status:
-                <span th:text="${invoice.status}">UNPAID</span>
-            </div>
-        </div>
-
-        <!-- INVOICE DETAILS -->
-        <div class="invoice-meta-col">
-            <div class="meta-title">Invoice Details</div>
-
-            <div class="meta-muted">
-                Invoice Date:
-                <span th:text="${#temporals.format(invoice.invoiceDate, 'dd/MM/yyyy')}">
-                02/01/2026
-            </span>
-            </div>
-
-            <div class="meta-muted">
-                Due Date:
-                <span th:text="${#temporals.format(invoice.dueDate, 'dd/MM/yyyy')}">
-                27/04/1999
-            </span>
-            </div>
-
-            <div class="meta-muted">
-                Paid Date:
-                <span th:text="${invoice.paidDate != null
-                ? #temporals.format(invoice.paidDate, 'dd/MM/yyyy')
-                : 'N/A'}">
-                N/A
-            </span>
-            </div>
-        </div>
-
-        <!-- REFERENCE -->
-        <div class="invoice-meta-col">
-            <div class="meta-title">Reference</div>
-
-            <div class="meta-strong">
-            <span th:text="${type.name() == 'SALES' ? 'Sales order:' : 'Purchase order:'}">
-                Sales order:
-            </span>
-            </div>
-
-            <div class="meta-muted"
-                 th:text="${type.name() == 'SALES'
-                ? salesOrder.orderNumber
-                : purchaseOrder.orderNumber}">
-                SO-1769921463248
-            </div>
-        </div>
-
+    <div class="section">
+        <div class="section-title">Invoice Details</div>
+        <table class="info-table">
+            <tr>
+                <td>
+                    <div class="info-label" th:text="${partyLabel}">Bill To</div>
+                    <div class="info-value" th:text="${partyName}">Party</div>
+                    <div class="info-muted" th:if="${partyEmail != null and !#strings.isEmpty(partyEmail)}"
+                         th:text="${partyEmail}">email</div>
+                    <div class="info-muted" th:if="${partyPhone != null and !#strings.isEmpty(partyPhone)}"
+                         th:text="${partyPhone}">phone</div>
+                    <div class="info-muted" th:if="${partyAddress != null and !#strings.isEmpty(partyAddress)}"
+                         th:text="${partyAddress}">address</div>
+                </td>
+                <td>
+                    <div class="info-label">Invoice Date</div>
+                    <div class="info-value" th:text="${invoiceDateFormatted}">—</div>
+                    <div class="info-label" style="margin-top:8px;">Due Date</div>
+                    <div class="info-value" th:text="${dueDateFormatted}">—</div>
+                </td>
+                <td>
+                    <div class="info-label" th:text="${orderLabel}">Sales Order</div>
+                    <div class="info-value" th:text="${orderNumber}">SO-1</div>
+<<<<<<< Updated upstream
+                    <div th:if="${showSupplierInvoiceNumber}">
+                        <div class="info-label" style="margin-top:8px;">Vendor Invoice #</div>
+                        <div class="info-value" th:text="${supplierInvoiceNumber}">—</div>
+                    </div>
+=======
+>>>>>>> Stashed changes
+                    <div class="info-label" style="margin-top:8px;">Paid Date</div>
+                    <div class="info-value" th:text="${paidDateFormatted}">—</div>
+                </td>
+            </tr>
+        </table>
     </div>
 
-    <!-- BODY -->
-    <div class="body">
-
-        <!-- EMPTY ITEMS TABLE (DESIGN ONLY) -->
-        <table class="items-table">
+    <div class="section">
+        <div class="section-title">Line Items</div>
+        <table class="lines-table">
             <thead>
             <tr>
-                <th>#</th>
+                <th class="center">#</th>
                 <th>Description</th>
-                <th class="text-right">Qty</th>
-                <th class="text-right">Unit</th>
-                <th class="text-right">Discount</th>
-                <th class="text-right">Amount</th>
+                <th class="right">Qty</th>
+                <th class="right">Unit</th>
+                <th class="right">Discount</th>
+                <th class="right">Amount</th>
             </tr>
             </thead>
             <tbody>
-            <tr th:each="item, iterStat : ${items}">
-                <!-- # -->
-                <td th:text="${iterStat.count}">1</td>
-
-                <!-- DESCRIPTION -->
+            <tr th:each="line : ${lines}"
+                th:class="${line.index % 2 == 0} ? 'row-even' : 'row-odd'">
+                <td class="center" th:text="${line.index}">1</td>
                 <td>
-                    <div class="item-title"
-                         th:text="${item.itemName}">
-                        Website Design & Development
-                    </div>
-                    <div class="item-desc"
-                         th:text="${item.itemDescription}">
-                        Complete redesign of corporate website
-                    </div>
+                    <div class="item-name" th:text="${line.name}">Item</div>
+                    <div class="item-meta"
+                         th:if="${line.description != null and !#strings.isEmpty(line.description)}"
+                         th:text="${line.description}">Description</div>
                 </td>
-
-                <!-- QTY -->
-                <td class="text-right"
-                    th:text="${item.quantity}">
-                    1
-                </td>
-
-                <!-- UNIT PRICE -->
-                <td class="text-right">
-                <span th:text="${#strings.isEmpty(currencyCode)
-                    ? #numbers.formatDecimal(item.unitPrice, 1, 'COMMA', 2, 'POINT')
-                    : currencyCode + ' ' + #numbers.formatDecimal(item.unitPrice, 1, 'COMMA', 2, 'POINT')}">
-                    45,000.00
-                </span>
-                </td>
-
-                <!-- TAX -->
-                <td class="text-right">
-                    0%
-                </td>
-
-                <!-- AMOUNT -->
-                <td class="text-right">
-                    <strong
-                            th:text="${#strings.isEmpty(currencyCode)
-                                ? #numbers.formatDecimal(item.lineTotal, 1, 'COMMA', 2, 'POINT')
-                                : currencyCode + ' ' + #numbers.formatDecimal(item.lineTotal, 1, 'COMMA', 2, 'POINT')}">
-                        45,000.00
-                    </strong>
-                </td>
+                <td class="right" th:text="${line.quantity}">1</td>
+                <td class="right" th:text="${line.unitFormatted}">0.00</td>
+                <td class="right" th:text="${line.discountFormatted}">—</td>
+                <td class="right" th:text="${line.amountFormatted}">0.00</td>
             </tr>
-
-            <!-- EMPTY STATE -->
-            <tr th:if="${items == null or #lists.isEmpty(items)}">
-                <td colspan="6" class="empty-row">
-                    —
-                </td>
+            <tr th:if="${lines == null or #lists.isEmpty(lines)}">
+                <td colspan="6" class="center" style="padding:16px;color:#94a3b8;">No line items</td>
             </tr>
             </tbody>
         </table>
 
-        <!-- TOTAL -->
-        <div class="total-box">
-            <table class="total-row">
+        <div class="totals-wrap">
+            <table class="totals-table">
                 <tr>
-                    <td class="total-label">Total Amount</td>
-                    <td class="total-value"
-                        th:text="${#strings.isEmpty(currencyCode)
-                            ? #numbers.formatDecimal(invoice.amount, 1, 'COMMA', 2, 'POINT')
-                            : currencyCode + ' ' + #numbers.formatDecimal(invoice.amount, 1, 'COMMA', 2, 'POINT')}">
-                        0
-                    </td>
+                    <td class="totals-label">Subtotal</td>
+                    <td class="right" th:text="${subtotalFormatted}">0.00</td>
+                </tr>
+                <tr th:if="${showDiscount}">
+                    <td class="totals-label">Discount</td>
+                    <td class="right" th:text="${discountFormatted}">0.00</td>
+                </tr>
+                <tr th:if="${showTax}">
+                    <td class="totals-label">Tax</td>
+                    <td class="right" th:text="${taxFormatted}">0.00</td>
+                </tr>
+                <tr class="totals-due">
+                    <td>Total Due</td>
+                    <td class="right" th:text="${totalFormatted}">0.00</td>
                 </tr>
             </table>
         </div>
+    </div>
 
-        <div class="terms"
-             th:if="${type.name() == 'SALES' and invoice.bankAccount != null and invoice.status != 'PAID'}">
-            <h4>Payment Information</h4>
+    <div class="section" th:if="${showPaymentInfo}">
+        <div class="section-title">Payment Information</div>
+        <div class="box">
             <p><strong>Bank Name:</strong> <span th:text="${invoice.bankAccount.bankName}">Bank</span></p>
             <p><strong>Account Holder:</strong> <span th:text="${invoice.bankAccount.accountHolderName}">Holder</span></p>
             <p><strong>Account Number:</strong> <span th:text="${invoice.bankAccount.accountNumber}">0000</span></p>
@@ -478,87 +234,59 @@
             <p><strong>Branch:</strong> <span th:text="${invoice.bankAccount.branchName}">Branch</span></p>
             <p><strong>Reference:</strong> <span th:text="${invoice.invoiceId}">INV-0000</span></p>
         </div>
-
-        <div class="notes" th:if="${type.name() == 'SALES'}">
-            <h4>Notes</h4>
-            <p th:if="${invoice.status != 'PAID'}"
-               th:text="${#strings.replace(#strings.replace(#strings.replace(#strings.replace((invoiceSettings.invoiceNotesUnpaid != null ? invoiceSettings.invoiceNotesUnpaid : ''), '{{companyName}}', company.companyName), '{{invoiceDate}}', #temporals.format(invoice.invoiceDate, 'dd/MM/yyyy')), '{{dueDate}}', #temporals.format(invoice.dueDate, 'dd/MM/yyyy')), '{{invoiceId}}', invoice.invoiceId)}">
-                Company has issued this invoice.
-            </p>
-            <p th:if="${invoice.status == 'PAID'}"
-               th:text="${#strings.replace(#strings.replace(#strings.replace((invoiceSettings.invoiceNotesPaid != null ? invoiceSettings.invoiceNotesPaid : ''), '{{companyName}}', company.companyName), '{{invoiceId}}', invoice.invoiceId), '{{paidDate}}', invoice.paidDate != null ? #temporals.format(invoice.paidDate, 'dd/MM/yyyy') : 'N/A')}">
-                Payment confirmation note.
-            </p>
-            <p th:if="${company.street != null or company.city != null or company.country != null}">
-                Company Address:
-                <span th:text="|${company.street != null ? company.street : ''} ${company.city != null ? company.city : ''} ${company.country != null ? company.country : ''}|">Address</span>
-            </p>
-            <p th:if="${company.phoneNo != null}">
-                Contact:
-                <span th:text="${company.phoneNo}">0000000000</span>
-            </p>
-        </div>
-
-        <div class="terms" th:if="${type.name() == 'SALES' and invoiceTermsList != null and !#lists.isEmpty(invoiceTermsList)}">
-            <h4>⚖ Terms &amp; Conditions</h4>
-
-            <ol>
-                <li th:each="term : ${invoiceTermsList}" th:text="${term}">
-                    Terms line item
-                </li>
-            </ol>
-        </div>
-
     </div>
 
-    <!--    &lt;!&ndash; FOOTER &ndash;&gt;-->
-    <!--    <div class="footer">-->
-    <!--        This is a system-generated document. No signature required.-->
-    <!--    </div>-->
+    <div class="section" th:if="${showNotes}">
+        <div class="section-title">Notes</div>
+        <div class="box" th:text="${notesText}">Notes</div>
+    </div>
+
+    <div class="section" th:if="${showTerms}">
+        <div class="section-title">Terms and Conditions</div>
+        <div class="box">
+            <ol class="terms-list">
+                <li th:each="term : ${invoiceTermsList}" th:text="${term}">Terms line</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Signatures</div>
+        <table class="sig-table">
+            <tr>
+                <td>
+                    <div class="sig-line">
+                        <div class="sig-label" th:text="${sigPartyName}">Customer</div>
+                        <div class="sig-sub" th:text="${sigPartyRole}">Customer Signature and Date</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="sig-line">
+                        <div class="sig-label" th:text="${company.companyName}">Company</div>
+                        <div class="sig-sub">Authorized Signatory and Date</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
 
     <table class="footer-table">
         <tr>
-            <td class="footer-left">
-                <p class="footer-company">
-                    <span th:text="${invoiceSettings.invoiceFooterCompanyLine != null and !#strings.isEmpty(invoiceSettings.invoiceFooterCompanyLine) ? invoiceSettings.invoiceFooterCompanyLine : (company.companyName + ' | Commercial Registration: ' + (company.crNo != null ? company.crNo : 'N/A'))}">MyWeb Systems QFZ LLC | Commercial Registration: 123456789</span>
-                </p>
-
-                <p>
-                    <span th:text="${invoiceSettings.invoiceFooterTaxLine != null and !#strings.isEmpty(invoiceSettings.invoiceFooterTaxLine) ? invoiceSettings.invoiceFooterTaxLine : ''}">Tax ID: QA-123456789</span>
-                </p>
-
-                <p class="footer-muted"
-                   th:if="${company.street != null or company.city != null or company.state != null or company.country != null}">
-                    Address:
-                    <span th:text="|${company.street != null ? company.street : ''} ${company.city != null ? company.city : ''} ${company.state != null ? company.state : ''} ${company.country != null ? company.country : ''}|">Address</span>
-                </p>
-
-                <p class="footer-muted">
-                    <span th:text="${invoiceSettings.invoiceFooterSignatureNote != null and !#strings.isEmpty(invoiceSettings.invoiceFooterSignatureNote) ? invoiceSettings.invoiceFooterSignatureNote : 'This is a computer-generated document and does not require a physical signature.'}">This is a computer-generated document and does not require a physical signature.</span>
-                </p>
-
-                <p class="footer-muted">
-                    For support:
-                    <span th:text="${company.companyEmail != null and !#strings.isEmpty(company.companyEmail) ? company.companyEmail : (invoiceSettings.invoiceFooterSupportEmail != null and !#strings.isEmpty(invoiceSettings.invoiceFooterSupportEmail) ? invoiceSettings.invoiceFooterSupportEmail : 'info@company.com')}">support@myweb.qa</span>
-                    |
-                    For billing:
-                    <span th:text="${company.billingEmail != null and !#strings.isEmpty(company.billingEmail) ? company.billingEmail : (invoiceSettings.invoiceFooterBillingEmail != null and !#strings.isEmpty(invoiceSettings.invoiceFooterBillingEmail) ? invoiceSettings.invoiceFooterBillingEmail : 'accounts@company.com')}">accounts@myweb.qa</span>
-                </p>
-
-                <p class="footer-muted" th:if="${company.websiteUrl != null and !#strings.isEmpty(company.websiteUrl)}">
-                    Website:
-                    <span th:text="${company.websiteUrl}">https://example.com</span>
-                </p>
-            </td>
-
-            <td class="footer-right" th:if="${invoiceSettings.invoiceQrEnabled and publicInvoiceUrl != null and !#strings.isEmpty(publicInvoiceUrl)}">
-                <div class="qr-box">
-                    <img th:src="|https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${publicInvoiceUrl}|"
-                         alt="Invoice QR"
-                         style="width:100%;height:100%;border-radius:10px;" />
+            <td>
+                <div th:text="${invoiceSettings.invoiceFooterCompanyLine != null and !#strings.isEmpty(invoiceSettings.invoiceFooterCompanyLine)
+                    ? invoiceSettings.invoiceFooterCompanyLine
+                    : (company.companyName + ' | Commercial Registration: ' + (company.crNo != null ? company.crNo : 'N/A'))}">
+                    Company footer
                 </div>
-                <div class="qr-label">Scan to View Online</div>
+                <div th:if="${invoiceSettings.invoiceFooterTaxLine != null and !#strings.isEmpty(invoiceSettings.invoiceFooterTaxLine)}"
+                     th:text="${invoiceSettings.invoiceFooterTaxLine}">Tax line</div>
+                <div th:text="${invoiceSettings.invoiceFooterSignatureNote != null and !#strings.isEmpty(invoiceSettings.invoiceFooterSignatureNote)
+                    ? invoiceSettings.invoiceFooterSignatureNote
+                    : 'This is a computer-generated document and does not require a physical signature.'}">
+                    Signature note
+                </div>
             </td>
+            <td class="right" th:text="'Ref: ' + ${invoice.invoiceId} + ' | ' + ${company.companyName}">Ref</td>
         </tr>
     </table>
 

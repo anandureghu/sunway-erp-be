@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 @Getter
 @Setter
@@ -24,7 +25,16 @@ public class GoodsReceiptItem {
     @JoinColumn(name = "item_id")
     private Item item;
 
-    /** Where accepted quantity was posted; legacy receipts may be null. */
+    /** The exact purchase order line this was received against. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "purchase_order_item_id")
+    private PurchaseOrderItem purchaseOrderItem;
+
+    /** Snapshot, at receive time, of the PO line's remaining orderable quantity. */
+    @Column(name = "ordered_quantity", nullable = false)
+    private Integer orderedQuantity;
+
+    /** Where accepted quantity was posted; null until stock is actually posted. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id")
     private Warehouse warehouse;
@@ -43,4 +53,8 @@ public class GoodsReceiptItem {
 
     @Column(name = "unit_cost", precision = 18, scale = 2)
     private BigDecimal unitCost;
+
+    /** Set once this line's accepted quantity has been posted to inventory. */
+    @Column(name = "stocked_at")
+    private Instant stockedAt;
 }

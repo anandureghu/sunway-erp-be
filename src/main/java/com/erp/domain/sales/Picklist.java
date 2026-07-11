@@ -31,6 +31,9 @@ public class Picklist {
     @Column(nullable = false)
     private String status; // CREATED, PICKED, CANCELLED
 
+    @Builder.Default
+    private boolean archived = false;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")
     private Company company;

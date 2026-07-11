@@ -20,6 +20,7 @@ import com.erp.repo.hr.CompanyInvoiceSettingsRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.DocumentSequenceService;
 import com.erp.service.file.FileStorageService;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class CompanyService {
     private final BankAccountRepository       bankAccountRepository;
     private final AuthContext                 authContext;
     private final FileStorageService          fileStorageService;
+    private final DocumentSequenceService     documentSequenceService;
 
     public CompanyService(
             CompanyRepository companyRepository,
@@ -50,7 +52,8 @@ public class CompanyService {
             ChartOfAccountsRepository chartOfAccountsRepository,
             BankAccountRepository bankAccountRepository,
             AuthContext authContext,
-            FileStorageService fileStorageService) {
+            FileStorageService fileStorageService,
+            DocumentSequenceService documentSequenceService) {
 
         this.companyRepository         = companyRepository;
         this.invoiceSettingsRepository = invoiceSettingsRepository;
@@ -60,6 +63,7 @@ public class CompanyService {
         this.bankAccountRepository     = bankAccountRepository;
         this.authContext               = authContext;
         this.fileStorageService        = fileStorageService;
+        this.documentSequenceService   = documentSequenceService;
     }
 
     // ======================================================
@@ -153,6 +157,8 @@ public class CompanyService {
         Company saved = companyRepository.save(company);
         seedDefaultCompanyRoles(saved);
         invoiceSettingsRepository.save(InvoiceSettingsDefaults.buildDefaults(saved));
+        // Start this company's employee-number sequence at 1000 up front.
+        documentSequenceService.initEmployeeSequence(saved.getId());
 
         if (logo != null && !logo.isEmpty()) {
             FileUploadResult upload = fileStorageService.upload(

@@ -17,4 +17,10 @@ public interface EmployeeTimesheetRepository extends JpaRepository<EmployeeTimes
             LocalDate startDate,
             LocalDate endDate
     );
+
+    List<EmployeeTimesheet> findByEmployeeIdInAndAttendanceDateBetween(
+            List<Long> employeeIds,
+            LocalDate startDate,
+            LocalDate endDate
+    );
 }

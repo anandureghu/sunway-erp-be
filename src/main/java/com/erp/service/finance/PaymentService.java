@@ -192,6 +192,7 @@ public class PaymentService {
             invoiceRepo.findByInvoiceId(p.getInvoiceId()).ifPresent(inv -> {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
+                b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
                 if (inv.getType() == InvoiceType.SALES && inv.getOrderId() != null) {
                     salesOrderRepo.findById(inv.getOrderId())
                             .ifPresent(so -> b.salesOrderNumber(so.getOrderNumber()));
@@ -203,6 +204,7 @@ public class PaymentService {
             invoiceRepo.findByOrderIdAndType(p.getPurchaseOrderId(), InvoiceType.PURCHASE).ifPresent(inv -> {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
+                b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
             });
         }
     }
@@ -302,6 +304,10 @@ public class PaymentService {
                 || status == PurchaseOrderStatus.RECEIVED;
     }
 
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
     public java.util.List<PaymentResponseDTO> getPaymentsByInvoice(String invoiceId) {
         if (invoiceId == null || invoiceId.isBlank()) {
             return List.of();
@@ -396,6 +402,11 @@ public class PaymentService {
         }
         Invoice purchaseInvoice = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                 .orElseThrow(() -> new RuntimeException("Purchase invoice not found for this purchase order"));
+        if (isBlank(purchaseInvoice.getSupplierInvoiceNumber())) {
+            throw new ConflictException(
+                    "Vendor Invoice Matching is missing. Please match your invoice with the vendor invoice "
+                            + "and confirm the order items before proceeding with the vendor payment.");
+        }
         BigDecimal confirmAmount = resolveConfirmAmount(body, purchaseInvoice, payment);
 
         String methodCode;
@@ -436,9 +447,12 @@ public class PaymentService {
                     e.getMessage());
         }
         try {
-            String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
-                    .map(Invoice::getInvoiceId)
+            Invoice invoiceForReceipt = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                     .orElse(null);
+            String purchaseInvoiceCode = invoiceForReceipt != null ? invoiceForReceipt.getInvoiceId() : null;
+            String vendorInvoiceNumber = invoiceForReceipt != null
+                    ? invoiceForReceipt.getSupplierInvoiceNumber()
+                    : null;
             Vendor supplier = po.getSupplier();
             String supplierName = supplier != null ? supplier.getVendorName() : null;
             String receiptUrl = vendorPaymentReceiptPdfService.generateAndUpload(
@@ -446,7 +460,8 @@ public class PaymentService {
                     po.getCompany(),
                     po,
                     supplierName,
-                    purchaseInvoiceCode);
+                    purchaseInvoiceCode,
+                    vendorInvoiceNumber);
             saved.setPdfUrl(receiptUrl);
             saved = paymentRepo.save(saved);
         } catch (Exception e) {
@@ -478,9 +493,12 @@ public class PaymentService {
         }
         PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
                 .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
-        String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
-                .map(Invoice::getInvoiceId)
+        Invoice invoiceForReceipt = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                 .orElse(null);
+        String purchaseInvoiceCode = invoiceForReceipt != null ? invoiceForReceipt.getInvoiceId() : null;
+        String vendorInvoiceNumber = invoiceForReceipt != null
+                ? invoiceForReceipt.getSupplierInvoiceNumber()
+                : null;
         Vendor supplier = po.getSupplier();
         String supplierName = supplier != null ? supplier.getVendorName() : null;
         String receiptUrl = vendorPaymentReceiptPdfService.generateAndUpload(
@@ -488,7 +506,8 @@ public class PaymentService {
                 po.getCompany(),
                 po,
                 supplierName,
-                purchaseInvoiceCode);
+                purchaseInvoiceCode,
+                vendorInvoiceNumber);
         payment.setPdfUrl(receiptUrl);
         paymentRepo.save(payment);
         return receiptUrl;

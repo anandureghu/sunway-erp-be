@@ -26,6 +26,7 @@ import com.erp.service.pdf.GoodsReceiptPdfService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -129,10 +130,15 @@ public class GoodsReceiptService {
                     .build();
         }).collect(Collectors.toCollection(ArrayList::new));
 
+        Instant now = Instant.now();
         GoodsReceipt grn = GoodsReceipt.builder()
                 .purchaseOrder(po)
                 .company(company)
                 .receivedBy(user)
+                // Receive flow includes quality inspection and sign-off by the same actor.
+                .inspectedBy(user)
+                .inspectedAt(now)
+                .authorizedBy(user)
                 .items(items)
                 .build();
 
@@ -151,11 +157,8 @@ public class GoodsReceiptService {
     }
 
     public String getOrCreateReceiptPdfUrl(Long id) {
-        GoodsReceipt gr = getEntity(id);
-        if (gr.getDocumentPdfUrl() != null && !gr.getDocumentPdfUrl().isBlank()) {
-            return gr.getDocumentPdfUrl();
-        }
-        GoodsReceipt loaded = repo.findById(gr.getId()).orElse(gr);
+        // Always regenerate so template/layout updates are reflected immediately.
+        GoodsReceipt loaded = getEntity(id);
         String url = goodsReceiptPdfService.generateAndUploadGoodsReceiptPdf(loaded);
         loaded.setDocumentPdfUrl(url);
         repo.save(loaded);
@@ -188,24 +191,32 @@ public class GoodsReceiptService {
                 .id(gr.getId())
                 .purchaseOrderId(gr.getPurchaseOrder().getId())
                 .receivedAt(gr.getReceivedAt())
+                .receivedById(gr.getReceivedBy() != null ? gr.getReceivedBy().getId() : null)
+                .receivedByName(gr.getReceivedBy() != null ? gr.getReceivedBy().getFullName() : null)
+                .inspectedById(gr.getInspectedBy() != null ? gr.getInspectedBy().getId() : null)
+                .inspectedByName(gr.getInspectedBy() != null ? gr.getInspectedBy().getFullName() : null)
+                .inspectedAt(gr.getInspectedAt())
+                .authorizedById(gr.getAuthorizedBy() != null ? gr.getAuthorizedBy().getId() : null)
+                .authorizedByName(gr.getAuthorizedBy() != null ? gr.getAuthorizedBy().getFullName() : null)
                 .documentPdfUrl(gr.getDocumentPdfUrl())
                 .items(
-                        gr.getItems().stream().map(i ->
-                                GoodsReceiptItemDTO.builder()
-                                        .itemId(i.getItem().getId())
-                                        .warehouseId(
-                                                i.getWarehouse() != null
-                                                        ? i.getWarehouse().getId()
-                                                        : i.getItem().getWarehouse().getId())
-                                        .receivedQty(i.getReceivedQty())
-                                        .acceptedQty(i.getAcceptedQty())
-                                        .rejectedQty(i.getRejectedQty())
-                                        .remarks(i.getRemarks())
-                                        .batchNo(i.getBatchNo())
-                                        .lotNo(i.getLotNo())
-                                        .unitCost(i.getUnitCost())
-                                        .build()
-                        ).toList()
+                        gr.getItems().stream().map(i -> {
+                            var warehouse = i.getWarehouse() != null
+                                    ? i.getWarehouse()
+                                    : i.getItem().getWarehouse();
+                            return GoodsReceiptItemDTO.builder()
+                                    .itemId(i.getItem().getId())
+                                    .warehouseId(warehouse != null ? warehouse.getId() : null)
+                                    .warehouseName(warehouse != null ? warehouse.getName() : null)
+                                    .receivedQty(i.getReceivedQty())
+                                    .acceptedQty(i.getAcceptedQty())
+                                    .rejectedQty(i.getRejectedQty())
+                                    .remarks(i.getRemarks())
+                                    .batchNo(i.getBatchNo())
+                                    .lotNo(i.getLotNo())
+                                    .unitCost(i.getUnitCost())
+                                    .build();
+                        }).toList()
                 )
                 .build();
     }

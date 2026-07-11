@@ -24,4 +24,5 @@ public class LeaveHistoryDTO {
     private String leaveStatus;
     private Long delegateId;
     private String delegateName;
+    private String rejectionComment;
 }

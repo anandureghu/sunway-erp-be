@@ -25,11 +25,30 @@ public class GoodsReceipt {
     @JoinColumn(name = "purchase_order_id")
     private PurchaseOrder purchaseOrder;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private GoodsReceiptStatus status = GoodsReceiptStatus.PENDING_INSPECTION;
+
+    @Builder.Default
+    private boolean archived = false;
+
     private Instant receivedAt;
 
     @ManyToOne
     @JoinColumn(name = "received_by")
     private User receivedBy;
+
+    @ManyToOne
+    @JoinColumn(name = "inspected_by")
+    private User inspectedBy;
+
+    @Column(name = "inspected_at")
+    private Instant inspectedAt;
+
+    @ManyToOne
+    @JoinColumn(name = "authorized_by")
+    private User authorizedBy;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "company_id")

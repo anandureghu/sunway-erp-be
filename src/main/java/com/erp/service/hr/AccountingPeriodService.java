@@ -118,7 +118,7 @@ public class AccountingPeriodService {
         AccountingPeriod acc = periodRepository
                 .findByCompanyIdAndStatus(companyId, PeriodStatus.OPEN);
 
-        return mapToDTO(acc);
+        return acc == null ? null : mapToDTO(acc);
     }
 
     private AccountingPeriodResponseDTO mapToDTO(AccountingPeriod period) {

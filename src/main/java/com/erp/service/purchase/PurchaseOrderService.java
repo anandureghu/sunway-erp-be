@@ -11,6 +11,8 @@ import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderItem;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
+import com.erp.domain.purchase.PurchaseRequisitionReviewAction;
+import com.erp.domain.purchase.PurchaseRequisitionStatus;
 import com.erp.dto.purchase.PurchaseOrderAssignSupplierDTO;
 import com.erp.dto.purchase.PurchaseOrderCreateDTO;
 import com.erp.dto.purchase.PurchaseOrderItemDTO;
@@ -40,6 +42,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -276,7 +279,22 @@ public class PurchaseOrderService {
         }
         releaseEncumbranceOnCancel(po);
         po.setStatus(PurchaseOrderStatus.CANCELLED);
-        return toDTO(repo.save(po));
+        PurchaseOrder saved = repo.save(po);
+
+        PurchaseRequisition sourcePr = po.getSourceRequisition();
+        if (sourcePr != null
+                && sourcePr.getStatus() != PurchaseRequisitionStatus.REJECTED) {
+            User actor = userRepo.findById(auth.getCurrentUserId()).orElse(null);
+            sourcePr.setStatus(PurchaseRequisitionStatus.REJECTED);
+            sourcePr.setReviewAction(PurchaseRequisitionReviewAction.REJECT);
+            sourcePr.setRejectionReason(
+                    "Linked purchase order " + po.getOrderNumber() + " was cancelled.");
+            sourcePr.setRejectedAt(java.time.Instant.now());
+            sourcePr.setRejectedBy(actor);
+            requisitionRepo.save(sourcePr);
+        }
+
+        return toDTO(saved);
     }
 
     public PurchaseOrderPostingPreviewDTO getPostingPreview(Long id, String action) {
@@ -483,31 +501,40 @@ public class PurchaseOrderService {
     }
 
     private PurchaseOrderResponseDTO toDTO(PurchaseOrder po) {
+        var purchaseInvoice = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE);
+        PurchaseRequisition sourcePr = po.getSourceRequisition();
+        LocalDate requiredDeliveryDate = po.getRequiredDeliveryDate() != null
+                ? po.getRequiredDeliveryDate()
+                : (sourcePr != null ? sourcePr.getRequiredDeliveryDate() : null);
+        User requestedBy = po.getRequestedBy() != null
+                ? po.getRequestedBy()
+                : (sourcePr != null ? sourcePr.getRequestedBy() : null);
         return PurchaseOrderResponseDTO.builder()
                 .id(po.getId())
                 .orderNumber(po.getOrderNumber())
                 .sourceRequisitionId(
-                        po.getSourceRequisition() != null
-                                ? po.getSourceRequisition().getId()
+                        sourcePr != null
+                                ? sourcePr.getId()
                                 : null)
                 .sourceRequisitionNumber(
-                        po.getSourceRequisition() != null
-                                ? po.getSourceRequisition().getRequisitionNumber()
+                        sourcePr != null
+                                ? sourcePr.getRequisitionNumber()
                                 : null)
                 .supplierId(po.getSupplier() != null ? po.getSupplier().getId() : null)
                 .supplierName(po.getSupplier() != null ? po.getSupplier().getVendorName() : null)
                 .orderDate(po.getOrderDate())
+                .requiredDeliveryDate(requiredDeliveryDate)
                 .status(po.getStatus().name())
                 .archived(po.isArchived())
                 .createdAt(po.getCreatedAt().toString())
                 .createdById(po.getCreatedBy().getId())
                 .createdByName(po.getCreatedBy().getFullName())
+                .requestedById(requestedBy != null ? requestedBy.getId() : null)
+                .requestedByName(requestedBy != null ? requestedBy.getFullName() : null)
                 .totalAmount(po.getTotalAmount())
                 .vendorPaymentSettled(vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId()))
-                .purchaseInvoiceId(
-                        invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
-                                .map(Invoice::getId)
-                                .orElse(null))
+                .paymentStatus(purchaseInvoice.map(Invoice::getStatus).orElse("UNPAID"))
+                .purchaseInvoiceId(purchaseInvoice.map(Invoice::getId).orElse(null))
                 .vendorPaymentId(
                         vendorPayableService.findVendorPaymentIdForPurchaseOrder(po.getId())
                                 .orElse(null))

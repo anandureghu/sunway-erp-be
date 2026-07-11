@@ -3,11 +3,13 @@ package com.erp.service.finance;
 import com.erp.domain.finance.CreditNote;
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.hr.Company;
+import com.erp.domain.purchase.GoodsReceipt;
 import com.erp.dto.finance.CreateCreditNoteDTO;
 import com.erp.dto.finance.CreditNoteResponseDTO;
 import com.erp.repo.finance.CreditNoteRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.purchase.GoodsReceiptRepository;
 import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ public class CreditNoteService {
     private final CreditNoteRepository creditNoteRepository;
     private final CompanyRepository companyRepository;
     private final InvoiceRepository invoiceRepository;
+    private final GoodsReceiptRepository goodsReceiptRepository;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
 
@@ -81,6 +84,53 @@ public class CreditNoteService {
 
         creditNoteRepository.save(creditNote);
         invoiceRepository.save(invoice);
+
+        return mapToResponse(creditNote);
+    }
+
+    /**
+     * Automatically creates an unapplied supplier credit when inspection rejects goods on a
+     * purchase order whose invoice is already fully settled. Kept deliberately separate from
+     * {@link #createCreditNote} — that method requires {@code amount <= invoice.getOutstanding()}
+     * and immediately zeroes it out, which doesn't fit an invoice whose outstanding is already 0.
+     * Does not touch the invoice's own amount/status; the invoice stays settled/paid, and the
+     * credit is tracked as a standalone record for later manual application against future
+     * purchases from the same supplier.
+     */
+    @Transactional
+    public CreditNoteResponseDTO createAutomaticCreditNoteForRejection(
+            String invoiceId, BigDecimal amount, String reason, Long goodsReceiptId) {
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+
+        Invoice invoice = invoiceRepository.findByInvoiceId(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+
+        Long companyId = invoice.getCompany().getId();
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company doesn't exist"));
+
+        GoodsReceipt goodsReceipt = goodsReceiptId != null
+                ? goodsReceiptRepository.findById(goodsReceiptId).orElse(null)
+                : null;
+
+        CreditNote creditNote = CreditNote.builder()
+                .creditNoteNumber(documentSequenceService.generateNext("CN"))
+                .invoice(invoice)
+                .company(company)
+                .amount(amount)
+                .remainingAmount(amount) // unapplied - available for future use
+                .status("AVAILABLE")
+                .source("AUTO_REJECTION")
+                .goodsReceipt(goodsReceipt)
+                .creditDate(java.time.LocalDate.now())
+                .reason(reason)
+                .createdAt(OffsetDateTime.now())
+                .build();
+
+        creditNoteRepository.save(creditNote);
 
         return mapToResponse(creditNote);
     }

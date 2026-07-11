@@ -9,8 +9,10 @@ import com.erp.domain.finance.Transaction;
 import com.erp.domain.history.HistoryEntityType;
 import com.erp.domain.history.HistoryModule;
 import com.erp.domain.inventory.StockVariance;
+import com.erp.domain.purchase.GoodsReceipt;
 import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseRequisition;
+import com.erp.domain.sales.Picklist;
 import com.erp.domain.sales.SalesOrder;
 import com.erp.dto.history.BulkActionFailureDTO;
 import com.erp.dto.history.BulkActionResultDTO;
@@ -21,6 +23,7 @@ import com.erp.repo.finance.JournalEntryRepository;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.finance.TransactionRepository;
 import com.erp.repo.inventory.StockVarianceRepository;
+import com.erp.repo.purchase.GoodsReceiptRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.repo.purchase.PurchaseRequisitionRepository;
 import com.erp.repo.sales.PicklistRepository;
@@ -31,8 +34,10 @@ import com.erp.service.finance.JournalEntryService;
 import com.erp.service.finance.PaymentService;
 import com.erp.service.finance.TransactionService;
 import com.erp.service.inventory.StockVarianceService;
+import com.erp.service.purchase.GoodsReceiptService;
 import com.erp.service.purchase.PurchaseOrderService;
 import com.erp.service.purchase.PurchaseRequisitionService;
+import com.erp.service.sales.PicklistService;
 import com.erp.service.sales.SalesOrderService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -60,14 +65,17 @@ public class HistoryService {
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final PurchaseRequisitionRepository purchaseRequisitionRepo;
     private final StockVarianceRepository stockVarianceRepo;
+    private final GoodsReceiptRepository goodsReceiptRepo;
     private final InvoiceRepository invoiceRepo;
     private final PaymentRepository paymentRepo;
     private final JournalEntryRepository journalEntryRepo;
     private final TransactionRepository transactionRepo;
     private final SalesOrderService salesOrderService;
+    private final PicklistService picklistService;
     private final PurchaseOrderService purchaseOrderService;
     private final PurchaseRequisitionService purchaseRequisitionService;
     private final StockVarianceService stockVarianceService;
+    private final GoodsReceiptService goodsReceiptService;
     private final InvoiceService invoiceService;
     private final PaymentService paymentService;
     private final JournalEntryService journalEntryService;
@@ -80,14 +88,17 @@ public class HistoryService {
             PurchaseOrderRepository purchaseOrderRepo,
             PurchaseRequisitionRepository purchaseRequisitionRepo,
             StockVarianceRepository stockVarianceRepo,
+            GoodsReceiptRepository goodsReceiptRepo,
             InvoiceRepository invoiceRepo,
             PaymentRepository paymentRepo,
             JournalEntryRepository journalEntryRepo,
             TransactionRepository transactionRepo,
             SalesOrderService salesOrderService,
+            PicklistService picklistService,
             PurchaseOrderService purchaseOrderService,
             PurchaseRequisitionService purchaseRequisitionService,
             StockVarianceService stockVarianceService,
+            GoodsReceiptService goodsReceiptService,
             InvoiceService invoiceService,
             PaymentService paymentService,
             JournalEntryService journalEntryService,
@@ -99,14 +110,17 @@ public class HistoryService {
         this.purchaseOrderRepo = purchaseOrderRepo;
         this.purchaseRequisitionRepo = purchaseRequisitionRepo;
         this.stockVarianceRepo = stockVarianceRepo;
+        this.goodsReceiptRepo = goodsReceiptRepo;
         this.invoiceRepo = invoiceRepo;
         this.paymentRepo = paymentRepo;
         this.journalEntryRepo = journalEntryRepo;
         this.transactionRepo = transactionRepo;
         this.salesOrderService = salesOrderService;
+        this.picklistService = picklistService;
         this.purchaseOrderService = purchaseOrderService;
         this.purchaseRequisitionService = purchaseRequisitionService;
         this.stockVarianceService = stockVarianceService;
+        this.goodsReceiptService = goodsReceiptService;
         this.invoiceService = invoiceService;
         this.paymentService = paymentService;
         this.journalEntryService = journalEntryService;
@@ -145,6 +159,16 @@ public class HistoryService {
             case STOCK_VARIANCE -> mapPage(
                     stockVarianceRepo.findByCompanyIdAndArchivedTrueOrderByCreatedAtDesc(companyId, pageable),
                     this::toStockVarianceRecord,
+                    normalizedSearch
+            );
+            case GOODS_RECEIPT -> mapPage(
+                    goodsReceiptRepo.findByCompany_IdAndArchivedTrueOrderByReceivedAtDesc(companyId, pageable),
+                    this::toGoodsReceiptRecord,
+                    normalizedSearch
+            );
+            case PICKLIST -> mapPage(
+                    picklistRepo.findByCompanyIdAndArchivedTrueOrderByCreatedAtDesc(companyId, pageable),
+                    this::toPicklistRecord,
                     normalizedSearch
             );
             case SALES_INVOICE -> mapPage(
@@ -248,6 +272,8 @@ public class HistoryService {
             case PURCHASE_ORDER -> purchaseOrderService.archive(id);
             case PURCHASE_REQUISITION -> purchaseRequisitionService.archive(id);
             case STOCK_VARIANCE -> stockVarianceService.archive(id);
+            case GOODS_RECEIPT -> goodsReceiptService.archive(id);
+            case PICKLIST -> picklistService.archive(id);
             case SALES_INVOICE, PURCHASE_INVOICE -> invoiceService.archiveInvoice(id);
             case CUSTOMER_PAYMENT, VENDOR_PAYMENT -> paymentService.archivePayment(id);
             case JOURNAL_ENTRY -> journalEntryService.archive(id);
@@ -262,6 +288,10 @@ public class HistoryService {
             case PURCHASE_ORDER -> deletePurchaseOrder(id, companyId);
             case PURCHASE_REQUISITION -> deletePurchaseRequisition(id, companyId);
             case STOCK_VARIANCE -> deleteStockVariance(id, companyId);
+            case GOODS_RECEIPT -> throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Goods receipts cannot be permanently deleted");
+            case PICKLIST -> throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Picklists cannot be permanently deleted");
             case SALES_INVOICE -> deleteInvoice(id, companyId, InvoiceType.SALES);
             case PURCHASE_INVOICE -> deleteInvoice(id, companyId, InvoiceType.PURCHASE);
             case CUSTOMER_PAYMENT -> deletePayment(id, companyId, PaymentDirection.CUSTOMER);
@@ -375,6 +405,8 @@ public class HistoryService {
             case PURCHASE_ORDER -> purchaseOrderRepo.findByCompanyIdAndArchivedTrue(companyId).stream().map(PurchaseOrder::getId).toList();
             case PURCHASE_REQUISITION -> purchaseRequisitionRepo.findByCompanyIdAndArchivedTrue(companyId).stream().map(PurchaseRequisition::getId).toList();
             case STOCK_VARIANCE -> stockVarianceRepo.findByCompanyIdAndArchivedTrue(companyId).stream().map(StockVariance::getId).toList();
+            case GOODS_RECEIPT -> goodsReceiptRepo.findByCompany_IdAndArchivedTrueOrderByReceivedAtDesc(companyId).stream().map(GoodsReceipt::getId).toList();
+            case PICKLIST -> picklistRepo.findByCompanyIdAndArchivedTrue(companyId).stream().map(Picklist::getId).toList();
             case SALES_INVOICE -> invoiceRepo.findByCompany_IdAndArchivedTrueAndType(companyId, InvoiceType.SALES).stream().map(Invoice::getId).toList();
             case PURCHASE_INVOICE -> invoiceRepo.findByCompany_IdAndArchivedTrueAndType(companyId, InvoiceType.PURCHASE).stream().map(Invoice::getId).toList();
             case CUSTOMER_PAYMENT -> paymentRepo.findByCompany_IdAndArchivedTrueAndPaymentDirection(companyId, PaymentDirection.CUSTOMER).stream().map(Payment::getId).toList();
@@ -480,6 +512,30 @@ public class HistoryService {
                 .status(variance.getVarianceStatus() != null ? variance.getVarianceStatus().name() : null)
                 .partyName(variance.getItem() != null ? variance.getItem().getName() : null)
                 .createdAt(variance.getCreatedAt())
+                .build();
+    }
+
+    private HistoryRecordDTO toGoodsReceiptRecord(GoodsReceipt gr) {
+        return HistoryRecordDTO.builder()
+                .id(gr.getId())
+                .type(HistoryEntityType.GOODS_RECEIPT)
+                .referenceNo("GRN-" + gr.getId())
+                .status(gr.getStatus() != null ? gr.getStatus().name() : null)
+                .partyName(gr.getPurchaseOrder() != null && gr.getPurchaseOrder().getSupplier() != null
+                        ? gr.getPurchaseOrder().getSupplier().getVendorName()
+                        : null)
+                .createdAt(gr.getReceivedAt())
+                .build();
+    }
+
+    private HistoryRecordDTO toPicklistRecord(Picklist p) {
+        return HistoryRecordDTO.builder()
+                .id(p.getId())
+                .type(HistoryEntityType.PICKLIST)
+                .referenceNo(p.getPicklistNumber())
+                .status(p.getStatus())
+                .partyName(p.getSalesOrder() != null ? p.getSalesOrder().getOrderNumber() : null)
+                .createdAt(p.getCreatedAt())
                 .build();
     }
 

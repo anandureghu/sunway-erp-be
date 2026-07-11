@@ -37,6 +37,12 @@ public class PicklistController {
         return service.cancel(id);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.DELETE})
+    @PostMapping("/{id}/archive")
+    public PicklistResponseDTO archive(@PathVariable("id") Long id) {
+        return service.archive(id);
+    }
+
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}")
     public PicklistResponseDTO get(@PathVariable("id") Long id) {

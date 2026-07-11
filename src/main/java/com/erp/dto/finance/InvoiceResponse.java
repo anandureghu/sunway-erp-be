@@ -55,9 +55,14 @@ public class InvoiceResponse {
 
     private String partyClassification;
     private String pdfUrl;
+    /** Receipt PDF after full payment (GENERATED documents only). */
+    private String receiptPdfUrl;
     private String supplierInvoiceNumber;
     private InvoiceDocumentSource documentSource;
     private String externalDocumentUrl;
+    /** Vendor's own invoice document attached via "Match Vendor Invoice". */
+    private String vendorInvoiceDocumentUrl;
+    private Instant vendorInvoiceMatchedAt;
 
     private InvoiceType type;
     private Long orderId;

@@ -68,6 +68,13 @@ public class Invoice {
     private String pdfUrl;
 
     /**
+     * Generated receipt PDF after the invoice is fully paid.
+     * Kept separate from {@link #pdfUrl} so the original unpaid invoice document is preserved.
+     */
+    @Column(name = "receipt_pdf_url", length = 1024)
+    private String receiptPdfUrl;
+
+    /**
      * Vendor's own invoice number (for duplicate checks and display). Optional.
      */
     @Column(name = "supplier_invoice_number", length = 120)
@@ -83,6 +90,16 @@ public class Invoice {
      */
     @Column(name = "external_document_url", length = 2000)
     private String externalDocumentUrl;
+
+    /**
+     * Vendor's own invoice document attached via "Match Vendor Invoice", kept separate from
+     * {@link #pdfUrl} so matching never overwrites the system-generated invoice PDF.
+     */
+    @Column(name = "vendor_invoice_document_url", length = 2000)
+    private String vendorInvoiceDocumentUrl;
+
+    @Column(name = "vendor_invoice_matched_at")
+    private Instant vendorInvoiceMatchedAt;
 
     @Column(name = "created_at")
     private Instant createdAt;

@@ -10,6 +10,7 @@ import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
+import com.erp.dto.leave.LeaveBalanceSummaryDTO;
 import com.erp.dto.leave.LeaveHistoryDTO;
 import com.erp.dto.leave.LeavePreviewDTO;
 import com.erp.dto.leave.LeaveRequestDTO;
@@ -88,6 +89,34 @@ public class LeaveService {
                 })
                 .map(CompanyLeavePolicy::getLeaveType)
                 .distinct()
+                .toList();
+    }
+
+    public List<LeaveBalanceSummaryDTO> listBalances(Long employeeId) {
+        Employee employee = getEmployee(employeeId);
+
+        return getAvailableLeaveTypes(employeeId)
+                .stream()
+                .distinct()
+                .map(leaveType -> {
+                    CompanyLeavePolicy policy = getPolicy(employee, leaveType);
+                    if (!policy.isPaid()) {
+                        return LeaveBalanceSummaryDTO.builder()
+                                .leaveType(policy.getLeaveType())
+                                .paid(false)
+                                .totalLeaves(0)
+                                .remainingLeaves(0)
+                                .build();
+                    }
+
+                    EmployeeLeaveBalance balance = getOrCreateBalance(employee, policy);
+                    return LeaveBalanceSummaryDTO.builder()
+                            .leaveType(policy.getLeaveType())
+                            .paid(true)
+                            .totalLeaves(balance.getTotalLeaves())
+                            .remainingLeaves(balance.getRemainingLeaves())
+                            .build();
+                })
                 .toList();
     }
 
@@ -356,7 +385,7 @@ public class LeaveService {
     }
 
     @Transactional
-    public LeaveHistoryDTO rejectLeave(Long leaveId) {
+    public LeaveHistoryDTO rejectLeave(Long leaveId, String rejectionComment) {
         Employee approver = getCurrentEmployee();
 
         if (!canActAsApprover(approver)) {
@@ -385,6 +414,10 @@ public class LeaveService {
         }
 
         leave.setLeaveStatus(LeaveStatus.REJECTED);
+        leave.setRejectionComment(
+                rejectionComment != null && !rejectionComment.isBlank()
+                        ? rejectionComment.trim()
+                        : null);
         leave = leaveRepo.save(leave);
 
         return mapToHistoryDTO(leave);
@@ -969,6 +1002,7 @@ public class LeaveService {
                         : null
         );
         dto.setLeaveStatus(leave.getLeaveStatus() != null ? leave.getLeaveStatus().name() : null);
+        dto.setRejectionComment(leave.getRejectionComment());
         if (leave.getDelegate() != null) {
             dto.setDelegateId(leave.getDelegate().getId());
             dto.setDelegateName(

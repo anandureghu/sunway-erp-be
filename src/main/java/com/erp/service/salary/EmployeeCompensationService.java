@@ -2,15 +2,21 @@ package com.erp.service.salary;
 
 import com.erp.domain.Employee;
 import com.erp.domain.enums.BenefitType;
+import com.erp.domain.hrsettings.JobCode;
 import com.erp.domain.salary.EmployeeCompensation;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.salary.CompensationRequestDTO;
 import com.erp.dto.salary.SalaryResponseDTO;
+import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
 import com.erp.security.guard.EmployeeAccessGuard;
 import jakarta.transaction.Transactional;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.math.BigDecimal;
 
 @Service
 public class EmployeeCompensationService {
@@ -19,14 +25,17 @@ public class EmployeeCompensationService {
 
     private final EmployeeRepository employeeRepo;
     private final EmployeeCompensationRepository compensationRepo;
+    private final EmployeeCurrentJobRepo currentJobRepo;
     private final EmployeeAccessGuard accessGuard;
 
     public EmployeeCompensationService(
             EmployeeRepository employeeRepo,
             EmployeeCompensationRepository compensationRepo,
+            EmployeeCurrentJobRepo currentJobRepo,
             EmployeeAccessGuard accessGuard) {
         this.employeeRepo = employeeRepo;
         this.compensationRepo = compensationRepo;
+        this.currentJobRepo = currentJobRepo;
         this.accessGuard = accessGuard;
     }
 
@@ -39,6 +48,8 @@ public class EmployeeCompensationService {
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
         accessGuard.assertCanWrite(employee, AppModule.SALARY);
+
+        validateSalaryBand(employeeId, dto.getBasicSalary());
 
         // 🔒 Deactivate old ACTIVE salary
         compensationRepo.findByEmployeeAndStatus(employee, "ACTIVE")
@@ -70,6 +81,8 @@ public class EmployeeCompensationService {
         EmployeeCompensation c = compensationRepo
                 .findByEmployeeAndStatus(employee, "ACTIVE")
                 .orElseThrow(() -> new RuntimeException("Active salary not found"));
+
+        validateSalaryBand(employeeId, dto.getBasicSalary());
 
         mapAndCalculate(c, dto);
 
@@ -182,6 +195,42 @@ public class EmployeeCompensationService {
         c.setStatus(dto.getStatus() != null ? dto.getStatus() : "ACTIVE");
         c.setEffectiveFrom(dto.getEffectiveFrom());
         c.setEffectiveTo(dto.getEffectiveTo());
+    }
+
+    /* ================= SALARY BAND ENFORCEMENT ================= */
+
+    /**
+     * Reject a basic salary that falls outside the min/max band of the employee's
+     * job code (salary grade). No-op when the employee has no current job / job
+     * code, or the grade has no configured band.
+     */
+    private void validateSalaryBand(Long employeeId, Double basicSalary) {
+        if (basicSalary == null) {
+            return;
+        }
+        currentJobRepo.findByEmployee_Id(employeeId).ifPresent(currentJob -> {
+            JobCode jobCode = currentJob.getJobCode();
+            if (jobCode == null) {
+                return;
+            }
+
+            BigDecimal basic = BigDecimal.valueOf(basicSalary);
+            BigDecimal min = jobCode.getMinSalary();
+            BigDecimal max = jobCode.getMaxSalary();
+            String grade = jobCode.getSalaryGrade();
+            String forGrade = (grade != null && !grade.isBlank())
+                    ? " for salary grade " + grade
+                    : "";
+
+            if (max != null && max.signum() > 0 && basic.compareTo(max) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Basic salary exceeds the maximum of " + max.toPlainString() + forGrade);
+            }
+            if (min != null && min.signum() > 0 && basic.compareTo(min) < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Basic salary is below the minimum of " + min.toPlainString() + forGrade);
+            }
+        });
     }
 
     /* ================= HELPERS ================= */

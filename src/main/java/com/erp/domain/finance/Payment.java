@@ -9,13 +9,15 @@ import java.time.LocalDate;
 
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @Entity
-@Table(name = "payments")
+@Table(name = "payments", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_payments_company_payment_code", columnNames = {"company_id", "payment_code"})
+})
 public class Payment {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "payment_code", length = 64, unique = true)
+    @Column(name = "payment_code", length = 64)
     private String paymentCode;
 
     @ManyToOne
