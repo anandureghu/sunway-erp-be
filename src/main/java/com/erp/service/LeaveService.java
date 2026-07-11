@@ -385,7 +385,7 @@ public class LeaveService {
     }
 
     @Transactional
-    public LeaveHistoryDTO rejectLeave(Long leaveId) {
+    public LeaveHistoryDTO rejectLeave(Long leaveId, String rejectionComment) {
         Employee approver = getCurrentEmployee();
 
         if (!canActAsApprover(approver)) {
@@ -414,6 +414,10 @@ public class LeaveService {
         }
 
         leave.setLeaveStatus(LeaveStatus.REJECTED);
+        leave.setRejectionComment(
+                rejectionComment != null && !rejectionComment.isBlank()
+                        ? rejectionComment.trim()
+                        : null);
         leave = leaveRepo.save(leave);
 
         return mapToHistoryDTO(leave);
@@ -998,6 +1002,7 @@ public class LeaveService {
                         : null
         );
         dto.setLeaveStatus(leave.getLeaveStatus() != null ? leave.getLeaveStatus().name() : null);
+        dto.setRejectionComment(leave.getRejectionComment());
         if (leave.getDelegate() != null) {
             dto.setDelegateId(leave.getDelegate().getId());
             dto.setDelegateName(
