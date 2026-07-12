@@ -95,6 +95,22 @@ counter by `companyId + "_" + prefix` — copy this pattern for any new generate
 also be company-scoped, or the correctly-reset-per-company codes will still collide against a
 global unique index.
 
+## Gotcha — a migration marked "success" in `flyway_schema_history` is not proof it worked
+
+`V20260648__employee_no_per_company.sql` was recorded as successful, but on the actual
+database its `DROP INDEX`/`ADD CONSTRAINT` never took effect — `employees.employee_no` stayed
+globally unique (via `V1`'s hardcoded key) with no composite constraint ever created, and the bug
+this whole doc is about resurfaced weeks later. Root cause wasn't fully pinned down, but the
+migration used a riskier idiom than the rest of this series (`PREPARE ... FROM 'DO 0'` as a
+no-op fallback, versus the `'SELECT 1'` no-op fallback used everywhere else, and no stored
+procedure wrapper). Fixed forward by `V20260681__repair_employee_no_company_scope.sql` using the
+`CREATE PROCEDURE` pattern from Rule 2.
+
+**Takeaway**: when a report says "I already fixed this" or a migration file *looks* correct,
+don't trust `flyway_schema_history.success = 1` alone — query `information_schema.STATISTICS`
+against the live database to confirm the constraint you expect is actually there. This is
+especially worth doing before believing an "already fixed" item in an audit.
+
 ## Checklist — run through this before shipping anything touching tenant-scoped data
 
 - [ ] New entity holding tenant data has a **direct** `company_id` column (not just reachable via a parent join).
@@ -105,3 +121,4 @@ global unique index.
 - [ ] Any generated business code's counter is keyed by `companyId` (see `DocumentSequenceService`).
 - [ ] List/search endpoints filter by the caller's company at the query level, not just in-memory after fetch.
 - [ ] If a client request body or path variable includes a `companyId`, it's validated against `auth.getCurrentCompanyId()`, never trusted as-is.
+- [ ] After running a constraint-fixing migration, verify the live database directly via `information_schema.STATISTICS` — don't rely on `flyway_schema_history.success = 1` alone (see the gotcha above).
