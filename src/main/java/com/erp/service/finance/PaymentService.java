@@ -102,6 +102,8 @@ public class PaymentService {
             throw new RuntimeException("Payment method is required");
         }
 
+        assertTenantCompanyPath(dto.getCompanyId());
+
         Company company = companyRepo.findById(dto.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 

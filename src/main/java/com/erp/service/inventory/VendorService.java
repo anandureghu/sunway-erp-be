@@ -9,6 +9,7 @@ import com.erp.dto.inventory.VendorFilterDTO;
 import com.erp.dto.inventory.VendorResponseDTO;
 import com.erp.dto.inventory.VendorUpdateDTO;
 import com.erp.exception.ConflictException;
+import com.erp.exception.NotFoundException;
 import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
@@ -62,6 +63,7 @@ public class VendorService {
 
     public Boolean approveVendor(Long id, boolean status) {
         Vendor vendor = vendorRepo.findById(id).orElseThrow(() -> new RuntimeException("vendor not exist"));
+        assertSameTenant(vendor);
         if (status) {
             vendor.setApproved(true);
         } else {
@@ -97,6 +99,17 @@ public class VendorService {
     private void validateCompany(Long vendorCompanyId) {
         if (!vendorCompanyId.equals(authContext.getCurrentCompanyId())) {
             throw new RuntimeException("Unauthorized access");
+        }
+    }
+
+    private void assertSameTenant(Vendor vendor) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long vendorCompanyId = vendor != null && vendor.getCompany() != null
+                ? vendor.getCompany().getId() : null;
+        if (currentCompanyId == null || vendorCompanyId == null
+                || !currentCompanyId.equals(vendorCompanyId)) {
+            throw new NotFoundException("Vendor not found");
         }
     }
 

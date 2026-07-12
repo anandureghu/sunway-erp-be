@@ -1,8 +1,11 @@
 package com.erp.controller.hr;
 
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.hr.AccountingPeriodRequestDTO;
 import com.erp.dto.hr.AccountingPeriodResponseDTO;
 import com.erp.service.hr.AccountingPeriodService;
+import com.erp.service.security.annotation.RequiresPermission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,11 +28,13 @@ public class AccountingPeriodController {
         return periodService.getByCompany();
     }
 
+    @RequiresPermission(module = AppModule.FINANCE_LEDGER, action = {AppAction.EDIT})
     @PutMapping("/{id}/close")
     public void close(@PathVariable("id") Long id) {
         periodService.closePeriod(id);
     }
 
+    @RequiresPermission(module = AppModule.FINANCE_LEDGER, action = {AppAction.EDIT})
     @PutMapping("/{id}/reopen")
     public void reopen(@PathVariable("id") Long id) {
         periodService.reopenPeriod(id);

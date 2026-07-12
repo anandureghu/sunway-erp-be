@@ -296,12 +296,25 @@ public class EmployeeLeaveController {
     private void validateSelfAccess(Long employeeId) {
         User authUser = getAuthUser();
 
-        if (authUser.getRole() == Role.ADMIN || authUser.getRole() == Role.SUPER_ADMIN) {
+        if (authUser.getRole() == Role.SUPER_ADMIN) {
             return;
         }
 
         Employee targetEmployee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        if (authUser.getRole() == Role.ADMIN) {
+            Long callerCompanyId = authContext.getCurrentCompanyId();
+            Long targetCompanyId = targetEmployee.getCompany() != null
+                    ? targetEmployee.getCompany().getId()
+                    : null;
+            if (callerCompanyId != null
+                    && targetCompanyId != null
+                    && callerCompanyId.equals(targetCompanyId)) {
+                return;
+            }
+            throw new AccessDeniedException("Access denied: can only access employees in your own company");
+        }
 
         boolean isOwnRecord = targetEmployee.getUser() != null
                 && targetEmployee.getUser().getId() != null

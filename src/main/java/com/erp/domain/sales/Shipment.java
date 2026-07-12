@@ -15,14 +15,19 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "shipments")
+@Table(
+        name = "shipments",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_shipments_company_shipment_number", columnNames = {"company_id", "shipment_number"})
+        }
+)
 public class Shipment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String shipmentNumber;
 
     @ManyToOne(optional = false)

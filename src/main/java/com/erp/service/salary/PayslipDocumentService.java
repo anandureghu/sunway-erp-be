@@ -13,8 +13,10 @@ import com.erp.repo.EmployeeRepository;
 import com.erp.repo.salary.EmployeeBankDetailsRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
 import com.erp.repo.salary.PayrollRepository;
+import com.erp.security.context.AuthContext;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.HtmlUtils;
 import org.thymeleaf.TemplateEngine;
@@ -41,6 +43,7 @@ public class PayslipDocumentService {
     private final EmployeeLoanRepository loanRepo;
     private final EmployeeBankDetailsRepository bankRepo;
     private final TemplateEngine templateEngine;
+    private final AuthContext authContext;
 
     private static final DateTimeFormatter DATE_FMT =
             DateTimeFormatter.ofPattern("dd MMM yyyy");
@@ -48,6 +51,7 @@ public class PayslipDocumentService {
     public byte[] generatePayslipPdf(Long employeeId, String payrollCode) {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertSameTenant(employee);
 
         Payroll payroll = payrollRepo.findByEmployeeAndPayrollCode(employee, payrollCode)
                 .orElseThrow(() -> new RuntimeException("Payroll not found"));
@@ -273,6 +277,17 @@ public class PayslipDocumentService {
         String clean = accountNo.replaceAll("[-\\s]", "");
         if (clean.length() < 8) return clean;
         return clean.substring(0, 4) + " •••• " + clean.substring(clean.length() - 4);
+    }
+
+    private void assertSameTenant(Employee employee) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long employeeCompanyId = employee != null && employee.getCompany() != null
+                ? employee.getCompany().getId() : null;
+        if (currentCompanyId == null || employeeCompanyId == null
+                || !currentCompanyId.equals(employeeCompanyId)) {
+            throw new AccessDeniedException("This employee belongs to a different company");
+        }
     }
 
     private String resolveDesignation(Employee employee) {

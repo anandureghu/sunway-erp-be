@@ -2,11 +2,13 @@ package com.erp.service;
 
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeExperience;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.currentjob.EmployeeExperienceRequestDTO;
 import com.erp.dto.currentjob.EmployeeExperienceResponseDTO;
 import com.erp.mapper.EmployeeExperienceMapper;
 import com.erp.repo.EmployeeExperienceRepo;
 import com.erp.repo.EmployeeRepository;
+import com.erp.security.guard.EmployeeAccessGuard;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ public class EmployeeExperienceService {
 
     private final EmployeeExperienceRepo experienceRepo;
     private final EmployeeRepository employeeRepo;
+    private final EmployeeAccessGuard employeeAccessGuard;
 
     // ---------------- GET ALL ----------------
     public List<EmployeeExperienceResponseDTO> getAll(Long employeeId) {
@@ -56,6 +59,8 @@ public class EmployeeExperienceService {
                 .findByIdAndEmployeeId(experienceId, employeeId)
                 .orElseThrow(() -> new RuntimeException("Experience not found"));
 
+        employeeAccessGuard.assertCanWrite(experience.getEmployee(), AppModule.CURRENT_JOB);
+
         EmployeeExperienceMapper.updateEntity(experience, dto);
         return EmployeeExperienceMapper.toDTO(experience);
     }
@@ -65,6 +70,8 @@ public class EmployeeExperienceService {
         EmployeeExperience experience = experienceRepo
                 .findByIdAndEmployeeId(experienceId, employeeId)
                 .orElseThrow(() -> new RuntimeException("Experience not found"));
+
+        employeeAccessGuard.assertCanWrite(experience.getEmployee(), AppModule.CURRENT_JOB);
 
         experienceRepo.delete(experience);
     }

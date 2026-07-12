@@ -15,7 +15,7 @@ import java.util.List;
 @Table(
         name = "contracts",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_contract_code", columnNames = "contract_code")
+                @UniqueConstraint(name = "uk_contracts_company_contract_code", columnNames = {"company_id", "contract_code"})
         }
 )
 @Where(clause = "deleted = false")
@@ -83,6 +83,10 @@ public class Contract {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", nullable = false)
     private Employee employee;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     // One contract has many allowances
     @OneToMany(

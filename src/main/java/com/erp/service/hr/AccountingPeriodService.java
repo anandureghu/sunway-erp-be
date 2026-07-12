@@ -9,6 +9,7 @@ import com.erp.repo.hr.AccountingPeriodRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -72,6 +73,7 @@ public class AccountingPeriodService {
     public void closePeriod(Long periodId) {
         AccountingPeriod period = periodRepository.findById(periodId)
                 .orElseThrow(() -> new RuntimeException("Period not found"));
+        assertSameTenant(period);
 
         period.setStatus(PeriodStatus.CLOSED);
         periodRepository.save(period);
@@ -80,6 +82,7 @@ public class AccountingPeriodService {
     public void reopenPeriod(Long periodId) {
         AccountingPeriod period = periodRepository.findById(periodId)
                 .orElseThrow(() -> new RuntimeException("Period not found"));
+        assertSameTenant(period);
 
         Long companyId = period.getCompany().getId();
 
@@ -119,6 +122,19 @@ public class AccountingPeriodService {
                 .findByCompanyIdAndStatus(companyId, PeriodStatus.OPEN);
 
         return acc == null ? null : mapToDTO(acc);
+    }
+
+    /* ================= TENANT GUARD ================= */
+
+    private void assertSameTenant(AccountingPeriod period) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long periodCompanyId = period != null && period.getCompany() != null
+                ? period.getCompany().getId() : null;
+        if (currentCompanyId == null || periodCompanyId == null
+                || !currentCompanyId.equals(periodCompanyId)) {
+            throw new AccessDeniedException("This accounting period belongs to a different company");
+        }
     }
 
     private AccountingPeriodResponseDTO mapToDTO(AccountingPeriod period) {

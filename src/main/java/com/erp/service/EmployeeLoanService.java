@@ -38,11 +38,12 @@ public class EmployeeLoanService {
     /* ================= GENERATE LOAN CODE ================= */
 
     @Transactional
-    public String generateLoanCode(LoanType loanType) {
+    public String generateLoanCode(Company company, LoanType loanType) {
 
-        LoanSequence sequence = sequenceRepo.findByLoanTypeForUpdate(loanType)
+        LoanSequence sequence = sequenceRepo.findByCompanyIdAndLoanTypeForUpdate(company.getId(), loanType)
                 .orElseGet(() -> {
                     LoanSequence newSeq = new LoanSequence();
+                    newSeq.setCompany(company);
                     newSeq.setLoanType(loanType);
                     newSeq.setCurrentSequence(0L);
                     return sequenceRepo.save(newSeq);
@@ -73,16 +74,18 @@ public class EmployeeLoanService {
                             + "or fully repaid (closed) before requesting another.");
         }
 
+        assertSameTenant(employee);
         validateLoanPolicy(employee, dto.getLoanPeriod());
         validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
 
-        String loanCode = generateLoanCode(dto.getLoanType());
+        String loanCode = generateLoanCode(employee.getCompany(), dto.getLoanType());
 
         Double monthlyDeduction = dto.getLoanAmount() / dto.getLoanPeriod();
         LocalDate endDate = dto.getStartDate().plusMonths(dto.getLoanPeriod());
 
         EmployeeLoan loan = new EmployeeLoan();
         loan.setEmployee(employee);
+        loan.setCompany(employee.getCompany());
         loan.setLoanCode(loanCode);
         loan.setLoanType(dto.getLoanType());
         loan.setLoanAmount(dto.getLoanAmount());
@@ -113,6 +116,7 @@ public class EmployeeLoanService {
         if (!loan.getEmployee().getId().equals(employee.getId())) {
             throw new RuntimeException("Loan does not belong to this employee");
         }
+        assertSameTenant(employee);
 
         validateLoanPolicy(employee, dto.getLoanPeriod());
         validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
@@ -139,6 +143,7 @@ public class EmployeeLoanService {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertSameTenant(employee);
 
         return loanRepo.findByEmployee(employee)
                 .stream()
@@ -156,6 +161,7 @@ public class EmployeeLoanService {
 
         EmployeeLoan loan = loanRepo.findById(loanId)
                 .orElseThrow(() -> new RuntimeException("Loan not found"));
+        assertSameTenant(loan.getEmployee());
 
         return toDTO(loan);
     }
@@ -174,6 +180,7 @@ public class EmployeeLoanService {
         if (!loan.getEmployee().getId().equals(employee.getId())) {
             throw new RuntimeException("Loan does not belong to this employee");
         }
+        assertSameTenant(employee);
 
         loanRepo.delete(loan);
     }
@@ -185,6 +192,7 @@ public class EmployeeLoanService {
 
         EmployeeLoan loan = loanRepo.findById(loanId)
                 .orElseThrow(() -> new RuntimeException("Loan not found"));
+        assertSameTenant(loan.getEmployee());
 
         if (!"PENDING_APPROVAL".equals(loan.getStatus())) {
             throw new RuntimeException(
@@ -270,6 +278,7 @@ public class EmployeeLoanService {
 
         EmployeeLoan loan = loanRepo.findById(loanId)
                 .orElseThrow(() -> new RuntimeException("Loan not found"));
+        assertSameTenant(loan.getEmployee());
 
         if (!loan.getStatus().equals("ACTIVE")) {
             throw new RuntimeException("Loan is not active");
@@ -294,6 +303,19 @@ public class EmployeeLoanService {
         loan = loanRepo.save(loan);
 
         return toDTO(loan);
+    }
+
+    /* ================= TENANT GUARD ================= */
+
+    private void assertSameTenant(Employee employee) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long employeeCompanyId = employee != null && employee.getCompany() != null
+                ? employee.getCompany().getId() : null;
+        if (currentCompanyId == null || employeeCompanyId == null
+                || !currentCompanyId.equals(employeeCompanyId)) {
+            throw new AccessDeniedException("This loan belongs to a different company");
+        }
     }
 
     /* ================= VALIDATION METHOD ================= */

@@ -51,6 +51,7 @@ public class ResidencePermitService {
 
         ResidencePermit permit = ResidencePermit.builder()
                 .employee(employee)
+                .company(employee.getCompany())
                 .permitIdNumber(dto.getPermitIdNumber())   // ✅ ONLY CHANGE
                 .visaType(dto.getVisaType())
                 .durationType(dto.getDurationType())

@@ -402,6 +402,7 @@ public class InvoiceService {
         }
         Invoice inv = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
         if (inv.getType() != InvoiceType.PURCHASE) {
             throw new RuntimeException("Vendor invoice matching applies only to purchase invoices");
         }
@@ -430,6 +431,7 @@ public class InvoiceService {
         }
         Invoice inv = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
         if (inv.getType() != InvoiceType.PURCHASE) {
             throw new RuntimeException("Supplier documents apply only to purchase invoices");
         }
@@ -884,6 +886,7 @@ public class InvoiceService {
 
         Invoice inv = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
 
         inv.setToParty(req.getToParty());
         inv.setInvoiceDate(req.getInvoiceDate());

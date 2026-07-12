@@ -66,6 +66,7 @@ Restart app if migration added.
 
 <!-- Agents: prepend new bullets here (newest first). Do not duplicate project.mdc. -->
 
+- **Multi-tenancy hardening pass** — audited and fixed two systemic gaps: (1) generated business codes (`invoice_id`, `transaction_code`, `order_number`, `sku`, etc.) were globally unique in the DB while their generators reset per company, causing false "already exists" collisions across tenants; (2) several services fetched entities by plain `findById` with no check that the row belongs to the caller's company. See `multi-tenancy.mdc` for the full rules and the checklist to run before shipping tenant-scoped changes.
 - **Purchase orders (draft)** — `PUT` update may change `supplierId` via `applyDraftSupplierChange` only while status is `DRAFT`; use `ConflictException` if not draft. See `PurchaseOrderService`, `PurchaseOrderUpdateDTO`.
 - **PO → AP** — Vendor payable + generated purchase invoice are created in `onReleasedToSupplier` when status becomes `CONFIRMED`. AP vendor payments and purchase invoices list only CONFIRMED+ POs. `confirmVendorPayment` requires released PO. `cancel` blocked with `ConflictException` after AP payment confirmed.
 - **PO payment receipts** — On `confirmVendorPayment`: regenerate GENERATED purchase invoice PDF (RECEIPT badge) + `VendorPaymentReceiptPdfService` → `payments/{id}/pdf`. PO DTO includes `purchaseInvoiceId`, `vendorPaymentId`.

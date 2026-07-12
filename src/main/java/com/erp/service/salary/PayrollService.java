@@ -25,12 +25,14 @@ import com.erp.repo.salary.EmployeeBankDetailsRepository;
 import com.erp.repo.salary.EmployeeCompensationRepository;
 import com.erp.repo.salary.PayrollRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
+import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
 import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.finance.TransactionService;
 import com.erp.service.hr.ProcessAccountDefaultsService;
 import com.erp.service.hr.RetirementCompensationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -76,6 +78,7 @@ public class PayrollService {
     private final ProcessAccountDefaultsService processAccountDefaultsService;
     private final TransactionService transactionService;
     private final ChartOfAccountsRepository chartOfAccountsRepository;
+    private final AuthContext authContext;
 
     @Transactional(readOnly = true)
     public PayrollPreviewDTO previewPayroll(Long employeeId, PayrollGenerateRequestDTO dto) {
@@ -100,6 +103,7 @@ public class PayrollService {
 
     @Transactional(readOnly = true)
     public PayrollAccountStatusDTO getPayrollAccountStatus(Long companyId) {
+        assertCallerCompany(companyId);
         return resolvePayrollAccountStatus(companyId, 0.0);
     }
 
@@ -132,6 +136,7 @@ public class PayrollService {
 
     @Transactional
     public PayrollBatchResponseDTO generatePayrollBatch(Long companyId, PayrollGenerateRequestDTO dto) {
+        assertCallerCompany(companyId);
         validateRequest(dto);
 
         List<Employee> employees = getActiveEmployeesByCompany(companyId);
@@ -219,6 +224,7 @@ public class PayrollService {
     ) {
         Payroll payroll = new Payroll();
         payroll.setEmployee(employee);
+        payroll.setCompany(employee.getCompany());
         payroll.setPayrollCode(generatePayrollCode(employee.getId()));
         payroll.setPayPeriodStart(dto.getPayPeriodStart());
         payroll.setPayPeriodEnd(dto.getPayPeriodEnd());
@@ -484,8 +490,29 @@ public class PayrollService {
     }
 
     private Employee getEmployee(Long employeeId) {
-        return employeeRepo.findById(employeeId)
+        Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertSameTenant(employee);
+        return employee;
+    }
+
+    private void assertSameTenant(Employee employee) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long employeeCompanyId = employee != null && employee.getCompany() != null
+                ? employee.getCompany().getId() : null;
+        if (currentCompanyId == null || employeeCompanyId == null
+                || !currentCompanyId.equals(employeeCompanyId)) {
+            throw new AccessDeniedException("This employee belongs to a different company");
+        }
+    }
+
+    private void assertCallerCompany(Long companyId) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        if (currentCompanyId == null || companyId == null || !currentCompanyId.equals(companyId)) {
+            throw new AccessDeniedException("This company belongs to a different tenant");
+        }
     }
 
     private EmployeeCompensation getActiveCompensation(Employee employee) {

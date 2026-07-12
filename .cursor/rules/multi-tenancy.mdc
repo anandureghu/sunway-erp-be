@@ -1,0 +1,107 @@
+---
+description: Multi-tenancy rules — tenant scoping, unique constraints, access checks
+alwaysApply: true
+---
+
+# Multi-tenancy
+
+This is a shared-schema, row-level multi-tenant app: every tenant ("company") lives in the
+same MySQL database, distinguished by a `company_id` column. There is no schema/DB-per-tenant
+isolation — the app layer is the only thing enforcing tenant boundaries. Get any of the rules
+below wrong and either (a) two companies' data silently collides, or (b) one company can read or
+write another company's data.
+
+## Tenant context
+
+- `AuthContext.getCurrentCompanyId()` / `getCurrentUserRole()` / `getCurrentEmployee()` resolve
+  the caller's tenant from the JWT `companyId` claim.
+- `SUPER_ADMIN` is the **only** role allowed to bypass a tenant check. Never let a plain `ADMIN`
+  (or any other role) skip the company comparison — an admin is scoped to their own company,
+  same as everyone else. (`EmployeeLeaveController.validateSelfAccess` and `UserService`'s
+  admin-reset methods used to get this wrong by treating `ADMIN` like `SUPER_ADMIN`.)
+- A user can belong to multiple companies (`AuthService.switchCompany`) via separate `Employee`
+  rows — one user, one row per company membership.
+
+## Rule 1 — every tenant-owned table needs a DIRECT `company_id` column
+
+Don't rely on a join through a parent for tenant scoping, even when the parent is only one hop
+away (e.g. `employee_id` → `employees.company_id`). Two reasons:
+- You can't put a MySQL composite `UNIQUE` constraint across a join — only across columns in the
+  same table (see Rule 2).
+- Every guard/service check that walks the join is a chance to forget the check, or for the join
+  to be null (e.g. the parent FK is nullable) and silently pass.
+
+If a table only reaches its company transitively today, add the direct column and backfill it —
+see the migration template below (`contracts`, `employee_residence_permits`, `payroll`,
+`employee_loans`, `loan_sequence`, and `orders` were all fixed this way).
+
+## Rule 2 — unique business codes must be `UNIQUE(company_id, code)`, never a bare global unique
+
+A generated code (invoice number, order number, SKU, employee number, etc.) that's globally
+unique will eventually collide, because sequence generators in this codebase reset **per
+company** (see Rule 4) — Company A's and Company B's first invoice can both legitimately be
+`INV-1000`. If the DB constraint is a bare `UNIQUE` on the code column alone, the second
+company's insert throws a false "already exists" error.
+
+Fix template — see any of `V20260615__department_code_unique_per_company.sql`,
+`V20260659__payment_code_unique_per_company.sql`, `V20260664__invoice_id_unique_per_company.sql`
+(and the rest of the `V202606{64-73}` series) for the exact idempotent pattern: look up the
+existing single-column unique index dynamically via `information_schema.STATISTICS` (auto-generated
+Hibernate index names vary by environment — don't hardcode them), drop it, add
+`UNIQUE (company_id, <code>)`.
+
+If the table doesn't have a direct `company_id` yet, apply Rule 1 first — see
+`V20260674__contract_company_scope.sql` through `V20260679__orders_company_scope.sql` for the
+combined "add column + backfill + rescope constraint" template.
+
+**Watch for a fix that looks applied but isn't**: `credit_notes` had the correct composite
+constraint in code (`CreditNote`'s `@Table(uniqueConstraints = ...)`) AND a leftover global
+single-column unique index in the live database from before the fix — the leftover index alone
+still caused collisions even though the "right" constraint was also present. When retrofitting an
+existing unique column, always confirm the *old* index is actually dropped, not just that the new
+one was added.
+
+## Rule 3 — every fetch-by-id must verify tenant ownership before use
+
+`repository.findById(id)` (or `findByCode`/`findByEmail`/etc.) returns whatever row matches,
+regardless of which company it belongs to. Every service method that reads, mutates, or deletes
+a row fetched this way must check the row belongs to the caller's company before using it.
+
+Two accepted idioms — pick whichever fits the entity:
+
+1. **`EmployeeAccessGuard`** (`security/guard/EmployeeAccessGuard.java`) — for anything reachable
+   through `Employee`. `assertCanRead(employee, module)` / `assertCanWrite(employee, module)` /
+   `assertCanWrite(employee, module, action)`. Handles SUPER_ADMIN bypass and VIEW_OWN/VIEW_ALL
+   ownership logic so you don't reimplement it. See `EmployeeCompensationService`,
+   `EmployeeBankDetailsService`.
+2. **Private `assertSameTenant(entity)` helper** — for entities with their own direct
+   `company_id`. Compares `authContext.getCurrentCompanyId()` to `entity.getCompany().getId()`,
+   SUPER_ADMIN bypasses, throws `AccessDeniedException` otherwise. See `PassportService`,
+   `ResidencePermitService`, `ContractService`, `EmployeeLoanService`, or the `assertOrderInTenant`
+   /`assertInvoiceInTenant`-style helpers already used per-module in finance/inventory/purchase
+   services.
+
+If a request body or path variable carries a `companyId` (e.g. `/api/companies/{companyId}/...`),
+**never trust it as-is** — compare it against `authContext.getCurrentCompanyId()` (SUPER_ADMIN
+bypasses) before using it to scope a query or fetch. `@PreAuthorize`/`@RequiresPermission` in this
+codebase check module/action permission only — they do **not** check tenant, so a path-variable
+`companyId` sails straight through unless the service checks it explicitly.
+
+## Rule 4 — sequence/code generators must be keyed by `companyId`
+
+`DocumentSequenceService.generateNext(prefix)` and `nextEmployeeNo(companyId)` already key their
+counter by `companyId + "_" + prefix` — copy this pattern for any new generated code. Keying the
+*counter* by company is necessary but not sufficient on its own — the DB constraint (Rule 2) must
+also be company-scoped, or the correctly-reset-per-company codes will still collide against a
+global unique index.
+
+## Checklist — run through this before shipping anything touching tenant-scoped data
+
+- [ ] New entity holding tenant data has a **direct** `company_id` column (not just reachable via a parent join).
+- [ ] Any `@Column(unique = true)` or `@UniqueConstraint` on a business code includes `company_id` in the same constraint.
+- [ ] Any new Flyway migration adding a unique index on a code/name column is composite with `company_id`.
+- [ ] Any service method that does `repository.findById(id)` (or `findByCode`/`findByEmail`/etc.) follows up with a tenant check — `EmployeeAccessGuard` or a `assertSameTenant`-style helper — before reading, mutating, or deleting.
+- [ ] Any bypass of a tenant check is gated on `SUPER_ADMIN` specifically, never a general `isAdmin()`/`ADMIN` role check.
+- [ ] Any generated business code's counter is keyed by `companyId` (see `DocumentSequenceService`).
+- [ ] List/search endpoints filter by the caller's company at the query level, not just in-memory after fetch.
+- [ ] If a client request body or path variable includes a `companyId`, it's validated against `auth.getCurrentCompanyId()`, never trusted as-is.

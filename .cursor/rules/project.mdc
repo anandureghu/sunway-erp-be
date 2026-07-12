@@ -39,7 +39,7 @@ Follow patterns in the **same module** you are changing (naming, DTOs, status en
 
 ## Multi-tenant
 
-Use `AuthContext` for current user/company/role. Scope queries with `auth.getCurrentCompanyId()` unless super-admin.
+Use `AuthContext` for current user/company/role. Scope queries with `auth.getCurrentCompanyId()` unless super-admin. Full rules, unique-constraint pattern, and a pre-ship checklist: see `multi-tenancy.mdc`.
 
 ## Errors & API
 

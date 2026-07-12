@@ -13,9 +13,11 @@ import com.erp.dto.hr.ContractResponseDTO;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.AllowanceTypeRepository;
 import com.erp.repo.hr.ContractRepository;
+import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,6 +36,7 @@ public class ContractService {
     private final AllowanceTypeRepository allowanceTypeRepository;
     private final CodeGeneratorService codeGeneratorService;
     private final FileStorageService fileStorageService;
+    private final AuthContext authContext;
 
     // ================= CREATE =================
 
@@ -65,6 +68,7 @@ public class ContractService {
                 .attachmentPath(dto.getAttachmentUrl())
                 .termsAndConditions(dto.getTermsAndConditions())
                 .employee(employee)
+                .company(employee.getCompany())
                 .allowances(new ArrayList<>())
                 .build();
 
@@ -86,6 +90,7 @@ public class ContractService {
         Contract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Contract not found"));
+        assertSameTenant(contract);
 
         if (contract.isDeleted()) {
             throw new ResponseStatusException(
@@ -118,6 +123,7 @@ public class ContractService {
         Contract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Contract not found"));
+        assertSameTenant(contract);
 
         if (contract.isDeleted()) {
             throw new ResponseStatusException(
@@ -133,6 +139,7 @@ public class ContractService {
                 .findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(employeeId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Create the contract before uploading an attachment"));
+        assertSameTenant(contract);
 
         uploadAttachmentIfPresent(contract, attachment);
         return mapToResponse(contract);
@@ -144,7 +151,10 @@ public class ContractService {
     public ContractResponseDTO getByEmployee(Long employeeId) {
         return contractRepository
                 .findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(employeeId)
-                .map(this::mapToResponse)
+                .map(contract -> {
+                    assertSameTenant(contract);
+                    return mapToResponse(contract);
+                })
                 .orElse(null);
     }
 
@@ -154,8 +164,22 @@ public class ContractService {
         Contract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Contract not found"));
+        assertSameTenant(contract);
 
         contract.setDeleted(true);
+    }
+
+    // ================= TENANT GUARD =================
+
+    private void assertSameTenant(Contract contract) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long contractCompanyId = contract != null && contract.getCompany() != null
+                ? contract.getCompany().getId() : null;
+        if (currentCompanyId == null || contractCompanyId == null
+                || !currentCompanyId.equals(contractCompanyId)) {
+            throw new AccessDeniedException("This contract belongs to a different company");
+        }
     }
 
     // ================= ALLOWANCE MAPPING =================

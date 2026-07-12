@@ -157,7 +157,9 @@ public class UserService {
     public ProfileResponse getProfile(Long userId) {
         CustomUserPrincipal principal = currentPrincipal();
 
-        if (!principal.getId().equals(userId) && !isAdmin(principal)) {
+        if (!principal.getId().equals(userId)
+                && !isSuperAdmin(principal)
+                && !(isAdmin(principal) && isSameCompanyAsCaller(principal, userId))) {
             throw new AccessDeniedException("Access denied");
         }
 
@@ -177,7 +179,9 @@ public class UserService {
     public void changePassword(Long userId, ChangePasswordRequest req) {
         CustomUserPrincipal principal = currentPrincipal();
 
-        if (!principal.getId().equals(userId) && !isAdmin(principal)) {
+        if (!principal.getId().equals(userId)
+                && !isSuperAdmin(principal)
+                && !(isAdmin(principal) && isSameCompanyAsCaller(principal, userId))) {
             throw new AccessDeniedException("Access denied");
         }
 
@@ -235,10 +239,11 @@ public class UserService {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
-        // Company safety: target user must have membership in JWT tenant
-        if (!isAdmin(principal) && principal.getCompanyId() != null) {
-            boolean member = employeeRepo.existsByUser_IdAndCompany_Id(userId, principal.getCompanyId());
-            if (!member) {
+        // Company safety: target user must have membership in caller's tenant.
+        // Only SUPER_ADMIN operates across tenants; a plain company ADMIN must
+        // still be confined to their own company.
+        if (!isSuperAdmin(principal)) {
+            if (!isSameCompanyAsCaller(principal, userId)) {
                 throw new AccessDeniedException("Access denied (different company)");
             }
         }
@@ -305,6 +310,21 @@ public class UserService {
         String role = p.getRole().name();
 
         return role.equals("ADMIN") || role.equals("SUPER_ADMIN");
+    }
+
+    private boolean isSuperAdmin(CustomUserPrincipal p) {
+        return p.getRole() == Role.SUPER_ADMIN;
+    }
+
+    /**
+     * True when the target user has an Employee membership in the caller's
+     * own company. Used to confine a plain company ADMIN (as opposed to
+     * SUPER_ADMIN) to their own tenant.
+     */
+    private boolean isSameCompanyAsCaller(CustomUserPrincipal principal, Long targetUserId) {
+        Long callerCompanyId = principal.getCompanyId();
+        return callerCompanyId != null
+                && employeeRepo.existsByUser_IdAndCompany_Id(targetUserId, callerCompanyId);
     }
 
     private boolean canManageUsers() {

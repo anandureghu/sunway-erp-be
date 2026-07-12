@@ -1,10 +1,13 @@
 package com.erp.controller;
 
+import com.erp.domain.security.AppAction;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.timesheet.AttendanceHistoryItemResponse;
 import com.erp.dto.timesheet.MonthlySummaryResponse;
 import com.erp.dto.timesheet.TimesheetDashboardResponse;
 import com.erp.dto.timesheet.TimesheetTodayResponse;
 import com.erp.service.EmployeeTimesheetService;
+import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,26 +24,36 @@ public class EmployeeTimesheetController {
         this.service = service;
     }
 
+    // HR_REPORTS — checking in is the employee recording their own attendance;
+    // CREATE_OWN/CREATE_ALL grants scope this via the {employeeId} path variable.
+    @RequiresPermission(module = AppModule.HR_REPORTS, action = {AppAction.CREATE})
     @PostMapping("/checkin")
     public ResponseEntity<TimesheetTodayResponse> checkIn(@PathVariable Long employeeId) {
         return ResponseEntity.ok(service.checkIn(employeeId));
     }
 
+    // HR_REPORTS — checking out modifies today's attendance record.
+    @RequiresPermission(module = AppModule.HR_REPORTS, action = {AppAction.EDIT})
     @PostMapping("/checkout")
     public ResponseEntity<TimesheetTodayResponse> checkOut(@PathVariable Long employeeId) {
         return ResponseEntity.ok(service.checkOut(employeeId));
     }
 
+    // HR_REPORTS — VIEW_OWN for the employee viewing their own attendance,
+    // VIEW_ALL for HR/admins viewing anyone's.
+    @RequiresPermission(module = AppModule.HR_REPORTS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/today")
     public ResponseEntity<TimesheetTodayResponse> getToday(@PathVariable Long employeeId) {
         return ResponseEntity.ok(service.getToday(employeeId));
     }
 
+    @RequiresPermission(module = AppModule.HR_REPORTS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/refresh")
     public ResponseEntity<TimesheetTodayResponse> refresh(@PathVariable Long employeeId) {
         return ResponseEntity.ok(service.getToday(employeeId));
     }
 
+    @RequiresPermission(module = AppModule.HR_REPORTS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/month-summary")
     public ResponseEntity<MonthlySummaryResponse> getMonthlySummary(
             @PathVariable Long employeeId,
@@ -54,6 +67,7 @@ public class EmployeeTimesheetController {
         return ResponseEntity.ok(service.getMonthlySummary(employeeId, resolvedYear, resolvedMonth));
     }
 
+    @RequiresPermission(module = AppModule.HR_REPORTS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping("/history")
     public ResponseEntity<List<AttendanceHistoryItemResponse>> getAttendanceHistory(
             @PathVariable Long employeeId,
@@ -67,6 +81,7 @@ public class EmployeeTimesheetController {
         return ResponseEntity.ok(service.getAttendanceHistory(employeeId, resolvedYear, resolvedMonth));
     }
 
+    @RequiresPermission(module = AppModule.HR_REPORTS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
     @GetMapping
     public ResponseEntity<TimesheetDashboardResponse> getDashboard(
             @PathVariable Long employeeId,

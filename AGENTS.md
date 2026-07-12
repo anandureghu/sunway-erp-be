@@ -7,6 +7,7 @@ Read [CLAUDE.md](./CLAUDE.md).
 | File | Scope |
 |------|--------|
 | `project.mdc` | Always — stack, modules, errors, Flyway, auth |
+| `multi-tenancy.mdc` | Always — tenant scoping, unique constraints, access checks, developer checklist |
 | `capture-knowledge.mdc` | Always — append to rules/skills when you add undocumented patterns |
 | `git-commits.mdc` | Always — commit policy |
 

@@ -451,7 +451,7 @@ public class LeaveService {
         Employee currentEmployee = getCurrentEmployee();
         boolean isOwner = currentEmployee.getId() != null
                 && currentEmployee.getId().equals(employeeId);
-        if (!isOwner && !canActAsApprover(currentEmployee)) {
+        if (!isOwner && !canApproveLeave(currentEmployee, leave)) {
             throw new AccessDeniedException(
                     "Only the employee or an HR / department approver can confirm a return");
         }

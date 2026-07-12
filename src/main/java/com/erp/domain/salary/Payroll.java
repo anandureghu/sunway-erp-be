@@ -1,6 +1,7 @@
 package com.erp.domain.salary;
 
 import com.erp.domain.Employee;
+import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -15,6 +16,10 @@ import java.time.temporal.ChronoUnit;
                 @UniqueConstraint(
                         name = "uk_payroll_employee_period",
                         columnNames = {"employee_id", "pay_period_start", "pay_period_end"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_payroll_company_payroll_code",
+                        columnNames = {"company_id", "payroll_code"}
                 )
         }
 )
@@ -30,7 +35,11 @@ public class Payroll {
     @JoinColumn(name = "employee_id", nullable = false)
     private Employee employee;
 
-    @Column(name = "payroll_code", nullable = false, unique = true, length = 100)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
+
+    @Column(name = "payroll_code", nullable = false, length = 100)
     private String payrollCode;
 
     @Column(name = "pay_period_start", nullable = false)

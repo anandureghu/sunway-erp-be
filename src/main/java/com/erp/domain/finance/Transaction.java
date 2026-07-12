@@ -15,7 +15,12 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "transactions")
+@Table(
+        name = "transactions",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_transactions_company_transaction_code", columnNames = {"company_id", "transaction_code"})
+        }
+)
 public class Transaction {
 
     @Id
@@ -23,7 +28,7 @@ public class Transaction {
     private Long id;
 
     // business / human readable id (optional)
-    @Column(name = "transaction_code", length = 64, unique = true)
+    @Column(name = "transaction_code", length = 64)
     private String transactionCode;
 
     @Column(name = "transaction_type", length = 50)

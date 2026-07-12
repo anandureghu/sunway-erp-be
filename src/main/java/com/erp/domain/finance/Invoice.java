@@ -18,14 +18,19 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "invoices")
+@Table(
+        name = "invoices",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_invoices_company_invoice_id", columnNames = {"company_id", "invoice_id"})
+        }
+)
 public class Invoice {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "invoice_id", unique = true)
+    @Column(name = "invoice_id")
     private String invoiceId;
 
     @ManyToOne

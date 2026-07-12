@@ -27,7 +27,7 @@ public class CreditNote {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private String creditNoteNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)

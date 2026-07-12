@@ -5,6 +5,7 @@ import com.erp.domain.EmployeeCurrentJob;
 import com.erp.domain.hr.Department;
 import com.erp.domain.hr.Division;
 import com.erp.domain.hrsettings.JobCode;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.currentjob.EmployeeCurrentJobRequestDTO;
 import com.erp.dto.currentjob.EmployeeCurrentJobResponseDTO;
 import com.erp.exception.NotFoundException;
@@ -14,6 +15,7 @@ import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.repo.hr.DivisionRepository;
 import com.erp.repo.hrsettings.JobCodeRepository;
+import com.erp.security.guard.EmployeeAccessGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,9 +30,15 @@ public class CurrentJobService {
     private final JobCodeRepository jobCodeRepo;
     private final DepartmentRepository departmentRepo;
     private final DivisionRepository divisionRepo;
+    private final EmployeeAccessGuard employeeAccessGuard;
 
     @Transactional(readOnly = true)
     public EmployeeCurrentJobResponseDTO get(Long employeeId) {
+
+        Employee employee = employeeRepo.findById(employeeId)
+                .orElseThrow(() -> new NotFoundException("Employee not found"));
+
+        employeeAccessGuard.assertCanRead(employee, AppModule.CURRENT_JOB);
 
         EmployeeCurrentJob job = currentJobRepo
                 .findByEmployee_Id(employeeId)
@@ -52,6 +60,8 @@ public class CurrentJobService {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new NotFoundException("Employee not found"));
+
+        employeeAccessGuard.assertCanWrite(employee, AppModule.CURRENT_JOB);
 
         JobCode jobCode = jobCodeRepo.findById(dto.getJobCodeId())
                 .orElseThrow(() -> new NotFoundException("Job code not found"));
@@ -81,6 +91,8 @@ public class CurrentJobService {
 
         EmployeeCurrentJob job = currentJobRepo.findByEmployee_Id(employeeId)
                 .orElseThrow(() -> new NotFoundException("Current job not found"));
+
+        employeeAccessGuard.assertCanWrite(job.getEmployee(), AppModule.CURRENT_JOB);
 
         JobCode jobCode = jobCodeRepo.findById(dto.getJobCodeId())
                 .orElseThrow(() -> new NotFoundException("Job code not found"));
