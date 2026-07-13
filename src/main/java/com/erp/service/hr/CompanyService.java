@@ -254,8 +254,8 @@ public class CompanyService {
     @Transactional
     public Company updateInvoiceBrandingSettings(Long companyId, InvoiceBrandingSettingsDTO dto) {
         String role = authContext.getCurrentUserRole();
-        if (!"SUPER_ADMIN".equalsIgnoreCase(role)) {
-            throw new RuntimeException("Only SUPER_ADMIN can update invoice branding settings");
+        if (!"ADMIN".equalsIgnoreCase(role) && !"SUPER_ADMIN".equalsIgnoreCase(role)) {
+            throw new RuntimeException("Only ADMIN or SUPER_ADMIN can update invoice branding settings");
         }
         Company company = getCompanyById(companyId);
         CompanyInvoiceSettings settings = getOrCreateInvoiceSettings(company);

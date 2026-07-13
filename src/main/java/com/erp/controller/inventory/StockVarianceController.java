@@ -4,6 +4,7 @@ import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.inventory.StockVarianceCreateDTO;
 import com.erp.dto.inventory.StockVarianceResponseDTO;
+import com.erp.dto.inventory.StockVarianceSendBackDTO;
 import com.erp.service.inventory.StockVarianceService;
 import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.web.bind.annotation.*;
@@ -57,6 +58,30 @@ public class StockVarianceController {
     @PostMapping("/{id}/reject")
     public StockVarianceResponseDTO reject(@PathVariable("id") Long id) {
         return service.reject(id);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.APPROVE})
+    @PostMapping("/{id}/send-back")
+    public StockVarianceResponseDTO sendBack(
+            @PathVariable("id") Long id,
+            @RequestBody StockVarianceSendBackDTO dto
+    ) {
+        return service.sendBack(id, dto.getReason());
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/sent-back")
+    public List<StockVarianceResponseDTO> listSentBackToMe() {
+        return service.listSentBackToMe();
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.CREATE})
+    @PutMapping("/{id}/resubmit")
+    public StockVarianceResponseDTO resubmit(
+            @PathVariable("id") Long id,
+            @RequestBody StockVarianceCreateDTO dto
+    ) {
+        return service.resubmit(id, dto);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.DELETE})

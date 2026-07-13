@@ -92,6 +92,16 @@ public class StockVariance {
     @Column(name = "rejected_at")
     private Instant rejectedAt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sent_back_by")
+    private User sentBackBy;
+
+    @Column(name = "sent_back_at")
+    private Instant sentBackAt;
+
+    @Column(name = "sent_back_reason", length = 500)
+    private String sentBackReason;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean archived = false;
