@@ -121,4 +121,13 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
               AND p.archived = false
             """)
     long countPendingVendorPaymentsForCompany(@Param("companyId") Long companyId);
+
+    /** Sum of confirmed (non-pending, non-archived) payment amounts applied to an invoice. */
+    @Query("""
+            SELECT COALESCE(SUM(p.amount), 0) FROM Payment p
+            WHERE p.invoiceId = :invoiceId
+              AND p.archived = false
+              AND UPPER(p.paymentMethod) NOT IN ('PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT')
+            """)
+    BigDecimal sumConfirmedAmountByInvoiceId(@Param("invoiceId") String invoiceId);
 }

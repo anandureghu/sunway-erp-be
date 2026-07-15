@@ -30,6 +30,10 @@ public class Payment {
     @Column(name = "amount", precision = 18, scale = 2)
     private BigDecimal amount;
 
+    /** Portion of this payment's invoice reduction that came from an applied credit note, not cash. */
+    @Column(name = "credit_applied_amount", precision = 18, scale = 2)
+    private BigDecimal creditAppliedAmount;
+
     @Column(name = "effective_date")
     private LocalDate effectiveDate;
 

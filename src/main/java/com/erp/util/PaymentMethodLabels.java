@@ -8,18 +8,18 @@ public final class PaymentMethodLabels {
     public static final String PENDING_VENDOR = "PENDING_VENDOR_PAYMENT";
     public static final String PENDING_REQUEST = "PENDING_REQUEST";
 
-    private static final Set<String> ALLOWED_VENDOR_METHODS = Set.of(
+    private static final Set<String> ALLOWED_METHODS = Set.of(
             "CASH", "CARD", "BANK_TRANSFER", "CHEQUE", "UPI", "OTHER");
 
     private PaymentMethodLabels() {
     }
 
-    public static String normalizeVendorMethod(String raw) {
+    public static String normalizeMethod(String raw) {
         if (raw == null || raw.isBlank()) {
             throw new IllegalArgumentException("Payment method is required");
         }
         String code = raw.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
-        if (!ALLOWED_VENDOR_METHODS.contains(code)) {
+        if (!ALLOWED_METHODS.contains(code)) {
             throw new IllegalArgumentException(
                     "Invalid payment method. Use one of: cash, card, bank transfer, cheque, UPI, other.");
         }

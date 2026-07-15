@@ -12,8 +12,10 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 public class ConfirmPaymentDTO {
-    /** Required for vendor (AP) payments: CASH, CARD, BANK_TRANSFER, CHEQUE, UPI, OTHER */
+    /** CASH, CARD, BANK_TRANSFER, CHEQUE, UPI, OTHER */
     private String paymentMethod;
     /** Amount to confirm; defaults to min(pending payment amount, invoice outstanding) when omitted. */
     private BigDecimal amount;
+    /** Amount of the party's available credit note balance to apply to this payment, if any. */
+    private BigDecimal applyCreditAmount;
 }

@@ -58,6 +58,7 @@ public class PaymentService {
     private final VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService;
     private final VendorPayableService vendorPayableService;
     private final CompanyAccountingDefaultsService accountingDefaults;
+    private final CreditNoteService creditNoteService;
 
     public PaymentService(PaymentRepository paymentRepo,
                           TransactionService transactionService,
@@ -72,7 +73,8 @@ public class PaymentService {
                           DocumentSequenceService documentSequenceService,
                           VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService,
                           VendorPayableService vendorPayableService,
-                          CompanyAccountingDefaultsService accountingDefaults) {
+                          CompanyAccountingDefaultsService accountingDefaults,
+                          CreditNoteService creditNoteService) {
 
         this.paymentRepo = paymentRepo;
         this.transactionService = transactionService;
@@ -88,6 +90,7 @@ public class PaymentService {
         this.vendorPaymentReceiptPdfService = vendorPaymentReceiptPdfService;
         this.vendorPayableService = vendorPayableService;
         this.accountingDefaults = accountingDefaults;
+        this.creditNoteService = creditNoteService;
     }
 
     @Transactional
@@ -100,6 +103,12 @@ public class PaymentService {
         }
         if (dto.getPaymentMethod() == null || dto.getPaymentMethod().isBlank()) {
             throw new RuntimeException("Payment method is required");
+        }
+        String methodCode;
+        try {
+            methodCode = PaymentMethodLabels.normalizeMethod(dto.getPaymentMethod());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
         }
 
         assertTenantCompanyPath(dto.getCompanyId());
@@ -126,7 +135,7 @@ public class PaymentService {
                 .paymentCode(documentSequenceService.generateNext("PAY"))
                 .company(company)
                 .amount(dto.getAmount())
-                .paymentMethod(dto.getPaymentMethod())
+                .paymentMethod(methodCode)
                 .effectiveDate(dto.getEffectiveDate() == null ? LocalDate.now() : dto.getEffectiveDate())
                 .notes(dto.getNotes())
                 .invoiceId(dto.getInvoiceId())
@@ -174,6 +183,7 @@ public class PaymentService {
                 .purchaseOrderId(p.getPurchaseOrderId())
                 .pdfUrl(p.getPdfUrl())
                 .archived(p.isArchived())
+                .creditAppliedAmount(p.getCreditAppliedAmount())
                 .createdAt(p.getCreatedAt());
         if (p.getPurchaseOrderId() != null) {
             purchaseOrderRepo.findById(p.getPurchaseOrderId())
@@ -182,6 +192,8 @@ public class PaymentService {
                         if (po.getSupplier() != null) {
                             b.supplierId(po.getSupplier().getId());
                             b.supplierName(po.getSupplier().getVendorName());
+                            b.availableCreditAmount(
+                                    creditNoteService.getAvailableCreditTotal(null, po.getSupplier().getId()));
                         }
                     });
         }
@@ -195,9 +207,18 @@ public class PaymentService {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
+                applyInvoiceProgress(b, inv);
                 if (inv.getType() == InvoiceType.SALES && inv.getOrderId() != null) {
                     salesOrderRepo.findById(inv.getOrderId())
-                            .ifPresent(so -> b.salesOrderNumber(so.getOrderNumber()));
+                            .ifPresent(so -> {
+                                b.salesOrderNumber(so.getOrderNumber());
+                                if (so.getCustomer() != null) {
+                                    b.customerId(so.getCustomer().getId());
+                                    b.customerName(so.getCustomer().getCustomerName());
+                                    b.availableCreditAmount(
+                                            creditNoteService.getAvailableCreditTotal(so.getCustomer().getId(), null));
+                                }
+                            });
                 }
             });
             return;
@@ -207,8 +228,24 @@ public class PaymentService {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
+                applyInvoiceProgress(b, inv);
             });
         }
+    }
+
+    /** Populates cumulative paid/credit-applied totals for the invoice linked to a payment row. */
+    private void applyInvoiceProgress(PaymentResponseDTO.PaymentResponseDTOBuilder b, Invoice inv) {
+        BigDecimal total = inv.getAmount() != null ? inv.getAmount() : BigDecimal.ZERO;
+        BigDecimal outstanding = inv.getOutstanding() != null ? inv.getOutstanding() : total;
+        BigDecimal paid = inv.getInvoiceId() != null
+                ? paymentRepo.sumConfirmedAmountByInvoiceId(inv.getInvoiceId())
+                : BigDecimal.ZERO;
+        BigDecimal creditApplied = total.subtract(outstanding).subtract(paid);
+        if (creditApplied.compareTo(BigDecimal.ZERO) < 0) {
+            creditApplied = BigDecimal.ZERO;
+        }
+        b.invoicePaidAmount(paid);
+        b.invoiceCreditAppliedAmount(creditApplied);
     }
 
     private BigDecimal resolveConfirmAmount(ConfirmPaymentDTO body, Invoice invoice, Payment payment) {
@@ -240,6 +277,42 @@ public class PaymentService {
         }
         return invoiceRepo.findByInvoiceId(payment.getInvoiceId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this payment"));
+    }
+
+    private Long resolveCustomerIdForInvoice(Invoice invoice) {
+        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+            return null;
+        }
+        return salesOrderRepo.findById(invoice.getOrderId())
+                .map(so -> so.getCustomer() != null ? so.getCustomer().getId() : null)
+                .orElse(null);
+    }
+
+    /**
+     * Consumes the party's available credit notes (capped at the invoice's outstanding balance)
+     * and reduces the invoice's outstanding/status accordingly. Returns the amount actually
+     * applied (0 if none requested/available).
+     */
+    private BigDecimal applyCreditToInvoice(
+            Invoice invoice, Long customerId, Long supplierId, BigDecimal requestedAmount) {
+        if (requestedAmount == null || requestedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal outstanding = invoice.getOutstanding() != null ? invoice.getOutstanding() : invoice.getAmount();
+        BigDecimal cappedRequest = requestedAmount.min(outstanding);
+        BigDecimal applied = creditNoteService.applyAvailableCredit(customerId, supplierId, cappedRequest);
+        if (applied.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal newOutstanding = outstanding.subtract(applied);
+            invoice.setOutstanding(newOutstanding);
+            invoice.setOpenAmount(newOutstanding);
+            if (newOutstanding.compareTo(BigDecimal.ZERO) == 0) {
+                invoice.setStatus("ADJUSTED");
+            } else if (!"PARTIALLY_PAID".equalsIgnoreCase(invoice.getStatus())) {
+                invoice.setStatus("PARTIALLY_ADJUSTED");
+            }
+            invoiceRepo.save(invoice);
+        }
+        return applied;
     }
 
     @Transactional
@@ -339,9 +412,15 @@ public class PaymentService {
         if (dto.getPaymentMethod() == null || dto.getPaymentMethod().isBlank()) {
             throw new RuntimeException("Payment method is required");
         }
+        String methodCode;
+        try {
+            methodCode = PaymentMethodLabels.normalizeMethod(dto.getPaymentMethod());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
+        }
 
         payment.setAmount(dto.getAmount());
-        payment.setPaymentMethod(dto.getPaymentMethod());
+        payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(dto.getEffectiveDate() == null ? LocalDate.now() : dto.getEffectiveDate());
         payment.setNotes(dto.getNotes());
         payment.setInvoiceId(dto.getInvoiceId());
@@ -366,15 +445,39 @@ public class PaymentService {
             throw new RuntimeException("Payment is already confirmed");
         }
         Invoice invoice = requireInvoiceForCustomerPayment(payment);
-        BigDecimal confirmAmount = resolveConfirmAmount(body, invoice, payment);
 
-        payment.setAmount(confirmAmount);
-        payment.setPaymentMethod("BANK_TRANSFER");
+        String rawMethod = body != null && body.getPaymentMethod() != null && !body.getPaymentMethod().isBlank()
+                ? body.getPaymentMethod()
+                : "BANK_TRANSFER";
+        String methodCode;
+        try {
+            methodCode = PaymentMethodLabels.normalizeMethod(rawMethod);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+
+        Long customerId = resolveCustomerIdForInvoice(invoice);
+        BigDecimal creditApplied = applyCreditToInvoice(
+                invoice, customerId, null, body != null ? body.getApplyCreditAmount() : null);
+
+        payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
+        payment.setCreditAppliedAmount(creditApplied.compareTo(BigDecimal.ZERO) > 0 ? creditApplied : null);
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Confirmed from payment request"
         );
+
+        BigDecimal outstandingAfterCredit = invoice.getOutstanding() != null
+                ? invoice.getOutstanding() : invoice.getAmount();
+        if (outstandingAfterCredit.compareTo(BigDecimal.ZERO) <= 0) {
+            // Fully settled by credit alone — nothing left to collect in cash.
+            payment.setAmount(BigDecimal.ZERO);
+            return toDTO(paymentRepo.save(payment));
+        }
+
+        BigDecimal confirmAmount = resolveConfirmAmount(body, invoice, payment);
+        payment.setAmount(confirmAmount);
         Payment saved = paymentRepo.save(payment);
 
         Invoice updatedInvoice = invoiceService.applyPayment(saved.getInvoiceId(), saved.getAmount());
@@ -409,22 +512,36 @@ public class PaymentService {
                     "Vendor Invoice Matching is missing. Please match your invoice with the vendor invoice "
                             + "and confirm the order items before proceeding with the vendor payment.");
         }
-        BigDecimal confirmAmount = resolveConfirmAmount(body, purchaseInvoice, payment);
-
         String methodCode;
         try {
-            methodCode = PaymentMethodLabels.normalizeVendorMethod(
+            methodCode = PaymentMethodLabels.normalizeMethod(
                     body != null ? body.getPaymentMethod() : null);
         } catch (IllegalArgumentException e) {
             throw new RuntimeException(e.getMessage());
         }
-        payment.setAmount(confirmAmount);
+
+        Long supplierId = po.getSupplier() != null ? po.getSupplier().getId() : null;
+        BigDecimal creditApplied = applyCreditToInvoice(
+                purchaseInvoice, null, supplierId, body != null ? body.getApplyCreditAmount() : null);
+
         payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
+        payment.setCreditAppliedAmount(creditApplied.compareTo(BigDecimal.ZERO) > 0 ? creditApplied : null);
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Vendor payment confirmed (AP)"
         );
+
+        BigDecimal outstandingAfterCredit = purchaseInvoice.getOutstanding() != null
+                ? purchaseInvoice.getOutstanding() : purchaseInvoice.getAmount();
+        if (outstandingAfterCredit.compareTo(BigDecimal.ZERO) <= 0) {
+            // Fully settled by supplier credit alone — nothing left to pay in cash.
+            payment.setAmount(BigDecimal.ZERO);
+            return toDTO(paymentRepo.save(payment));
+        }
+
+        BigDecimal confirmAmount = resolveConfirmAmount(body, purchaseInvoice, payment);
+        payment.setAmount(confirmAmount);
         invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                 .map(Invoice::getInvoiceId)
                 .ifPresent(code -> {
