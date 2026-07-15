@@ -42,6 +42,7 @@ public class TransactionService {
     public static final String SOURCE_UNKNOWN = "UNKNOWN";
     public static final String SOURCE_SALE = "sale";
     public static final String SOURCE_PURCHASE = "purchase";
+    public static final String SOURCE_OTHER = "other";
     public static final String TYPE_OPENING_BALANCE = "OPENING_BALANCE";
     public static final String TYPE_PAYMENT = "PAYMENT";
     public static final String TYPE_MANUAL = "MANUAL";
@@ -59,6 +60,8 @@ public class TransactionService {
     public static final String TYPE_SALES_ORDER_CANCEL_REVERSAL = "SALES_ORDER_CANCEL_REVERSAL";
     public static final String TYPE_STOCK_VARIANCE = "STOCK_VARIANCE";
     public static final String TYPE_PAYROLL = "PAYROLL";
+    /** Ad-hoc expense payment confirmed in AP (rent, reimbursements, etc.) — not tied to a PO/invoice. */
+    public static final String TYPE_OTHER_PAYMENT = "OTHER_PAYMENT";
 
     private final TransactionRepository repo;
     private final CompanyRepository companyRepo;

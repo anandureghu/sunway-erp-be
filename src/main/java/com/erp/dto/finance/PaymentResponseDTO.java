@@ -46,4 +46,8 @@ public class PaymentResponseDTO {
     private BigDecimal availableCreditAmount;
     /** Portion of this payment that was covered by an applied credit note rather than cash. */
     private BigDecimal creditAppliedAmount;
+    /** Set for OTHER-direction (ad-hoc expense) payments. */
+    private String expenseCategory;
+    /** Set for OTHER-direction (ad-hoc expense) payments: who the expense was paid to. */
+    private String payee;
 }

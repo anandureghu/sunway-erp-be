@@ -34,6 +34,14 @@ public class Payment {
     @Column(name = "credit_applied_amount", precision = 18, scale = 2)
     private BigDecimal creditAppliedAmount;
 
+    /** Set for {@link PaymentDirection#OTHER}: RENT, EMPLOYEE_REIMBURSEMENT, VENDOR_REIMBURSEMENT, UTILITIES, OTHER. */
+    @Column(name = "expense_category", length = 64)
+    private String expenseCategory;
+
+    /** Set for {@link PaymentDirection#OTHER}: free text — who the expense was paid to. */
+    @Column(name = "payee", length = 255)
+    private String payee;
+
     @Column(name = "effective_date")
     private LocalDate effectiveDate;
 

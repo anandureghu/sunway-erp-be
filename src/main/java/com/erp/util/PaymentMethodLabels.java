@@ -7,6 +7,7 @@ public final class PaymentMethodLabels {
 
     public static final String PENDING_VENDOR = "PENDING_VENDOR_PAYMENT";
     public static final String PENDING_REQUEST = "PENDING_REQUEST";
+    public static final String PENDING_OTHER = "PENDING_OTHER_PAYMENT";
 
     private static final Set<String> ALLOWED_METHODS = Set.of(
             "CASH", "CARD", "BANK_TRANSFER", "CHEQUE", "UPI", "OTHER");
@@ -39,6 +40,7 @@ public final class PaymentMethodLabels {
             case "OTHER" -> "Other";
             case PENDING_VENDOR -> "Pending vendor payment";
             case PENDING_REQUEST -> "Pending request";
+            case PENDING_OTHER -> "Pending expense payment";
             case "CANCELLED" -> "Cancelled";
             default -> code.replace('_', ' ');
         };
