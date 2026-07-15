@@ -18,6 +18,7 @@ public class CompanyDTO {
     private Long crNo;
     private String computerCard;
     private String companyCode;
+    private String industry;
     private String street;
     private String city;
     private String state;

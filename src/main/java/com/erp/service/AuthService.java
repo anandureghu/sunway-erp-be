@@ -76,9 +76,14 @@ public class AuthService {
         if (!encoder.matches(req.getPassword(), u.getPassword()))
             throw new IllegalArgumentException("Invalid credentials");
 
-        List<Employee> memberships = employeeRepository.findAllByUser_Id(u.getId());
-        if (memberships.isEmpty())
+        List<Employee> allMemberships = employeeRepository.findAllByUser_Id(u.getId());
+        if (allMemberships.isEmpty())
             throw new IllegalArgumentException("Invalid credentials");
+
+        List<Employee> memberships = activeCompanyMemberships(allMemberships);
+        if (memberships.isEmpty())
+            throw new IllegalArgumentException(
+                    "Your company account has been deactivated. Contact your administrator.");
 
         List<CompanySummary> companies = memberships.stream()
                 .map(this::toCompanySummary)
@@ -123,9 +128,15 @@ public class AuthService {
 
         otpService.consumeVerificationToken(u.getEmail(), OtpPurpose.LOGIN_2FA, req.getVerificationToken());
 
-        List<Employee> memberships = employeeRepository.findAllByUser_Id(u.getId());
-        if (memberships.isEmpty()) {
+        List<Employee> allMemberships = employeeRepository.findAllByUser_Id(u.getId());
+        if (allMemberships.isEmpty()) {
             throw new IllegalArgumentException("Invalid credentials");
+        }
+
+        List<Employee> memberships = activeCompanyMemberships(allMemberships);
+        if (memberships.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Your company account has been deactivated. Contact your administrator.");
         }
 
         List<CompanySummary> companies = memberships.stream()
@@ -231,6 +242,10 @@ public class AuthService {
 
         Employee emp = employeeRepository.findByUser_IdAndCompany_Id(userId, companyId)
                 .orElseThrow(() -> new IllegalArgumentException("You do not belong to this company"));
+        if (emp.getCompany() != null && !emp.getCompany().isActive()) {
+            throw new IllegalArgumentException(
+                    "This company has been deactivated. Contact your administrator.");
+        }
 
         List<CompanySummary> companies = employeeRepository.findAllByUser_Id(userId).stream()
                 .map(this::toCompanySummary)
@@ -269,6 +284,13 @@ public class AuthService {
         claims.put("companyRoleId", emp.getCompanyRoleId());
         claims.put("companyRole", emp.getCompanyRole());
         return claims;
+    }
+
+    /** Excludes memberships in a company that's been deactivated by a Super Admin. */
+    private List<Employee> activeCompanyMemberships(List<Employee> memberships) {
+        return memberships.stream()
+                .filter(e -> e.getCompany() == null || e.getCompany().isActive())
+                .toList();
     }
 
     private Employee resolveActiveEmployee(List<Employee> memberships, Long preferredCompanyId) {

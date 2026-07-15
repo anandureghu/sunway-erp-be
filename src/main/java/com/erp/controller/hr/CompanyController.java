@@ -130,10 +130,16 @@ public class CompanyController {
         return ResponseEntity.ok(companyService.updatePayrollExportSettings(id, body));
     }
 
+    /** Soft-deactivates the company (sets it inactive) — never a hard delete. */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCompany(@PathVariable("id") Long id) {
         companyService.deleteCompany(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{id}/reactivate")
+    public ResponseEntity<Company> reactivateCompany(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(companyService.reactivateCompany(id));
     }
 
     @PostMapping("/{id}/assign-user")
