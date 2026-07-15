@@ -9,6 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,4 +63,29 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     boolean existsByUser_IdAndCompany_Id(Long userId, Long companyId);
 
     List<Employee> findByCompany_IdAndStatus(Long companyId, EmployeeStatus employeeStatus);
+
+    // ======================================================
+    //  Dashboard aggregations
+    // ======================================================
+
+    long countByCompany_Id(Long companyId);
+
+    long countByCompany_IdAndStatus(Long companyId, EmployeeStatus employeeStatus);
+
+    long countByCompany_IdAndJoinDateBetween(Long companyId, LocalDate from, LocalDate to);
+
+    /** Best-effort "resigned this month" proxy: no dedicated resignation-date field exists yet. */
+    long countByCompany_IdAndStatusAndUpdatedAtBetween(
+            Long companyId, EmployeeStatus employeeStatus, Instant from, Instant to);
+
+    /** Rows of (departmentId, departmentName, employeeCount) for the "employees by department" widget. */
+    @Query("""
+            SELECT e.department.id, e.department.departmentName, COUNT(e)
+            FROM Employee e
+            WHERE e.company.id = :companyId
+              AND e.department IS NOT NULL
+            GROUP BY e.department.id, e.department.departmentName
+            ORDER BY COUNT(e) DESC
+            """)
+    List<Object[]> countByDepartment(@Param("companyId") Long companyId);
 }

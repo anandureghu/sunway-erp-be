@@ -111,4 +111,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             @Param("companyId") Long companyId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
+
+    /** Company-wide count of vendor payments awaiting approval, for the dashboard pending-approvals widget. */
+    @Query("""
+            SELECT COUNT(p) FROM Payment p
+            WHERE p.company.id = :companyId
+              AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.VENDOR
+              AND UPPER(p.paymentMethod) = 'PENDING_VENDOR_PAYMENT'
+              AND p.archived = false
+            """)
+    long countPendingVendorPaymentsForCompany(@Param("companyId") Long companyId);
 }

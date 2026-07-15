@@ -6,6 +6,7 @@ import com.erp.domain.security.AppModule;
 import com.erp.dto.contact.EmployeeContactInfoRequestDTO;
 import com.erp.dto.contact.EmployeeContactInfoResponseDTO;
 import com.erp.repo.EmployeeRepository;
+import com.erp.repo.UserRepository;
 import com.erp.repo.contact.EmployeeContactInfoRepository;
 import com.erp.security.guard.EmployeeAccessGuard;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class EmployeeContactInfoService {
     private final EmployeeRepository employeeRepo;
     private final EmployeeContactInfoRepository contactInfoRepo;
     private final EmployeeAccessGuard employeeAccessGuard;
+    private final UserRepository userRepository;
 
     // ======================================================
     // GET CONTACT INFO
@@ -70,6 +72,18 @@ public class EmployeeContactInfoService {
                                 .employee(employee)
                                 .build()
                 );
+
+        // Login and every other feature read User.email, not this table — keep them
+        // in sync so editing the contact email here doesn't silently diverge from it.
+        if (employee.getUser() != null && !dto.getEmail().equalsIgnoreCase(employee.getUser().getEmail())) {
+            userRepository.findByEmailIgnoreCase(dto.getEmail())
+                    .filter(existing -> !existing.getId().equals(employee.getUser().getId()))
+                    .ifPresent(existing -> {
+                        throw new RuntimeException("Email already in use");
+                    });
+            employee.getUser().setEmail(dto.getEmail());
+            userRepository.save(employee.getUser());
+        }
 
         contactInfo.setEmail(dto.getEmail());
         contactInfo.setPhone(dto.getPhone());

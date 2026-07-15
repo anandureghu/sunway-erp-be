@@ -241,6 +241,18 @@ public class EmployeeService {
 
         if (employee.getUser() != null) {
 
+            // ✅ Login email — kept in sync with the user's account, since login
+            // and every display surface read User.email, not an Employee-owned field.
+            if (dto.getEmail() != null && !dto.getEmail().isBlank()
+                    && !dto.getEmail().equalsIgnoreCase(employee.getUser().getEmail())) {
+                userRepository.findByEmailIgnoreCase(dto.getEmail())
+                        .filter(existing -> !existing.getId().equals(employee.getUser().getId()))
+                        .ifPresent(existing -> {
+                            throw new IllegalArgumentException("Email already in use");
+                        });
+                employee.getUser().setEmail(dto.getEmail());
+            }
+
             // ✅ Spring Security role — ADMIN/SUPER_ADMIN only
             if (dto.getRole() != null) {
                 User authUser = getAuthUser();

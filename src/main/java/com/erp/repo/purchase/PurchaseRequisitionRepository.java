@@ -18,6 +18,8 @@ public interface PurchaseRequisitionRepository extends JpaRepository<PurchaseReq
 
     List<PurchaseRequisition> findByCompanyIdAndArchivedTrue(Long companyId);
 
+    long countByCompanyIdAndArchivedFalseAndStatus(Long companyId, PurchaseRequisitionStatus status);
+
     @Query("""
             SELECT pr FROM PurchaseRequisition pr
             JOIN pr.items line
