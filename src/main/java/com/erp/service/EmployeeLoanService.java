@@ -38,11 +38,12 @@ public class EmployeeLoanService {
     /* ================= GENERATE LOAN CODE ================= */
 
     @Transactional
-    public String generateLoanCode(LoanType loanType) {
+    public String generateLoanCode(Company company, LoanType loanType) {
 
-        LoanSequence sequence = sequenceRepo.findByLoanTypeForUpdate(loanType)
+        LoanSequence sequence = sequenceRepo.findByCompanyIdAndLoanTypeForUpdate(company.getId(), loanType)
                 .orElseGet(() -> {
                     LoanSequence newSeq = new LoanSequence();
+                    newSeq.setCompany(company);
                     newSeq.setLoanType(loanType);
                     newSeq.setCurrentSequence(0L);
                     return sequenceRepo.save(newSeq);
@@ -73,16 +74,18 @@ public class EmployeeLoanService {
                             + "or fully repaid (closed) before requesting another.");
         }
 
+        assertSameTenant(employee);
         validateLoanPolicy(employee, dto.getLoanPeriod());
         validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
 
-        String loanCode = generateLoanCode(dto.getLoanType());
+        String loanCode = generateLoanCode(employee.getCompany(), dto.getLoanType());
 
         Double monthlyDeduction = dto.getLoanAmount() / dto.getLoanPeriod();
         LocalDate endDate = dto.getStartDate().plusMonths(dto.getLoanPeriod());
 
         EmployeeLoan loan = new EmployeeLoan();
         loan.setEmployee(employee);
+        loan.setCompany(employee.getCompany());
         loan.setLoanCode(loanCode);
         loan.setLoanType(dto.getLoanType());
         loan.setLoanAmount(dto.getLoanAmount());
@@ -113,6 +116,7 @@ public class EmployeeLoanService {
         if (!loan.getEmployee().getId().equals(employee.getId())) {
             throw new RuntimeException("Loan does not belong to this employee");
         }
+        assertSameTenant(employee);
 
         validateLoanPolicy(employee, dto.getLoanPeriod());
         validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
@@ -139,6 +143,7 @@ public class EmployeeLoanService {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertSameTenant(employee);
 
         return loanRepo.findByEmployee(employee)
                 .stream()
@@ -156,6 +161,7 @@ public class EmployeeLoanService {
 
         EmployeeLoan loan = loanRepo.findById(loanId)
                 .orElseThrow(() -> new RuntimeException("Loan not found"));
+        assertSameTenant(loan.getEmployee());
 
         return toDTO(loan);
     }
@@ -174,6 +180,7 @@ public class EmployeeLoanService {
         if (!loan.getEmployee().getId().equals(employee.getId())) {
             throw new RuntimeException("Loan does not belong to this employee");
         }
+        assertSameTenant(employee);
 
         loanRepo.delete(loan);
     }
@@ -185,6 +192,7 @@ public class EmployeeLoanService {
 
         EmployeeLoan loan = loanRepo.findById(loanId)
                 .orElseThrow(() -> new RuntimeException("Loan not found"));
+        assertSameTenant(loan.getEmployee());
 
         if (!"PENDING_APPROVAL".equals(loan.getStatus())) {
             throw new RuntimeException(
@@ -238,7 +246,7 @@ public class EmployeeLoanService {
      * Company-wide history of decided loans (active, closed, rejected) for the HR
      * Reports "Loan Approvals" view. Scoped to the caller's company.
      */
-    public List<LoanResponseDTO> getCompanyLoanApprovals() {
+    public List<LoanResponseDTO> getCompanyLoanApprovals(boolean archived) {
         Long userId = authContext.getCurrentUserId();
         if (userId == null) {
             throw new AccessDeniedException("Unauthorized");
@@ -259,8 +267,42 @@ public class EmployeeLoanService {
         return loanRepo.findByCompanyAndStatusIn(
                         companyId, List.of("ACTIVE", "CLOSED", "REJECTED"))
                 .stream()
+                .filter(loan -> loan.isArchived() == archived)
                 .map(this::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    /** Archive / unarchive a decided loan so it drops from (or returns to) the active list. */
+    @Transactional
+    public LoanResponseDTO setLoanArchived(Long loanId, boolean archived) {
+        Long userId = authContext.getCurrentUserId();
+        if (userId == null) {
+            throw new AccessDeniedException("Unauthorized");
+        }
+        Employee approver = authContext.getCurrentEmployee();
+        if (approver == null) {
+            approver = employeeRepo.findByUser_Id(userId)
+                    .orElseThrow(() -> new AccessDeniedException(
+                            "User is not linked to an employee record"));
+        }
+        Long companyId = approver.getCompany() != null ? approver.getCompany().getId() : null;
+
+        EmployeeLoan loan = loanRepo.findById(loanId)
+                .orElseThrow(() -> new RuntimeException("Loan not found"));
+
+        Long loanCompanyId = loan.getEmployee() != null && loan.getEmployee().getCompany() != null
+                ? loan.getEmployee().getCompany().getId() : null;
+        if (companyId == null || loanCompanyId == null || !companyId.equals(loanCompanyId)) {
+            throw new AccessDeniedException("Loan not found");
+        }
+
+        if ("PENDING_APPROVAL".equals(loan.getStatus())) {
+            throw new RuntimeException("Loans pending approval cannot be archived");
+        }
+
+        loan.setArchived(archived);
+        loan = loanRepo.save(loan);
+        return toDTO(loan);
     }
 
     /* ================= MAKE PAYMENT ================= */
@@ -270,6 +312,7 @@ public class EmployeeLoanService {
 
         EmployeeLoan loan = loanRepo.findById(loanId)
                 .orElseThrow(() -> new RuntimeException("Loan not found"));
+        assertSameTenant(loan.getEmployee());
 
         if (!loan.getStatus().equals("ACTIVE")) {
             throw new RuntimeException("Loan is not active");
@@ -294,6 +337,19 @@ public class EmployeeLoanService {
         loan = loanRepo.save(loan);
 
         return toDTO(loan);
+    }
+
+    /* ================= TENANT GUARD ================= */
+
+    private void assertSameTenant(Employee employee) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long employeeCompanyId = employee != null && employee.getCompany() != null
+                ? employee.getCompany().getId() : null;
+        if (currentCompanyId == null || employeeCompanyId == null
+                || !currentCompanyId.equals(employeeCompanyId)) {
+            throw new AccessDeniedException("This loan belongs to a different company");
+        }
     }
 
     /* ================= VALIDATION METHOD ================= */
@@ -404,6 +460,7 @@ public class EmployeeLoanService {
         dto.setEndDate(loan.getEndDate());
         dto.setNotes(loan.getNotes());
         dto.setRejectionComment(loan.getRejectionComment());
+        dto.setArchived(loan.isArchived());
 
         Employee employee = loan.getEmployee();
         if (employee != null) {

@@ -9,7 +9,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "journal_entries")
+@Table(
+        name = "journal_entries",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_journal_entries_company_je_number", columnNames = {"company_id", "je_number"})
+        }
+)
 @Getter
 @Setter
 @Builder
@@ -21,7 +26,7 @@ public class JournalEntry {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "je_number", unique = true)
+    @Column(name = "je_number")
     private String jeNumber;
 
     @ManyToOne()

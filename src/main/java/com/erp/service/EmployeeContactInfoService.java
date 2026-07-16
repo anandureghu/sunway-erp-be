@@ -2,10 +2,13 @@ package com.erp.service;
 
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeContactInfo;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.contact.EmployeeContactInfoRequestDTO;
 import com.erp.dto.contact.EmployeeContactInfoResponseDTO;
 import com.erp.repo.EmployeeRepository;
+import com.erp.repo.UserRepository;
 import com.erp.repo.contact.EmployeeContactInfoRepository;
+import com.erp.security.guard.EmployeeAccessGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,11 +20,19 @@ public class EmployeeContactInfoService {
 
     private final EmployeeRepository employeeRepo;
     private final EmployeeContactInfoRepository contactInfoRepo;
+    private final EmployeeAccessGuard employeeAccessGuard;
+    private final UserRepository userRepository;
+
 
     // ======================================================
     // GET CONTACT INFO
     // ======================================================
     public EmployeeContactInfoResponseDTO getContactInfo(Long employeeId) {
+
+        Employee employee = employeeRepo.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        employeeAccessGuard.assertCanRead(employee, AppModule.EMPLOYEE_PROFILE);
 
         EmployeeContactInfo contactInfo = contactInfoRepo
                 .findByEmployeeId(employeeId)
@@ -49,6 +60,8 @@ public class EmployeeContactInfoService {
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
+        employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
+
         if (dto.getEmail() == null || dto.getEmail().isBlank()) {
             throw new RuntimeException("Email is required");
         }
@@ -60,6 +73,18 @@ public class EmployeeContactInfoService {
                                 .employee(employee)
                                 .build()
                 );
+
+        // Login and every other feature read User.email, not this table — keep them
+        // in sync so editing the contact email here doesn't silently diverge from it.
+        if (employee.getUser() != null && !dto.getEmail().equalsIgnoreCase(employee.getUser().getEmail())) {
+            userRepository.findByEmailIgnoreCase(dto.getEmail())
+                    .filter(existing -> !existing.getId().equals(employee.getUser().getId()))
+                    .ifPresent(existing -> {
+                        throw new RuntimeException("Email already in use");
+                    });
+            employee.getUser().setEmail(dto.getEmail());
+            userRepository.save(employee.getUser());
+        }
 
         contactInfo.setEmail(dto.getEmail());
         contactInfo.setPhone(dto.getPhone());

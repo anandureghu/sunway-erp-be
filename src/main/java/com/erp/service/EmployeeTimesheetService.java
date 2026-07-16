@@ -4,12 +4,14 @@ import com.erp.domain.Employee;
 import com.erp.domain.EmployeeStatus;
 import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.TimesheetStatus;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.timesheet.AttendanceHistoryItemResponse;
 import com.erp.dto.timesheet.MonthlySummaryResponse;
 import com.erp.dto.timesheet.TimesheetDashboardResponse;
 import com.erp.dto.timesheet.TimesheetTodayResponse;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.EmployeeTimesheetRepository;
+import com.erp.security.guard.EmployeeAccessGuard;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,12 +30,15 @@ public class EmployeeTimesheetService {
 
     private final EmployeeTimesheetRepository repository;
     private final EmployeeRepository employeeRepository;
+    private final EmployeeAccessGuard accessGuard;
 
     public EmployeeTimesheetService(
             EmployeeTimesheetRepository repository,
-            EmployeeRepository employeeRepository) {
+            EmployeeRepository employeeRepository,
+            EmployeeAccessGuard accessGuard) {
         this.repository = repository;
         this.employeeRepository = employeeRepository;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional
@@ -44,6 +49,7 @@ public class EmployeeTimesheetService {
         // (inactive / on leave / resigned …) cannot check in.
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        accessGuard.assertCanWrite(employee, AppModule.HR_REPORTS);
         if (employee.getStatus() != EmployeeStatus.ACTIVE) {
             throw new RuntimeException(
                     "Check-in is only available for active employees (current status: "
@@ -75,6 +81,10 @@ public class EmployeeTimesheetService {
 
     @Transactional
     public TimesheetTodayResponse checkOut(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        accessGuard.assertCanWrite(employee, AppModule.HR_REPORTS);
+
         LocalDate today = LocalDate.now();
 
         EmployeeTimesheet timesheet = repository
@@ -100,6 +110,10 @@ public class EmployeeTimesheetService {
 
     @Transactional(readOnly = true)
     public TimesheetTodayResponse getToday(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        accessGuard.assertCanRead(employee, AppModule.HR_REPORTS);
+
         return repository.findByEmployeeIdAndAttendanceDate(employeeId, LocalDate.now())
                 .map(this::mapToday)
                 .orElseGet(() -> {
@@ -117,6 +131,10 @@ public class EmployeeTimesheetService {
 
     @Transactional(readOnly = true)
     public MonthlySummaryResponse getMonthlySummary(Long employeeId, int year, int month) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        accessGuard.assertCanRead(employee, AppModule.HR_REPORTS);
+
         List<EmployeeTimesheet> records = getMonthlyRecords(employeeId, year, month);
 
         int daysRecorded = records.size();
@@ -142,6 +160,10 @@ public class EmployeeTimesheetService {
 
     @Transactional(readOnly = true)
     public List<AttendanceHistoryItemResponse> getAttendanceHistory(Long employeeId, int year, int month) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        accessGuard.assertCanRead(employee, AppModule.HR_REPORTS);
+
         return getMonthlyRecords(employeeId, year, month).stream()
                 .sorted(Comparator.comparing(EmployeeTimesheet::getAttendanceDate).reversed())
                 .map(this::mapHistory)

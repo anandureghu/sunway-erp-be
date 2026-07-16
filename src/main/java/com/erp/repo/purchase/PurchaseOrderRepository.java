@@ -18,6 +18,8 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
 
     List<PurchaseOrder> findByCompanyIdAndArchivedTrue(Long companyId);
 
+    long countByCompanyIdAndArchivedFalseAndStatus(Long companyId, PurchaseOrderStatus status);
+
     List<PurchaseOrder> findBySupplier_IdAndArchivedFalseAndStatusInOrderByCreatedAtDesc(
             Long supplierId,
             List<PurchaseOrderStatus> statuses

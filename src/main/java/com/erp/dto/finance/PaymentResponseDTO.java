@@ -23,6 +23,10 @@ public class PaymentResponseDTO {
     private Long supplierId;
     /** Vendor name when linked to a purchase order (AP vendor payments). */
     private String supplierName;
+    /** Customer id when linked to a sales invoice (AR customer payments). */
+    private Long customerId;
+    /** Customer name when linked to a sales invoice (AR customer payments). */
+    private String customerName;
     /** Business SO number for customer payments linked to a sales invoice. */
     private String salesOrderNumber;
     private String pdfUrl;
@@ -32,6 +36,18 @@ public class PaymentResponseDTO {
     private BigDecimal invoiceOutstanding;
     /** Total amount on the linked invoice (for confirm dialog). */
     private BigDecimal invoiceTotal;
+    /** Sum of all confirmed payments applied to the linked invoice (cash collected across all payments). */
+    private BigDecimal invoicePaidAmount;
+    /** Portion of the linked invoice written off via applied credit notes (across all payments). */
+    private BigDecimal invoiceCreditAppliedAmount;
     /** Vendor's own invoice number recorded via "Match Vendor Invoice", when present. */
     private String supplierInvoiceNumber;
+    /** Available (unapplied) credit note balance for this payment's customer/supplier. */
+    private BigDecimal availableCreditAmount;
+    /** Portion of this payment that was covered by an applied credit note rather than cash. */
+    private BigDecimal creditAppliedAmount;
+    /** Set for OTHER-direction (ad-hoc expense) payments. */
+    private String expenseCategory;
+    /** Set for OTHER-direction (ad-hoc expense) payments: who the expense was paid to. */
+    private String payee;
 }

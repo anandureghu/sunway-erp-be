@@ -1,5 +1,6 @@
 package com.erp.service.hr;
 
+import com.erp.domain.EmployeeStatus;
 import com.erp.domain.finance.ChartOfAccounts;
 import com.erp.domain.hr.BankAccount;
 import com.erp.domain.hr.Company;
@@ -13,6 +14,7 @@ import com.erp.dto.hr.CompanyDTO;
 import com.erp.dto.hr.HrPoliciesDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
 import com.erp.dto.hr.PayrollExportSettingsDTO;
+import com.erp.repo.EmployeeRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.BankAccountRepository;
 import com.erp.repo.hr.CompanyRepository;
@@ -43,6 +45,7 @@ public class CompanyService {
     private final AuthContext                 authContext;
     private final FileStorageService          fileStorageService;
     private final DocumentSequenceService     documentSequenceService;
+    private final EmployeeRepository          employeeRepository;
 
     public CompanyService(
             CompanyRepository companyRepository,
@@ -53,7 +56,8 @@ public class CompanyService {
             BankAccountRepository bankAccountRepository,
             AuthContext authContext,
             FileStorageService fileStorageService,
-            DocumentSequenceService documentSequenceService) {
+            DocumentSequenceService documentSequenceService,
+            EmployeeRepository employeeRepository) {
 
         this.companyRepository         = companyRepository;
         this.invoiceSettingsRepository = invoiceSettingsRepository;
@@ -64,6 +68,7 @@ public class CompanyService {
         this.authContext               = authContext;
         this.fileStorageService        = fileStorageService;
         this.documentSequenceService   = documentSequenceService;
+        this.employeeRepository        = employeeRepository;
     }
 
     // ======================================================
@@ -118,6 +123,7 @@ public class CompanyService {
         Company company = Company.builder()
                 .companyName(dto.getCompanyName())
                 .noOfEmployees(dto.getNoOfEmployees())
+                .industry(dto.getIndustry())
                 .currency(currency)
                 .crNo(dto.getCrNo())
                 .computerCard(dto.getComputerCard())
@@ -188,6 +194,7 @@ public class CompanyService {
         existing.setCompanyName(updated.getCompanyName());
         existing.setCompanyCode(updated.getCompanyCode());
         existing.setNoOfEmployees(updated.getNoOfEmployees());
+        existing.setIndustry(updated.getIndustry());
         existing.setCrNo(updated.getCrNo());
         existing.setComputerCard(updated.getComputerCard());
         existing.setStreet(updated.getStreet());
@@ -317,6 +324,8 @@ public class CompanyService {
         company.setInvoiceFooterSupportEmail(settings.getInvoiceFooterSupportEmail());
         company.setInvoiceFooterBillingEmail(settings.getInvoiceFooterBillingEmail());
         company.setInvoiceQrEnabled(settings.isInvoiceQrEnabled());
+        company.setEmployeeCount(
+                employeeRepository.countByCompany_IdAndStatus(company.getId(), EmployeeStatus.ACTIVE));
         return company;
     }
 
@@ -474,11 +483,20 @@ public class CompanyService {
     }
 
     // ======================================================
-    // DELETE COMPANY
+    // DEACTIVATE / REACTIVATE COMPANY (soft delete — never a hard delete)
     // ======================================================
+    @Transactional
     public void deleteCompany(Long id) {
-        getCompanyById(id);
-        companyRepository.deleteById(id);
+        Company existing = getCompanyById(id);
+        existing.setActive(false);
+        companyRepository.save(existing);
+    }
+
+    @Transactional
+    public Company reactivateCompany(Long id) {
+        Company existing = getCompanyById(id);
+        existing.setActive(true);
+        return hydrateInvoiceBrandingView(companyRepository.save(existing));
     }
 
     private String defaultIfBlank(String value, String defaultValue) {

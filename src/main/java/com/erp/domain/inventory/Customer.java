@@ -13,7 +13,12 @@ import java.time.Instant;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "customers")
+@Table(
+        name = "customers",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_customers_company_tax_id", columnNames = {"company_id", "tax_id"})
+        }
+)
 public class Customer {
 
     @Id
@@ -23,7 +28,7 @@ public class Customer {
     @Column(nullable = false, length = 150)
     private String customerName;
 
-    @Column(unique = true, length = 50)
+    @Column(length = 50)
     private String taxId;
 
     @Column(nullable = false, length = 50)

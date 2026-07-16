@@ -296,7 +296,7 @@ public class LeaveService {
      * the HR Reports "Leave Approvals" view. Scoped to the approver's company and
      * gated the same way as pending approvals.
      */
-    public List<LeaveHistoryDTO> getCompanyLeaveApprovals() {
+    public List<LeaveHistoryDTO> getCompanyLeaveApprovals(boolean archived) {
         Employee approver = getCurrentEmployee();
 
         if (!canActAsApprover(approver)) {
@@ -312,8 +312,35 @@ public class LeaveService {
                         approverCompanyId,
                         List.of(LeaveStatus.APPROVED, LeaveStatus.COMPLETED, LeaveStatus.REJECTED))
                 .stream()
+                .filter(leave -> leave.isArchived() == archived)
                 .map(this::mapToHistoryDTO)
                 .toList();
+    }
+
+    /** Archive / unarchive a decided leave so it drops from (or returns to) the active list. */
+    @Transactional
+    public LeaveHistoryDTO setLeaveArchived(Long leaveId, boolean archived) {
+        Employee approver = getCurrentEmployee();
+        if (!canActAsApprover(approver)) {
+            throw new AccessDeniedException("Access denied: no permission to archive leave records");
+        }
+
+        EmployeeLeave leave = leaveRepo.findById(leaveId)
+                .orElseThrow(() -> new RuntimeException("Leave request not found"));
+
+        if (leave.getEmployee() == null || leave.getEmployee().getCompany() == null
+                || approver.getCompany() == null
+                || !leave.getEmployee().getCompany().getId().equals(approver.getCompany().getId())) {
+            throw new AccessDeniedException("Leave request not found");
+        }
+
+        if (leave.getLeaveStatus() == LeaveStatus.PENDING) {
+            throw new IllegalArgumentException("Pending leave requests cannot be archived");
+        }
+
+        leave.setArchived(archived);
+        leave = leaveRepo.save(leave);
+        return mapToHistoryDTO(leave);
     }
 
     @Transactional
@@ -451,7 +478,7 @@ public class LeaveService {
         Employee currentEmployee = getCurrentEmployee();
         boolean isOwner = currentEmployee.getId() != null
                 && currentEmployee.getId().equals(employeeId);
-        if (!isOwner && !canActAsApprover(currentEmployee)) {
+        if (!isOwner && !canApproveLeave(currentEmployee, leave)) {
             throw new AccessDeniedException(
                     "Only the employee or an HR / department approver can confirm a return");
         }
@@ -1003,6 +1030,7 @@ public class LeaveService {
         );
         dto.setLeaveStatus(leave.getLeaveStatus() != null ? leave.getLeaveStatus().name() : null);
         dto.setRejectionComment(leave.getRejectionComment());
+        dto.setArchived(leave.isArchived());
         if (leave.getDelegate() != null) {
             dto.setDelegateId(leave.getDelegate().getId());
             dto.setDelegateName(

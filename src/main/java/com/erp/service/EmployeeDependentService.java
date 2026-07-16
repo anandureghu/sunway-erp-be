@@ -2,10 +2,12 @@ package com.erp.service;
 
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeDependent;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.dependent.DependentRequestDTO;
 import com.erp.dto.dependent.DependentResponseDTO;
 import com.erp.repo.EmployeeDependentRepository;
 import com.erp.repo.EmployeeRepository;
+import com.erp.security.guard.EmployeeAccessGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +20,7 @@ public class EmployeeDependentService {
 
     private final EmployeeDependentRepository dependentRepository;
     private final EmployeeRepository employeeRepository;
+    private final EmployeeAccessGuard employeeAccessGuard;
 
     // =========================
     // CREATE DEPENDENT
@@ -26,6 +29,8 @@ public class EmployeeDependentService {
 
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        employeeAccessGuard.assertCanWrite(employee, AppModule.DEPENDENTS);
 
         EmployeeDependent dependent = EmployeeDependent.builder()
                 .employee(employee)
@@ -62,6 +67,8 @@ public class EmployeeDependentService {
         EmployeeDependent dependent = dependentRepository.findById(dependentId)
                 .orElseThrow(() -> new RuntimeException("Dependent not found"));
 
+        employeeAccessGuard.assertCanWrite(dependent.getEmployee(), AppModule.DEPENDENTS);
+
         dependent.setFirstName(dto.getFirstName());
         dependent.setMiddleName(dto.getMiddleName());
         dependent.setLastName(dto.getLastName());
@@ -89,6 +96,11 @@ public class EmployeeDependentService {
     // GET ALL DEPENDENTS BY EMPLOYEE
     // =========================
     public List<DependentResponseDTO> getDependentsByEmployee(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        employeeAccessGuard.assertCanRead(employee, AppModule.DEPENDENTS);
+
         return dependentRepository.findByEmployeeId(employeeId)
                 .stream()
                 .map(this::toDTO)
@@ -99,18 +111,23 @@ public class EmployeeDependentService {
     // GET SINGLE DEPENDENT
     // =========================
     public DependentResponseDTO getDependentById(Long dependentId) {
-        return dependentRepository.findById(dependentId)
-                .map(this::toDTO)
+        EmployeeDependent dependent = dependentRepository.findById(dependentId)
                 .orElseThrow(() -> new RuntimeException("Dependent not found"));
+
+        employeeAccessGuard.assertCanRead(dependent.getEmployee(), AppModule.DEPENDENTS);
+
+        return toDTO(dependent);
     }
 
     // =========================
     // DELETE DEPENDENT
     // =========================
     public void deleteDependent(Long dependentId) {
-        if (!dependentRepository.existsById(dependentId)) {
-            throw new RuntimeException("Dependent not found");
-        }
+        EmployeeDependent dependent = dependentRepository.findById(dependentId)
+                .orElseThrow(() -> new RuntimeException("Dependent not found"));
+
+        employeeAccessGuard.assertCanWrite(dependent.getEmployee(), AppModule.DEPENDENTS);
+
         dependentRepository.deleteById(dependentId);
     }
 

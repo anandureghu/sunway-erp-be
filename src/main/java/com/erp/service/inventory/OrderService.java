@@ -35,7 +35,7 @@ public class OrderService {
         if (companyId == null) {
             return Collections.emptyList();
         }
-        return orderRepository.findBySupplier_Company_IdOrderByCreatedAtDesc(companyId);
+        return orderRepository.findByCompany_IdOrderByCreatedAtDesc(companyId);
     }
 
     public Orders getOrderById(Long id) {
@@ -60,6 +60,7 @@ public class OrderService {
                 .orderName(req.getOrderName())
                 .orderStatus(req.getOrderStatus())
                 .supplier(supplier)
+                .company(supplier.getCompany())
                 .createdBy(req.getCreatedBy())
                 .agreement(req.getAgreement())
                 .estimatedDeliveryDate(req.getEstimatedDeliveryDate())
@@ -93,9 +94,7 @@ public class OrderService {
         if (cid == null) {
             throw new RuntimeException("Company context required");
         }
-        if (order.getSupplier() == null
-                || order.getSupplier().getCompany() == null
-                || !cid.equals(order.getSupplier().getCompany().getId())) {
+        if (order.getCompany() == null || !cid.equals(order.getCompany().getId())) {
             throw new RuntimeException("Order not found or access denied");
         }
     }

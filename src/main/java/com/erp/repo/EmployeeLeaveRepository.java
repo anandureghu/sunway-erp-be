@@ -116,4 +116,41 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
     ) {
         return existsLeavesForPayrollPeriod(employeeId, LeaveStatus.PENDING, periodStart, periodEnd);
     }
+
+    // ======================================================
+    //  Dashboard aggregations
+    // ======================================================
+
+    /** Employee ids (within a company) that have an approved leave covering the given date. */
+    @Query("""
+        select distinct l.employee.id from EmployeeLeave l
+        where l.employee.company.id = :companyId
+          and l.leaveStatus = com.erp.domain.LeaveStatus.APPROVED
+          and l.startDate <= :onDate
+          and l.endDate >= :onDate
+    """)
+    List<Long> findEmployeeIdsOnApprovedLeaveForCompany(
+            @Param("companyId") Long companyId,
+            @Param("onDate") LocalDate onDate);
+
+    /** Leave requests submitted (dateReported) within a window, for the monthly leave-summary widget. */
+    List<EmployeeLeave> findByEmployee_Company_IdAndDateReportedBetween(
+            Long companyId, LocalDate from, LocalDate to);
+
+    /**
+     * Monthly count of leave requests by year + month over dateReported, scoped to company.
+     * Returns rows of (year, month, count).
+     */
+    @Query("""
+        select year(l.dateReported), month(l.dateReported), count(l)
+        from EmployeeLeave l
+        where l.employee.company.id = :companyId
+          and l.dateReported between :from and :to
+        group by year(l.dateReported), month(l.dateReported)
+        order by year(l.dateReported), month(l.dateReported)
+    """)
+    List<Object[]> monthlyRequestCounts(
+            @Param("companyId") Long companyId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 }

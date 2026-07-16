@@ -230,10 +230,26 @@ public class EmployeeLeaveController {
     }
 
     @GetMapping("/leaves/approvals/history")
-    public ResponseEntity<?> leaveApprovalsHistory() {
+    public ResponseEntity<?> leaveApprovalsHistory(
+            @RequestParam(name = "archived", defaultValue = "false") boolean archived) {
         try {
-            List<LeaveHistoryDTO> approvals = leaveService.getCompanyLeaveApprovals();
+            List<LeaveHistoryDTO> approvals = leaveService.getCompanyLeaveApprovals(archived);
             return ResponseEntity.ok(Map.of("approvals", approvals));
+        } catch (AccessDeniedException e) {
+            return forbidden(e);
+        } catch (RuntimeException e) {
+            return badRequest(e);
+        }
+    }
+
+    @PostMapping("/leaves/{leaveId}/archive")
+    public ResponseEntity<?> archiveLeave(
+            @PathVariable Long leaveId,
+            @RequestParam(name = "archived", defaultValue = "true") boolean archived) {
+        try {
+            return ResponseEntity.ok(leaveService.setLeaveArchived(leaveId, archived));
+        } catch (IllegalArgumentException e) {
+            return badRequest(e);
         } catch (AccessDeniedException e) {
             return forbidden(e);
         } catch (RuntimeException e) {
@@ -296,12 +312,25 @@ public class EmployeeLeaveController {
     private void validateSelfAccess(Long employeeId) {
         User authUser = getAuthUser();
 
-        if (authUser.getRole() == Role.ADMIN || authUser.getRole() == Role.SUPER_ADMIN) {
+        if (authUser.getRole() == Role.SUPER_ADMIN) {
             return;
         }
 
         Employee targetEmployee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        if (authUser.getRole() == Role.ADMIN) {
+            Long callerCompanyId = authContext.getCurrentCompanyId();
+            Long targetCompanyId = targetEmployee.getCompany() != null
+                    ? targetEmployee.getCompany().getId()
+                    : null;
+            if (callerCompanyId != null
+                    && targetCompanyId != null
+                    && callerCompanyId.equals(targetCompanyId)) {
+                return;
+            }
+            throw new AccessDeniedException("Access denied: can only access employees in your own company");
+        }
 
         boolean isOwnRecord = targetEmployee.getUser() != null
                 && targetEmployee.getUser().getId() != null

@@ -4,6 +4,7 @@ import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.finance.ConfirmPaymentDTO;
+import com.erp.dto.finance.CreateOtherPaymentDTO;
 import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
 import com.erp.service.finance.PaymentService;
@@ -30,6 +31,15 @@ public class PaymentController {
     @PostMapping
     public PaymentResponseDTO createPayment(@RequestBody CreatePaymentDTO dto) {
         return paymentService.createPayment(dto);
+    }
+
+    // ----------------------------------------------------------
+    // 1️⃣b Create an ad-hoc expense payment (rent, reimbursements, etc.)
+    // ----------------------------------------------------------
+    @RequiresPermission(module = AppModule.FINANCE_PAYMENT, action = {AppAction.CREATE})
+    @PostMapping("/other")
+    public PaymentResponseDTO createOtherPayment(@RequestBody CreateOtherPaymentDTO dto) {
+        return paymentService.createOtherPayment(dto);
     }
 
     @RequiresPermission(module = AppModule.FINANCE_PAYMENT, action = {AppAction.EDIT})

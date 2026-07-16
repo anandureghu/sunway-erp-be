@@ -15,8 +15,11 @@ public class CreditNoteResponseDTO {
     private LocalDate creditNoteDate;
 
     private String customerName;
+    private String supplierName;
+    private Long customerId;
+    private Long supplierId;
 
-    private String status; // DRAFT, APPLIED, PARTIALLY_APPLIED
+    private String status; // DRAFT, APPLIED, AVAILABLE, PARTIALLY_APPLIED
 
     private String project; // optional
     private String referenceNumber; // invoice number

@@ -23,6 +23,7 @@ import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.security.guard.EmployeeAccessGuard;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.security.PermissionCheckService;
 import com.erp.util.EmployeeUserUtil;
@@ -62,6 +63,7 @@ public class EmployeeService {
     private final FileStorageService fileStorageService;
     private final PermissionCheckService permissionCheckService;
     private final DocumentSequenceService documentSequenceService;
+    private final EmployeeAccessGuard employeeAccessGuard;
 
     public EmployeeService(
             EmployeeRepository employeeRepository,
@@ -78,7 +80,8 @@ public class EmployeeService {
             PasswordEncoder passwordEncoder,
             FileStorageService fileStorageService,
             PermissionCheckService permissionCheckService,
-            DocumentSequenceService documentSequenceService
+            DocumentSequenceService documentSequenceService,
+            EmployeeAccessGuard employeeAccessGuard
     ) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
@@ -95,6 +98,7 @@ public class EmployeeService {
         this.fileStorageService = fileStorageService;
         this.permissionCheckService = permissionCheckService;
         this.documentSequenceService = documentSequenceService;
+        this.employeeAccessGuard = employeeAccessGuard;
     }
     // ======================================================
     // CREATE EMPLOYEE
@@ -201,6 +205,8 @@ public class EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
+        employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
+
         if (dto.getEmployeeNo()     != null) employee.setEmployeeNo(dto.getEmployeeNo());
         if (dto.getPrefix()         != null) employee.setPrefix(dto.getPrefix());
         if (dto.getFirstName()      != null) employee.setFirstName(dto.getFirstName());
@@ -235,6 +241,18 @@ public class EmployeeService {
 
         if (employee.getUser() != null) {
 
+            // ✅ Login email — kept in sync with the user's account, since login
+            // and every display surface read User.email, not an Employee-owned field.
+            if (dto.getEmail() != null && !dto.getEmail().isBlank()
+                    && !dto.getEmail().equalsIgnoreCase(employee.getUser().getEmail())) {
+                userRepository.findByEmailIgnoreCase(dto.getEmail())
+                        .filter(existing -> !existing.getId().equals(employee.getUser().getId()))
+                        .ifPresent(existing -> {
+                            throw new IllegalArgumentException("Email already in use");
+                        });
+                employee.getUser().setEmail(dto.getEmail());
+            }
+
             // ✅ Spring Security role — ADMIN/SUPER_ADMIN only
             if (dto.getRole() != null) {
                 User authUser = getAuthUser();
@@ -266,6 +284,8 @@ public class EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
+        employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
+
         if (image != null && !image.isEmpty()) {
             FileUploadResult upload = fileStorageService.upload(
                     image, FileCategory.EMPLOYEE_PROFILE, id.toString(), true);
@@ -283,33 +303,10 @@ public class EmployeeService {
 
     public EmployeeResponseDTO getEmployeeById(Long id) {
 
-        User authUser = getAuthUser();
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        // ✅ Check permissions
-        if (authUser.getRole() == Role.USER) {
-            boolean canViewAll = permissionCheckService.hasAccess(
-                    auth,
-                    AppModule.EMPLOYEE_PROFILE,
-                    AppAction.VIEW_ALL
-            );
-
-            if (!canViewAll) {
-                boolean canViewOwn = permissionCheckService.hasAccess(
-                        auth,
-                        AppModule.EMPLOYEE_PROFILE,
-                        AppAction.VIEW_OWN
-                );
-
-                if (!canViewOwn || employee.getUser() == null ||
-                        !employee.getUser().getId().equals(authUser.getId())) {
-                    throw new RuntimeException("Access denied: cannot view other employees");
-                }
-            }
-        }
+        employeeAccessGuard.assertCanRead(employee, AppModule.EMPLOYEE_PROFILE);
 
         return toDTO(employee);
     }
@@ -479,7 +476,12 @@ public class EmployeeService {
     // ======================================================
 
     public void deleteEmployee(Long id) {
-        employeeRepository.deleteById(id);
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
+
+        employeeRepository.delete(employee);
     }
 
     // ======================================================

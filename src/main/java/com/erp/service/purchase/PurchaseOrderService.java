@@ -33,6 +33,7 @@ import com.erp.service.finance.PurchaseInvoiceGenerationScheduler;
 import com.erp.service.finance.TransactionService;
 import com.erp.service.finance.VendorPayableService;
 import com.erp.exception.ConflictException;
+import com.erp.exception.NotFoundException;
 import com.erp.service.DocumentSequenceService;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
@@ -102,6 +103,7 @@ public class PurchaseOrderService {
 
         Vendor supplier = vendorRepo.findById(dto.getSupplierId())
                 .orElseThrow(() -> new RuntimeException("Supplier not found"));
+        assertVendorInTenant(supplier);
         assertVendorEligibleForPurchase(supplier);
 
         Company company = companyRepo.findById(companyId).orElseThrow();
@@ -112,6 +114,7 @@ public class PurchaseOrderService {
         List<PurchaseOrderItem> items = dto.getItems().stream().map(i -> {
             Item item = itemRepo.findById(i.getItemId())
                     .orElseThrow(() -> new RuntimeException("Item not found"));
+            assertItemInTenant(item);
 
             PurchaseLinePricing.Resolved r = PurchaseLinePricing.resolveOrderLine(
                     item, i.getOtherUnitCost(), i.getUnitCost());
@@ -157,6 +160,28 @@ public class PurchaseOrderService {
         }
         applyDraftSupplierChange(po, dto.getSupplierId());
         return toDTO(repo.save(po));
+    }
+
+    private void assertVendorInTenant(Vendor vendor) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(auth.getCurrentUserRole())) return;
+        Long currentCompanyId = auth.getCurrentCompanyId();
+        Long vendorCompanyId = vendor != null && vendor.getCompany() != null
+                ? vendor.getCompany().getId() : null;
+        if (currentCompanyId == null || vendorCompanyId == null
+                || !currentCompanyId.equals(vendorCompanyId)) {
+            throw new NotFoundException("Supplier not found");
+        }
+    }
+
+    private void assertItemInTenant(Item item) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(auth.getCurrentUserRole())) return;
+        Long currentCompanyId = auth.getCurrentCompanyId();
+        Long itemCompanyId = item != null && item.getCompany() != null
+                ? item.getCompany().getId() : null;
+        if (currentCompanyId == null || itemCompanyId == null
+                || !currentCompanyId.equals(itemCompanyId)) {
+            throw new NotFoundException("Item not found");
+        }
     }
 
     private void assertVendorEligibleForPurchase(Vendor supplier) {
@@ -238,7 +263,8 @@ public class PurchaseOrderService {
 
         List<PurchaseOrderItem> items = dto.getItems().stream().map(i -> {
             Item item = itemRepo.findById(i.getItemId())
-                    .orElseThrow();
+                    .orElseThrow(() -> new RuntimeException("Item not found"));
+            assertItemInTenant(item);
 
             PurchaseLinePricing.Resolved r = PurchaseLinePricing.resolveOrderLine(
                     item, i.getOtherUnitCost(), i.getUnitCost());

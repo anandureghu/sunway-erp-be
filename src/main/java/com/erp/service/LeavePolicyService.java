@@ -10,7 +10,9 @@ import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.EmployeeLeaveBalanceRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,8 +30,10 @@ public class LeavePolicyService {
     private final CompanyLeavePolicyRepository policyRepo;
     private final EmployeeRepository employeeRepo;
     private final EmployeeLeaveBalanceRepository balanceRepo;
+    private final AuthContext authContext;
 
     public List<LeavePolicyResponseDTO> getAllPolicies(Long companyId) {
+        assertSameTenant(companyId);
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
@@ -56,6 +60,7 @@ public class LeavePolicyService {
 
     @Transactional
     public void savePolicies(Long companyId, List<LeavePolicyRequestDTO> dtos) {
+        assertSameTenant(companyId);
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
@@ -234,6 +239,7 @@ public class LeavePolicyService {
     public void deletePolicy(Long policyId) {
         CompanyLeavePolicy policy = policyRepo.findById(policyId)
                 .orElseThrow(() -> new RuntimeException("Policy not found"));
+        assertSameTenant(policy.getCompany());
 
         List<Employee> employees = employeeRepo.findByCompanyOrderByCreatedAtDesc(policy.getCompany());
 
@@ -248,6 +254,21 @@ public class LeavePolicyService {
         }
 
         policyRepo.delete(policy);
+    }
+
+    /* ================= TENANT GUARD ================= */
+
+    private void assertSameTenant(Long companyId) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        if (currentCompanyId == null || companyId == null
+                || !currentCompanyId.equals(companyId)) {
+            throw new AccessDeniedException("This company's leave policies belong to a different company");
+        }
+    }
+
+    private void assertSameTenant(Company company) {
+        assertSameTenant(company != null ? company.getId() : null);
     }
 
     private List<CompanyLeavePolicy> findPoliciesByRole(Company company, String role) {

@@ -15,14 +15,19 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "items")
+@Table(
+        name = "items",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_items_company_sku", columnNames = {"company_id", "sku"})
+        }
+)
 public class Item {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(nullable = false, length = 100)
     private String sku;
 
     @Column(nullable = false, length = 150)

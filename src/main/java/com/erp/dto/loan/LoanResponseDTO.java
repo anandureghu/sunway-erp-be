@@ -22,6 +22,7 @@ public class LoanResponseDTO {
     private String employeeName;
     private String notes;
     private String rejectionComment;
+    private boolean archived;
     private String currencyCode;
     private String currencySymbol;
 

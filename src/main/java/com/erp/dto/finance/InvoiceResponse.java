@@ -46,6 +46,10 @@ public class InvoiceResponse {
     private BigDecimal taxAmount;
     private BigDecimal openAmount;
     private BigDecimal outstanding;
+    /** Sum of confirmed payments applied to this invoice (cash collected, excludes credit notes). */
+    private BigDecimal paidAmount;
+    /** Portion of {@link #amount} written off this invoice via applied credit notes. */
+    private BigDecimal creditAppliedAmount;
 
     private String itemDescription;
     private String notesRemarks;

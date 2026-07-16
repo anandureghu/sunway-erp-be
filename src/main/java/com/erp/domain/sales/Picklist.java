@@ -14,14 +14,19 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "picklists")
+@Table(
+        name = "picklists",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_picklists_company_picklist_number", columnNames = {"company_id", "picklist_number"})
+        }
+)
 public class Picklist {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String picklistNumber;
 
     @ManyToOne(optional = false)

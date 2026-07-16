@@ -1,11 +1,13 @@
 package com.erp.service;
 
 import com.erp.domain.*;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.currentjob.EmployeeEducationRequestDTO;
 import com.erp.dto.currentjob.EmployeeEducationResponseDTO;
 import com.erp.mapper.EmployeeEducationMapper;
 import com.erp.repo.EmployeeEducationRepo;
 import com.erp.repo.EmployeeRepository;
+import com.erp.security.guard.EmployeeAccessGuard;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ public class EmployeeEducationService {
 
     private final EmployeeEducationRepo repo;
     private final EmployeeRepository employeeRepo;
+    private final EmployeeAccessGuard employeeAccessGuard;
 
     public List<EmployeeEducationResponseDTO> getAll(Long employeeId) {
         return repo.findByEmployeeId(employeeId)
@@ -42,6 +45,8 @@ public class EmployeeEducationService {
         EmployeeEducation edu = repo.findByIdAndEmployeeId(eduId, employeeId)
                 .orElseThrow(() -> new RuntimeException("Education not found"));
 
+        employeeAccessGuard.assertCanWrite(edu.getEmployee(), AppModule.CURRENT_JOB);
+
         EmployeeEducationMapper.updateEntity(edu, dto);
         return EmployeeEducationMapper.toDTO(edu);
     }
@@ -49,6 +54,9 @@ public class EmployeeEducationService {
     public void delete(Long employeeId, Long eduId) {
         EmployeeEducation edu = repo.findByIdAndEmployeeId(eduId, employeeId)
                 .orElseThrow(() -> new RuntimeException("Education not found"));
+
+        employeeAccessGuard.assertCanWrite(edu.getEmployee(), AppModule.CURRENT_JOB);
+
         repo.delete(edu);
     }
 }

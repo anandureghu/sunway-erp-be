@@ -1,5 +1,6 @@
 package com.erp.domain;
 
+import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -10,7 +11,7 @@ import java.time.LocalDate;
         name = "employee_residence_permits",
         uniqueConstraints = {
                 @UniqueConstraint(columnNames = "employee_id"),
-                @UniqueConstraint(columnNames = "permit_id_number")
+                @UniqueConstraint(name = "uk_residence_permits_company_permit_id_number", columnNames = {"company_id", "permit_id_number"})
         }
 )
 @Getter
@@ -27,6 +28,10 @@ public class ResidencePermit {
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "employee_id", nullable = false)
     private Employee employee;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Column(name = "permit_id_number", nullable = false, length = 50)
     private String permitIdNumber;

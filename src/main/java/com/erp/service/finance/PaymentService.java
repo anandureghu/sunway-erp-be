@@ -1,16 +1,20 @@
 package com.erp.service.finance;
 
+import com.erp.domain.finance.AccountingProcessCode;
 import com.erp.domain.finance.Payment;
 import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
+import com.erp.dto.hr.ProcessAccountPair;
 import com.erp.exception.ConflictException;
 import com.erp.domain.hr.Company;
 import com.erp.dto.finance.ConfirmPaymentDTO;
+import com.erp.dto.finance.CreateOtherPaymentDTO;
 import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
+import com.erp.util.ExpenseCategoryLabels;
 import com.erp.util.PaymentMethodLabels;
 import com.erp.dto.finance.TransactionResponseDTO;
 import com.erp.repo.finance.InvoiceRepository;
@@ -58,6 +62,7 @@ public class PaymentService {
     private final VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService;
     private final VendorPayableService vendorPayableService;
     private final CompanyAccountingDefaultsService accountingDefaults;
+    private final CreditNoteService creditNoteService;
 
     public PaymentService(PaymentRepository paymentRepo,
                           TransactionService transactionService,
@@ -72,7 +77,8 @@ public class PaymentService {
                           DocumentSequenceService documentSequenceService,
                           VendorPaymentReceiptPdfService vendorPaymentReceiptPdfService,
                           VendorPayableService vendorPayableService,
-                          CompanyAccountingDefaultsService accountingDefaults) {
+                          CompanyAccountingDefaultsService accountingDefaults,
+                          CreditNoteService creditNoteService) {
 
         this.paymentRepo = paymentRepo;
         this.transactionService = transactionService;
@@ -88,6 +94,7 @@ public class PaymentService {
         this.vendorPaymentReceiptPdfService = vendorPaymentReceiptPdfService;
         this.vendorPayableService = vendorPayableService;
         this.accountingDefaults = accountingDefaults;
+        this.creditNoteService = creditNoteService;
     }
 
     @Transactional
@@ -101,6 +108,16 @@ public class PaymentService {
         if (dto.getPaymentMethod() == null || dto.getPaymentMethod().isBlank()) {
             throw new RuntimeException("Payment method is required");
         }
+        String methodCode;
+        try {
+            methodCode = PaymentMethodLabels.normalizeMethod(dto.getPaymentMethod());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+
+        assertTenantCompanyPath(dto.getCompanyId());
+
+        assertTenantCompanyPath(dto.getCompanyId());
 
         Company company = companyRepo.findById(dto.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"));
@@ -124,7 +141,7 @@ public class PaymentService {
                 .paymentCode(documentSequenceService.generateNext("PAY"))
                 .company(company)
                 .amount(dto.getAmount())
-                .paymentMethod(dto.getPaymentMethod())
+                .paymentMethod(methodCode)
                 .effectiveDate(dto.getEffectiveDate() == null ? LocalDate.now() : dto.getEffectiveDate())
                 .notes(dto.getNotes())
                 .invoiceId(dto.getInvoiceId())
@@ -156,6 +173,96 @@ public class PaymentService {
         return toDTO(saved);
     }
 
+    /**
+     * Creates a pending ad-hoc expense payment (rent, employee/vendor reimbursement, utilities,
+     * etc.) — not tied to a PO or invoice. Mirrors {@link VendorPayableService}'s pending-row
+     * creation, except this one is user-initiated rather than triggered by a PO release.
+     */
+    @Transactional
+    public PaymentResponseDTO createOtherPayment(CreateOtherPaymentDTO dto) {
+        if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Payment amount must be greater than zero");
+        }
+        String categoryCode;
+        try {
+            categoryCode = ExpenseCategoryLabels.normalize(dto.getExpenseCategory());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+
+        assertTenantCompanyPath(dto.getCompanyId());
+
+        Company company = companyRepo.findById(dto.getCompanyId())
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+
+        Long userId = auth.getCurrentUserId();
+
+        Payment payment = Payment.builder()
+                .paymentCode(documentSequenceService.generateNext("EXP"))
+                .company(company)
+                .amount(dto.getAmount())
+                .paymentMethod(PaymentMethodLabels.PENDING_OTHER)
+                .effectiveDate(dto.getEffectiveDate() == null ? LocalDate.now() : dto.getEffectiveDate())
+                .notes(dto.getNotes())
+                .expenseCategory(categoryCode)
+                .payee(dto.getPayee())
+                .paymentDirection(PaymentDirection.OTHER)
+                .createdBy(userId)
+                .build();
+
+        return toDTO(paymentRepo.save(payment));
+    }
+
+    private PaymentResponseDTO confirmOtherPayment(Payment payment, ConfirmPaymentDTO body) {
+        if (!PaymentMethodLabels.PENDING_OTHER.equalsIgnoreCase(payment.getPaymentMethod())) {
+            throw new RuntimeException("Expense payment is already confirmed or is not pending");
+        }
+        String methodCode;
+        try {
+            methodCode = PaymentMethodLabels.normalizeMethod(
+                    body != null ? body.getPaymentMethod() : null);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+        BigDecimal confirmAmount = body != null && body.getAmount() != null
+                ? body.getAmount()
+                : payment.getAmount();
+        if (confirmAmount == null || confirmAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Payment amount must be greater than zero");
+        }
+
+        Long companyId = payment.getCompany().getId();
+        ProcessAccountPair accounts =
+                accountingDefaults.requireProcessAccounts(companyId, AccountingProcessCode.OTHER_PAYMENT);
+        accountingDefaults.assertDistinctAccounts(
+                "Other payment defaults", accounts.getDebitAccountId(), accounts.getCreditAccountId());
+
+        payment.setAmount(confirmAmount);
+        payment.setPaymentMethod(methodCode);
+        payment.setNotes(
+                (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
+                        + "Confirmed expense payment"
+        );
+        Payment saved = paymentRepo.save(payment);
+
+        String description = "Other payment (" + ExpenseCategoryLabels.displayLabel(saved.getExpenseCategory()) + ")"
+                + (saved.getPayee() != null && !saved.getPayee().isBlank() ? " — " + saved.getPayee() : "");
+
+        transactionService.create(CreateTransactionDTO.builder()
+                .companyId(companyId)
+                .transactionType(TransactionService.TYPE_OTHER_PAYMENT)
+                .transactionDate(saved.getEffectiveDate())
+                .amount(confirmAmount)
+                .debitAccount(accounts.getDebitAccountId())
+                .creditAccount(accounts.getCreditAccountId())
+                .paymentId(String.valueOf(saved.getId()))
+                .source(TransactionService.SOURCE_OTHER)
+                .transactionDescription(description)
+                .build());
+
+        return toDTO(saved);
+    }
+
     private PaymentResponseDTO toDTO(Payment p) {
         PaymentDirection dir = p.getPaymentDirection() != null
                 ? p.getPaymentDirection()
@@ -172,6 +279,9 @@ public class PaymentService {
                 .purchaseOrderId(p.getPurchaseOrderId())
                 .pdfUrl(p.getPdfUrl())
                 .archived(p.isArchived())
+                .creditAppliedAmount(p.getCreditAppliedAmount())
+                .expenseCategory(p.getExpenseCategory())
+                .payee(p.getPayee())
                 .createdAt(p.getCreatedAt());
         if (p.getPurchaseOrderId() != null) {
             purchaseOrderRepo.findById(p.getPurchaseOrderId())
@@ -180,6 +290,8 @@ public class PaymentService {
                         if (po.getSupplier() != null) {
                             b.supplierId(po.getSupplier().getId());
                             b.supplierName(po.getSupplier().getVendorName());
+                            b.availableCreditAmount(
+                                    creditNoteService.getAvailableCreditTotal(null, po.getSupplier().getId()));
                         }
                     });
         }
@@ -193,9 +305,18 @@ public class PaymentService {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
+                applyInvoiceProgress(b, inv);
                 if (inv.getType() == InvoiceType.SALES && inv.getOrderId() != null) {
                     salesOrderRepo.findById(inv.getOrderId())
-                            .ifPresent(so -> b.salesOrderNumber(so.getOrderNumber()));
+                            .ifPresent(so -> {
+                                b.salesOrderNumber(so.getOrderNumber());
+                                if (so.getCustomer() != null) {
+                                    b.customerId(so.getCustomer().getId());
+                                    b.customerName(so.getCustomer().getCustomerName());
+                                    b.availableCreditAmount(
+                                            creditNoteService.getAvailableCreditTotal(so.getCustomer().getId(), null));
+                                }
+                            });
                 }
             });
             return;
@@ -205,8 +326,24 @@ public class PaymentService {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
+                applyInvoiceProgress(b, inv);
             });
         }
+    }
+
+    /** Populates cumulative paid/credit-applied totals for the invoice linked to a payment row. */
+    private void applyInvoiceProgress(PaymentResponseDTO.PaymentResponseDTOBuilder b, Invoice inv) {
+        BigDecimal total = inv.getAmount() != null ? inv.getAmount() : BigDecimal.ZERO;
+        BigDecimal outstanding = inv.getOutstanding() != null ? inv.getOutstanding() : total;
+        BigDecimal paid = inv.getInvoiceId() != null
+                ? paymentRepo.sumConfirmedAmountByInvoiceId(inv.getInvoiceId())
+                : BigDecimal.ZERO;
+        BigDecimal creditApplied = total.subtract(outstanding).subtract(paid);
+        if (creditApplied.compareTo(BigDecimal.ZERO) < 0) {
+            creditApplied = BigDecimal.ZERO;
+        }
+        b.invoicePaidAmount(paid);
+        b.invoiceCreditAppliedAmount(creditApplied);
     }
 
     private BigDecimal resolveConfirmAmount(ConfirmPaymentDTO body, Invoice invoice, Payment payment) {
@@ -240,6 +377,42 @@ public class PaymentService {
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this payment"));
     }
 
+    private Long resolveCustomerIdForInvoice(Invoice invoice) {
+        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+            return null;
+        }
+        return salesOrderRepo.findById(invoice.getOrderId())
+                .map(so -> so.getCustomer() != null ? so.getCustomer().getId() : null)
+                .orElse(null);
+    }
+
+    /**
+     * Consumes the party's available credit notes (capped at the invoice's outstanding balance)
+     * and reduces the invoice's outstanding/status accordingly. Returns the amount actually
+     * applied (0 if none requested/available).
+     */
+    private BigDecimal applyCreditToInvoice(
+            Invoice invoice, Long customerId, Long supplierId, BigDecimal requestedAmount) {
+        if (requestedAmount == null || requestedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal outstanding = invoice.getOutstanding() != null ? invoice.getOutstanding() : invoice.getAmount();
+        BigDecimal cappedRequest = requestedAmount.min(outstanding);
+        BigDecimal applied = creditNoteService.applyAvailableCredit(customerId, supplierId, cappedRequest);
+        if (applied.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal newOutstanding = outstanding.subtract(applied);
+            invoice.setOutstanding(newOutstanding);
+            invoice.setOpenAmount(newOutstanding);
+            if (newOutstanding.compareTo(BigDecimal.ZERO) == 0) {
+                invoice.setStatus("ADJUSTED");
+            } else if (!"PARTIALLY_PAID".equalsIgnoreCase(invoice.getStatus())) {
+                invoice.setStatus("PARTIALLY_ADJUSTED");
+            }
+            invoiceRepo.save(invoice);
+        }
+        return applied;
+    }
+
     @Transactional
     public PaymentResponseDTO archivePayment(Long id) {
         Payment payment = paymentRepo.findById(id)
@@ -249,8 +422,9 @@ public class PaymentService {
             return toDTO(payment);
         }
         String method = payment.getPaymentMethod() == null ? "" : payment.getPaymentMethod().trim();
-        if ("PENDING_REQUEST".equalsIgnoreCase(method)
-                || "PENDING_VENDOR_PAYMENT".equalsIgnoreCase(method)) {
+        if (PaymentMethodLabels.PENDING_REQUEST.equalsIgnoreCase(method)
+                || PaymentMethodLabels.PENDING_VENDOR.equalsIgnoreCase(method)
+                || PaymentMethodLabels.PENDING_OTHER.equalsIgnoreCase(method)) {
             throw new RuntimeException("Only confirmed payments can be archived");
         }
         payment.setArchived(true);
@@ -280,6 +454,12 @@ public class PaymentService {
             return paymentRepo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                     .filter(p -> p.getPaymentDirection() == null
                             || p.getPaymentDirection() == PaymentDirection.CUSTOMER)
+                    .map(this::toDTO)
+                    .toList();
+        }
+        if (direction == PaymentDirection.OTHER) {
+            return paymentRepo.findByCompany_IdAndPaymentDirectionOrderByCreatedAtDesc(companyId, PaymentDirection.OTHER)
+                    .stream()
                     .map(this::toDTO)
                     .toList();
         }
@@ -337,9 +517,15 @@ public class PaymentService {
         if (dto.getPaymentMethod() == null || dto.getPaymentMethod().isBlank()) {
             throw new RuntimeException("Payment method is required");
         }
+        String methodCode;
+        try {
+            methodCode = PaymentMethodLabels.normalizeMethod(dto.getPaymentMethod());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
+        }
 
         payment.setAmount(dto.getAmount());
-        payment.setPaymentMethod(dto.getPaymentMethod());
+        payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(dto.getEffectiveDate() == null ? LocalDate.now() : dto.getEffectiveDate());
         payment.setNotes(dto.getNotes());
         payment.setInvoiceId(dto.getInvoiceId());
@@ -359,20 +545,47 @@ public class PaymentService {
         if (dir == PaymentDirection.VENDOR) {
             return confirmVendorPayment(payment, body);
         }
+        if (dir == PaymentDirection.OTHER) {
+            return confirmOtherPayment(payment, body);
+        }
 
         if (!"PENDING_REQUEST".equalsIgnoreCase(payment.getPaymentMethod())) {
             throw new RuntimeException("Payment is already confirmed");
         }
         Invoice invoice = requireInvoiceForCustomerPayment(payment);
-        BigDecimal confirmAmount = resolveConfirmAmount(body, invoice, payment);
 
-        payment.setAmount(confirmAmount);
-        payment.setPaymentMethod("BANK_TRANSFER");
+        String rawMethod = body != null && body.getPaymentMethod() != null && !body.getPaymentMethod().isBlank()
+                ? body.getPaymentMethod()
+                : "BANK_TRANSFER";
+        String methodCode;
+        try {
+            methodCode = PaymentMethodLabels.normalizeMethod(rawMethod);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e.getMessage());
+        }
+
+        Long customerId = resolveCustomerIdForInvoice(invoice);
+        BigDecimal creditApplied = applyCreditToInvoice(
+                invoice, customerId, null, body != null ? body.getApplyCreditAmount() : null);
+
+        payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
+        payment.setCreditAppliedAmount(creditApplied.compareTo(BigDecimal.ZERO) > 0 ? creditApplied : null);
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Confirmed from payment request"
         );
+
+        BigDecimal outstandingAfterCredit = invoice.getOutstanding() != null
+                ? invoice.getOutstanding() : invoice.getAmount();
+        if (outstandingAfterCredit.compareTo(BigDecimal.ZERO) <= 0) {
+            // Fully settled by credit alone — nothing left to collect in cash.
+            payment.setAmount(BigDecimal.ZERO);
+            return toDTO(paymentRepo.save(payment));
+        }
+
+        BigDecimal confirmAmount = resolveConfirmAmount(body, invoice, payment);
+        payment.setAmount(confirmAmount);
         Payment saved = paymentRepo.save(payment);
 
         Invoice updatedInvoice = invoiceService.applyPayment(saved.getInvoiceId(), saved.getAmount());
@@ -407,22 +620,36 @@ public class PaymentService {
                     "Vendor Invoice Matching is missing. Please match your invoice with the vendor invoice "
                             + "and confirm the order items before proceeding with the vendor payment.");
         }
-        BigDecimal confirmAmount = resolveConfirmAmount(body, purchaseInvoice, payment);
-
         String methodCode;
         try {
-            methodCode = PaymentMethodLabels.normalizeVendorMethod(
+            methodCode = PaymentMethodLabels.normalizeMethod(
                     body != null ? body.getPaymentMethod() : null);
         } catch (IllegalArgumentException e) {
             throw new RuntimeException(e.getMessage());
         }
-        payment.setAmount(confirmAmount);
+
+        Long supplierId = po.getSupplier() != null ? po.getSupplier().getId() : null;
+        BigDecimal creditApplied = applyCreditToInvoice(
+                purchaseInvoice, null, supplierId, body != null ? body.getApplyCreditAmount() : null);
+
         payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
+        payment.setCreditAppliedAmount(creditApplied.compareTo(BigDecimal.ZERO) > 0 ? creditApplied : null);
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Vendor payment confirmed (AP)"
         );
+
+        BigDecimal outstandingAfterCredit = purchaseInvoice.getOutstanding() != null
+                ? purchaseInvoice.getOutstanding() : purchaseInvoice.getAmount();
+        if (outstandingAfterCredit.compareTo(BigDecimal.ZERO) <= 0) {
+            // Fully settled by supplier credit alone — nothing left to pay in cash.
+            payment.setAmount(BigDecimal.ZERO);
+            return toDTO(paymentRepo.save(payment));
+        }
+
+        BigDecimal confirmAmount = resolveConfirmAmount(body, purchaseInvoice, payment);
+        payment.setAmount(confirmAmount);
         invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                 .map(Invoice::getInvoiceId)
                 .ifPresent(code -> {

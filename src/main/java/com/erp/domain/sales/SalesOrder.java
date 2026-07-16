@@ -19,14 +19,19 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "sales_orders")
+@Table(
+        name = "sales_orders",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_sales_orders_company_order_number", columnNames = {"company_id", "order_number"})
+        }
+)
 public class SalesOrder {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String orderNumber;
 
     @ManyToOne(optional = false)

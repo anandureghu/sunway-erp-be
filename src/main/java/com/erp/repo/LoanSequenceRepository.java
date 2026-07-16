@@ -13,8 +13,9 @@ import java.util.Optional;
 public interface LoanSequenceRepository extends JpaRepository<LoanSequence, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT ls FROM LoanSequence ls WHERE ls.loanType = :loanType")
-    Optional<LoanSequence> findByLoanTypeForUpdate(@Param("loanType") LoanType loanType);  // <-- ADD @Param HERE
+    @Query("SELECT ls FROM LoanSequence ls WHERE ls.company.id = :companyId AND ls.loanType = :loanType")
+    Optional<LoanSequence> findByCompanyIdAndLoanTypeForUpdate(
+            @Param("companyId") Long companyId, @Param("loanType") LoanType loanType);
 
-    Optional<LoanSequence> findByLoanType(LoanType loanType);
+    Optional<LoanSequence> findByCompanyIdAndLoanType(Long companyId, LoanType loanType);
 }

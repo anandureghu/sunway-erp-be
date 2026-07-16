@@ -27,7 +27,7 @@ public class CreditNote {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private String creditNoteNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -59,6 +59,19 @@ public class CreditNote {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "goods_receipt_id")
     private GoodsReceipt goodsReceipt;
+
+    /**
+     * Customer this credit note belongs to (SALES invoices), resolved from the invoice's linked
+     * sales order at creation time. Lets "available" credit be looked up per-customer instead of
+     * per-invoice, so it can be applied to a later payment. Plain business id, not a JPA relation
+     * — matches {@code Payment.purchaseOrderId}'s pattern elsewhere in this module.
+     */
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    /** Supplier this credit note belongs to (PURCHASE invoices), resolved the same way. */
+    @Column(name = "supplier_id")
+    private Long supplierId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)

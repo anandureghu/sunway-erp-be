@@ -6,8 +6,10 @@ import com.erp.dto.property.CompanyPropertyRequestDTO;
 import com.erp.dto.property.CompanyPropertyResponseDTO;
 import com.erp.repo.CompanyPropertyRepository;
 import com.erp.repo.EmployeeRepository;
+import com.erp.security.context.AuthContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -17,6 +19,7 @@ public class CompanyPropertyService {
 
     private final EmployeeRepository employeeRepo;
     private final CompanyPropertyRepository propertyRepo;
+    private final AuthContext authContext;
 
     /* ================= CREATE ================= */
     @Transactional
@@ -26,6 +29,7 @@ public class CompanyPropertyService {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertSameTenant(employee);
 
         // 🔒 Prevent duplicate asset for same employee
         if (propertyRepo.existsByEmployeeIdAndItemCode(employeeId, dto.getItemCode())) {
@@ -50,6 +54,7 @@ public class CompanyPropertyService {
 
         CompanyProperty p = propertyRepo.findById(propertyId)
                 .orElseThrow(() -> new RuntimeException("Property not found"));
+        assertSameTenant(p.getEmployee());
 
         if (!p.getEmployee().getId().equals(employeeId)) {
             throw new RuntimeException("Property does not belong to this employee");
@@ -67,6 +72,7 @@ public class CompanyPropertyService {
 
         CompanyProperty p = propertyRepo.findById(propertyId)
                 .orElseThrow(() -> new RuntimeException("Property not found"));
+        assertSameTenant(p.getEmployee());
 
         if (!p.getEmployee().getId().equals(employeeId)) {
             throw new RuntimeException("Property does not belong to this employee");
@@ -78,10 +84,26 @@ public class CompanyPropertyService {
     /* ================= GET ================= */
     public List<CompanyPropertyResponseDTO> getProperties(Long employeeId) {
 
+        Employee employee = employeeRepo.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertSameTenant(employee);
+
         return propertyRepo.findByEmployeeId(employeeId)
                 .stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    /* ================= TENANT GUARD ================= */
+    private void assertSameTenant(Employee employee) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(authContext.getCurrentUserRole())) return;
+        Long currentCompanyId = authContext.getCurrentCompanyId();
+        Long employeeCompanyId = employee != null && employee.getCompany() != null
+                ? employee.getCompany().getId() : null;
+        if (currentCompanyId == null || employeeCompanyId == null
+                || !currentCompanyId.equals(employeeCompanyId)) {
+            throw new AccessDeniedException("This company property belongs to a different company");
+        }
     }
 
     /* ================= VALIDATION + MAPPING ================= */

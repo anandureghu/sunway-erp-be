@@ -1,5 +1,6 @@
 package com.erp.domain;
 
+import com.erp.domain.hr.Company;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -7,7 +8,12 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "employee_loans")
+@Table(
+        name = "employee_loans",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_employee_loans_company_loan_code", columnNames = {"company_id", "loan_code"})
+        }
+)
 @Getter
 @Setter
 public class EmployeeLoan {
@@ -20,7 +26,11 @@ public class EmployeeLoan {
     @JoinColumn(name = "employee_id")
     private Employee employee;
 
-    @Column(nullable = false, unique = true)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
+
+    @Column(nullable = false)
     private String loanCode;
 
     @Enumerated(EnumType.STRING)
@@ -41,6 +51,10 @@ public class EmployeeLoan {
 
     @Column(nullable = false)
     private String status; // ACTIVE, CLOSED
+
+    /** Archived decided loans drop out of the active Loan Approvals list. */
+    @Column(nullable = false)
+    private boolean archived = false;
 
     @Column(length = 1000)
     private String notes;

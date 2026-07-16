@@ -66,6 +66,13 @@ public class Company {
     @Column(name = "company_code", length = 3)
     private String companyCode;
 
+    @Column(name = "industry", length = 100)
+    private String industry;
+
+    @Builder.Default
+    @Column(name = "is_active", nullable = false)
+    private boolean active = true;
+
     @Column(name = "tax_rate", length = 3)
     private String taxRate;
 
@@ -199,5 +206,9 @@ public class Company {
 
     @Transient
     private boolean invoiceQrEnabled;
+
+    /** Live count of ACTIVE employees, computed on read — not persisted. */
+    @Transient
+    private Long employeeCount;
 
 }

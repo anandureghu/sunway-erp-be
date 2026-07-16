@@ -12,4 +12,11 @@ public class CreateCreditNoteDTO {
     private BigDecimal amount;
     private String reason;
     private LocalDate creditDate;
+
+    /**
+     * Null/true (default) = today's behavior: apply immediately, reducing this invoice's
+     * outstanding balance. False = create as a standing "AVAILABLE" credit for the invoice's
+     * customer/supplier, not tied to this invoice's balance, for use on a future payment.
+     */
+    private Boolean applyImmediately;
 }

@@ -402,6 +402,7 @@ public class InvoiceService {
         }
         Invoice inv = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
         if (inv.getType() != InvoiceType.PURCHASE) {
             throw new RuntimeException("Vendor invoice matching applies only to purchase invoices");
         }
@@ -430,6 +431,7 @@ public class InvoiceService {
         }
         Invoice inv = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
         if (inv.getType() != InvoiceType.PURCHASE) {
             throw new RuntimeException("Supplier documents apply only to purchase invoices");
         }
@@ -884,6 +886,7 @@ public class InvoiceService {
 
         Invoice inv = repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(inv);
 
         inv.setToParty(req.getToParty());
         inv.setInvoiceDate(req.getInvoiceDate());
@@ -1031,6 +1034,17 @@ public class InvoiceService {
             orderNumber = salesOrder.getOrderNumber();
         }
 
+        BigDecimal invoiceTotal = i.getAmount() != null ? i.getAmount() : BigDecimal.ZERO;
+        BigDecimal outstandingAmount = i.getOutstanding() != null ? i.getOutstanding() : invoiceTotal;
+        BigDecimal paidAmount = i.getInvoiceId() != null
+                ? paymentRepo.sumConfirmedAmountByInvoiceId(i.getInvoiceId())
+                : BigDecimal.ZERO;
+        // Whatever reduced the balance that wasn't cash was a directly-applied credit note.
+        BigDecimal creditAppliedAmount = invoiceTotal.subtract(outstandingAmount).subtract(paidAmount);
+        if (creditAppliedAmount.compareTo(BigDecimal.ZERO) < 0) {
+            creditAppliedAmount = BigDecimal.ZERO;
+        }
+
         return InvoiceResponse.builder()
                 .id(i.getId())
                 .invoiceId(i.getInvoiceId())
@@ -1064,6 +1078,8 @@ public class InvoiceService {
                 .taxAmount(i.getTaxAmount() == null ? BigDecimal.ZERO : i.getTaxAmount())
                 .openAmount(i.getOpenAmount())
                 .outstanding(i.getOutstanding())
+                .paidAmount(paidAmount)
+                .creditAppliedAmount(creditAppliedAmount)
                 .itemDescription(i.getItemDescription())
                 .notesRemarks(i.getNotesRemarks())
                 .gracePeriod(i.getGracePeriod())

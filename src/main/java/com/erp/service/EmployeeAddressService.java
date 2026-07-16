@@ -3,6 +3,7 @@ package com.erp.service;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeAddress;
 import com.erp.domain.EmployeeContactInfo;
+import com.erp.domain.security.AppModule;
 import com.erp.dto.contact.EmployeeAddressRequestDTO;
 import com.erp.dto.contact.EmployeeAddressResponseDTO;
 import com.erp.dto.contact.EmployeeContactInfoRequestDTO;
@@ -10,6 +11,7 @@ import com.erp.dto.contact.EmployeeContactInfoResponseDTO;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.contact.EmployeeAddressRepository;
 import com.erp.repo.contact.EmployeeContactInfoRepository;
+import com.erp.security.guard.EmployeeAccessGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,7 @@ public class EmployeeAddressService {
     private final EmployeeRepository employeeRepo;
     private final EmployeeContactInfoRepository contactInfoRepo;
     private final EmployeeAddressRepository addressRepo;
+    private final EmployeeAccessGuard employeeAccessGuard;
 
     // ======================================================
     // ADD ADDRESS
@@ -35,6 +38,8 @@ public class EmployeeAddressService {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
 
         EmployeeAddress address = EmployeeAddress.builder()
                 .line1(dto.getLine1())
@@ -61,6 +66,8 @@ public class EmployeeAddressService {
         EmployeeAddress address = addressRepo.findById(addressId)
                 .orElseThrow(() -> new RuntimeException("Address not found"));
 
+        employeeAccessGuard.assertCanWrite(address.getEmployee(), AppModule.EMPLOYEE_PROFILE);
+
         address.setLine1(dto.getLine1());
         address.setLine2(dto.getLine2());
         address.setCity(dto.getCity());
@@ -77,6 +84,11 @@ public class EmployeeAddressService {
     // DELETE ADDRESS
     // ======================================================
     public void deleteAddress(Long addressId) {
+        EmployeeAddress address = addressRepo.findById(addressId)
+                .orElseThrow(() -> new RuntimeException("Address not found"));
+
+        employeeAccessGuard.assertCanWrite(address.getEmployee(), AppModule.EMPLOYEE_PROFILE);
+
         addressRepo.deleteById(addressId);
     }
 
@@ -84,6 +96,11 @@ public class EmployeeAddressService {
     // GET ALL ADDRESSES (BY EMPLOYEE)
     // ======================================================
     public List<EmployeeAddressResponseDTO> getAddresses(Long employeeId) {
+
+        Employee employee = employeeRepo.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        employeeAccessGuard.assertCanRead(employee, AppModule.EMPLOYEE_PROFILE);
 
         return addressRepo.findByEmployeeId(employeeId)
                 .stream()
@@ -95,6 +112,11 @@ public class EmployeeAddressService {
     // GET CONTACT INFO
     // ======================================================
     public EmployeeContactInfoResponseDTO getContactInfo(Long employeeId) {
+
+        Employee employee = employeeRepo.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        employeeAccessGuard.assertCanRead(employee, AppModule.EMPLOYEE_PROFILE);
 
         EmployeeContactInfo contactInfo = contactInfoRepo
                 .findByEmployeeId(employeeId)
@@ -131,6 +153,8 @@ public class EmployeeAddressService {
 
         Employee employee = employeeRepo.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+
+        employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
 
         EmployeeContactInfo contactInfo = contactInfoRepo
                 .findByEmployeeId(employeeId)

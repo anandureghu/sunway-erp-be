@@ -1,5 +1,6 @@
 package com.erp.service.finance;
 
+import com.erp.domain.InvoiceType;
 import com.erp.domain.finance.CreditNote;
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.hr.Company;
@@ -10,6 +11,8 @@ import com.erp.repo.finance.CreditNoteRepository;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.purchase.GoodsReceiptRepository;
+import com.erp.repo.purchase.PurchaseOrderRepository;
+import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.security.context.AuthContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,7 +22,6 @@ import com.erp.service.DocumentSequenceService;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,8 @@ public class CreditNoteService {
     private final CompanyRepository companyRepository;
     private final InvoiceRepository invoiceRepository;
     private final GoodsReceiptRepository goodsReceiptRepository;
+    private final SalesOrderRepository salesOrderRepository;
+    private final PurchaseOrderRepository purchaseOrderRepository;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
 
@@ -40,6 +44,80 @@ public class CreditNoteService {
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    public List<CreditNoteResponseDTO> getAvailableForCustomer(Long customerId) {
+        if (customerId == null) {
+            return List.of();
+        }
+        return creditNoteRepository
+                .findAvailableForCustomer(auth.getCurrentCompanyId(), customerId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public List<CreditNoteResponseDTO> getAvailableForSupplier(Long supplierId) {
+        if (supplierId == null) {
+            return List.of();
+        }
+        return creditNoteRepository
+                .findAvailableForSupplier(auth.getCurrentCompanyId(), supplierId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    /** Total unapplied credit note balance for a customer or supplier (whichever id is non-null). */
+    public BigDecimal getAvailableCreditTotal(Long customerId, Long supplierId) {
+        List<CreditNote> notes = availableNotesFor(customerId, supplierId);
+        return notes.stream()
+                .map(CreditNote::getRemainingAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private List<CreditNote> availableNotesFor(Long customerId, Long supplierId) {
+        Long companyId = auth.getCurrentCompanyId();
+        if (customerId != null) {
+            return creditNoteRepository.findAvailableForCustomer(companyId, customerId);
+        }
+        if (supplierId != null) {
+            return creditNoteRepository.findAvailableForSupplier(companyId, supplierId);
+        }
+        return List.of();
+    }
+
+    /**
+     * Consumes available credit notes for a customer/supplier (oldest first) up to
+     * {@code requestedAmount}, capped by however much is actually available. Only mutates the
+     * credit notes themselves (remainingAmount/status) — callers are responsible for reducing the
+     * relevant invoice's outstanding balance by the amount returned.
+     */
+    @Transactional
+    public BigDecimal applyAvailableCredit(Long customerId, Long supplierId, BigDecimal requestedAmount) {
+        if (requestedAmount == null || requestedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        List<CreditNote> available = availableNotesFor(customerId, supplierId);
+
+        BigDecimal remainingToApply = requestedAmount;
+        BigDecimal totalApplied = BigDecimal.ZERO;
+        for (CreditNote note : available) {
+            if (remainingToApply.compareTo(BigDecimal.ZERO) <= 0) {
+                break;
+            }
+            BigDecimal consume = note.getRemainingAmount().min(remainingToApply);
+            if (consume.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal newRemaining = note.getRemainingAmount().subtract(consume);
+            note.setRemainingAmount(newRemaining);
+            note.setStatus(newRemaining.compareTo(BigDecimal.ZERO) == 0 ? "APPLIED" : "PARTIALLY_APPLIED");
+            creditNoteRepository.save(note);
+            remainingToApply = remainingToApply.subtract(consume);
+            totalApplied = totalApplied.add(consume);
+        }
+        return totalApplied;
     }
 
     @Transactional
@@ -55,37 +133,59 @@ public class CreditNoteService {
             throw new RuntimeException("Invoice not found or access denied");
         }
 
-        if (dto.getAmount().compareTo(invoice.getOutstanding()) > 0) {
-            throw new RuntimeException("Credit exceeds outstanding amount");
-        }
-
         Company company = companyRepository.findById(companyId).orElseThrow(() -> new RuntimeException("Company doesn't exist"));
 
-        CreditNote creditNote = CreditNote.builder()
+        boolean applyImmediately = dto.getApplyImmediately() == null || dto.getApplyImmediately();
+
+        Long customerId = resolveCustomerId(invoice);
+        Long supplierId = resolveSupplierId(invoice);
+
+        CreditNote.CreditNoteBuilder builder = CreditNote.builder()
                 .creditNoteNumber(documentSequenceService.generateNext("CN"))
                 .invoice(invoice)
                 .company(company)
                 .amount(dto.getAmount())
-                .remainingAmount(BigDecimal.ZERO) // fully applied immediately
-                .status("APPLIED")
                 .creditDate(dto.getCreditDate())
                 .reason(dto.getReason())
                 .createdAt(OffsetDateTime.now())
-                .build();
+                .customerId(customerId)
+                .supplierId(supplierId);
 
-        BigDecimal newOutstanding = invoice.getOutstanding().subtract(dto.getAmount());
-        invoice.setOutstanding(newOutstanding);
-
-        if (newOutstanding.compareTo(BigDecimal.ZERO) == 0) {
-            invoice.setStatus("ADJUSTED");
+        if (applyImmediately) {
+            if (dto.getAmount().compareTo(invoice.getOutstanding()) > 0) {
+                throw new RuntimeException("Credit exceeds outstanding amount");
+            }
+            BigDecimal newOutstanding = invoice.getOutstanding().subtract(dto.getAmount());
+            invoice.setOutstanding(newOutstanding);
+            invoice.setStatus(newOutstanding.compareTo(BigDecimal.ZERO) == 0 ? "ADJUSTED" : "PARTIALLY_ADJUSTED");
+            invoiceRepository.save(invoice);
+            builder.remainingAmount(BigDecimal.ZERO).status("APPLIED"); // fully applied immediately
         } else {
-            invoice.setStatus("PARTIALLY_ADJUSTED");
+            builder.remainingAmount(dto.getAmount()).status("AVAILABLE"); // standing credit, not yet applied
         }
 
+        CreditNote creditNote = builder.build();
         creditNoteRepository.save(creditNote);
-        invoiceRepository.save(invoice);
 
         return mapToResponse(creditNote);
+    }
+
+    private Long resolveCustomerId(Invoice invoice) {
+        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+            return null;
+        }
+        return salesOrderRepository.findById(invoice.getOrderId())
+                .map(so -> so.getCustomer() != null ? so.getCustomer().getId() : null)
+                .orElse(null);
+    }
+
+    private Long resolveSupplierId(Invoice invoice) {
+        if (invoice.getType() != InvoiceType.PURCHASE || invoice.getOrderId() == null) {
+            return null;
+        }
+        return purchaseOrderRepository.findById(invoice.getOrderId())
+                .map(po -> po.getSupplier() != null ? po.getSupplier().getId() : null)
+                .orElse(null);
     }
 
     /**
@@ -116,6 +216,11 @@ public class CreditNoteService {
                 ? goodsReceiptRepository.findById(goodsReceiptId).orElse(null)
                 : null;
 
+        Long supplierId = goodsReceipt != null && goodsReceipt.getPurchaseOrder() != null
+                && goodsReceipt.getPurchaseOrder().getSupplier() != null
+                ? goodsReceipt.getPurchaseOrder().getSupplier().getId()
+                : resolveSupplierId(invoice);
+
         CreditNote creditNote = CreditNote.builder()
                 .creditNoteNumber(documentSequenceService.generateNext("CN"))
                 .invoice(invoice)
@@ -125,6 +230,7 @@ public class CreditNoteService {
                 .status("AVAILABLE")
                 .source("AUTO_REJECTION")
                 .goodsReceipt(goodsReceipt)
+                .supplierId(supplierId)
                 .creditDate(java.time.LocalDate.now())
                 .reason(reason)
                 .createdAt(OffsetDateTime.now())
@@ -138,15 +244,19 @@ public class CreditNoteService {
     private CreditNoteResponseDTO mapToResponse(CreditNote creditNote) {
 
         Invoice invoice = creditNote.getInvoice();
+        boolean isPurchase = invoice != null && invoice.getType() == InvoiceType.PURCHASE;
 
         return CreditNoteResponseDTO.builder()
                 .id(creditNote.getId())
                 .creditNoteNumber(creditNote.getCreditNoteNumber())
                 .creditNoteDate(creditNote.getCreditDate())
-                .customerName(invoice.getToParty())
+                .customerName(!isPurchase && invoice != null ? invoice.getToParty() : null)
+                .supplierName(isPurchase && invoice != null ? invoice.getToParty() : null)
+                .customerId(creditNote.getCustomerId())
+                .supplierId(creditNote.getSupplierId())
                 .status(creditNote.getStatus())
                 .project(creditNote.getProject())
-                .referenceNumber(invoice.getInvoiceId())
+                .referenceNumber(invoice != null ? invoice.getInvoiceId() : null)
                 .amount(creditNote.getAmount())
                 .remainingAmount(creditNote.getRemainingAmount())
                 .build();

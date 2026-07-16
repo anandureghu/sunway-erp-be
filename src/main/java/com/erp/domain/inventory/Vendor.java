@@ -15,7 +15,8 @@ import java.time.Instant;
 @Entity
 @Table(name = "vendor",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"company_id", "vendor_name"})
+                @UniqueConstraint(columnNames = {"company_id", "vendor_name"}),
+                @UniqueConstraint(name = "uk_vendor_company_tax_id", columnNames = {"company_id", "tax_id"})
         })
 public class Vendor {
     @Id
@@ -25,7 +26,7 @@ public class Vendor {
     @Column(nullable = false, length = 150)
     private String vendorName;
 
-    @Column(unique = true, length = 50)
+    @Column(length = 50)
     private String taxId;
 
     @Column(nullable = false, length = 50)

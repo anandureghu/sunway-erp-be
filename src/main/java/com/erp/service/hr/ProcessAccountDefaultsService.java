@@ -29,7 +29,8 @@ public class ProcessAccountDefaultsService {
     private static final EnumSet<AccountingProcessCode> GL_BACKED_PROCESSES = EnumSet.of(
             AccountingProcessCode.MANUAL_JOURNAL,
             AccountingProcessCode.STOCK_VARIANCE,
-            AccountingProcessCode.PAYROLL);
+            AccountingProcessCode.PAYROLL,
+            AccountingProcessCode.OTHER_PAYMENT);
 
     private static final EnumSet<AccountingProcessCode> DEBIT_ONLY_PROCESSES = EnumSet.noneOf(
             AccountingProcessCode.class);
