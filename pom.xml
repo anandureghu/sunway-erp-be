@@ -206,7 +206,7 @@
                 <version>10.10.0</version>
                 <configuration>
                     <driver>com.mysql.cj.jdbc.Driver</driver>
-                    <url>jdbc:mysql://${db.host}:${db.port}/${db.name}?createDatabaseIfNotExist=true&amp;useSSL=false&amp;serverTimezone=UTC</url>
+                    <url>jdbc:mysql://${db.host}:${db.port}/${db.name}?createDatabaseIfNotExist=true&amp;useSSL=false&amp;allowPublicKeyRetrieval=true&amp;serverTimezone=UTC</url>
                     <user>root</user>
                     <password>Shras@123</password>
                     <locations>

@@ -230,10 +230,26 @@ public class EmployeeLeaveController {
     }
 
     @GetMapping("/leaves/approvals/history")
-    public ResponseEntity<?> leaveApprovalsHistory() {
+    public ResponseEntity<?> leaveApprovalsHistory(
+            @RequestParam(name = "archived", defaultValue = "false") boolean archived) {
         try {
-            List<LeaveHistoryDTO> approvals = leaveService.getCompanyLeaveApprovals();
+            List<LeaveHistoryDTO> approvals = leaveService.getCompanyLeaveApprovals(archived);
             return ResponseEntity.ok(Map.of("approvals", approvals));
+        } catch (AccessDeniedException e) {
+            return forbidden(e);
+        } catch (RuntimeException e) {
+            return badRequest(e);
+        }
+    }
+
+    @PostMapping("/leaves/{leaveId}/archive")
+    public ResponseEntity<?> archiveLeave(
+            @PathVariable Long leaveId,
+            @RequestParam(name = "archived", defaultValue = "true") boolean archived) {
+        try {
+            return ResponseEntity.ok(leaveService.setLeaveArchived(leaveId, archived));
+        } catch (IllegalArgumentException e) {
+            return badRequest(e);
         } catch (AccessDeniedException e) {
             return forbidden(e);
         } catch (RuntimeException e) {

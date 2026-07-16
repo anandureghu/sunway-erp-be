@@ -52,6 +52,10 @@ public class EmployeeLoan {
     @Column(nullable = false)
     private String status; // ACTIVE, CLOSED
 
+    /** Archived decided loans drop out of the active Loan Approvals list. */
+    @Column(nullable = false)
+    private boolean archived = false;
+
     @Column(length = 1000)
     private String notes;
 

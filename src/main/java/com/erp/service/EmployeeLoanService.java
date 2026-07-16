@@ -246,7 +246,7 @@ public class EmployeeLoanService {
      * Company-wide history of decided loans (active, closed, rejected) for the HR
      * Reports "Loan Approvals" view. Scoped to the caller's company.
      */
-    public List<LoanResponseDTO> getCompanyLoanApprovals() {
+    public List<LoanResponseDTO> getCompanyLoanApprovals(boolean archived) {
         Long userId = authContext.getCurrentUserId();
         if (userId == null) {
             throw new AccessDeniedException("Unauthorized");
@@ -267,8 +267,42 @@ public class EmployeeLoanService {
         return loanRepo.findByCompanyAndStatusIn(
                         companyId, List.of("ACTIVE", "CLOSED", "REJECTED"))
                 .stream()
+                .filter(loan -> loan.isArchived() == archived)
                 .map(this::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    /** Archive / unarchive a decided loan so it drops from (or returns to) the active list. */
+    @Transactional
+    public LoanResponseDTO setLoanArchived(Long loanId, boolean archived) {
+        Long userId = authContext.getCurrentUserId();
+        if (userId == null) {
+            throw new AccessDeniedException("Unauthorized");
+        }
+        Employee approver = authContext.getCurrentEmployee();
+        if (approver == null) {
+            approver = employeeRepo.findByUser_Id(userId)
+                    .orElseThrow(() -> new AccessDeniedException(
+                            "User is not linked to an employee record"));
+        }
+        Long companyId = approver.getCompany() != null ? approver.getCompany().getId() : null;
+
+        EmployeeLoan loan = loanRepo.findById(loanId)
+                .orElseThrow(() -> new RuntimeException("Loan not found"));
+
+        Long loanCompanyId = loan.getEmployee() != null && loan.getEmployee().getCompany() != null
+                ? loan.getEmployee().getCompany().getId() : null;
+        if (companyId == null || loanCompanyId == null || !companyId.equals(loanCompanyId)) {
+            throw new AccessDeniedException("Loan not found");
+        }
+
+        if ("PENDING_APPROVAL".equals(loan.getStatus())) {
+            throw new RuntimeException("Loans pending approval cannot be archived");
+        }
+
+        loan.setArchived(archived);
+        loan = loanRepo.save(loan);
+        return toDTO(loan);
     }
 
     /* ================= MAKE PAYMENT ================= */
@@ -426,6 +460,7 @@ public class EmployeeLoanService {
         dto.setEndDate(loan.getEndDate());
         dto.setNotes(loan.getNotes());
         dto.setRejectionComment(loan.getRejectionComment());
+        dto.setArchived(loan.isArchived());
 
         Employee employee = loan.getEmployee();
         if (employee != null) {

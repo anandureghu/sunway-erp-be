@@ -48,4 +48,8 @@ public class EmployeeLeave {
     /** Approver's reason when the leave is rejected. */
     @Column(length = 1000)
     private String rejectionComment;
+
+    /** Archived decided leaves drop out of the active Leave Approvals list. */
+    @Column(nullable = false)
+    private boolean archived = false;
 }

@@ -25,4 +25,5 @@ public class LeaveHistoryDTO {
     private Long delegateId;
     private String delegateName;
     private String rejectionComment;
+    private boolean archived;
 }

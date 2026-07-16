@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:hrdb}?createDatabaseIfNotExist=true&useSSL=${DB_SSL:false}&requireSSL=${DB_SSL:false}&verifyServerCertificate=${DB_VERIFY:false}&serverTimezone=UTC${DB_SSL_CA:}
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:hrdb}?createDatabaseIfNotExist=true&useSSL=${DB_SSL:false}&requireSSL=${DB_SSL:false}&verifyServerCertificate=${DB_VERIFY:false}&allowPublicKeyRetrieval=${DB_ALLOW_PUBKEY:true}&serverTimezone=UTC${DB_SSL_CA:}
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USER:root}
     password: ${DB_PASS:Shras@123}
