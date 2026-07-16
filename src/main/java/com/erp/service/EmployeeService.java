@@ -288,7 +288,8 @@ public class EmployeeService {
 
         if (image != null && !image.isEmpty()) {
             FileUploadResult upload = fileStorageService.upload(
-                    image, FileCategory.EMPLOYEE_PROFILE, id.toString(), true);
+                    image, FileCategory.EMPLOYEE_PROFILE, id.toString(), true,
+                    authContext.getCurrentCompanyId());
             employee.setImageUrl(upload.getBlobPath());
             employeeRepository.save(employee);
         }

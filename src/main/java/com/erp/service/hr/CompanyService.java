@@ -14,6 +14,7 @@ import com.erp.dto.hr.CompanyDTO;
 import com.erp.dto.hr.HrPoliciesDTO;
 import com.erp.dto.hr.InvoiceBrandingSettingsDTO;
 import com.erp.dto.hr.PayrollExportSettingsDTO;
+import com.erp.dto.hr.StorageUsageDTO;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.BankAccountRepository;
@@ -46,6 +47,7 @@ public class CompanyService {
     private final FileStorageService          fileStorageService;
     private final DocumentSequenceService     documentSequenceService;
     private final EmployeeRepository          employeeRepository;
+    private final CompanyStorageService       companyStorageService;
 
     public CompanyService(
             CompanyRepository companyRepository,
@@ -57,7 +59,8 @@ public class CompanyService {
             AuthContext authContext,
             FileStorageService fileStorageService,
             DocumentSequenceService documentSequenceService,
-            EmployeeRepository employeeRepository) {
+            EmployeeRepository employeeRepository,
+            CompanyStorageService companyStorageService) {
 
         this.companyRepository         = companyRepository;
         this.invoiceSettingsRepository = invoiceSettingsRepository;
@@ -69,6 +72,7 @@ public class CompanyService {
         this.fileStorageService        = fileStorageService;
         this.documentSequenceService   = documentSequenceService;
         this.employeeRepository        = employeeRepository;
+        this.companyStorageService     = companyStorageService;
     }
 
     // ======================================================
@@ -80,6 +84,7 @@ public class CompanyService {
         if (isSuperAdmin()) {
             return companyRepository.findAll().stream()
                     .map(this::hydrateInvoiceBrandingView)
+                    .map(this::hydrateStorageUsage)
                     .toList();
         }
         Long cid = authContext.getCurrentCompanyId();
@@ -97,13 +102,15 @@ public class CompanyService {
     public Company getCompanyById(Long id) {
         Company company = companyRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
-        if (!isSuperAdmin()) {
+        boolean isSuperAdmin = isSuperAdmin();
+        if (!isSuperAdmin) {
             Long current = authContext.getCurrentCompanyId();
             if (current == null || !current.equals(id)) {
                 throw new AccessDeniedException("Access denied for this company");
             }
         }
-        return hydrateInvoiceBrandingView(company);
+        company = hydrateInvoiceBrandingView(company);
+        return isSuperAdmin ? hydrateStorageUsage(company) : company;
     }
 
     private boolean isSuperAdmin() {
@@ -171,7 +178,8 @@ public class CompanyService {
                     logo,
                     FileCategory.COMPANY_LOGO,
                     saved.getId().toString(),
-                    true
+                    true,
+                    saved.getId()
             );
             saved.setLogoUrl(fileStorageService.buildPublicUrl(upload.getBlobPath()));
             saved = companyRepository.save(saved);
@@ -238,7 +246,8 @@ public class CompanyService {
                     logo,
                     FileCategory.COMPANY_LOGO,
                     existing.getId().toString(),
-                    true
+                    true,
+                    existing.getId()
             );
             existing.setLogoUrl(fileStorageService.buildPublicUrl(upload.getBlobPath()));
         }
@@ -327,6 +336,27 @@ public class CompanyService {
         company.setEmployeeCount(
                 employeeRepository.countByCompany_IdAndStatus(company.getId(), EmployeeStatus.ACTIVE));
         return company;
+    }
+
+    private Company hydrateStorageUsage(Company company) {
+        StorageUsageDTO usage = companyStorageService.getStorageUsage(company.getId());
+        company.setCloudStorageBytes(usage.getCloudStorageBytes());
+        company.setDatabaseStorageBytes(usage.getDatabaseStorageBytes());
+        company.setStorageCalculatedAt(usage.getDatabaseStorageCalculatedAt());
+        return company;
+    }
+
+    // ======================================================
+    // STORAGE USAGE (manual recalculation — SUPER_ADMIN only)
+    // ======================================================
+    public Company recalculateStorageUsage(Long companyId) {
+        if (!isSuperAdmin()) {
+            throw new AccessDeniedException("Only SUPER_ADMIN can recalculate storage usage");
+        }
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+        companyStorageService.recalculateDatabaseStorage(companyId);
+        return hydrateStorageUsage(hydrateInvoiceBrandingView(company));
     }
 
     private Long resolveCoaId(Long companyId, Long coaId, String label) {

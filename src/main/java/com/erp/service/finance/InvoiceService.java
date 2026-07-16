@@ -413,7 +413,8 @@ public class InvoiceService {
                         file,
                         FileCategory.VENDOR_INVOICE_MATCH_DOCUMENT,
                         inv.getId().toString(),
-                        true
+                        true,
+                        inv.getCompany().getId()
                 );
                 inv.setVendorInvoiceDocumentUrl(fileStorageService.getPublicUrl(uploadResult.getBlobPath()));
             }
@@ -446,7 +447,8 @@ public class InvoiceService {
                     file,
                     FileCategory.INVOICE_PDF,
                     invoice.getId().toString(),
-                    true
+                    true,
+                    invoice.getCompany().getId()
             );
             String pdfUrl = fileStorageService.getPublicUrl(uploadResult.getBlobPath());
             invoice.setPdfUrl(pdfUrl);
@@ -988,7 +990,8 @@ public class InvoiceService {
                     pdfFile,
                     FileCategory.INVOICE_PDF,
                     storageKey,
-                    true
+                    true,
+                    invoice.getCompany().getId()
             );
 
             String pdfUrl = fileStorageService.getPublicUrl(

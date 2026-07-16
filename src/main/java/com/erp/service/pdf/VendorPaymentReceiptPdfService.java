@@ -92,7 +92,8 @@ public class VendorPaymentReceiptPdfService {
                 pdfFile,
                 FileCategory.PAYMENT_RECEIPT_PDF,
                 payment.getId().toString(),
-                true
+                true,
+                company.getId()
         );
         return fileStorageService.getPublicUrl(uploadResult.getBlobPath());
     }

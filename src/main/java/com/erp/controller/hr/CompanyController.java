@@ -142,6 +142,12 @@ public class CompanyController {
         return ResponseEntity.ok(companyService.reactivateCompany(id));
     }
 
+    /** Forces a fresh database-storage estimate for this company (SUPER_ADMIN only). */
+    @PostMapping("/{id}/storage-usage/recalculate")
+    public ResponseEntity<Company> recalculateStorageUsage(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(companyService.recalculateStorageUsage(id));
+    }
+
     @PostMapping("/{id}/assign-user")
     public ResponseEntity<EmployeeResponseDTO> assignUser(
             @PathVariable("id") Long id,

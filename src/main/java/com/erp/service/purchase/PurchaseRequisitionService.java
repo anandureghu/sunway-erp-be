@@ -398,7 +398,8 @@ public class PurchaseRequisitionService {
                 file,
                 FileCategory.PURCHASE_REQUISITION_DOCUMENT,
                 pr.getId().toString(),
-                false
+                false,
+                auth.getCurrentCompanyId()
         );
 
         String originalName = file.getOriginalFilename();

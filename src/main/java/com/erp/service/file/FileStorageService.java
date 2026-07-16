@@ -7,14 +7,17 @@ import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import com.azure.storage.blob.sas.BlobSasPermission;
 import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
+import com.erp.domain.hr.StoredFile;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
+import com.erp.repo.hr.StoredFileRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -23,6 +26,7 @@ import java.util.UUID;
 public class FileStorageService {
 
     private final BlobServiceClient blobServiceClient;
+    private final StoredFileRepository storedFileRepository;
 
     @Value("${azure.storage.public-container}")
     private String publicContainer;
@@ -31,11 +35,13 @@ public class FileStorageService {
     private String privateContainer;
 
     public FileStorageService(
-            @Value("${azure.storage.connection-string}") String connectionString
+            @Value("${azure.storage.connection-string}") String connectionString,
+            StoredFileRepository storedFileRepository
     ) {
         this.blobServiceClient = new BlobServiceClientBuilder()
                 .connectionString(connectionString)
                 .buildClient();
+        this.storedFileRepository = storedFileRepository;
     }
 
     // ======================================================
@@ -45,7 +51,8 @@ public class FileStorageService {
             MultipartFile file,
             FileCategory category,
             String entityId,
-            boolean isPublic
+            boolean isPublic,
+            Long companyId
     ) {
 
         validateFile(file, category);
@@ -69,11 +76,25 @@ public class FileStorageService {
                     new BlobHttpHeaders().setContentType(file.getContentType())
             );
 
+            recordStoredFile(companyId, blobPath, containerName, file.getSize());
+
             return new FileUploadResult(blobPath, isPublic);
 
         } catch (IOException e) {
             throw new RuntimeException("File upload failed", e);
         }
+    }
+
+    /** Upserts the ledger row for this blob path so per-company cloud storage totals stay accurate,
+     *  including when a fixed-name blob (e.g. a profile photo) is overwritten by a re-upload. */
+    private void recordStoredFile(Long companyId, String blobPath, String containerName, long sizeBytes) {
+        StoredFile storedFile = storedFileRepository.findByBlobPath(blobPath)
+                .orElseGet(() -> StoredFile.builder().blobPath(blobPath).build());
+        storedFile.setCompanyId(companyId);
+        storedFile.setContainer(containerName);
+        storedFile.setSizeBytes(sizeBytes);
+        storedFile.setUpdatedAt(Instant.now());
+        storedFileRepository.save(storedFile);
     }
 
     // ======================================================

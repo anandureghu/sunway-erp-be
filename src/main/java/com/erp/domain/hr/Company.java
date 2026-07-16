@@ -211,4 +211,14 @@ public class Company {
     @Transient
     private Long employeeCount;
 
+    /** Storage usage — hydrated for SUPER_ADMIN only. See CompanyStorageService. */
+    @Transient
+    private Long cloudStorageBytes;
+
+    @Transient
+    private Long databaseStorageBytes;
+
+    @Transient
+    private Instant storageCalculatedAt;
+
 }

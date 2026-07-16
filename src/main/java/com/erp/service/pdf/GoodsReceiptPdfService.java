@@ -130,7 +130,8 @@ public class GoodsReceiptPdfService {
                 pdfFile,
                 FileCategory.GOODS_RECEIPT_PDF,
                 receipt.getId().toString(),
-                true
+                true,
+                receipt.getCompany().getId()
         );
         return fileStorageService.getPublicUrl(uploadResult.getBlobPath());
     }

@@ -122,7 +122,8 @@ public class ItemService {
                     image,
                     FileCategory.INVENTORY_IMAGE,
                     saved.getId().toString(),
-                    true
+                    true,
+                    saved.getCompany().getId()
             );
 
             saved.setImageUrl(upload.getBlobPath());
@@ -197,7 +198,8 @@ public class ItemService {
                     image,
                     FileCategory.INVENTORY_IMAGE,
                     saved.getId().toString(),
-                    true
+                    true,
+                    saved.getCompany().getId()
             );
             saved.setImageUrl(upload.getBlobPath());
             saved = itemRepo.save(saved);
@@ -218,7 +220,8 @@ public class ItemService {
                 image,
                 FileCategory.INVENTORY_IMAGE,
                 item.getId().toString(),
-                true
+                true,
+                item.getCompany().getId()
         );
         item.setImageUrl(upload.getBlobPath());
         item.setUpdatedBy(user);
