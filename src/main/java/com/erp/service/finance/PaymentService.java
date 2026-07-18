@@ -571,6 +571,10 @@ public class PaymentService {
         payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
         payment.setCreditAppliedAmount(creditApplied.compareTo(BigDecimal.ZERO) > 0 ? creditApplied : null);
+
+        if (creditApplied.compareTo(BigDecimal.ZERO) > 0) {
+            postCreditAppliedToAccountingSales(payment, creditApplied, invoice.getInvoiceId());
+        }
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Confirmed from payment request"
@@ -635,6 +639,12 @@ public class PaymentService {
         payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
         payment.setCreditAppliedAmount(creditApplied.compareTo(BigDecimal.ZERO) > 0 ? creditApplied : null);
+
+        if (creditApplied.compareTo(BigDecimal.ZERO) > 0) {
+            String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                    .map(Invoice::getInvoiceId).orElse(null);
+            postCreditAppliedToAccountingPurchase(payment, creditApplied, purchaseInvoiceCode, po);
+        }
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Vendor payment confirmed (AP)"
@@ -806,6 +816,49 @@ public class PaymentService {
                 purchaseRequisitionRepo.save(managed);
             });
         }
+    }
+
+    /**
+     * Posts a credit-applied GL entry for a customer (AR) settlement via credit notes.
+     * Uses the same sales account pair as a cash payment so the AR balance is relieved correctly.
+     */
+    private void postCreditAppliedToAccountingSales(Payment payment, BigDecimal creditApplied, String invoiceId) {
+        Long companyId = payment.getCompany().getId();
+        var accounts = accountingDefaults.requireSalesAccounts(companyId);
+        transactionService.createTransactionForPayment(
+                payment.getId(),
+                companyId,
+                creditApplied,
+                accounts.debitAccountId(),
+                accounts.creditAccountId(),
+                payment.getEffectiveDate() != null ? payment.getEffectiveDate() : LocalDate.now(),
+                "CREDIT_APPLIED",
+                invoiceId);
+    }
+
+    /**
+     * Posts a credit-applied GL entry for a vendor (AP) settlement via supplier credit notes.
+     * Uses the purchase account pair (reversed, same as vendor payment) to relieve AP.
+     */
+    private void postCreditAppliedToAccountingPurchase(
+            Payment payment, BigDecimal creditApplied, String invoiceId, PurchaseOrder po) {
+        Long companyId = payment.getCompany().getId();
+        var accounts = accountingDefaults.requirePurchaseAccounts(companyId);
+        Long debitAccountId = accounts.creditAccountId();
+        Long creditAccountId = accounts.debitAccountId();
+        transactionService.create(CreateTransactionDTO.builder()
+                .companyId(companyId)
+                .transactionType("CREDIT_APPLIED")
+                .transactionDate(payment.getEffectiveDate() != null ? payment.getEffectiveDate() : LocalDate.now())
+                .amount(creditApplied)
+                .debitAccount(debitAccountId)
+                .creditAccount(creditAccountId)
+                .paymentId(String.valueOf(payment.getId()))
+                .invoiceId(invoiceId)
+                .relatedId(po.getId())
+                .source(TransactionService.SOURCE_PURCHASE)
+                .transactionDescription("Supplier credit applied — PO " + po.getOrderNumber())
+                .build());
     }
 
     /**
