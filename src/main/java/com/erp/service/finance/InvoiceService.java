@@ -805,13 +805,26 @@ public class InvoiceService {
     }
 
     public List<InvoiceResponse> getAllInvoices() {
-        return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId()).stream()
+        Long companyId = auth.getCurrentCompanyId();
+        if (companyId == null && !isSuperAdmin()) {
+            return List.of();
+        }
+        if (companyId == null) {
+            return List.of();
+        }
+        return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                 .map(this::toDTO)
                 .toList();
     }
 
     public List<InvoiceResponse> listInvoicesForCurrentCompany(InvoiceType type) {
         Long companyId = auth.getCurrentCompanyId();
+        if (companyId == null && !isSuperAdmin()) {
+            return List.of();
+        }
+        if (companyId == null) {
+            return List.of();
+        }
         if (type == null) {
             return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream().map(this::toDTO).toList();
         }
