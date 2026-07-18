@@ -81,7 +81,9 @@ public class PurchaseProcurementDuplicateGuard {
                     warehouseId,
                     itemId,
                     ACTIVE_PO_STATUSES
-            );
+            ).filter(po -> excludeRequisitionId == null
+                    || po.getSourceRequisition() == null
+                    || !excludeRequisitionId.equals(po.getSourceRequisition().getId()));
 
             if (pendingPr.isEmpty() && pendingPo.isEmpty()) {
                 continue;
