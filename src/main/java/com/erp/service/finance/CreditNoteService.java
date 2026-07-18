@@ -125,7 +125,7 @@ public class CreditNoteService {
 
         Long companyId = auth.getCurrentCompanyId();
 
-        Invoice invoice = invoiceRepository.findByInvoiceId(dto.getInvoiceId())
+        Invoice invoice = invoiceRepository.findFirstByInvoiceIdOrderByCreatedAtDesc(dto.getInvoiceId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
         if (invoice.getCompany() == null
@@ -205,7 +205,7 @@ public class CreditNoteService {
             return null;
         }
 
-        Invoice invoice = invoiceRepository.findByInvoiceId(invoiceId)
+        Invoice invoice = invoiceRepository.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
         Long companyId = invoice.getCompany().getId();

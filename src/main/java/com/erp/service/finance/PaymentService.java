@@ -301,7 +301,7 @@ public class PaymentService {
 
     private void enrichInvoiceAmounts(PaymentResponseDTO.PaymentResponseDTOBuilder b, Payment p) {
         if (p.getInvoiceId() != null && !p.getInvoiceId().isBlank()) {
-            invoiceRepo.findByInvoiceId(p.getInvoiceId()).ifPresent(inv -> {
+            invoiceRepo.findFirstByInvoiceIdOrderByCreatedAtDesc(p.getInvoiceId()).ifPresent(inv -> {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
@@ -373,7 +373,7 @@ public class PaymentService {
         if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
             throw new RuntimeException("Invoice ID is missing for this payment request");
         }
-        return invoiceRepo.findByInvoiceId(payment.getInvoiceId())
+        return invoiceRepo.findFirstByInvoiceIdOrderByCreatedAtDesc(payment.getInvoiceId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this payment"));
     }
 
@@ -492,7 +492,7 @@ public class PaymentService {
         if (invoiceId == null || invoiceId.isBlank()) {
             return List.of();
         }
-        Invoice inv = invoiceRepo.findByInvoiceId(invoiceId).orElse(null);
+        Invoice inv = invoiceRepo.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceId).orElse(null);
         if (inv == null) {
             return List.of();
         }

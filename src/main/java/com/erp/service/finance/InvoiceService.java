@@ -697,7 +697,7 @@ public class InvoiceService {
     // ============================================================
     public Invoice applyPayment(String invoiceId, BigDecimal amount) {
 
-        Invoice inv = repo.findByInvoiceId(invoiceId)
+        Invoice inv = repo.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
         if ("CANCELLED".equalsIgnoreCase(inv.getStatus())) {
@@ -798,7 +798,7 @@ public class InvoiceService {
     }
 
     public InvoiceResponse getInvoiceByCode(String invoiceCode) {
-        Invoice inv = repo.findByInvoiceId(invoiceCode)
+        Invoice inv = repo.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceCode)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
         assertInvoiceInTenant(inv);
         return toDTO(inv);
