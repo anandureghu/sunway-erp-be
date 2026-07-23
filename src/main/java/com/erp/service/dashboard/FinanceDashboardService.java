@@ -107,11 +107,13 @@ public class FinanceDashboardService {
         List<FinanceDepartmentBudgetSpendDTO> departmentBudgetSpend = summary.getDepartmentBudgetSpend();
         BigDecimal budgetUtilizationPercent = overallUtilization(departmentBudgetSpend);
 
+        long pendingPurchaseOrders = purchaseOrderRepo.countByCompanyIdAndArchivedFalseAndStatusIn(
+                companyId, List.of(PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.APPROVED));
+
         FinancePendingApprovalsDTO pendingApprovals = FinancePendingApprovalsDTO.builder()
                 .purchaseRequisitions(purchaseRequisitionRepo.countByCompanyIdAndArchivedFalseAndStatus(
                         companyId, PurchaseRequisitionStatus.SUBMITTED))
-                .purchaseOrders(purchaseOrderRepo.countByCompanyIdAndArchivedFalseAndStatus(
-                        companyId, PurchaseOrderStatus.DRAFT))
+                .purchaseOrders(pendingPurchaseOrders)
                 .paymentRequests(paymentRepo.countPendingVendorPaymentsForCompany(companyId))
                 .journalEntries(journalEntryRepo.countByCompanyIdAndArchivedFalseAndStatus(
                         companyId, JournalEntryStatus.PENDING_APPROVAL))
@@ -134,8 +136,8 @@ public class FinanceDashboardService {
                 .build();
 
         List<FinanceInvoiceRowDTO> topOverdueReceivables = mapInvoiceRows(
-                invoiceRepo.findOpenInvoicesByTypeOrderByDueDateAsc(
-                        companyId, InvoiceType.SALES, PageRequest.of(0, TOP_ROWS)),
+                invoiceRepo.findOverdueInvoicesByTypeOrderByDueDateAsc(
+                        companyId, InvoiceType.SALES, today, PageRequest.of(0, TOP_ROWS)),
                 today);
         List<FinanceInvoiceRowDTO> topPayablesDue = mapInvoiceRows(
                 invoiceRepo.findOpenInvoicesByTypeOrderByDueDateAsc(

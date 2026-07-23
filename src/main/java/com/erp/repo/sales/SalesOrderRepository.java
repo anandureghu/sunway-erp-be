@@ -16,6 +16,8 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
     List<SalesOrder> findByCompanyIdAndArchivedTrue(Long companyId);
 
+    long countByCompanyIdAndArchivedFalseAndStatus(Long companyId, String status);
+
     @Query("""
             SELECT COALESCE(SUM(soi.quantity), 0)
             FROM SalesOrder so

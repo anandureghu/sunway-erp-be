@@ -20,6 +20,8 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
 
     long countByCompanyIdAndArchivedFalseAndStatus(Long companyId, PurchaseOrderStatus status);
 
+    long countByCompanyIdAndArchivedFalseAndStatusIn(Long companyId, List<PurchaseOrderStatus> statuses);
+
     List<PurchaseOrder> findBySupplier_IdAndArchivedFalseAndStatusInOrderByCreatedAtDesc(
             Long supplierId,
             List<PurchaseOrderStatus> statuses
@@ -62,14 +64,10 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
             JOIN po.items poi
             WHERE po.company.id = :companyId
               AND po.archived = false
-              AND (
-                po.status IN :releasedStatuses
-                OR (po.status = com.erp.domain.purchase.PurchaseOrderStatus.DRAFT
-                    AND po.sourceRequisition IS NOT NULL)
-              )
+              AND po.status IN :openStatuses
             """)
     Long sumOnOrderQuantity(
             @Param("companyId") Long companyId,
-            @Param("releasedStatuses") List<PurchaseOrderStatus> releasedStatuses
+            @Param("openStatuses") List<PurchaseOrderStatus> openStatuses
     );
 }

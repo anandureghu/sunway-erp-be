@@ -14,7 +14,10 @@ public class HrDocumentsExpiringDTO {
     private long qidExpiring;
     private long passportExpiring;
 
-    /** Aliases qidExpiring — this schema models QID and visa as one ResidencePermit record. */
+    /**
+     * Not populated separately: ResidencePermit expiry is reported under {@link #qidExpiring}
+     * to avoid double-counting the same documents.
+     */
     private long visaExpiring;
 
     private long contractsExpiring;

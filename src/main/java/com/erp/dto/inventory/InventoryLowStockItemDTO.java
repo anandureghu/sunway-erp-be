@@ -15,6 +15,9 @@ public class InventoryLowStockItemDTO {
     private String sku;
     private String name;
 
+    private Long warehouseId;
+    private String warehouseName;
+
     private Integer available;
     private Integer reorderLevel;
 }

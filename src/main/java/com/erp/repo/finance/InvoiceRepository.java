@@ -158,7 +158,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     //  Dashboard aggregations
     // ======================================================
 
-    /** Open (outstanding > 0) invoices of a type, oldest due date first, for "top overdue/due" widgets. */
+    /** Open (outstanding > 0) invoices of a type, oldest due date first, for "top due" widgets. */
     @Query("""
             SELECT i FROM Invoice i
             WHERE i.company.id = :companyId
@@ -171,6 +171,24 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Invoice> findOpenInvoicesByTypeOrderByDueDateAsc(
             @Param("companyId") Long companyId,
             @Param("type") InvoiceType type,
+            Pageable pageable);
+
+    /** Overdue open invoices: due date before today and outstanding &gt; 0. */
+    @Query("""
+            SELECT i FROM Invoice i
+            WHERE i.company.id = :companyId
+              AND i.type = :type
+              AND i.archived = false
+              AND i.outstanding IS NOT NULL
+              AND i.outstanding > 0
+              AND i.dueDate IS NOT NULL
+              AND i.dueDate < :asOf
+            ORDER BY i.dueDate ASC
+            """)
+    List<Invoice> findOverdueInvoicesByTypeOrderByDueDateAsc(
+            @Param("companyId") Long companyId,
+            @Param("type") InvoiceType type,
+            @Param("asOf") LocalDate asOf,
             Pageable pageable);
 
     /** Invoices of a type raised within [from, to], for "payment status this month" bucketing. */
