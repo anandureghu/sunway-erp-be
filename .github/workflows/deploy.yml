@@ -61,6 +61,14 @@ jobs:
           docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
           docker push "${{ steps.meta.outputs.image }}:latest"
 
+      - name: Register ACR on Container App
+        run: |
+          az containerapp registry set \
+            --name "${{ secrets.AZURE_CONTAINER_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --server "${{ secrets.ACR_LOGIN_SERVER }}" \
+            --identity system
+
       - name: Update Container App
         run: |
           az containerapp update \
