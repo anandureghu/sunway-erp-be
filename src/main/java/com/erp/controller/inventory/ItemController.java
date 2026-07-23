@@ -86,6 +86,12 @@ public class ItemController {
         return service.listForCompany();
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/stock-catalog")
+    public List<ItemResponseDTO> stockCatalog() {
+        return service.listStockCatalogForCompany();
+    }
+
     @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}")
     public ItemResponseDTO get(@PathVariable("id") Long id) {

@@ -108,7 +108,7 @@ public class PurchaseRequisitionService {
 
         PurchaseRequisition pr = PurchaseRequisition.builder()
                 .requisitionNumber(documentSequenceService.generateNext("PR"))
-                .status(PurchaseRequisitionStatus.DRAFT)
+                .status(PurchaseRequisitionStatus.QUOTATION)
                 .company(company)
                 .build();
 
@@ -250,8 +250,8 @@ public class PurchaseRequisitionService {
     public PurchaseRequisitionResponseDTO submit(Long id) {
         PurchaseRequisition pr = getEntity(id);
 
-        if (pr.getStatus() != PurchaseRequisitionStatus.DRAFT) {
-            throw new RuntimeException("Only DRAFT requisitions can be submitted");
+        if (pr.getStatus() != PurchaseRequisitionStatus.QUOTATION) {
+            throw new RuntimeException("Only QUOTATION requisitions can be submitted");
         }
         if (pr.getDebitAccount() == null || pr.getCreditAccount() == null) {
             throw new RuntimeException("Debit and credit accounts are required before submit");
@@ -267,9 +267,9 @@ public class PurchaseRequisitionService {
     public PurchaseRequisitionResponseDTO update(Long id, PurchaseRequisitionCreateDTO dto) {
         validateCreateDto(dto);
         PurchaseRequisition pr = getEntity(id);
-        if (pr.getStatus() != PurchaseRequisitionStatus.DRAFT) {
+        if (pr.getStatus() != PurchaseRequisitionStatus.QUOTATION) {
             throw new RuntimeException(
-                    "Only draft requisitions can be edited. Rejected requisitions must use Revise first.");
+                    "Only quotation requisitions can be edited. Rejected requisitions must use Revise first.");
         }
         assertNoPendingProcurementForDto(dto, id);
 
@@ -297,7 +297,7 @@ public class PurchaseRequisitionService {
         if (pr.getStatus() != PurchaseRequisitionStatus.REJECTED) {
             throw new RuntimeException("Only REJECTED requisitions can be revised");
         }
-        pr.setStatus(PurchaseRequisitionStatus.DRAFT);
+        pr.setStatus(PurchaseRequisitionStatus.QUOTATION);
         return toDTO(repo.save(pr), null);
     }
 
@@ -388,9 +388,9 @@ public class PurchaseRequisitionService {
             throw new RuntimeException("File is required");
         }
         PurchaseRequisition pr = getEntity(requisitionId);
-        if (pr.getStatus() != PurchaseRequisitionStatus.DRAFT
+        if (pr.getStatus() != PurchaseRequisitionStatus.QUOTATION
                 && pr.getStatus() != PurchaseRequisitionStatus.REJECTED) {
-            throw new RuntimeException("Documents can only be uploaded while the requisition is draft or awaiting revision");
+            throw new RuntimeException("Documents can only be uploaded while the requisition is a quotation or awaiting revision");
         }
         User uploader = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
 

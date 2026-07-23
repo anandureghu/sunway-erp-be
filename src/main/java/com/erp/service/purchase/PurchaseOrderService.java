@@ -211,11 +211,26 @@ public class PurchaseOrderService {
         }
     }
 
-    public PurchaseOrderResponseDTO confirm(Long id) {
+    public PurchaseOrderResponseDTO approve(Long id) {
         PurchaseOrder po = getEntity(id);
 
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
-            throw new RuntimeException("Only DRAFT purchase orders can be confirmed");
+            throw new RuntimeException("Only DRAFT purchase orders can be approved");
+        }
+        if (po.getSupplier() == null) {
+            throw new RuntimeException("Assign a supplier before approving this purchase order");
+        }
+        assertVendorEligibleForPurchase(po.getSupplier());
+
+        po.setStatus(PurchaseOrderStatus.APPROVED);
+        return toDTO(repo.save(po));
+    }
+
+    public PurchaseOrderResponseDTO confirm(Long id) {
+        PurchaseOrder po = getEntity(id);
+
+        if (po.getStatus() != PurchaseOrderStatus.APPROVED) {
+            throw new RuntimeException("Only APPROVED purchase orders can be released to the supplier");
         }
         if (po.getSupplier() == null) {
             throw new RuntimeException("Assign a supplier before releasing this purchase order");
@@ -298,6 +313,10 @@ public class PurchaseOrderService {
         PurchaseOrder po = getEntity(id);
         if (po.getStatus() == PurchaseOrderStatus.CANCELLED) {
             return toDTO(po);
+        }
+        if (po.getStatus() != PurchaseOrderStatus.DRAFT
+                && po.getStatus() != PurchaseOrderStatus.APPROVED) {
+            throw new RuntimeException("Only DRAFT or APPROVED purchase orders can be cancelled");
         }
         if (vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId())) {
             throw new ConflictException(
@@ -405,8 +424,8 @@ public class PurchaseOrderService {
                         .summary("Funds are already committed for this purchase order.")
                         .build();
             }
-            if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
-                throw new RuntimeException("Only draft purchase orders can be released");
+            if (po.getStatus() != PurchaseOrderStatus.APPROVED) {
+                throw new RuntimeException("Only approved purchase orders can be released");
             }
             return PurchaseOrderPostingPreviewDTO.builder()
                     .action(normalized)

@@ -3,6 +3,7 @@ package com.erp.controller.sales;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.sales.ShipmentCreateDTO;
+import com.erp.dto.sales.ShipmentDeliverDTO;
 import com.erp.dto.sales.ShipmentResponseDTO;
 import com.erp.dto.sales.ShipmentTrackingEventCreateDTO;
 import com.erp.service.sales.ShipmentService;
@@ -44,8 +45,11 @@ public class ShipmentController {
 
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.EDIT})
     @PostMapping("/{id}/delivered")
-    public ShipmentResponseDTO markDelivered(@PathVariable("id") Long id) {
-        return service.markDelivered(id);
+    public ShipmentResponseDTO markDelivered(
+            @PathVariable("id") Long id,
+            @RequestBody ShipmentDeliverDTO dto
+    ) {
+        return service.markDelivered(id, dto);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.EDIT})

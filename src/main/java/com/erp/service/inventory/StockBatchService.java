@@ -22,7 +22,6 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -190,6 +189,65 @@ public class StockBatchService {
         BigDecimal weighted = totalCost.divide(
                 BigDecimal.valueOf(quantity), 4, RoundingMode.HALF_UP);
         return new ConsumptionResult(lines, totalCost.setScale(2, RoundingMode.HALF_UP), weighted);
+    }
+
+    /**
+     * Ensures FIFO batches cover IWS on-hand (seeds an ADJUSTMENT batch when IWS is ahead of
+     * batches). Then asserts both IWS available and batch on-hand can fulfill {@code quantity}.
+     */
+    public void assertAvailableForSale(Long itemId, Long warehouseId, int quantity, Long companyId) {
+        stockService.assertAvailableForSale(itemId, warehouseId, quantity, companyId);
+        if (quantity <= 0) {
+            return;
+        }
+        syncBatchesToMatchIws(itemId, warehouseId, companyId);
+        int batchQty = batchRepo.sumQuantityOnHand(companyId, itemId, warehouseId);
+        if (batchQty < quantity) {
+            throw new RuntimeException(
+                    "Insufficient batch stock for item "
+                            + itemId
+                            + " at warehouse "
+                            + warehouseId
+                            + ". Available: "
+                            + batchQty
+                            + ", requested: "
+                            + quantity);
+        }
+    }
+
+    /**
+     * If warehouse on-hand exceeds sum of batch layers, seed an ADJUSTMENT batch for the gap
+     * (does not change IWS — it already holds the quantity).
+     */
+    public void syncBatchesToMatchIws(Long itemId, Long warehouseId, Long companyId) {
+        Item item = loadItem(itemId, companyId);
+        Warehouse warehouse = loadWarehouse(warehouseId, companyId);
+        int iwsQty = stockService.getQuantityOnHand(itemId, warehouseId, companyId);
+        int batchQty = batchRepo.sumQuantityOnHand(companyId, itemId, warehouseId);
+        int gap = iwsQty - batchQty;
+        if (gap <= 0) {
+            return;
+        }
+        BigDecimal cost = item.getCostPrice() != null ? item.getCostPrice() : BigDecimal.ZERO;
+        String batchNo = "ADJ-" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
+        StockBatch batch = batchRepo
+                .findByCompanyIdAndItemIdAndWarehouseIdAndBatchNoAndUnitCost(
+                        companyId, itemId, warehouseId, batchNo, cost)
+                .orElseGet(() -> StockBatch.builder()
+                        .company(Company.builder().id(companyId).build())
+                        .item(item)
+                        .warehouse(warehouse)
+                        .batchNo(batchNo)
+                        .quantityOnHand(0)
+                        .unitCost(cost)
+                        .receivedAt(LocalDate.now())
+                        .sourceType(StockBatchSourceType.ADJUSTMENT)
+                        .sourceId(null)
+                        .createdAt(Instant.now())
+                        .build());
+        batch.setQuantityOnHand(nz(batch.getQuantityOnHand()) + gap);
+        StockBatch saved = batchRepo.save(batch);
+        recordMovement(saved, StockBatchMovementType.RECEIVE, gap, cost, "ADJUSTMENT_SYNC", null);
     }
 
     public void restoreByReference(String referenceType, Long referenceId, Long companyId) {

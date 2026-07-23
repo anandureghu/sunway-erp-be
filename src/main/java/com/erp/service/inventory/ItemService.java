@@ -188,7 +188,32 @@ public class ItemService {
             int newTotal = dto.getQuantity();
             int delta = newTotal - oldTotalQty;
             if (delta != 0) {
-                itemWarehouseStockService.applyDeltaToDefaultWarehouse(saved, delta);
+                Long whId = saved.getWarehouse().getId();
+                Long companyId = auth.getCurrentCompanyId();
+                if (delta > 0) {
+                    stockBatchService.receiveIntoBatch(
+                            saved.getId(),
+                            whId,
+                            delta,
+                            saved.getCostPrice() != null ? saved.getCostPrice() : java.math.BigDecimal.ZERO,
+                            "ADJ-" + java.time.LocalDate.now(),
+                            null,
+                            StockBatchSourceType.ADJUSTMENT,
+                            null,
+                            companyId
+                    );
+                } else {
+                    stockBatchService.syncBatchesToMatchIws(saved.getId(), whId, companyId);
+                    stockBatchService.consumeFifo(
+                            saved.getId(),
+                            whId,
+                            Math.abs(delta),
+                            "ITEM_QTY_EDIT",
+                            saved.getId(),
+                            companyId,
+                            com.erp.domain.inventory.StockBatchMovementType.ADJUSTMENT
+                    );
+                }
             }
         }
         itemWarehouseStockService.syncItemAggregates(saved);
@@ -238,6 +263,16 @@ public class ItemService {
         return itemRepo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream()
                 .map(this::toDTO)
+                .toList();
+    }
+
+    /**
+     * One catalog row per item×warehouse stock line (quantities match sales availability checks).
+     */
+    public List<ItemResponseDTO> listStockCatalogForCompany() {
+        Long companyId = auth.getCurrentCompanyId();
+        return itemWarehouseStockService.listStockCatalog(companyId).stream()
+                .map(row -> toDTOForWarehouse(row.item(), row.warehouse(), row.quantityOnHand(), row.reserved(), row.available()))
                 .toList();
     }
 
@@ -327,11 +362,32 @@ public class ItemService {
             throw new IllegalArgumentException("Reason is required");
         }
 
-        itemWarehouseStockService.adjustRowToAbsoluteQuantity(
-                item.getId(),
-                whId,
-                newRowQty,
-                auth.getCurrentCompanyId());
+        Long companyId = auth.getCurrentCompanyId();
+        int delta = newRowQty - currentOnHand;
+        if (delta > 0) {
+            stockBatchService.receiveIntoBatch(
+                    item.getId(),
+                    whId,
+                    delta,
+                    item.getCostPrice() != null ? item.getCostPrice() : java.math.BigDecimal.ZERO,
+                    "ADJ-" + java.time.LocalDate.now(),
+                    null,
+                    StockBatchSourceType.ADJUSTMENT,
+                    null,
+                    companyId
+            );
+        } else if (delta < 0) {
+            stockBatchService.syncBatchesToMatchIws(item.getId(), whId, companyId);
+            stockBatchService.consumeFifo(
+                    item.getId(),
+                    whId,
+                    Math.abs(delta),
+                    "STOCK_ADJUSTMENT",
+                    item.getId(),
+                    companyId,
+                    com.erp.domain.inventory.StockBatchMovementType.ADJUSTMENT
+            );
+        }
 
         item = itemRepo.findById(item.getId()).orElseThrow();
         item.setUpdatedBy(user);
@@ -393,6 +449,54 @@ public class ItemService {
                                 item.getWarehouse().getStreet(),
                                 item.getWarehouse().getCity(),
                                 item.getWarehouse().getCountry()
+                        )
+                ).build();
+    }
+
+    private ItemResponseDTO toDTOForWarehouse(
+            Item item,
+            Warehouse warehouse,
+            int quantityOnHand,
+            int reserved,
+            int available
+    ) {
+        String imageUrl = fileStorageService.getPublicUrl(item.getImageUrl());
+        return ItemResponseDTO.builder()
+                .id(item.getId())
+                .sku(item.getSku())
+                .name(item.getName())
+                .type(item.getType())
+                .category(item.getCategory())
+                .subCategory(item.getSubCategory())
+                .brand(item.getBrand())
+                .description(item.getDescription())
+                .unitMeasure(item.getUnitMeasure())
+                .barcode(item.getBarcode())
+                .serialNo(item.getSerialNo())
+                .dateReceived(item.getDateReceived())
+                .expiryDate(item.getExpiryDate())
+                .location(item.getLocation())
+                .quantity(quantityOnHand)
+                .available(available)
+                .reserved(reserved)
+                .minimum(item.getMinimum())
+                .maximum(item.getMaximum())
+                .reorderLevel(item.getReorderLevel())
+                .costPrice(item.getCostPrice())
+                .sellingPrice(item.getSellingPrice())
+                .unitSale(item.getUnitSale())
+                .status(item.getStatus())
+                .imageUrl(imageUrl)
+                .createdAt(item.getCreatedAt())
+                .updatedAt(item.getUpdatedAt())
+                .warehouse_id(warehouse.getId())
+                .warehouse_name(warehouse.getName())
+                .warehouse_location(
+                        String.format(
+                                "%s, %s, %s",
+                                warehouse.getStreet(),
+                                warehouse.getCity(),
+                                warehouse.getCountry()
                         )
                 ).build();
     }

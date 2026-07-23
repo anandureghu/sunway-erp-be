@@ -48,7 +48,7 @@ public class SalesOrder {
     private String shippingAddress;
 
     @Column(nullable = false)
-    private String status; // DRAFT, CONFIRMED, COMPLETED, CANCELLED
+    private String status; // QUOTATION, CONFIRMED, COMPLETED, CANCELLED
 
     @Column(nullable = false)
     @Builder.Default

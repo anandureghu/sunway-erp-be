@@ -31,6 +31,7 @@ public class VendorService {
 
     private static final List<PurchaseOrderStatus> OPEN_PO_STATUSES = List.of(
             PurchaseOrderStatus.DRAFT,
+            PurchaseOrderStatus.APPROVED,
             PurchaseOrderStatus.CONFIRMED,
             PurchaseOrderStatus.PARTIALLY_RECEIVED
     );

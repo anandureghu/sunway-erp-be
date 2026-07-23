@@ -16,6 +16,15 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
     List<ItemWarehouseStock> findByItemId(Long itemId);
 
     @Query("""
+            SELECT iws FROM ItemWarehouseStock iws
+            JOIN FETCH iws.item i
+            JOIN FETCH iws.warehouse w
+            WHERE i.company.id = :companyId
+            ORDER BY i.name ASC, w.name ASC
+            """)
+    List<ItemWarehouseStock> findAllByCompanyId(@Param("companyId") Long companyId);
+
+    @Query("""
             SELECT COUNT(DISTINCT i.id)
             FROM ItemWarehouseStock iws
             JOIN iws.item i

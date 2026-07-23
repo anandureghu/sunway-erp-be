@@ -25,12 +25,13 @@ import java.util.Set;
 public class PurchaseProcurementDuplicateGuard {
 
     private static final List<PurchaseRequisitionStatus> ACTIVE_PR_STATUSES = List.of(
-            PurchaseRequisitionStatus.DRAFT,
+            PurchaseRequisitionStatus.QUOTATION,
             PurchaseRequisitionStatus.SUBMITTED
     );
 
     private static final List<PurchaseOrderStatus> ACTIVE_PO_STATUSES = List.of(
             PurchaseOrderStatus.DRAFT,
+            PurchaseOrderStatus.APPROVED,
             PurchaseOrderStatus.CONFIRMED,
             PurchaseOrderStatus.PARTIALLY_RECEIVED
     );

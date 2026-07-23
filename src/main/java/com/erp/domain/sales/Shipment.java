@@ -50,6 +50,12 @@ public class Shipment {
     private String deliveryAddress;
     private String notes;
 
+    @Column(name = "customer_signature", columnDefinition = "MEDIUMTEXT")
+    private String customerSignature;
+
+    @Column(name = "delivery_remarks", length = 2000)
+    private String deliveryRemarks;
+
     private Instant dispatchedAt;
     private Instant inTransitAt;
     private Instant outForDeliveryAt;
