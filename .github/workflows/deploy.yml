@@ -1,72 +1,73 @@
-name: Sunway ERP Backend Deployment
+# Deploy Sunway ERP backend to Azure Container Apps on every push to develop.
+#
+# One-time Azure Portal setup (no local az login):
+#   1. Resource group, ACR, Container Apps Environment, Container App
+#      (name e.g. sunway-backend, target port 8080, external ingress)
+#   2. App registration + client secret for GitHub Actions
+#   3. Grant the SP: AcrPush on ACR, Contributor on the resource group
+#   4. Set DB/app secrets on the Container App itself (DB_HOST, DB_USER,
+#      DB_PASS, AZURE_STORAGE_CONNECTION_STRING, etc.) — this workflow
+#      only updates the container image
+#
+# GitHub repo secrets (Settings → Secrets and variables → Actions):
+#   AZURE_CREDENTIALS       {"clientId","clientSecret","subscriptionId","tenantId"}
+#   AZURE_RESOURCE_GROUP    e.g. rg-sunway-dev
+#   AZURE_CONTAINER_APP_NAME  e.g. sunway-backend
+#   ACR_NAME                e.g. sunwayacr  (registry name, not FQDN)
+#   ACR_LOGIN_SERVER        e.g. sunwayacr.azurecr.io
+#
+# After setup: push to develop or run this workflow manually.
+
+name: Deploy to Azure Container Apps
 
 on:
   push:
     branches:
       - develop
-
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    environment:
-      name: production
+    permissions:
+      contents: read
 
     steps:
-      - name: Checkout Source
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
+      - name: Log in to Azure
+        uses: azure/login@v2
         with:
-          distribution: temurin
-          java-version: 21
-          cache: maven
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Build Application
-        run: mvn clean package -DskipTests
+      - name: Log in to ACR
+        run: az acr login --name ${{ secrets.ACR_NAME }}
 
-      - name: Rename JAR
+      - name: Set image tag
+        id: meta
         run: |
-          mkdir deploy
-          cp target/*.jar deploy/app.jar
+          IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/sunway-backend"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload JAR to Azure VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.AZURE_HOST }}
-          username: ${{ secrets.AZURE_USER }}
-          key: ${{ secrets.AZURE_SSH_KEY }}
-          port: 22
-          source: "deploy/app.jar"
-          target: "/home/${{ secrets.AZURE_USER }}/apps/sunway"
+      - name: Build and push image
+        run: |
+          docker build \
+            -t "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}" \
+            -t "${{ steps.meta.outputs.image }}:latest" \
+            .
+          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
+          docker push "${{ steps.meta.outputs.image }}:latest"
 
-      - name: Restart Spring Boot Service
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.AZURE_HOST }}
-          username: ${{ secrets.AZURE_USER }}
-          key: ${{ secrets.AZURE_SSH_KEY }}
-          port: 22
-          script: |
-            set -e
-            DEPLOY_DIR="/home/${{ secrets.AZURE_USER }}/apps/sunway"
+      - name: Update Container App
+        run: |
+          az containerapp update \
+            --name "${{ secrets.AZURE_CONTAINER_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
 
-            mv "$DEPLOY_DIR/deploy/app.jar" "$DEPLOY_DIR/app.jar"
-
-            sudo systemctl restart sunway
-
-            echo "Waiting for service to start..."
-            for i in $(seq 1 24); do
-              if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
-                echo "Service is healthy after ${i}s"
-                exit 0
-              fi
-              sleep 5
-            done
-
-            echo "Service did not become healthy within 120s"
-            sudo journalctl -u sunway -n 50 --no-pager
-            exit 1
+      - name: Logout from Azure
+        if: always()
+        run: az logout
