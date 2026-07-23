@@ -194,8 +194,14 @@ public class InvoiceService {
         return "PAID".equalsIgnoreCase(invoice.getStatus() == null ? "" : invoice.getStatus().trim());
     }
 
-    /** Original pre-payment invoice document (never overwritten after payment). */
+    /** Original pre-payment invoice document for GENERATED invoices (rebuilt so totals stay current). */
     private String getOrCreateOriginalInvoicePdfUrl(Invoice invoice) {
+        // Always rebuild system-generated PDFs so template/total fixes apply immediately.
+        // Supplier uploads and external links keep their stored URL.
+        if (invoice.getDocumentSource() == null
+                || invoice.getDocumentSource() == InvoiceDocumentSource.GENERATED) {
+            return generateAndUploadInvoicePdf(invoice, false);
+        }
         if (invoice.getPdfUrl() != null && !invoice.getPdfUrl().isBlank()) {
             return invoice.getPdfUrl();
         }
