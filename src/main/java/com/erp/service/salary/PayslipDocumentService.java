@@ -122,9 +122,16 @@ public class PayslipDocumentService {
         dto.setEarnings(earnings);
         dto.setDeductions(buildDeductions(activeLoans, payroll));
 
-        dto.setGrossPay(payroll.getGrossPay());
-        dto.setTotalDeductions(payroll.getDeductions());
-        dto.setNetPayable(payroll.getNetPayable());
+        // Derive the summary from invariant fields (net, LOP, loan) so the payslip always
+        // reconciles — gross earnings − deductions = net — for rows generated both before
+        // and after loss of pay moved into the deductions bucket.
+        double lopAmt = payroll.getLopAmount() != null ? payroll.getLopAmount() : 0.0;
+        double loanAmt = payroll.getLoanDeduction() != null ? payroll.getLoanDeduction() : 0.0;
+        double net = payroll.getNetPayable() != null ? payroll.getNetPayable() : 0.0;
+        double totalDeductions = Math.round((lopAmt + loanAmt) * 100.0) / 100.0;
+        dto.setGrossPay(Math.round((net + totalDeductions) * 100.0) / 100.0);
+        dto.setTotalDeductions(totalDeductions);
+        dto.setNetPayable(net);
 
         dto.setBankName(bank.getBankName());
         dto.setBankBranch(bank.getBankBranch());
@@ -160,6 +167,17 @@ public class PayslipDocumentService {
     private List<LineItemDTO> buildDeductions(List<EmployeeLoan> loans, Payroll payroll) {
         List<LineItemDTO> list = new ArrayList<>();
 
+        // Loss of pay for unpaid absence — shown as a deduction so the payslip reconciles
+        // (gross earnings − deductions = net pay) rather than silently reducing the gross.
+        double lopAmount = payroll.getLopAmount() != null ? payroll.getLopAmount() : 0.0;
+        if (lopAmount > 0) {
+            double lopDays = payroll.getLopDays() != null ? payroll.getLopDays() : 0.0;
+            String label = lopDays > 0
+                    ? "Loss of Pay (" + trimDays(lopDays) + (lopDays == 1.0 ? " day)" : " days)")
+                    : "Loss of Pay";
+            list.add(line(label, lopAmount));
+        }
+
         // On a final settlement the loans are recovered in full and closed during the
         // run, so they no longer appear as ACTIVE here — show the settled total instead.
         if (payroll.isFinalSettlement()) {
@@ -186,6 +204,13 @@ public class PayslipDocumentService {
 
     private String esc(String value) {
         return value != null ? HtmlUtils.htmlEscape(value) : "—";
+    }
+
+    /** Render a day count without a trailing ".0" (2.0 → "2", 1.5 → "1.5"). */
+    private String trimDays(double days) {
+        return days == Math.rint(days)
+                ? String.valueOf((long) days)
+                : String.valueOf(Math.round(days * 10.0) / 10.0);
     }
 
     private String renderHtml(PayslipDocumentDTO dto) {

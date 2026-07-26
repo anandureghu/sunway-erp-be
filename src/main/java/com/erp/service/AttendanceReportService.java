@@ -2,6 +2,7 @@ package com.erp.service;
 
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeTimesheet;
+import com.erp.domain.hr.Company;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.timesheet.EmployeeMonthlyAttendanceDTO;
@@ -16,6 +17,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -35,9 +37,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AttendanceReportService {
-
-    /** A day counts as "worked" once at least 6 hours are logged. */
-    private static final long MIN_WORKED_MINUTES_FOR_DAY = 360L;
 
     private final EmployeeRepository employeeRepo;
     private final EmployeeTimesheetRepository timesheetRepo;
@@ -68,6 +67,48 @@ public class AttendanceReportService {
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
+        LocalDate today = LocalDate.now();
+
+        // Company attendance policy (all rows here belong to one company).
+        double stdHours = 6.0;
+        boolean requireCheckIn = true;
+        try {
+            Company c = employees.get(0).getCompany();
+            if (c != null) {
+                if (c.getStandardWorkingHoursPerDay() != null) {
+                    stdHours = c.getStandardWorkingHoursPerDay().doubleValue();
+                }
+                requireCheckIn = c.isRequireCheckIn();
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable — use defaults
+        }
+        final long minMinutes = Math.round(stdHours * 60.0);
+
+        // No-punch companies: every weekday up to today is a full standard day.
+        if (!requireCheckIn) {
+            int workingDays = countWorkingDaysUpToToday(year, month);
+            double totalHours = Math.round(workingDays * stdHours * 10.0) / 10.0;
+            boolean todayIsWorkday = ym.equals(YearMonth.from(today)) && isWeekday(today);
+            List<EmployeeMonthlyAttendanceDTO> autoRows = new ArrayList<>();
+            for (Employee e : employees) {
+                autoRows.add(EmployeeMonthlyAttendanceDTO.builder()
+                        .employeeId(e.getId())
+                        .employeeNo(e.getEmployeeNo())
+                        .employeeName(fullName(e))
+                        .department(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
+                        .daysRecorded(workingDays)
+                        .daysPresent(workingDays)
+                        .totalHours(totalHours)
+                        .todayStatus(todayIsWorkday ? "PRESENT" : "NOT_CHECKED_IN")
+                        .todayCheckIn(null)
+                        .todayCheckOut(null)
+                        .todayHours(todayIsWorkday ? Math.round(stdHours * 10.0) / 10.0 : 0.0)
+                        .build());
+            }
+            autoRows.sort(Comparator.comparing(r -> r.getEmployeeName() == null ? "" : r.getEmployeeName()));
+            return autoRows;
+        }
 
         List<Long> ids = employees.stream().map(Employee::getId).toList();
         Map<Long, List<EmployeeTimesheet>> byEmployee = timesheetRepo
@@ -75,14 +116,14 @@ public class AttendanceReportService {
                 .stream()
                 .collect(Collectors.groupingBy(EmployeeTimesheet::getEmployeeId));
 
-        LocalDate today = LocalDate.now();
-
         List<EmployeeMonthlyAttendanceDTO> rows = new ArrayList<>();
         for (Employee e : employees) {
             List<EmployeeTimesheet> records = byEmployee.getOrDefault(e.getId(), List.of());
 
             int daysRecorded = records.size();
-            int daysPresent = (int) records.stream().filter(this::isPresent).count();
+            int daysPresent = (int) records.stream()
+                    .filter(t -> resolveWorkedMinutes(t) >= minMinutes)
+                    .count();
             long totalMinutes = records.stream().mapToLong(this::resolveWorkedMinutes).sum();
             double totalHours = Math.round(totalMinutes / 60.0 * 10.0) / 10.0;
 
@@ -137,8 +178,22 @@ public class AttendanceReportService {
         return permissionCheck.hasAny(auth, AppModule.HR_REPORTS, AppAction.VIEW_ALL, AppAction.VIEW_OWN);
     }
 
-    private boolean isPresent(EmployeeTimesheet t) {
-        return resolveWorkedMinutes(t) >= MIN_WORKED_MINUTES_FOR_DAY;
+    private boolean isWeekday(LocalDate d) {
+        return d.getDayOfWeek() != DayOfWeek.SATURDAY && d.getDayOfWeek() != DayOfWeek.SUNDAY;
+    }
+
+    /** Weekdays (Mon–Fri) from the 1st of the month through today (or month end if past). */
+    private int countWorkingDaysUpToToday(int year, int month) {
+        YearMonth ym = YearMonth.of(year, month);
+        LocalDate start = ym.atDay(1);
+        LocalDate today = LocalDate.now();
+        LocalDate end = ym.atEndOfMonth().isAfter(today) ? today : ym.atEndOfMonth();
+        if (end.isBefore(start)) return 0;
+        int count = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (isWeekday(d)) count++;
+        }
+        return count;
     }
 
     private long resolveWorkedMinutes(EmployeeTimesheet t) {

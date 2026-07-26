@@ -12,6 +12,9 @@ public class TimesheetTodayResponse {
     private Long workedMinutes;
     private String workedDuration;
     private String status;
+    /** Company policy: whether punch in/out is used at all (drives the UI). */
+    private Boolean requireCheckIn;
+    private Double standardWorkingHoursPerDay;
 
     public Long getEmployeeId() {
         return employeeId;
@@ -67,5 +70,21 @@ public class TimesheetTodayResponse {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public Boolean getRequireCheckIn() {
+        return requireCheckIn;
+    }
+
+    public void setRequireCheckIn(Boolean requireCheckIn) {
+        this.requireCheckIn = requireCheckIn;
+    }
+
+    public Double getStandardWorkingHoursPerDay() {
+        return standardWorkingHoursPerDay;
+    }
+
+    public void setStandardWorkingHoursPerDay(Double standardWorkingHoursPerDay) {
+        this.standardWorkingHoursPerDay = standardWorkingHoursPerDay;
     }
 }

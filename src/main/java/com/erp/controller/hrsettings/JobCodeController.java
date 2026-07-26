@@ -68,6 +68,33 @@ public class JobCodeController {
     }
 
     /**
+     * GET Assignable Job Codes for an employee — the active list minus codes already
+     * held by another still-employed person (a code frees up when its holder exits).
+     * Used to populate the Current Job job-code dropdown so a taken code can't be picked.
+     */
+    @PreAuthorize("""
+        @permissionChecker.hasAny(authentication,
+            T(com.erp.domain.security.AppModule).HR_SETTINGS,
+            T(com.erp.domain.security.AppAction).VIEW_OWN,
+            T(com.erp.domain.security.AppAction).VIEW_ALL)
+        or
+        @permissionChecker.hasAny(authentication,
+            T(com.erp.domain.security.AppModule).CURRENT_JOB,
+            T(com.erp.domain.security.AppAction).VIEW_OWN,
+            T(com.erp.domain.security.AppAction).VIEW_ALL)
+        or
+        @permissionChecker.hasAny(authentication,
+            T(com.erp.domain.security.AppModule).EMPLOYEE_PROFILE,
+            T(com.erp.domain.security.AppAction).VIEW_OWN,
+            T(com.erp.domain.security.AppAction).VIEW_ALL)
+    """)
+    @GetMapping("/assignable")
+    public List<JobCodeResponseDTO> getAssignable(
+            @RequestParam(name = "employeeId", required = false) Long employeeId) {
+        return service.getAssignable(employeeId);
+    }
+
+    /**
      * UPDATE Job Code
      */
     @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).EDIT)")

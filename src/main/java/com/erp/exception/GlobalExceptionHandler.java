@@ -50,6 +50,25 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String,Object>> handleIllegalState(IllegalStateException ex) {
+        // Business-rule conflicts (e.g. duplicate job code, job code already assigned).
+        Map<String, Object> body = Map.of(
+                "error", "Conflict",
+                "message", ex.getMessage() != null ? ex.getMessage() : "Operation not allowed"
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String,Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        Map<String, Object> body = Map.of(
+                "error", "Bad Request",
+                "message", ex.getMessage() != null ? ex.getMessage() : "Invalid request"
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String,Object>> handleOther(Exception ex, HttpServletRequest request) {
         log.error(

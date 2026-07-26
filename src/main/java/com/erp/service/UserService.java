@@ -35,16 +35,32 @@ public class UserService {
     private final PermissionCheckService permissionCheckService;
     private final AuthContext authContext;
 
+    private final com.erp.service.file.FileStorageService fileStorageService;
+
     public UserService(UserRepository userRepo,
                        EmployeeRepository employeeRepo,
                        PasswordEncoder passwordEncoder,
                        PermissionCheckService permissionCheckService,
-                       AuthContext authContext) {
+                       AuthContext authContext,
+                       com.erp.service.file.FileStorageService fileStorageService) {
         this.userRepo = userRepo;
         this.employeeRepo = employeeRepo;
         this.passwordEncoder = passwordEncoder;
         this.permissionCheckService = permissionCheckService;
         this.authContext = authContext;
+        this.fileStorageService = fileStorageService;
+    }
+
+    /**
+     * Resolve an employee's stored blob path into a servable public URL. The image
+     * is persisted as a relative path (e.g. "employees/2/profile.png"); rendering it
+     * directly would 404, so callers must expose the resolved URL.
+     */
+    private String resolveEmployeeImageUrl(Employee emp) {
+        if (emp == null || emp.getImageUrl() == null || emp.getImageUrl().isBlank()) {
+            return null;
+        }
+        return fileStorageService.getPublicUrl(emp.getImageUrl());
     }
 
     // ======================================================
@@ -86,7 +102,7 @@ public class UserService {
                 .firstName(emp != null ? emp.getFirstName() : null)
                 .lastName(emp != null ? emp.getLastName() : null)
                 .phoneNo(emp != null ? emp.getPhoneNo() : null)
-                .imageUrl(emp != null ? emp.getImageUrl() : null)
+                .imageUrl(resolveEmployeeImageUrl(emp))
 
                 .companyId(resolveActiveCompanyIdForDetails(id, emp, user))
 
@@ -168,7 +184,9 @@ public class UserService {
 
         Employee emp = resolveEmployeeForContext(userId);
 
-        return ProfileResponse.from(user, emp);
+        ProfileResponse response = ProfileResponse.from(user, emp);
+        response.setImageUrl(resolveEmployeeImageUrl(emp));
+        return response;
     }
 
     // ======================================================
@@ -221,7 +239,9 @@ public class UserService {
         userRepo.save(user);
 
         Employee emp = resolveEmployeeForContext(userId);
-        return ProfileResponse.from(user, emp);
+        ProfileResponse response = ProfileResponse.from(user, emp);
+        response.setImageUrl(resolveEmployeeImageUrl(emp));
+        return response;
     }
 
     // ======================================================
