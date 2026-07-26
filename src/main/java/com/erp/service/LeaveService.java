@@ -206,7 +206,8 @@ public class LeaveService {
                     supportingDocument,
                     FileCategory.LEAVE_SUPPORTING_DOCUMENT,
                     leave.getId().toString(),
-                    true
+                    true,
+                    authContext.getCurrentCompanyId()
             );
             leave.setSupportingDocumentPath(uploadResult.getBlobPath());
             leave = leaveRepo.save(leave);
@@ -616,7 +617,8 @@ public class LeaveService {
                     supportingDocument,
                     FileCategory.LEAVE_SUPPORTING_DOCUMENT,
                     leave.getId().toString(),
-                    true
+                    true,
+                    authContext.getCurrentCompanyId()
             );
             leave.setSupportingDocumentPath(uploadResult.getBlobPath());
             leave = leaveRepo.save(leave);

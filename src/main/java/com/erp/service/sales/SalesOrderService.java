@@ -86,7 +86,7 @@ public class SalesOrderService {
     }
 
     // --------------------------
-    // Create Sales Order (DRAFT)
+    // Create Sales Order (QUOTATION)
     // --------------------------
     public SalesOrderResponseDTO create(SalesOrderCreateDTO dto) {
 
@@ -119,7 +119,7 @@ public class SalesOrderService {
                     .orElseThrow(() -> new RuntimeException("Item not found"));
 
             Warehouse lineWh = resolveLineWarehouse(i.getWarehouseId(), companyId);
-            itemWarehouseStockService.assertAvailableForSale(
+            stockBatchService.assertAvailableForSale(
                     item.getId(), lineWh.getId(), i.getQuantity(), companyId);
 
             BigDecimal qty = BigDecimal.valueOf(i.getQuantity());
@@ -163,7 +163,7 @@ public class SalesOrderService {
                 .orderDate(dto.getOrderDate())
                 .invoiceDueDate(dto.getInvoiceDueDate())
                 .shippingAddress(dto.getShippingAddress())
-                .status("DRAFT")
+                .status("QUOTATION")
                 .subtotalAmount(subtotal.setScale(2, RoundingMode.HALF_UP))
                 .discountAmount(discountTotal.setScale(2, RoundingMode.HALF_UP))
                 .taxAmount(taxTotal.setScale(2, RoundingMode.HALF_UP))
@@ -186,8 +186,8 @@ public class SalesOrderService {
 
         SalesOrder order = getEntity(id);
 
-        if (!"DRAFT".equals(order.getStatus())) {
-            throw new RuntimeException("Only DRAFT orders can be confirmed");
+        if (!"QUOTATION".equals(order.getStatus())) {
+            throw new RuntimeException("Only QUOTATION orders can be confirmed");
         }
 
         ChartOfAccounts debitAccount = order.getDebitAccount();
@@ -202,6 +202,8 @@ public class SalesOrderService {
         SalesOrder saved = repo.save(order);
         saved.getItems().forEach(i -> {
             Warehouse wh = i.getWarehouse() != null ? i.getWarehouse() : i.getItem().getWarehouse();
+            stockBatchService.syncBatchesToMatchIws(
+                    i.getItem().getId(), wh.getId(), companyId);
             StockBatchService.ConsumptionResult consumption = stockBatchService.consumeFifo(
                     i.getItem().getId(),
                     wh.getId(),
@@ -233,14 +235,14 @@ public class SalesOrderService {
     }
 
     // --------------------------
-// Update Sales Order (DRAFT only)
+// Update Sales Order (QUOTATION only)
 // --------------------------
     public SalesOrderResponseDTO update(Long id, SalesOrderUpdateDTO dto) {
 
         SalesOrder order = getEntity(id);
 
-        if (!"DRAFT".equals(order.getStatus())) {
-            throw new RuntimeException("Only DRAFT sales orders can be updated");
+        if (!"QUOTATION".equals(order.getStatus())) {
+            throw new RuntimeException("Only QUOTATION sales orders can be updated");
         }
         if (dto.getItems() == null || dto.getItems().isEmpty()) {
             throw new RuntimeException("Sales order must have at least one item");
@@ -262,7 +264,7 @@ public class SalesOrderService {
                     .orElseThrow(() -> new RuntimeException("Item not found"));
 
             Warehouse lineWh = resolveLineWarehouse(i.getWarehouseId(), companyId);
-            itemWarehouseStockService.assertAvailableForSale(
+            stockBatchService.assertAvailableForSale(
                     item.getId(), lineWh.getId(), i.getQuantity(), companyId);
 
             BigDecimal qty = BigDecimal.valueOf(i.getQuantity());
@@ -329,8 +331,8 @@ public class SalesOrderService {
             throw new RuntimeException("Sales order is already cancelled");
         }
 
-        if (!"DRAFT".equals(order.getStatus()) && !"CONFIRMED".equals(order.getStatus())) {
-            throw new RuntimeException("Only DRAFT or CONFIRMED orders can be cancelled");
+        if (!"QUOTATION".equals(order.getStatus()) && !"CONFIRMED".equals(order.getStatus())) {
+            throw new RuntimeException("Only QUOTATION or CONFIRMED orders can be cancelled");
         }
 
         if ("CONFIRMED".equals(order.getStatus())) {
@@ -480,7 +482,7 @@ public class SalesOrderService {
             SalesOrderResponseDTO.SalesOrderResponseDTOBuilder builder,
             SalesOrder so
     ) {
-        if (!"DRAFT".equals(so.getStatus()) || so.getDebitAccount() == null) {
+        if (!"QUOTATION".equals(so.getStatus()) || so.getDebitAccount() == null) {
             builder.sufficientDebitBalance(true);
             return;
         }

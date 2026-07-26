@@ -28,6 +28,8 @@ public class ShipmentResponseDTO {
     private String estimatedDeliveryDate;
     private String deliveryAddress;
     private String notes;
+    private String customerSignature;
+    private String deliveryRemarks;
     private Instant createdAt;
     private Instant dispatchedAt;
     private Instant inTransitAt;

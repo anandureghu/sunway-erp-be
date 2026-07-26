@@ -1,7 +1,7 @@
 package com.erp.domain.purchase;
 
 public enum PurchaseRequisitionStatus {
-    DRAFT,
+    QUOTATION,
     SUBMITTED,
     APPROVED,
     REJECTED,

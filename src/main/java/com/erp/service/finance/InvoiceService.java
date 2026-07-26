@@ -194,8 +194,14 @@ public class InvoiceService {
         return "PAID".equalsIgnoreCase(invoice.getStatus() == null ? "" : invoice.getStatus().trim());
     }
 
-    /** Original pre-payment invoice document (never overwritten after payment). */
+    /** Original pre-payment invoice document for GENERATED invoices (rebuilt so totals stay current). */
     private String getOrCreateOriginalInvoicePdfUrl(Invoice invoice) {
+        // Always rebuild system-generated PDFs so template/total fixes apply immediately.
+        // Supplier uploads and external links keep their stored URL.
+        if (invoice.getDocumentSource() == null
+                || invoice.getDocumentSource() == InvoiceDocumentSource.GENERATED) {
+            return generateAndUploadInvoicePdf(invoice, false);
+        }
         if (invoice.getPdfUrl() != null && !invoice.getPdfUrl().isBlank()) {
             return invoice.getPdfUrl();
         }
@@ -413,7 +419,8 @@ public class InvoiceService {
                         file,
                         FileCategory.VENDOR_INVOICE_MATCH_DOCUMENT,
                         inv.getId().toString(),
-                        true
+                        true,
+                        inv.getCompany().getId()
                 );
                 inv.setVendorInvoiceDocumentUrl(fileStorageService.getPublicUrl(uploadResult.getBlobPath()));
             }
@@ -446,7 +453,8 @@ public class InvoiceService {
                     file,
                     FileCategory.INVOICE_PDF,
                     invoice.getId().toString(),
-                    true
+                    true,
+                    invoice.getCompany().getId()
             );
             String pdfUrl = fileStorageService.getPublicUrl(uploadResult.getBlobPath());
             invoice.setPdfUrl(pdfUrl);
@@ -695,7 +703,7 @@ public class InvoiceService {
     // ============================================================
     public Invoice applyPayment(String invoiceId, BigDecimal amount) {
 
-        Invoice inv = repo.findByInvoiceId(invoiceId)
+        Invoice inv = repo.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
         if ("CANCELLED".equalsIgnoreCase(inv.getStatus())) {
@@ -796,20 +804,33 @@ public class InvoiceService {
     }
 
     public InvoiceResponse getInvoiceByCode(String invoiceCode) {
-        Invoice inv = repo.findByInvoiceId(invoiceCode)
+        Invoice inv = repo.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceCode)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
         assertInvoiceInTenant(inv);
         return toDTO(inv);
     }
 
     public List<InvoiceResponse> getAllInvoices() {
-        return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId()).stream()
+        Long companyId = auth.getCurrentCompanyId();
+        if (companyId == null && !isSuperAdmin()) {
+            return List.of();
+        }
+        if (companyId == null) {
+            return List.of();
+        }
+        return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                 .map(this::toDTO)
                 .toList();
     }
 
     public List<InvoiceResponse> listInvoicesForCurrentCompany(InvoiceType type) {
         Long companyId = auth.getCurrentCompanyId();
+        if (companyId == null && !isSuperAdmin()) {
+            return List.of();
+        }
+        if (companyId == null) {
+            return List.of();
+        }
         if (type == null) {
             return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream().map(this::toDTO).toList();
         }
@@ -988,7 +1009,8 @@ public class InvoiceService {
                     pdfFile,
                     FileCategory.INVOICE_PDF,
                     storageKey,
-                    true
+                    true,
+                    invoice.getCompany().getId()
             );
 
             String pdfUrl = fileStorageService.getPublicUrl(

@@ -39,6 +39,12 @@ public class PurchaseOrderController {
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.APPROVE, AppAction.EDIT})
+    @PostMapping("/{id}/approve")
+    public PurchaseOrderResponseDTO approve(@PathVariable("id") Long id) {
+        return service.approve(id);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.APPROVE, AppAction.EDIT})
     @PostMapping("/{id}/confirm")
     public PurchaseOrderResponseDTO confirm(@PathVariable("id") Long id) {
         return service.confirm(id);

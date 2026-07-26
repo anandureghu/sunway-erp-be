@@ -15,8 +15,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     boolean existsBySkuAndCompanyId(String sku, Long companyId);
 
     /**
-     * Low-stock items: available &lt;= reorder level (when reorder level is set).
-     * When warehouseId is set, only items that have a stock row in that warehouse are included.
+     * @deprecated Prefer {@link ItemWarehouseStockRepository#findLowStockLinesForReport} —
+     * low stock is evaluated per warehouse stock row, not Item.available aggregates.
      */
     @Query("""
             SELECT i FROM Item i
@@ -36,6 +36,9 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             @Param("category") String category,
             Pageable pageable);
 
+    /**
+     * @deprecated Prefer {@link ItemWarehouseStockRepository#countLowStockLinesForReport}.
+     */
     @Query("""
             SELECT COUNT(i) FROM Item i
             WHERE i.company.id = :companyId

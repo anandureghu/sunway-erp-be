@@ -237,7 +237,8 @@ public class ContractService {
                 attachment,
                 FileCategory.CONTRACT_ATTACHMENT,
                 contract.getId().toString(),
-                false
+                false,
+                authContext.getCurrentCompanyId()
         );
         contract.setAttachmentPath(upload.getBlobPath());
         contractRepository.save(contract);

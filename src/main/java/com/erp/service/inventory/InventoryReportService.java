@@ -1,10 +1,8 @@
 package com.erp.service.inventory;
 
-import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.ItemWarehouseStock;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.dto.inventory.*;
-import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.ItemWarehouseStockRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.repo.sales.SalesOrderRepository;
@@ -26,7 +24,6 @@ public class InventoryReportService {
     private static final int LOW_STOCK_SAMPLE = 25;
 
     private final ItemWarehouseStockRepository stockRepo;
-    private final ItemRepository itemRepo;
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final SalesOrderRepository salesOrderRepo;
     private final AuthContext auth;
@@ -34,14 +31,12 @@ public class InventoryReportService {
 
     public InventoryReportService(
             ItemWarehouseStockRepository stockRepo,
-            ItemRepository itemRepo,
             PurchaseOrderRepository purchaseOrderRepo,
             SalesOrderRepository salesOrderRepo,
             AuthContext auth,
             StockBatchService stockBatchService
     ) {
         this.stockRepo = stockRepo;
-        this.itemRepo = itemRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
         this.salesOrderRepo = salesOrderRepo;
         this.auth = auth;
@@ -64,11 +59,12 @@ public class InventoryReportService {
         }
         BigDecimal valueSelling = toBigDecimal(valueAt(totalsRow, 4));
 
-        List<PurchaseOrderStatus> releasedStatuses = List.of(
+        List<PurchaseOrderStatus> openOrderStatuses = List.of(
+                PurchaseOrderStatus.APPROVED,
                 PurchaseOrderStatus.CONFIRMED,
                 PurchaseOrderStatus.PARTIALLY_RECEIVED
         );
-        Long rawOnOrder = purchaseOrderRepo.sumOnOrderQuantity(companyId, releasedStatuses);
+        Long rawOnOrder = purchaseOrderRepo.sumOnOrderQuantity(companyId, openOrderStatuses);
         long totalOnOrder = rawOnOrder != null ? rawOnOrder : 0L;
 
         Long rawOnReserve = salesOrderRepo.sumConfirmedOrderQuantity(companyId);
@@ -125,16 +121,20 @@ public class InventoryReportService {
                     .build());
         }
 
-        long lowCount = itemRepo.countLowStockForReport(companyId, warehouseId, cat);
-        List<Item> lowItems = itemRepo.findLowStockForReport(
+        long lowCount = stockRepo.countLowStockLinesForReport(companyId, warehouseId, cat);
+        List<ItemWarehouseStock> lowLines = stockRepo.findLowStockLinesForReport(
                 companyId, warehouseId, cat, PageRequest.of(0, LOW_STOCK_SAMPLE));
         List<InventoryLowStockItemDTO> lowDtos = new ArrayList<>();
-        for (Item i : lowItems) {
+        for (ItemWarehouseStock iws : lowLines) {
+            var i = iws.getItem();
+            var w = iws.getWarehouse();
             lowDtos.add(InventoryLowStockItemDTO.builder()
                     .itemId(i.getId())
                     .sku(i.getSku())
                     .name(i.getName())
-                    .available(i.getAvailable())
+                    .warehouseId(w.getId())
+                    .warehouseName(w.getName())
+                    .available(iws.available())
                     .reorderLevel(i.getReorderLevel())
                     .build());
         }

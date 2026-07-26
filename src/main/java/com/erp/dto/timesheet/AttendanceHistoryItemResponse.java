@@ -11,6 +11,8 @@ public class AttendanceHistoryItemResponse {
     private Long workedMinutes;
     private String workedDuration;
     private String status;
+    private boolean autoCheckedOut;
+    private String note;
 
     public LocalDate getAttendanceDate() {
         return attendanceDate;
@@ -58,5 +60,21 @@ public class AttendanceHistoryItemResponse {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public boolean isAutoCheckedOut() {
+        return autoCheckedOut;
+    }
+
+    public void setAutoCheckedOut(boolean autoCheckedOut) {
+        this.autoCheckedOut = autoCheckedOut;
+    }
+
+    public String getNote() {
+        return note;
+    }
+
+    public void setNote(String note) {
+        this.note = note;
     }
 }

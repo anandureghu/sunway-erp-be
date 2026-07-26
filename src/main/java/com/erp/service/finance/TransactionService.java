@@ -1126,7 +1126,7 @@ public class TransactionService {
             return null;
         }
         return switch (transactionType) {
-            case TYPE_PAYMENT, TYPE_SALES_ORDER_CANCEL_REVERSAL, "PAYMENT_REVERSAL" -> SOURCE_SALE;
+            case TYPE_PAYMENT, TYPE_SALES_ORDER_CANCEL_REVERSAL, "PAYMENT_REVERSAL", "CREDIT_APPLIED" -> SOURCE_SALE;
             case TYPE_VENDOR_PAYMENT, TYPE_PURCHASE_ORDER_ENCUMBRANCE,
                     TYPE_PURCHASE_ORDER_CANCEL_REVERSAL, TYPE_PURCHASE_REQUISITION -> SOURCE_PURCHASE;
             default -> null;

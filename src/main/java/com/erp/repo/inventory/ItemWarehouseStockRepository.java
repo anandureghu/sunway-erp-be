@@ -16,6 +16,15 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
     List<ItemWarehouseStock> findByItemId(Long itemId);
 
     @Query("""
+            SELECT iws FROM ItemWarehouseStock iws
+            JOIN FETCH iws.item i
+            JOIN FETCH iws.warehouse w
+            WHERE i.company.id = :companyId
+            ORDER BY i.name ASC, w.name ASC
+            """)
+    List<ItemWarehouseStock> findAllByCompanyId(@Param("companyId") Long companyId);
+
+    @Query("""
             SELECT COUNT(DISTINCT i.id)
             FROM ItemWarehouseStock iws
             JOIN iws.item i
@@ -102,4 +111,39 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
             @Param("warehouseId") Long warehouseId,
             @Param("category") String category,
             Pageable pageable);
+    @Query("""
+            SELECT iws FROM ItemWarehouseStock iws
+            JOIN FETCH iws.item i
+            JOIN FETCH iws.warehouse w
+            WHERE i.company.id = :companyId
+              AND i.reorderLevel IS NOT NULL
+              AND (CASE WHEN (iws.quantityOnHand - iws.reserved) < 0 THEN 0
+                        ELSE (iws.quantityOnHand - iws.reserved) END) <= i.reorderLevel
+              AND (:warehouseId IS NULL OR w.id = :warehouseId)
+              AND (:category IS NULL OR :category = '' OR i.category = :category)
+            ORDER BY (CASE WHEN (iws.quantityOnHand - iws.reserved) < 0 THEN 0
+                           ELSE (iws.quantityOnHand - iws.reserved) END) ASC, i.sku
+            """)
+    List<ItemWarehouseStock> findLowStockLinesForReport(
+            @Param("companyId") Long companyId,
+            @Param("warehouseId") Long warehouseId,
+            @Param("category") String category,
+            Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(iws)
+            FROM ItemWarehouseStock iws
+            JOIN iws.item i
+            JOIN iws.warehouse w
+            WHERE i.company.id = :companyId
+              AND i.reorderLevel IS NOT NULL
+              AND (CASE WHEN (iws.quantityOnHand - iws.reserved) < 0 THEN 0
+                        ELSE (iws.quantityOnHand - iws.reserved) END) <= i.reorderLevel
+              AND (:warehouseId IS NULL OR w.id = :warehouseId)
+              AND (:category IS NULL OR :category = '' OR i.category = :category)
+            """)
+    long countLowStockLinesForReport(
+            @Param("companyId") Long companyId,
+            @Param("warehouseId") Long warehouseId,
+            @Param("category") String category);
 }

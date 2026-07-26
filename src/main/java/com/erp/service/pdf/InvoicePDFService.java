@@ -160,11 +160,21 @@ public class InvoicePDFService {
                             && !invoice.getSupplierInvoiceNumber().isBlank());
             context.setVariable("lines", lines);
             context.setVariable("notesText", notesText);
-            context.setVariable("subtotalFormatted", formatMoney(invoice.getSubtotalAmount(), currencyCode));
-            context.setVariable("discountFormatted", formatMoney(invoice.getDiscountAmount(), currencyCode));
+            // subtotalAmount is stored post-discount; show pre-discount gross in the PDF summary.
+            BigDecimal discountAmount = nullToZero(invoice.getDiscountAmount());
+            BigDecimal netSubtotal = nullToZero(invoice.getSubtotalAmount());
+            if (netSubtotal.compareTo(BigDecimal.ZERO) == 0 && invoice.getAmount() != null) {
+                netSubtotal = invoice.getAmount().subtract(nullToZero(invoice.getTaxAmount()));
+                if (netSubtotal.compareTo(BigDecimal.ZERO) < 0) {
+                    netSubtotal = BigDecimal.ZERO;
+                }
+            }
+            BigDecimal grossSubtotal = netSubtotal.add(discountAmount);
+            context.setVariable("subtotalFormatted", formatMoney(grossSubtotal, currencyCode));
+            context.setVariable("discountFormatted", formatMoney(discountAmount, currencyCode));
             context.setVariable("taxFormatted", formatMoney(invoice.getTaxAmount(), currencyCode));
             context.setVariable("totalFormatted", formatMoney(invoice.getAmount(), currencyCode));
-            context.setVariable("showDiscount", isPositive(invoice.getDiscountAmount()));
+            context.setVariable("showDiscount", isPositive(discountAmount));
             context.setVariable("showTax", isPositive(invoice.getTaxAmount()));
             context.setVariable("showPaymentInfo",
                     isSales && invoice.getBankAccount() != null && !"PAID".equals(status));
@@ -259,6 +269,10 @@ public class InvoicePDFService {
 
     private static boolean isPositive(BigDecimal value) {
         return value != null && value.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private static BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private static String formatMoney(BigDecimal value, String currencyCode) {

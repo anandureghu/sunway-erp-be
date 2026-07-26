@@ -27,6 +27,8 @@ public class ProfileResponse {
     private String firstName;
     private String lastName;
     private String phoneNo;
+    /** Resolved to a servable public URL by UserService (stored as a relative blob path). */
+    @Setter
     private String imageUrl;
 
     // from Employee → Company

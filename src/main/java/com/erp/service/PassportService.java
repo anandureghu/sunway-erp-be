@@ -102,7 +102,8 @@ public class PassportService {
         assertSameTenant(passport.getEmployee());
 
         FileUploadResult result = fileStorageService.upload(
-                file, FileCategory.PASSPORT_DOCUMENT, employeeId.toString(), false);
+                file, FileCategory.PASSPORT_DOCUMENT, employeeId.toString(), false,
+                authContext.getCurrentCompanyId());
         passport.setDocumentPath(result.getBlobPath());
         passportRepo.save(passport);
         return toDTO(passport);

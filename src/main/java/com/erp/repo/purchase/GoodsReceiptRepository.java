@@ -5,6 +5,8 @@ import com.erp.domain.purchase.GoodsReceiptStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -19,4 +21,19 @@ public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, Long
 
     List<GoodsReceipt> findByCompany_IdAndStatusAndArchivedFalseOrderByReceivedAtDesc(
             Long companyId, GoodsReceiptStatus status);
+
+    long countByCompany_IdAndStatusAndArchivedFalse(Long companyId, GoodsReceiptStatus status);
+
+    @Query("""
+            SELECT COUNT(DISTINCT gr.id)
+            FROM GoodsReceipt gr
+            JOIN gr.items gi
+            WHERE gr.company.id = :companyId
+              AND gr.archived = false
+              AND gr.status = com.erp.domain.purchase.GoodsReceiptStatus.INSPECTED
+              AND gi.acceptedQty IS NOT NULL
+              AND gi.acceptedQty > 0
+              AND gi.stockedAt IS NULL
+            """)
+    long countAwaitingStockReceive(@Param("companyId") Long companyId);
 }

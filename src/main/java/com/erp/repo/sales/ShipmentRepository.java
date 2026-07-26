@@ -14,6 +14,19 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     List<Shipment> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
+    long countByCompanyIdAndStatus(Long companyId, String status);
+
+    @Query("""
+            SELECT COUNT(s) FROM Shipment s
+            WHERE s.company.id = :companyId
+              AND s.status = 'DELIVERED'
+              AND s.deliveredAt IS NOT NULL
+              AND s.deliveredAt >= :from
+            """)
+    long countDeliveredSince(
+            @Param("companyId") Long companyId,
+            @Param("from") java.time.Instant from);
+
     @Query("""
             SELECT DISTINCT s FROM Shipment s
             JOIN FETCH s.customer

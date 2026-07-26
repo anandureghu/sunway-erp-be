@@ -10,6 +10,7 @@ import com.erp.domain.sales.Shipment;
 import com.erp.domain.sales.ShipmentItem;
 import com.erp.domain.sales.ShipmentTrackingEvent;
 import com.erp.dto.sales.ShipmentCreateDTO;
+import com.erp.dto.sales.ShipmentDeliverDTO;
 import com.erp.dto.sales.ShipmentItemDTO;
 import com.erp.dto.sales.ShipmentResponseDTO;
 import com.erp.dto.sales.ShipmentTrackingEventCreateDTO;
@@ -181,9 +182,9 @@ public class ShipmentService {
     }
 
     // --------------------------
-    // Mark Delivered
+    // Mark Delivered (proof of delivery)
     // --------------------------
-    public ShipmentResponseDTO markDelivered(Long id) {
+    public ShipmentResponseDTO markDelivered(Long id, ShipmentDeliverDTO dto) {
 
         Shipment s = getEntity(id);
 
@@ -191,10 +192,19 @@ public class ShipmentService {
             throw new RuntimeException("Shipment cannot be delivered in current state");
         }
 
+        String signature = dto != null ? blankToNull(dto.getCustomerSignature()) : null;
+        String remarks = dto != null ? blankToNull(dto.getDeliveryRemarks()) : null;
+        if (signature == null) {
+            throw new RuntimeException("Customer signature is required to mark delivered");
+        }
+
+        s.setCustomerSignature(signature);
+        s.setDeliveryRemarks(remarks);
         s.setStatus("DELIVERED");
         Instant now = Instant.now();
         s.setDeliveredAt(now);
-        appendTrackingEvent(s, "DELIVERED", resolveEventLocation(s), "Shipment delivered", now);
+        String eventNotes = remarks != null ? remarks : "Shipment delivered with customer signature";
+        appendTrackingEvent(s, "DELIVERED", resolveEventLocation(s), eventNotes, now);
 
         SalesOrder linkedOrder = s.getPicklist().getSalesOrder();
         if (linkedOrder != null && !"CANCELLED".equals(linkedOrder.getStatus())) {
@@ -327,6 +337,8 @@ public class ShipmentService {
                 .estimatedDeliveryDate(s.getEstimatedDeliveryDate())
                 .deliveryAddress(s.getDeliveryAddress())
                 .notes(s.getNotes())
+                .customerSignature(s.getCustomerSignature())
+                .deliveryRemarks(s.getDeliveryRemarks())
                 .createdAt(s.getCreatedAt())
                 .dispatchedAt(s.getDispatchedAt())
                 .inTransitAt(s.getInTransitAt())

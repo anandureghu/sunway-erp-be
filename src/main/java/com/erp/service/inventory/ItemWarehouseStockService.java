@@ -274,6 +274,26 @@ public class ItemWarehouseStockService {
                 .toList();
     }
 
+    public record StockCatalogRow(
+            Item item,
+            Warehouse warehouse,
+            int quantityOnHand,
+            int reserved,
+            int available
+    ) {}
+
+    @Transactional(readOnly = true)
+    public List<StockCatalogRow> listStockCatalog(Long companyId) {
+        return stockRepo.findAllByCompanyId(companyId).stream()
+                .map(row -> new StockCatalogRow(
+                        row.getItem(),
+                        row.getWarehouse(),
+                        nz(row.getQuantityOnHand()),
+                        nz(row.getReserved()),
+                        row.available()))
+                .toList();
+    }
+
     private Item loadItemForCompany(Long itemId, Long companyId) {
         Item item = itemRepo.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("Item not found"));

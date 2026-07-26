@@ -141,7 +141,8 @@ public class HrDashboardService {
         HrDocumentsExpiringDTO documentsExpiring = HrDocumentsExpiringDTO.builder()
                 .qidExpiring(expiringPermits.size())
                 .passportExpiring(expiringPassports.size())
-                .visaExpiring(expiringPermits.size())
+                // ResidencePermit covers QID/residence; do not double-count under visaExpiring.
+                .visaExpiring(0)
                 .contractsExpiring(expiringContracts.size())
                 .otherDocsExpiring(0)
                 .build();

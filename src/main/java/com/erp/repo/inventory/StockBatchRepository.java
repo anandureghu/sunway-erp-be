@@ -80,4 +80,17 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, Long> {
             @Param("warehouseId") Long warehouseId,
             @Param("category") String category
     );
+
+    @Query("""
+            SELECT COALESCE(SUM(sb.quantityOnHand), 0)
+            FROM StockBatch sb
+            WHERE sb.company.id = :companyId
+              AND sb.item.id = :itemId
+              AND sb.warehouse.id = :warehouseId
+            """)
+    int sumQuantityOnHand(
+            @Param("companyId") Long companyId,
+            @Param("itemId") Long itemId,
+            @Param("warehouseId") Long warehouseId
+    );
 }

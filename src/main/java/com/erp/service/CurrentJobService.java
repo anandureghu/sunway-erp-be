@@ -2,6 +2,7 @@ package com.erp.service;
 
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeCurrentJob;
+import com.erp.domain.EmployeeStatus;
 import com.erp.domain.hr.Department;
 import com.erp.domain.hr.Division;
 import com.erp.domain.hrsettings.JobCode;
@@ -20,10 +21,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumSet;
+import java.util.Set;
+
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class CurrentJobService {
+
+    /**
+     * Statuses for which an employee no longer occupies their job code, freeing it
+     * to be assigned to someone else. Everyone still on the roster (ACTIVE, ON_LEAVE,
+     * INACTIVE) keeps their job code reserved.
+     */
+    public static final Set<EmployeeStatus> JOB_CODE_FREED_STATUSES = EnumSet.of(
+            EmployeeStatus.TERMINATED, EmployeeStatus.RESIGNED, EmployeeStatus.RETIRED);
 
     private final EmployeeCurrentJobRepo currentJobRepo;
     private final EmployeeRepository employeeRepo;
@@ -67,6 +79,7 @@ public class CurrentJobService {
                 .orElseThrow(() -> new NotFoundException("Job code not found"));
 
         assertSameCompany(employee, jobCode);
+        assertJobCodeAvailable(jobCode, employeeId);
 
         Department department = departmentRepo.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new NotFoundException("Department not found"));
@@ -98,6 +111,7 @@ public class CurrentJobService {
                 .orElseThrow(() -> new NotFoundException("Job code not found"));
 
         assertSameCompany(job.getEmployee(), jobCode);
+        assertJobCodeAvailable(jobCode, job.getEmployee().getId());
 
         Department department = departmentRepo.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new NotFoundException("Department not found"));
@@ -152,6 +166,32 @@ public class CurrentJobService {
         }
 
         return division;
+    }
+
+    /**
+     * A job code may be held by only one still-employed person at a time. If another
+     * non-exited employee already has it as their current job, reject the assignment
+     * (it frees up once that holder is terminated / resigned / retired).
+     */
+    private void assertJobCodeAvailable(JobCode jobCode, Long employeeId) {
+        boolean taken = currentJobRepo.isJobCodeHeldByAnotherActiveEmployee(
+                jobCode.getId(), employeeId, JOB_CODE_FREED_STATUSES);
+        if (!taken) {
+            return;
+        }
+        String holder = currentJobRepo
+                .findFirstByJobCode_IdAndEmployee_IdNot(jobCode.getId(), employeeId)
+                .map(cj -> {
+                    Employee e = cj.getEmployee();
+                    String name = ((e.getFirstName() == null ? "" : e.getFirstName()) + " "
+                            + (e.getLastName() == null ? "" : e.getLastName())).trim();
+                    return name.isEmpty() ? ("employee #" + e.getId()) : name;
+                })
+                .orElse("another active employee");
+        throw new IllegalStateException(
+                "Job code " + jobCode.getCode() + " is already assigned to " + holder
+                        + ". A job code can be held by only one active employee — it frees up "
+                        + "once that employee is terminated.");
     }
 
     private void assertSameCompany(Employee employee, JobCode jobCode) {

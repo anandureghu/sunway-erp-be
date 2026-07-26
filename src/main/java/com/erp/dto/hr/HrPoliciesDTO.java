@@ -32,4 +32,8 @@ public class HrPoliciesDTO {
     private Boolean loanPolicyEnabled;
     private Integer loanMinServiceDays;
     private Integer loanMaxRepaymentMonths;
+
+    // ---- Attendance & working hours ----
+    private BigDecimal standardWorkingHoursPerDay;
+    private Boolean requireCheckIn;
 }

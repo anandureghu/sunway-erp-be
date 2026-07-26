@@ -117,7 +117,8 @@ public class ResidencePermitService {
         assertSameTenant(permit.getEmployee());
 
         FileUploadResult result = fileStorageService.upload(
-                file, FileCategory.RESIDENCE_PERMIT_DOCUMENT, employeeId.toString(), false);
+                file, FileCategory.RESIDENCE_PERMIT_DOCUMENT, employeeId.toString(), false,
+                authContext.getCurrentCompanyId());
         permit.setDocumentPath(result.getBlobPath());
         permitRepo.save(permit);
         return toDTO(permit);

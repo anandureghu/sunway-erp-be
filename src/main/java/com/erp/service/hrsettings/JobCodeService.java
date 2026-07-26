@@ -32,15 +32,18 @@ public class JobCodeService {
 
         Company company = requireCurrentCompany();
 
-        repository.findByCompany_IdAndCode(company.getId(), dto.getCode())
+        String code = normalizeCode(dto.getCode());
+
+        repository.findByCompany_IdAndCode(company.getId(), code)
                 .ifPresent(j -> {
-                    throw new IllegalStateException("Job code already exists for this company");
+                    throw new IllegalStateException(
+                            "Job code \"" + code + "\" already exists for this company");
                 });
 
         validateSalaryRange(dto.getMinSalary(), dto.getMaxSalary());
 
         JobCode jobCode = JobCode.builder()
-                .code(dto.getCode())
+                .code(code)
                 .title(dto.getTitle())
                 .level(dto.getLevel())
                 .salaryGrade(dto.getSalaryGrade())
@@ -73,6 +76,25 @@ public class JobCodeService {
                 .toList();
     }
 
+    /**
+     * Active job codes that can still be assigned to the given employee — the active
+     * list minus any code already reserved by another still-employed person. The
+     * employee's own current code (if any) stays in the list so editing works.
+     */
+    @Transactional(readOnly = true)
+    public List<JobCodeResponseDTO> getAssignable(Long employeeId) {
+        Long companyId = requireCurrentCompany().getId();
+        long excludeId = employeeId != null ? employeeId : -1L;
+        java.util.Set<Long> taken = new java.util.HashSet<>(
+                employeeCurrentJobRepo.findJobCodeIdsHeldByActiveEmployeesExcluding(
+                        excludeId, com.erp.service.CurrentJobService.JOB_CODE_FREED_STATUSES));
+        return repository.findByCompany_IdAndActiveTrue(companyId)
+                .stream()
+                .filter(j -> !taken.contains(j.getId()))
+                .map(this::mapToDTO)
+                .toList();
+    }
+
     // UPDATE
     public JobCodeResponseDTO update(Long id, JobCodeRequestDTO dto) {
 
@@ -81,17 +103,20 @@ public class JobCodeService {
         JobCode existing = repository.findByIdAndCompany_Id(id, companyId)
                 .orElseThrow(() -> new NotFoundException("Job code not found"));
 
-        if (!existing.getCode().equals(dto.getCode())) {
-            repository.findByCompany_IdAndCode(companyId, dto.getCode())
+        String code = normalizeCode(dto.getCode());
+
+        if (!existing.getCode().equalsIgnoreCase(code)) {
+            repository.findByCompany_IdAndCode(companyId, code)
                     .filter(j -> !j.getId().equals(id))
                     .ifPresent(j -> {
-                        throw new IllegalStateException("Job code already exists for this company");
+                        throw new IllegalStateException(
+                                "Job code \"" + code + "\" already exists for this company");
                     });
         }
 
         validateSalaryRange(dto.getMinSalary(), dto.getMaxSalary());
 
-        existing.setCode(dto.getCode());
+        existing.setCode(code);
         existing.setTitle(dto.getTitle());
         existing.setLevel(dto.getLevel());
         existing.setSalaryGrade(dto.getSalaryGrade());
@@ -125,6 +150,15 @@ public class JobCodeService {
         }
         return companyRepository.findById(companyId)
                 .orElseThrow(() -> new AccessDeniedException("Current company not found"));
+    }
+
+    /** Trim surrounding whitespace so " ENG1" and "ENG1" can't both exist. */
+    private String normalizeCode(String code) {
+        String trimmed = code == null ? "" : code.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("Job code is required");
+        }
+        return trimmed;
     }
 
     private void validateSalaryRange(BigDecimal min, BigDecimal max) {

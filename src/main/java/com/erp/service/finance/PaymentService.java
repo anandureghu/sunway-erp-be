@@ -301,7 +301,7 @@ public class PaymentService {
 
     private void enrichInvoiceAmounts(PaymentResponseDTO.PaymentResponseDTOBuilder b, Payment p) {
         if (p.getInvoiceId() != null && !p.getInvoiceId().isBlank()) {
-            invoiceRepo.findByInvoiceId(p.getInvoiceId()).ifPresent(inv -> {
+            invoiceRepo.findFirstByInvoiceIdOrderByCreatedAtDesc(p.getInvoiceId()).ifPresent(inv -> {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
@@ -373,7 +373,7 @@ public class PaymentService {
         if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
             throw new RuntimeException("Invoice ID is missing for this payment request");
         }
-        return invoiceRepo.findByInvoiceId(payment.getInvoiceId())
+        return invoiceRepo.findFirstByInvoiceIdOrderByCreatedAtDesc(payment.getInvoiceId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this payment"));
     }
 
@@ -492,7 +492,7 @@ public class PaymentService {
         if (invoiceId == null || invoiceId.isBlank()) {
             return List.of();
         }
-        Invoice inv = invoiceRepo.findByInvoiceId(invoiceId).orElse(null);
+        Invoice inv = invoiceRepo.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceId).orElse(null);
         if (inv == null) {
             return List.of();
         }
@@ -571,6 +571,10 @@ public class PaymentService {
         payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
         payment.setCreditAppliedAmount(creditApplied.compareTo(BigDecimal.ZERO) > 0 ? creditApplied : null);
+
+        if (creditApplied.compareTo(BigDecimal.ZERO) > 0) {
+            postCreditAppliedToAccountingSales(payment, creditApplied, invoice.getInvoiceId());
+        }
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Confirmed from payment request"
@@ -635,6 +639,12 @@ public class PaymentService {
         payment.setPaymentMethod(methodCode);
         payment.setEffectiveDate(LocalDate.now());
         payment.setCreditAppliedAmount(creditApplied.compareTo(BigDecimal.ZERO) > 0 ? creditApplied : null);
+
+        if (creditApplied.compareTo(BigDecimal.ZERO) > 0) {
+            String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                    .map(Invoice::getInvoiceId).orElse(null);
+            postCreditAppliedToAccountingPurchase(payment, creditApplied, purchaseInvoiceCode, po);
+        }
         payment.setNotes(
                 (payment.getNotes() == null ? "" : payment.getNotes() + " | ")
                         + "Vendor payment confirmed (AP)"
@@ -806,6 +816,49 @@ public class PaymentService {
                 purchaseRequisitionRepo.save(managed);
             });
         }
+    }
+
+    /**
+     * Posts a credit-applied GL entry for a customer (AR) settlement via credit notes.
+     * Uses the same sales account pair as a cash payment so the AR balance is relieved correctly.
+     */
+    private void postCreditAppliedToAccountingSales(Payment payment, BigDecimal creditApplied, String invoiceId) {
+        Long companyId = payment.getCompany().getId();
+        var accounts = accountingDefaults.requireSalesAccounts(companyId);
+        transactionService.createTransactionForPayment(
+                payment.getId(),
+                companyId,
+                creditApplied,
+                accounts.debitAccountId(),
+                accounts.creditAccountId(),
+                payment.getEffectiveDate() != null ? payment.getEffectiveDate() : LocalDate.now(),
+                "CREDIT_APPLIED",
+                invoiceId);
+    }
+
+    /**
+     * Posts a credit-applied GL entry for a vendor (AP) settlement via supplier credit notes.
+     * Uses the purchase account pair (reversed, same as vendor payment) to relieve AP.
+     */
+    private void postCreditAppliedToAccountingPurchase(
+            Payment payment, BigDecimal creditApplied, String invoiceId, PurchaseOrder po) {
+        Long companyId = payment.getCompany().getId();
+        var accounts = accountingDefaults.requirePurchaseAccounts(companyId);
+        Long debitAccountId = accounts.creditAccountId();
+        Long creditAccountId = accounts.debitAccountId();
+        transactionService.create(CreateTransactionDTO.builder()
+                .companyId(companyId)
+                .transactionType("CREDIT_APPLIED")
+                .transactionDate(payment.getEffectiveDate() != null ? payment.getEffectiveDate() : LocalDate.now())
+                .amount(creditApplied)
+                .debitAccount(debitAccountId)
+                .creditAccount(creditAccountId)
+                .paymentId(String.valueOf(payment.getId()))
+                .invoiceId(invoiceId)
+                .relatedId(po.getId())
+                .source(TransactionService.SOURCE_PURCHASE)
+                .transactionDescription("Supplier credit applied — PO " + po.getOrderNumber())
+                .build());
     }
 
     /**
