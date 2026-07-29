@@ -88,6 +88,12 @@ public class FileStorageService {
     /** Upserts the ledger row for this blob path so per-company cloud storage totals stay accurate,
      *  including when a fixed-name blob (e.g. a profile photo) is overwritten by a re-upload. */
     private void recordStoredFile(Long companyId, String blobPath, String containerName, long sizeBytes) {
+        // The blob is already uploaded — the storage-usage ledger is secondary, so a
+        // missing company (e.g. a SUPER_ADMIN with no company context) must not fail
+        // the whole upload. Skip the row rather than hit the NOT NULL constraint.
+        if (companyId == null) {
+            return;
+        }
         StoredFile storedFile = storedFileRepository.findByBlobPath(blobPath)
                 .orElseGet(() -> StoredFile.builder().blobPath(blobPath).build());
         storedFile.setCompanyId(companyId);

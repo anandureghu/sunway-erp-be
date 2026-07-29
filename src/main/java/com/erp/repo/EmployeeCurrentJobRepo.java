@@ -50,4 +50,15 @@ public interface EmployeeCurrentJobRepo extends JpaRepository<EmployeeCurrentJob
     java.util.List<Long> findJobCodeIdsHeldByActiveEmployeesExcluding(
             @Param("employeeId") Long employeeId,
             @Param("freedStatuses") Collection<EmployeeStatus> freedStatuses);
+
+    /** Current-job rows (with employee + job code) held by still-employed staff other than the given employee. */
+    @EntityGraph(attributePaths = {"employee", "jobCode"})
+    @Query("""
+            SELECT cj FROM EmployeeCurrentJob cj
+            WHERE cj.employee.id <> :employeeId
+              AND cj.employee.status NOT IN :freedStatuses
+            """)
+    java.util.List<EmployeeCurrentJob> findActiveHoldersExcluding(
+            @Param("employeeId") Long employeeId,
+            @Param("freedStatuses") Collection<EmployeeStatus> freedStatuses);
 }

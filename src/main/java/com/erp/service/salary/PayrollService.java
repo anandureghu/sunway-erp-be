@@ -619,8 +619,9 @@ public class PayrollService {
     }
 
     private boolean isWeekend(LocalDate date) {
+        // Qatar workweek: Sunday–Thursday, with Friday & Saturday as the weekend.
         DayOfWeek day = date.getDayOfWeek();
-        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
+        return day == DayOfWeek.FRIDAY || day == DayOfWeek.SATURDAY;
     }
 
     private PayrollPreviewDTO toPreviewDTO(

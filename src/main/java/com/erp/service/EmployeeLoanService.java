@@ -467,6 +467,8 @@ public class EmployeeLoanService {
 
             dto.setEmployeeId(employee.getId());
             dto.setEmployeeName(employee.getFirstName() + " " + employee.getLastName());
+            dto.setDepartment(employee.getDepartment() != null
+                    ? employee.getDepartment().getDepartmentName() : null);
 
             if (employee.getCompany() != null &&
                     employee.getCompany().getCurrency() != null) {

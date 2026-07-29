@@ -121,3 +121,76 @@ WHERE LOWER(cr.name) = 'hr'
     'EMPLOYEE_PROFILE','CURRENT_JOB','DEPENDENTS','IMMIGRATION','SALARY',
     'PAYROLL','LEAVES','LOANS','APPRAISAL','HR_REPORTS','HR_SETTINGS'
   );
+
+-- ── Dashboard permissions ────────────────────────────────────────────────────
+-- Each area's sidebar dashboard is a dedicated, view-only permission
+-- (HR_DASHBOARD / FINANCE_DASHBOARD / INVENTORY_DASHBOARD) so admins can grant or
+-- revoke it explicitly. Backfill: any company role that can already view a core
+-- page in an area keeps that area's dashboard, with the same view scope. Only
+-- inserts when the role has no dashboard row yet, so later admin edits are kept.
+
+-- HR dashboard → roles that can view any core HR page.
+INSERT INTO company_role_permissions (
+  company_role_id, module,
+  view_own, view_all, create_own, create_all,
+  edit_own, edit_all, delete_own, delete_all, approve
+)
+SELECT src.company_role_id, 'HR_DASHBOARD',
+       src.view_own, src.view_all, b'0', b'0', b'0', b'0', b'0', b'0', b'0'
+FROM (
+  SELECT company_role_id,
+         MAX(view_own + 0) AS view_own,
+         MAX(view_all + 0) AS view_all
+  FROM company_role_permissions
+  WHERE module IN ('EMPLOYEE_PROFILE','HR_REPORTS','LEAVES','PAYROLL')
+    AND (view_own = b'1' OR view_all = b'1')
+  GROUP BY company_role_id
+) src
+WHERE NOT EXISTS (
+  SELECT 1 FROM company_role_permissions e
+  WHERE e.company_role_id = src.company_role_id AND e.module = 'HR_DASHBOARD'
+);
+
+-- Finance dashboard → roles that can view any core finance page.
+INSERT INTO company_role_permissions (
+  company_role_id, module,
+  view_own, view_all, create_own, create_all,
+  edit_own, edit_all, delete_own, delete_all, approve
+)
+SELECT src.company_role_id, 'FINANCE_DASHBOARD',
+       src.view_own, src.view_all, b'0', b'0', b'0', b'0', b'0', b'0', b'0'
+FROM (
+  SELECT company_role_id,
+         MAX(view_own + 0) AS view_own,
+         MAX(view_all + 0) AS view_all
+  FROM company_role_permissions
+  WHERE module IN ('FINANCE_REPORTS','FINANCE_INVOICE','FINANCE_PAYMENT','FINANCE_LEDGER')
+    AND (view_own = b'1' OR view_all = b'1')
+  GROUP BY company_role_id
+) src
+WHERE NOT EXISTS (
+  SELECT 1 FROM company_role_permissions e
+  WHERE e.company_role_id = src.company_role_id AND e.module = 'FINANCE_DASHBOARD'
+);
+
+-- Inventory dashboard → roles that can view any core inventory page.
+INSERT INTO company_role_permissions (
+  company_role_id, module,
+  view_own, view_all, create_own, create_all,
+  edit_own, edit_all, delete_own, delete_all, approve
+)
+SELECT src.company_role_id, 'INVENTORY_DASHBOARD',
+       src.view_own, src.view_all, b'0', b'0', b'0', b'0', b'0', b'0', b'0'
+FROM (
+  SELECT company_role_id,
+         MAX(view_own + 0) AS view_own,
+         MAX(view_all + 0) AS view_all
+  FROM company_role_permissions
+  WHERE module IN ('INVENTORY_STOCK','INVENTORY_ITEM','INVENTORY_SALES','INVENTORY_PURCHASE')
+    AND (view_own = b'1' OR view_all = b'1')
+  GROUP BY company_role_id
+) src
+WHERE NOT EXISTS (
+  SELECT 1 FROM company_role_permissions e
+  WHERE e.company_role_id = src.company_role_id AND e.module = 'INVENTORY_DASHBOARD'
+);

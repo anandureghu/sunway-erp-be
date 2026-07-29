@@ -20,6 +20,7 @@ public class LoanResponseDTO {
     private LocalDate endDate;
     private Long employeeId;
     private String employeeName;
+    private String department;
     private String notes;
     private String rejectionComment;
     private boolean archived;
