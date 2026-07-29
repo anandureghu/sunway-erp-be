@@ -44,7 +44,7 @@ public class UserController {
         if (companyId == null) {
             return ResponseEntity.ok(Collections.emptyList());
         }
-        return ResponseEntity.ok(repo.findByCompany_IdOrderByCreatedAtDesc(companyId));
+        return ResponseEntity.ok(repo.findDistinctByEmployeeCompanyId(companyId));
     }
 
     @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).VIEW_ALL)")
