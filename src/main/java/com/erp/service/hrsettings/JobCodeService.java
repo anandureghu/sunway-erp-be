@@ -1,5 +1,7 @@
 package com.erp.service.hrsettings;
 
+import com.erp.domain.Employee;
+import com.erp.domain.EmployeeCurrentJob;
 import com.erp.domain.hr.Company;
 import com.erp.domain.hrsettings.JobCode;
 import com.erp.dto.hrsettings.JobCodeRequestDTO;
@@ -9,13 +11,16 @@ import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hrsettings.JobCodeRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.CurrentJobService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -77,22 +82,42 @@ public class JobCodeService {
     }
 
     /**
-     * Active job codes that can still be assigned to the given employee — the active
-     * list minus any code already reserved by another still-employed person. The
-     * employee's own current code (if any) stays in the list so editing works.
+     * Active job codes for the Current Job picker, each annotated with assignability.
+     * Every active code is returned so the user can always see their codes; a code
+     * already held by another still-employed person is flagged `assignable=false`
+     * with `assignedTo` naming the holder (so the UI can show it disabled). The
+     * employee's own current code stays assignable so editing works.
      */
     @Transactional(readOnly = true)
     public List<JobCodeResponseDTO> getAssignable(Long employeeId) {
         Long companyId = requireCurrentCompany().getId();
         long excludeId = employeeId != null ? employeeId : -1L;
-        java.util.Set<Long> taken = new java.util.HashSet<>(
-                employeeCurrentJobRepo.findJobCodeIdsHeldByActiveEmployeesExcluding(
-                        excludeId, com.erp.service.CurrentJobService.JOB_CODE_FREED_STATUSES));
-        return repository.findByCompany_IdAndActiveTrue(companyId)
-                .stream()
-                .filter(j -> !taken.contains(j.getId()))
-                .map(this::mapToDTO)
+
+        // jobCodeId -> holder name, for codes reserved by another still-employed person.
+        Map<Long, String> holders = new HashMap<>();
+        for (EmployeeCurrentJob cj : employeeCurrentJobRepo.findActiveHoldersExcluding(
+                excludeId, CurrentJobService.JOB_CODE_FREED_STATUSES)) {
+            if (cj.getJobCode() == null) continue;
+            holders.putIfAbsent(cj.getJobCode().getId(), holderName(cj.getEmployee()));
+        }
+
+        return repository.findByCompany_IdAndActiveTrue(companyId).stream()
+                .map(j -> {
+                    JobCodeResponseDTO dto = mapToDTO(j);
+                    String holder = holders.get(j.getId());
+                    dto.setAssignable(holder == null);
+                    dto.setAssignedTo(holder);
+                    return dto;
+                })
                 .toList();
+    }
+
+    private String holderName(Employee e) {
+        if (e == null) return "another employee";
+        String name = ((e.getFirstName() == null ? "" : e.getFirstName()) + " "
+                + (e.getLastName() == null ? "" : e.getLastName())).trim();
+        if (!name.isEmpty()) return name;
+        return e.getEmployeeNo() != null ? e.getEmployeeNo() : ("employee #" + e.getId());
     }
 
     // UPDATE

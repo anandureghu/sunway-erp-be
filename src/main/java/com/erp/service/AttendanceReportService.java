@@ -179,10 +179,11 @@ public class AttendanceReportService {
     }
 
     private boolean isWeekday(LocalDate d) {
-        return d.getDayOfWeek() != DayOfWeek.SATURDAY && d.getDayOfWeek() != DayOfWeek.SUNDAY;
+        // Qatar workweek: Sunday–Thursday (Friday & Saturday are the weekend).
+        return d.getDayOfWeek() != DayOfWeek.FRIDAY && d.getDayOfWeek() != DayOfWeek.SATURDAY;
     }
 
-    /** Weekdays (Mon–Fri) from the 1st of the month through today (or month end if past). */
+    /** Working days (Sun–Thu) from the 1st of the month through today (or month end if past). */
     private int countWorkingDaysUpToToday(int year, int month) {
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);

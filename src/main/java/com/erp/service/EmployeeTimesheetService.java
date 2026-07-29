@@ -210,7 +210,7 @@ public class EmployeeTimesheetService {
         return response;
     }
 
-    /** Weekdays (Mon–Fri) from the 1st of the month through today (or month end if past). */
+    /** Working days (Sun–Thu) from the 1st of the month through today (or month end if past). */
     private int countWorkingDaysUpToToday(int year, int month) {
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
@@ -219,8 +219,9 @@ public class EmployeeTimesheetService {
         if (end.isBefore(start)) return 0;
         int count = 0;
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            // Qatar weekend: Friday & Saturday are off.
             switch (d.getDayOfWeek()) {
-                case SATURDAY, SUNDAY -> { }
+                case FRIDAY, SATURDAY -> { }
                 default -> count++;
             }
         }

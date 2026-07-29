@@ -287,9 +287,13 @@ public class EmployeeService {
         employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
 
         if (image != null && !image.isEmpty()) {
+            // Record the file under the EMPLOYEE's company — not the caller's context,
+            // which is null for a SUPER_ADMIN and would break the NOT NULL storage ledger.
+            Long companyId = employee.getCompanyId() != null
+                    ? employee.getCompanyId()
+                    : authContext.getCurrentCompanyId();
             FileUploadResult upload = fileStorageService.upload(
-                    image, FileCategory.EMPLOYEE_PROFILE, id.toString(), true,
-                    authContext.getCurrentCompanyId());
+                    image, FileCategory.EMPLOYEE_PROFILE, id.toString(), true, companyId);
             employee.setImageUrl(upload.getBlobPath());
             employeeRepository.save(employee);
         }
