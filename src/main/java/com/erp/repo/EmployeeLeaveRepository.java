@@ -47,6 +47,7 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
         select l from EmployeeLeave l
         where l.employee.company.id = :companyId
           and l.leaveStatus = :leaveStatus
+          and l.archived = false
         order by l.dateReported desc
     """)
     List<EmployeeLeave> findByEmployeeCompany_IdAndLeaveStatusOrderByDateReportedDesc(
@@ -126,6 +127,7 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
         select distinct l.employee.id from EmployeeLeave l
         where l.employee.company.id = :companyId
           and l.leaveStatus = com.erp.domain.LeaveStatus.APPROVED
+          and l.archived = false
           and l.startDate <= :onDate
           and l.endDate >= :onDate
     """)
@@ -134,8 +136,16 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
             @Param("onDate") LocalDate onDate);
 
     /** Leave requests submitted (dateReported) within a window, for the monthly leave-summary widget. */
+    @Query("""
+        select l from EmployeeLeave l
+        where l.employee.company.id = :companyId
+          and l.archived = false
+          and l.dateReported between :from and :to
+    """)
     List<EmployeeLeave> findByEmployee_Company_IdAndDateReportedBetween(
-            Long companyId, LocalDate from, LocalDate to);
+            @Param("companyId") Long companyId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 
     /**
      * Monthly count of leave requests by year + month over dateReported, scoped to company.
@@ -145,6 +155,7 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
         select year(l.dateReported), month(l.dateReported), count(l)
         from EmployeeLeave l
         where l.employee.company.id = :companyId
+          and l.archived = false
           and l.dateReported between :from and :to
         group by year(l.dateReported), month(l.dateReported)
         order by year(l.dateReported), month(l.dateReported)

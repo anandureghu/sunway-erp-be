@@ -16,12 +16,32 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     long countByCompanyIdAndStatus(Long companyId, String status);
 
+    /**
+     * Open shipments whose picklist and sales order are not archived.
+     */
     @Query("""
             SELECT COUNT(s) FROM Shipment s
+            JOIN s.picklist p
+            JOIN p.salesOrder so
+            WHERE s.company.id = :companyId
+              AND s.status = :status
+              AND p.archived = false
+              AND so.archived = false
+            """)
+    long countActiveByCompanyIdAndStatus(
+            @Param("companyId") Long companyId,
+            @Param("status") String status);
+
+    @Query("""
+            SELECT COUNT(s) FROM Shipment s
+            JOIN s.picklist p
+            JOIN p.salesOrder so
             WHERE s.company.id = :companyId
               AND s.status = 'DELIVERED'
               AND s.deliveredAt IS NOT NULL
               AND s.deliveredAt >= :from
+              AND p.archived = false
+              AND so.archived = false
             """)
     long countDeliveredSince(
             @Param("companyId") Long companyId,

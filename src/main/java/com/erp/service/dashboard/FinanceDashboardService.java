@@ -145,7 +145,7 @@ public class FinanceDashboardService {
                 today);
 
         List<FinanceTransactionRowDTO> recentTransactions = mapTransactionRows(
-                transactionRepo.findByCompanyIdOrderByCreatedAtDesc(companyId));
+                transactionRepo.findActiveByCompanyIdOrderByCreatedAtDesc(companyId));
 
         FinancePaymentStatusDTO paymentStatus = buildPaymentStatus(companyId, startOfMonth, today);
 

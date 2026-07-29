@@ -59,7 +59,13 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
     }
 
     @Query("""
-            SELECT COALESCE(SUM(poi.quantity), 0)
+            SELECT COALESCE(SUM(
+                    CASE
+                        WHEN (poi.quantity - COALESCE(poi.receivedQty, 0) - COALESCE(poi.rejectedQty, 0)) < 0
+                            THEN 0
+                        ELSE (poi.quantity - COALESCE(poi.receivedQty, 0) - COALESCE(poi.rejectedQty, 0))
+                    END
+                ), 0)
             FROM PurchaseOrder po
             JOIN po.items poi
             WHERE po.company.id = :companyId

@@ -30,6 +30,7 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
             JOIN iws.item i
             JOIN iws.warehouse w
             WHERE i.company.id = :companyId
+              AND iws.quantityOnHand > 0
               AND (:warehouseId IS NULL OR w.id = :warehouseId)
               AND (:category IS NULL OR :category = '' OR i.category = :category)
             """)
