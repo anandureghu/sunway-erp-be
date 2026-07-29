@@ -28,6 +28,14 @@ public class EmployeeTimesheet {
     @Column(nullable = false)
     private TimesheetStatus status = TimesheetStatus.NOT_CHECKED_IN;
 
+    /** True when the nightly job closed a session the employee forgot to check out of. */
+    @Column(name = "auto_checked_out", nullable = false)
+    private boolean autoCheckedOut = false;
+
+    /** Human-readable annotation (e.g. the auto-checkout explanation). */
+    @Column(name = "note", length = 255)
+    private String note;
+
     public void calculateWorkedMinutes() {
         if (checkInTime != null && checkOutTime != null) {
             this.workedMinutes = Duration.between(checkInTime, checkOutTime).toMinutes();
@@ -54,4 +62,10 @@ public class EmployeeTimesheet {
 
     public TimesheetStatus getStatus() { return status; }
     public void setStatus(TimesheetStatus status) { this.status = status; }
+
+    public boolean isAutoCheckedOut() { return autoCheckedOut; }
+    public void setAutoCheckedOut(boolean autoCheckedOut) { this.autoCheckedOut = autoCheckedOut; }
+
+    public String getNote() { return note; }
+    public void setNote(String note) { this.note = note; }
 }

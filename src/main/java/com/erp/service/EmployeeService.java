@@ -287,9 +287,13 @@ public class EmployeeService {
         employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
 
         if (image != null && !image.isEmpty()) {
+            // Record the file under the EMPLOYEE's company — not the caller's context,
+            // which is null for a SUPER_ADMIN and would break the NOT NULL storage ledger.
+            Long companyId = employee.getCompanyId() != null
+                    ? employee.getCompanyId()
+                    : authContext.getCurrentCompanyId();
             FileUploadResult upload = fileStorageService.upload(
-                    image, FileCategory.EMPLOYEE_PROFILE, id.toString(), true,
-                    authContext.getCurrentCompanyId());
+                    image, FileCategory.EMPLOYEE_PROFILE, id.toString(), true, companyId);
             employee.setImageUrl(upload.getBlobPath());
             employeeRepository.save(employee);
         }
@@ -504,10 +508,17 @@ public class EmployeeService {
             }
         }
 
-        String designation = e.getId() != null
-                ? currentJobRepo.findByEmployee_Id(e.getId())
-                    .map(cj -> cj.getJobCode() != null ? cj.getJobCode().getTitle() : null)
-                    .orElse(null)
+        var currentJob = e.getId() != null
+                ? currentJobRepo.findByEmployee_Id(e.getId()).orElse(null)
+                : null;
+        String designation = currentJob != null && currentJob.getJobCode() != null
+                ? currentJob.getJobCode().getTitle()
+                : null;
+        String employmentCategory = currentJob != null && currentJob.getEmploymentCategory() != null
+                ? currentJob.getEmploymentCategory().name()
+                : null;
+        String employmentType = currentJob != null && currentJob.getEmploymentType() != null
+                ? currentJob.getEmploymentType().name()
                 : null;
 
         return EmployeeResponseDTO.builder()
@@ -541,6 +552,8 @@ public class EmployeeService {
                 .departmentName(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
                 .imageUrl(imageUrl)
                 .designation(designation)
+                .employmentCategory(employmentCategory)
+                .employmentType(employmentType)
                 .build();
     }
 

@@ -6,790 +6,296 @@
   <meta charset="UTF-8"/>
   <title>Payslip</title>
   <style type="text/css">
+    /* ── Page ── */
     @page {
-      size: A4;
-      margin: 20px;
+      size: A4 portrait;
+      margin: 16mm 14mm;
     }
 
-    :root {
-      --sunway-gold: #C9A84C;
-      --sunway-gold-light: #E8D5A0;
-      --sunway-dark: #1A1A2E;
-      --sunway-navy: #16213E;
-      --sunway-slate: #2C3E6B;
-      --text-primary: #1A1A2E;
-      --text-secondary: #5A6178;
-      --text-muted: #8B91A8;
-      --border-light: #E8EAF0;
-      --border-soft: #F1F3F6;
-      --bg-cream: #FAFAF7;
-      --bg-subtle: #F4F4F0;
-      --bg-blue-soft: #F6F8FC;
-      --earnings-green: #2D8A56;
-      --deductions-red: #C0392B;
-      --info-blue: #3459A5;
-      --warning-amber: #B7791F;
-      --white: #FFFFFF;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      font-family: Helvetica, Arial, sans-serif;
-      font-size: 12px;
-      color: var(--text-primary);
-      background: #FFFFFF;
-    }
-
-    .payslip-container {
-      width: 100%;
-      border: 1px solid var(--border-light);
-      background: var(--white);
-    }
-
-    .payslip-header {
-      background: linear-gradient(135deg, var(--sunway-dark) 0%, var(--sunway-navy) 60%, var(--sunway-slate) 100%);
-      padding: 28px 32px;
-      position: relative;
-    }
-
-    .header-accent {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, var(--sunway-gold), var(--sunway-gold-light), var(--sunway-gold));
-    }
-
-    .header-table,
-    .info-columns,
-    .info-grid,
-    .payslip-table,
-    .bank-table,
-    .footer-table,
-    .attendance-grid {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    .header-table td,
-    .info-columns td,
-    .info-grid td,
-    .bank-table td,
-    .footer-table td,
-    .attendance-grid td {
-      border: 0;
-      padding: 0;
-      vertical-align: top;
-    }
-
-    .header-right {
-      text-align: right;
-    }
-
-    .company-logo {
-      display: inline-block;
-      width: 40px;
-      height: 40px;
-      line-height: 40px;
-      text-align: center;
-      background: linear-gradient(135deg, var(--sunway-gold), var(--sunway-gold-light));
-      color: var(--sunway-dark);
-      border-radius: 8px;
-      font-size: 22px;
-      font-weight: 700;
-      margin-right: 12px;
-    }
-
-    .company-stack {
-      display: inline-block;
-      vertical-align: top;
-    }
-
-    .company-name {
-      font-family: Georgia, "Times New Roman", serif;
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--white);
-      line-height: 1.2;
-    }
-
-    .company-name span {
-      color: var(--sunway-gold);
-    }
-
-    .company-subtitle {
-      margin-top: 4px;
-      color: rgba(255,255,255,0.60);
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
-
-    .payslip-title {
-      color: var(--sunway-gold);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      margin-bottom: 6px;
-    }
-
-    .payslip-period {
-      color: var(--white);
-      font-size: 20px;
-      font-weight: 700;
-      line-height: 1.2;
-    }
-
-    .payslip-ref {
-      margin-top: 6px;
-      color: rgba(255,255,255,0.55);
-      font-family: "Courier New", monospace;
-      font-size: 10px;
-    }
-
-    .employee-section {
-      background: var(--bg-cream);
-      border-bottom: 1px solid var(--border-light);
-      padding: 24px 32px;
-    }
-
-    .info-columns td {
-      width: 50%;
-    }
-
-    .info-grid td {
-      width: 50%;
-      padding: 0 18px 14px 0;
-    }
-
-    .info-label {
-      font-size: 9px;
-      font-weight: 700;
-      color: var(--text-muted);
-      letter-spacing: 1.4px;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-
-    .info-value {
+      font-family: Arial, Helvetica, sans-serif;
       font-size: 13px;
-      font-weight: 700;
-      color: var(--text-primary);
-      line-height: 1.35;
+      color: #1e293b;
+      background: #ffffff;
     }
 
-    .mono {
-      font-family: "Courier New", monospace;
-      font-size: 12px;
-    }
-
-    .section-title {
-      padding: 12px 32px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      border-top: 1px solid var(--border-light);
-    }
-
-    .section-title.attendance {
-      background: var(--bg-blue-soft);
-      color: var(--info-blue);
-    }
-
-    .section-title.earnings {
-      background: #F6FBF8;
-      color: var(--earnings-green);
-    }
-
-    .section-title.deductions {
-      background: #FDF7F6;
-      color: var(--deductions-red);
-    }
-
-    .attendance-section {
-      padding: 18px 32px 10px;
-      background: #FCFCFE;
-      border-bottom: 1px solid var(--border-light);
-    }
-
-    .attendance-grid td {
-      width: 33.33%;
-      padding: 0 14px 14px 0;
-    }
-
-    .attendance-card {
-      min-height: 88px;
-      border: 1px solid var(--border-light);
-      border-radius: 8px;
-      background: var(--white);
-      padding: 14px 16px;
-    }
-
-    .attendance-card.primary {
-      background: #F7FAFF;
-      border-color: #DCE6F7;
-    }
-
-    .attendance-card.success {
-      background: #F4FBF7;
-      border-color: #D7ECDD;
-    }
-
-    .attendance-card.warning {
-      background: #FFFBF3;
-      border-color: #F2E3BD;
-    }
-
-    .attendance-card.danger {
-      background: #FDF7F6;
-      border-color: #F0D5D1;
-    }
-
-    .attendance-label {
-      font-size: 9px;
-      font-weight: 700;
-      color: var(--text-muted);
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-
-    .attendance-value {
-      font-family: "Courier New", monospace;
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--text-primary);
-      line-height: 1.1;
-    }
-
-    .attendance-sub {
-      margin-top: 6px;
-      font-size: 10px;
-      color: var(--text-secondary);
-      line-height: 1.4;
-    }
-
-    .attendance-breakdown {
-      margin-top: 8px;
-      border: 1px solid var(--border-light);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .payslip-table {
+    /* ── Header ── */
+    .header {
       width: 100%;
       border-collapse: collapse;
+      border-bottom: 3px solid #3b82f6;
+      margin-bottom: 24px;
+    }
+    .header td { padding-bottom: 16px; vertical-align: top; }
+    .header-left { text-align: left; }
+    .header-right { text-align: right; }
+    .brand-name { font-size: 22px; font-weight: 800; color: #1e40af; }
+    .brand-sub  { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+    .doc-title  { font-size: 18px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.06em; }
+    .doc-code   { font-size: 12px; color: #64748b; margin-top: 4px; font-family: monospace; }
+    .period-badge {
+      display: inline-block; margin-top: 6px;
+      padding: 3px 12px; border-radius: 20px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      color: #ffffff; background: #1e40af;
     }
 
-    .payslip-table th {
-      padding: 10px 32px;
-      border-top: 1px solid var(--border-light);
-      border-bottom: 1px solid var(--border-light);
-      background: #FBFBFC;
-      color: var(--text-muted);
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      text-align: left;
+    /* ── Sections ── */
+    .section { margin-bottom: 22px; }
+    .section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.12em; color: #3b82f6;
+      border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 12px;
     }
 
-    .payslip-table.attendance-table th {
-      background: #F9FAFD;
+    /* ── Info grid (table-based) ── */
+    .info-table { width: 100%; border-collapse: collapse; }
+    .info-table td { padding: 5px 0; width: 33.33%; vertical-align: top; }
+    .info-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 2px; }
+    .info-value { font-size: 13px; font-weight: 600; color: #0f172a; }
+    .info-sub   { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+    .mono { font-family: "Courier New", monospace; }
+
+    /* ── Data table (earnings / deductions / attendance) ── */
+    .data-table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; font-size: 13px; }
+    .data-table thead tr { background: #1e40af; }
+    .data-table thead th {
+      padding: 10px 12px; text-align: left;
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #ffffff;
+    }
+    .data-table thead th.center { text-align: center; width: 36px; }
+    .data-table thead th.amount-col { text-align: right; width: 150px; }
+    .td-center { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; text-align: center; color: #64748b; font-size: 12px; width: 36px; }
+    .td-name   { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-weight: 600; }
+    .td-amount { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-weight: 700; text-align: right; width: 150px; }
+    .td-amount.pos { color: #16a34a; }
+    .td-amount.neg { color: #dc2626; }
+    .td-value  { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 700; color: #1e40af; font-family: "Courier New", monospace; width: 150px; }
+    .td-empty  { padding: 16px; text-align: center; color: #94a3b8; font-size: 13px; }
+    .row-even  { background: #f8fafc; }
+    .row-odd   { background: #ffffff; }
+    .total-row td { padding: 10px 12px; background: #eff6ff; font-weight: 700; color: #1e40af; border-top: 2px solid #3b82f6; }
+    .total-row td.amount { text-align: right; }
+
+    /* ── Net pay bar ── */
+    .netpay-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    .netpay-table td {
+      background: #0f172a; padding: 14px 18px; vertical-align: middle;
+    }
+    .netpay-label { color: #93c5fd; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; }
+    .netpay-amount { color: #ffffff; font-size: 22px; font-weight: 800; text-align: right; font-family: "Courier New", monospace; }
+    .netpay-cur { font-size: 13px; font-weight: 600; opacity: 0.75; margin-right: 3px; }
+
+    /* ── LOP amount callout ── */
+    .lop-bar {
+      width: 100%; border-collapse: collapse; margin-top: 14px;
+      background: #fef2f2; border: 1px solid #fecaca;
+    }
+    .lop-bar td { padding: 13px 18px; vertical-align: middle; }
+    .lop-bar .lop-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      color: #b91c1c;
+    }
+    .lop-bar .lop-sub { font-size: 10px; color: #ef9a9a; margin-top: 2px; font-weight: 600; }
+    .lop-bar .lop-value {
+      text-align: right; font-size: 19px; font-weight: 800; color: #dc2626;
+      font-family: "Courier New", monospace; white-space: nowrap;
+    }
+    .lop-bar .lop-cur { font-size: 12px; font-weight: 600; opacity: 0.8; margin-right: 3px; }
+
+    /* ── Status pill ── */
+    .pay-status {
+      display: inline-block; padding: 6px 14px; border-radius: 16px;
+      background: #ecfdf5; border: 1px solid #a7f3d0; color: #16a34a;
+      font-size: 11px; font-weight: 700;
     }
 
-    .payslip-table th:last-child,
-    .payslip-table td:last-child {
-      text-align: right;
-    }
-
-    .payslip-table td {
-      padding: 11px 32px;
-      border-bottom: 1px solid var(--border-soft);
-      font-size: 12px;
-      color: var(--text-primary);
-    }
-
-    .payslip-table tbody tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .amount-positive {
-      color: var(--earnings-green);
-      font-family: "Courier New", monospace;
-      font-weight: 700;
-    }
-
-    .amount-negative {
-      color: var(--deductions-red);
-      font-family: "Courier New", monospace;
-      font-weight: 700;
-    }
-
-    .amount-info {
-      color: var(--info-blue);
-      font-family: "Courier New", monospace;
-      font-weight: 700;
-    }
-
-    .amount-warning {
-      color: var(--warning-amber);
-      font-family: "Courier New", monospace;
-      font-weight: 700;
-    }
-
-    .summary-divider {
-      height: 1px;
-      background: var(--border-light);
-      margin: 18px 32px 0;
-    }
-
-    .summary-table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 16px 0;
-      padding: 18px 16px 0;
-    }
-
-    .summary-table td {
-      width: 33.33%;
-      padding: 0;
-      border: 0;
-      vertical-align: top;
-    }
-
-    .summary-card {
-      min-height: 94px;
-      border-radius: 8px;
-      padding: 18px;
-    }
-
-    .summary-card.gross {
-      background: #F0F6F3;
-      border: 1px solid #D4E8DC;
-    }
-
-    .summary-card.deduct {
-      background: #FDF5F4;
-      border: 1px solid #F0D5D1;
-    }
-
-    .summary-card.net {
-      background: linear-gradient(135deg, var(--sunway-dark), var(--sunway-navy));
-      border: 1px solid var(--sunway-dark);
-    }
-
-    .summary-label {
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 1.8px;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-
-    .summary-card.gross .summary-label {
-      color: var(--earnings-green);
-    }
-
-    .summary-card.deduct .summary-label {
-      color: var(--deductions-red);
-    }
-
-    .summary-card.net .summary-label {
-      color: var(--sunway-gold);
-    }
-
-    .summary-amount {
-      font-family: "Courier New", monospace;
-      font-size: 20px;
-      font-weight: 700;
-    }
-
-    .summary-card.gross .summary-amount {
-      color: var(--earnings-green);
-    }
-
-    .summary-card.deduct .summary-amount {
-      color: var(--deductions-red);
-    }
-
-    .summary-card.net .summary-amount {
-      color: var(--white);
-    }
-
-    .summary-currency {
-      font-size: 12px;
-      opacity: 0.7;
-      margin-right: 2px;
-    }
-
-    .bank-section {
-      margin-top: 18px;
-      padding: 18px 32px;
-      background: var(--bg-cream);
-      border-top: 1px solid var(--border-light);
-    }
-
-    .bank-table td {
-      width: 25%;
-      padding: 0 16px 10px 0;
-    }
-
-    .payment-status {
-      margin-top: 4px;
-      display: inline-block;
-      padding: 7px 14px;
-      background: rgba(45,138,86,0.08);
-      border: 1px solid rgba(45,138,86,0.18);
-      border-radius: 16px;
-      color: var(--earnings-green);
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .footer {
-      border-top: 1px solid var(--border-light);
-      padding: 18px 32px;
-    }
-
-    .footer-table td {
-      width: 50%;
-    }
-
-    .footer-note {
-      color: var(--text-muted);
-      font-size: 10px;
-      line-height: 1.6;
-      padding-right: 24px;
-    }
-
-    .footer-meta {
-      text-align: right;
-      color: var(--text-muted);
-      font-family: "Courier New", monospace;
-      font-size: 10px;
-      line-height: 1.7;
-    }
-
-    .footer-erp {
-      color: var(--sunway-gold);
-      font-family: Helvetica, Arial, sans-serif;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 1.6px;
-      text-transform: uppercase;
-    }
+    /* ── Footer ── */
+    .footer-table { width: 100%; border-collapse: collapse; border-top: 1px solid #e2e8f0; margin-top: 28px; }
+    .footer-table td { font-size: 10px; color: #94a3b8; padding-top: 10px; vertical-align: top; line-height: 1.6; }
+    .footer-table td:last-child { text-align: right; font-family: "Courier New", monospace; }
+    .footer-note { padding-right: 24px; }
   </style>
 </head>
 <body>
-<div class="payslip-container">
-  <div class="payslip-header">
-    <table class="header-table">
-      <tr>
-        <td>
-          <span class="company-logo">S</span>
-          <span class="company-stack">
-            <div class="company-name">Sunway <span>Group</span></div>
-            <div class="company-subtitle">ERP Payroll System</div>
-          </span>
-        </td>
-        <td class="header-right">
-          <div class="payslip-title">Payslip</div>
-          <div class="payslip-period" th:text="${payPeriod}">March 2026</div>
-          <div class="payslip-ref">REF: <span th:text="${payrollCode}">PR-001</span></div>
-        </td>
-      </tr>
-    </table>
-    <div class="header-accent"></div>
-  </div>
 
-  <div class="employee-section">
-    <table class="info-columns">
-      <tr>
-        <td>
-          <table class="info-grid">
-            <tr>
-              <td>
-                <div class="info-label">Employee Name</div>
-                <div class="info-value" th:text="${firstName + ' ' + lastName}">John Doe</div>
-              </td>
-              <td>
-                <div class="info-label">Employee ID</div>
-                <div class="info-value mono" th:text="${employeeNo}">EMP001</div>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <div class="info-label">Department</div>
-                <div class="info-value" th:text="${department}">IT</div>
-              </td>
-              <td>
-                <div class="info-label">Designation</div>
-                <div class="info-value" th:text="${designation}">Developer</div>
-              </td>
-            </tr>
-          </table>
-        </td>
-        <td>
-          <table class="info-grid">
-            <tr>
-              <td>
-                <div class="info-label">Date of Joining</div>
-                <div class="info-value mono" th:text="${dateOfJoining}">01 Jan 2024</div>
-              </td>
-              <td>
-                <div class="info-label">Pay Date</div>
-                <div class="info-value mono" th:text="${payDate}">31 Mar 2026</div>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <div class="info-label">Pay Period</div>
-                <div class="info-value mono" th:text="${payPeriod}">March 2026</div>
-              </td>
-              <td>
-                <div class="info-label">Payment Method</div>
-                <div class="info-value">Bank Transfer</div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
+<!-- Header -->
+<table class="header">
+  <tr>
+    <td class="header-left">
+      <div class="brand-name">Sunway ERP</div>
+      <div class="brand-sub">Human Resources &amp; Payroll</div>
+    </td>
+    <td class="header-right">
+      <div class="doc-title">Payslip</div>
+      <div class="doc-code">REF: <span th:text="${payrollCode}">PR-001</span></div>
+      <span class="period-badge" th:text="${payPeriod}">March 2026</span>
+    </td>
+  </tr>
+</table>
 
-  <div class="section-title attendance">Attendance &amp; Leave Summary</div>
-  <div class="attendance-section">
-    <table class="attendance-grid">
-      <tr>
-        <td>
-          <div class="attendance-card primary">
-            <div class="attendance-label">Total Working Days</div>
-            <div class="attendance-value" th:text="${workingDays != null ? workingDays : 0}">22</div>
-            <div class="attendance-sub">Eligible working days in this payroll period</div>
-          </div>
-        </td>
-        <td>
-          <div class="attendance-card success">
-            <div class="attendance-label">Present / Worked Days</div>
-            <div class="attendance-value" th:text="${workedDays != null ? #numbers.formatDecimal(workedDays,1,'COMMA',2,'POINT') : '0.00'}">20.00</div>
-            <div class="attendance-sub">
-              Worked Hours:
-              <span class="mono" th:text="${workedHours != null ? #numbers.formatDecimal(workedHours,1,'COMMA',2,'POINT') : '0.00'}">160.00</span>
-            </div>
-          </div>
-        </td>
-        <td>
-          <div class="attendance-card primary">
-            <div class="attendance-label">Payable Days</div>
-            <div class="attendance-value" th:text="${payableDays != null ? #numbers.formatDecimal(payableDays,1,'COMMA',2,'POINT') : '0.00'}">21.00</div>
-            <div class="attendance-sub">Worked days + approved paid leave days</div>
-          </div>
-        </td>
-      </tr>
-      <tr>
-        <td>
-          <div class="attendance-card success">
-            <div class="attendance-label">Paid Leave Days</div>
-            <div class="attendance-value" th:text="${paidLeaveDays != null ? #numbers.formatDecimal(paidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div>
-            <div class="attendance-sub">Included in salary calculation</div>
-          </div>
-        </td>
-        <td>
-          <div class="attendance-card warning">
-            <div class="attendance-label">Unpaid Leave Days</div>
-            <div class="attendance-value" th:text="${unpaidLeaveDays != null ? #numbers.formatDecimal(unpaidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div>
-            <div class="attendance-sub">Excluded from payable days</div>
-          </div>
-        </td>
-        <td>
-          <div class="attendance-card danger">
-            <div class="attendance-label">LOP Days</div>
-            <div class="attendance-value" th:text="${lopDays != null ? #numbers.formatDecimal(lopDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div>
-            <div class="attendance-sub">
-              LOP Amount:
-              <span class="mono" th:text="${currencyCode + ' ' + #numbers.formatDecimal(lopAmount != null ? lopAmount : 0,1,'COMMA',2,'POINT')}">USD 0.00</span>
-            </div>
-          </div>
-        </td>
-      </tr>
-    </table>
-
-    <div class="attendance-breakdown">
-      <table class="payslip-table attendance-table">
-        <thead>
-        <tr>
-          <th style="width:55%">Attendance Component</th>
-          <th style="width:45%">Value</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr>
-          <td>Total Calendar Days</td>
-          <td class="amount-info mono" th:text="${totalDays != null ? totalDays : 0}">31</td>
-        </tr>
-        <tr>
-          <td>Total Working Days in Period</td>
-          <td class="amount-info mono" th:text="${workingDays != null ? workingDays : 0}">22</td>
-        </tr>
-        <tr>
-          <td>Worked Days</td>
-          <td class="amount-info mono" th:text="${workedDays != null ? #numbers.formatDecimal(workedDays,1,'COMMA',2,'POINT') : '0.00'}">20.00</td>
-        </tr>
-        <tr>
-          <td>Worked Hours</td>
-          <td class="amount-info mono" th:text="${workedHours != null ? #numbers.formatDecimal(workedHours,1,'COMMA',2,'POINT') : '0.00'}">160.00</td>
-        </tr>
-        <tr>
-          <td>Paid Leave Days</td>
-          <td class="amount-positive mono" th:text="${paidLeaveDays != null ? #numbers.formatDecimal(paidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</td>
-        </tr>
-        <tr>
-          <td>Unpaid Leave Days</td>
-          <td class="amount-warning mono" th:text="${unpaidLeaveDays != null ? #numbers.formatDecimal(unpaidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</td>
-        </tr>
-        <tr>
-          <td>Total Leave Taken</td>
-          <td class="amount-info mono" th:text="${leaveTaken != null ? leaveTaken : 0}">2</td>
-        </tr>
-        <tr>
-          <td>Payable Days</td>
-          <td class="amount-positive mono" th:text="${payableDays != null ? #numbers.formatDecimal(payableDays,1,'COMMA',2,'POINT') : '0.00'}">21.00</td>
-        </tr>
-        <tr>
-          <td>Loss of Pay (LOP) Days</td>
-          <td class="amount-negative mono" th:text="${lopDays != null ? #numbers.formatDecimal(lopDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</td>
-        </tr>
-        <tr>
-          <td>Loss of Pay (LOP) Amount</td>
-          <td class="amount-negative mono" th:text="${#numbers.formatDecimal(lopAmount != null ? lopAmount : 0,1,'COMMA',2,'POINT')}">0.00</td>
-        </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="section-title earnings">Earnings</div>
-  <table class="payslip-table">
-    <thead>
+<!-- Employee Details -->
+<div class="section">
+  <div class="section-title">Employee Details</div>
+  <table class="info-table">
     <tr>
-      <th style="width:55%">Description</th>
-      <th style="width:45%">Amount (<span th:text="${currencyCode}">USD</span>)</th>
+      <td><div class="info-label">Employee Name</div><div class="info-value" th:text="${firstName + ' ' + lastName}">John Doe</div></td>
+      <td><div class="info-label">Employee ID</div><div class="info-value mono" th:text="${employeeNo}">EMP001</div></td>
+      <td><div class="info-label">Department</div><div class="info-value" th:text="${department}">IT</div></td>
     </tr>
-    </thead>
-    <tbody>
-    <tr th:each="e : ${earnings}">
-      <td th:text="${e.label}">Basic Salary</td>
-      <td class="amount-positive" th:text="${#numbers.formatDecimal(e.amount,1,'COMMA',2,'POINT')}">0.00</td>
-    </tr>
-    <tr th:if="${#lists.isEmpty(earnings)}">
-      <td>No earnings items</td>
-      <td class="amount-positive">0.00</td>
-    </tr>
-    </tbody>
-  </table>
-
-  <div class="section-title deductions">Deductions</div>
-  <table class="payslip-table">
-    <thead>
     <tr>
-      <th style="width:55%">Description</th>
-      <th style="width:45%">Amount (<span th:text="${currencyCode}">USD</span>)</th>
+      <td><div class="info-label">Designation</div><div class="info-value" th:text="${designation}">Developer</div></td>
+      <td><div class="info-label">Date of Joining</div><div class="info-value mono" th:text="${dateOfJoining}">01 Jan 2024</div></td>
+      <td><div class="info-label">Pay Date</div><div class="info-value mono" th:text="${payDate}">31 Mar 2026</div></td>
     </tr>
-    </thead>
-    <tbody>
-    <tr th:each="d : ${deductions}">
-      <td th:text="${d.label}">Loan</td>
-      <td class="amount-negative" th:text="${#numbers.formatDecimal(d.amount,1,'COMMA',2,'POINT')}">0.00</td>
-    </tr>
-    <tr th:if="${#lists.isEmpty(deductions)}">
-      <td>No deductions</td>
-      <td class="amount-negative">0.00</td>
-    </tr>
-    </tbody>
-  </table>
-
-  <div class="summary-divider"></div>
-  <table class="summary-table">
     <tr>
-      <td>
-        <div class="summary-card gross">
-          <div class="summary-label">Gross Earnings</div>
-          <div class="summary-amount">
-            <span class="summary-currency" th:text="${currencyCode}">USD</span>
-            <span th:text="${#numbers.formatDecimal(grossPay != null ? grossPay : 0,1,'COMMA',2,'POINT')}">0.00</span>
-          </div>
-        </div>
-      </td>
-      <td>
-        <div class="summary-card deduct">
-          <div class="summary-label">Total Deductions</div>
-          <div class="summary-amount">
-            <span class="summary-currency" th:text="${currencyCode}">USD</span>
-            <span th:text="${#numbers.formatDecimal(totalDeductions != null ? totalDeductions : 0,1,'COMMA',2,'POINT')}">0.00</span>
-          </div>
-        </div>
-      </td>
-      <td>
-        <div class="summary-card net">
-          <div class="summary-label">Net Pay</div>
-          <div class="summary-amount">
-            <span class="summary-currency" th:text="${currencyCode}">USD</span>
-            <span th:text="${#numbers.formatDecimal(netPayable != null ? netPayable : 0,1,'COMMA',2,'POINT')}">0.00</span>
-          </div>
-        </div>
-      </td>
+      <td><div class="info-label">Pay Period</div><div class="info-value mono" th:text="${payPeriod}">March 2026</div></td>
+      <td><div class="info-label">Payment Method</div><div class="info-value">Bank Transfer</div></td>
+      <td><div class="info-label">Currency</div><div class="info-value mono" th:text="${currencyCode}">USD</div></td>
     </tr>
   </table>
-
-  <div class="bank-section">
-    <table class="bank-table">
-      <tr>
-        <td>
-          <div class="info-label">Bank</div>
-          <div class="info-value" th:text="${bankName}">Bank Name</div>
-        </td>
-        <td>
-          <div class="info-label">Branch</div>
-          <div class="info-value" th:text="${bankBranch}">Main Branch</div>
-        </td>
-        <td>
-          <div class="info-label">Account No.</div>
-          <div class="info-value mono" th:text="${maskedAccount}">1234 **** 5678</div>
-        </td>
-        <td>
-          <div class="info-label">Payment Status</div>
-          <div class="payment-status">Paid via Bank Transfer</div>
-        </td>
-      </tr>
-    </table>
-  </div>
-
-  <div class="footer">
-    <table class="footer-table">
-      <tr>
-        <td>
-          <div class="footer-note">
-            This is a system-generated payslip and does not require a signature.
-            The attendance and leave summary above explains the payable days used for salary calculation.
-            For any discrepancy, contact HR within 7 working days of issuance.
-          </div>
-        </td>
-        <td class="footer-meta">
-          <div class="footer-erp">Sunway ERP Payroll</div>
-          Generated: <span th:text="${generatedAt}">14 Mar 2026</span><br/>
-          Document ID: <span th:text="${payrollCode}">PR-001</span>
-        </td>
-      </tr>
-    </table>
-  </div>
 </div>
+
+<!-- Attendance & Leave Summary -->
+<div class="section">
+  <div class="section-title">Attendance &amp; Leave Summary</div>
+  <table class="info-table">
+    <tr>
+      <td><div class="info-label">Total Calendar Days</div><div class="info-value mono" th:text="${totalDays != null ? totalDays : 0}">31</div></td>
+      <td><div class="info-label">Total Working Days</div><div class="info-value mono" th:text="${workingDays != null ? workingDays : 0}">22</div></td>
+      <td><div class="info-label">Present / Worked Days</div><div class="info-value mono" th:text="${workedDays != null ? #numbers.formatDecimal(workedDays,1,'COMMA',2,'POINT') : '0.00'}">20.00</div></td>
+    </tr>
+    <tr>
+      <td><div class="info-label">Worked Hours</div><div class="info-value mono" th:text="${workedHours != null ? #numbers.formatDecimal(workedHours,1,'COMMA',2,'POINT') : '0.00'}">160.00</div></td>
+      <td><div class="info-label">Total Leave Taken</div><div class="info-value mono" th:text="${leaveTaken != null ? leaveTaken : 0}">2</div></td>
+      <td><div class="info-label">Payable Days</div><div class="info-value mono" th:text="${payableDays != null ? #numbers.formatDecimal(payableDays,1,'COMMA',2,'POINT') : '0.00'}">21.00</div></td>
+    </tr>
+    <tr>
+      <td><div class="info-label">Paid Leave Days</div><div class="info-value mono" th:text="${paidLeaveDays != null ? #numbers.formatDecimal(paidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
+      <td><div class="info-label">Unpaid Leave Days</div><div class="info-value mono" th:text="${unpaidLeaveDays != null ? #numbers.formatDecimal(unpaidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
+      <td><div class="info-label">Loss of Pay (LOP) Days</div><div class="info-value mono" th:text="${lopDays != null ? #numbers.formatDecimal(lopDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
+    </tr>
+  </table>
+
+  <table class="lop-bar">
+    <tr>
+      <td>
+        <div class="lop-label">Loss of Pay (LOP) Amount</div>
+        <div class="lop-sub">Deducted for unpaid absence — shown again under Deductions</div>
+      </td>
+      <td class="lop-value">
+        <span class="lop-cur" th:text="${currencyCode}">USD</span>
+        <span th:text="${#numbers.formatDecimal(lopAmount != null ? lopAmount : 0,1,'COMMA',2,'POINT')}">0.00</span>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<!-- Earnings -->
+<div class="section">
+  <div class="section-title">Earnings</div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th class="center">#</th>
+        <th>Description</th>
+        <th class="amount-col">Amount (<span th:text="${currencyCode}">USD</span>)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="e,iter : ${earnings}" th:classappend="${iter.index % 2 == 0} ? 'row-even' : 'row-odd'">
+        <td class="td-center" th:text="${iter.count}">1</td>
+        <td class="td-name" th:text="${e.label}">Basic Salary</td>
+        <td class="td-amount pos" th:text="${#numbers.formatDecimal(e.amount,1,'COMMA',2,'POINT')}">0.00</td>
+      </tr>
+      <tr th:if="${#lists.isEmpty(earnings)}">
+        <td colspan="3" class="td-empty">No earnings items</td>
+      </tr>
+      <tr class="total-row">
+        <td colspan="2">Gross Earnings</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(grossPay != null ? grossPay : 0,1,'COMMA',2,'POINT')}">0.00</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Deductions -->
+<div class="section">
+  <div class="section-title">Deductions</div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th class="center">#</th>
+        <th>Description</th>
+        <th class="amount-col">Amount (<span th:text="${currencyCode}">USD</span>)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="d,iter : ${deductions}" th:classappend="${iter.index % 2 == 0} ? 'row-even' : 'row-odd'">
+        <td class="td-center" th:text="${iter.count}">1</td>
+        <td class="td-name" th:text="${d.label}">Loss of Pay</td>
+        <td class="td-amount neg" th:text="${#numbers.formatDecimal(d.amount,1,'COMMA',2,'POINT')}">0.00</td>
+      </tr>
+      <tr th:if="${#lists.isEmpty(deductions)}">
+        <td colspan="3" class="td-empty">No deductions</td>
+      </tr>
+      <tr class="total-row">
+        <td colspan="2">Total Deductions</td>
+        <td class="amount" th:text="${#numbers.formatDecimal(totalDeductions != null ? totalDeductions : 0,1,'COMMA',2,'POINT')}">0.00</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Net Pay -->
+<div class="section">
+  <div class="section-title">Net Payable</div>
+  <table class="netpay-table">
+    <tr>
+      <td class="netpay-label">Net Pay for <span th:text="${payPeriod}">March 2026</span></td>
+      <td class="netpay-amount">
+        <span class="netpay-cur" th:text="${currencyCode}">USD</span>
+        <span th:text="${#numbers.formatDecimal(netPayable != null ? netPayable : 0,1,'COMMA',2,'POINT')}">0.00</span>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<!-- Bank Details -->
+<div class="section">
+  <div class="section-title">Payment Details</div>
+  <table class="info-table">
+    <tr>
+      <td><div class="info-label">Bank</div><div class="info-value" th:text="${bankName}">Bank Name</div></td>
+      <td><div class="info-label">Branch</div><div class="info-value" th:text="${bankBranch}">Main Branch</div></td>
+      <td><div class="info-label">Account No.</div><div class="info-value mono" th:text="${maskedAccount}">1234 **** 5678</div></td>
+    </tr>
+    <tr>
+      <td><div class="info-label">Payment Status</div><div><span class="pay-status">Paid via Bank Transfer</span></div></td>
+      <td></td>
+      <td></td>
+    </tr>
+  </table>
+</div>
+
+<!-- Footer -->
+<table class="footer-table">
+  <tr>
+    <td class="footer-note">
+      This is a system-generated payslip and does not require a signature.
+      The attendance &amp; leave summary above explains the payable days used for salary calculation.
+      For any discrepancy, contact HR within 7 working days of issuance.
+    </td>
+    <td>
+      Generated: <span th:text="${generatedAt}">14 Mar 2026</span><br/>
+      Document Ref: <span th:text="${payrollCode}">PR-001</span> | Sunway ERP
+    </td>
+  </tr>
+</table>
+
 </body>
 </html>

@@ -426,6 +426,16 @@ public class CompanyService {
         if (dto.getLoanMaxRepaymentMonths() != null) {
             company.setLoanMaxRepaymentMonths(Math.max(dto.getLoanMaxRepaymentMonths(), 1));
         }
+        if (dto.getStandardWorkingHoursPerDay() != null) {
+            // Clamp to a sane 1–24h window so payroll/attendance math stays valid.
+            BigDecimal hrs = dto.getStandardWorkingHoursPerDay();
+            if (hrs.compareTo(BigDecimal.ONE) < 0) hrs = BigDecimal.ONE;
+            if (hrs.compareTo(new BigDecimal("24")) > 0) hrs = new BigDecimal("24");
+            company.setStandardWorkingHoursPerDay(hrs);
+        }
+        if (dto.getRequireCheckIn() != null) {
+            company.setRequireCheckIn(dto.getRequireCheckIn());
+        }
 
         companyRepository.save(company);
         return toHrPoliciesDto(company);
@@ -456,6 +466,11 @@ public class CompanyService {
                         company.getLoanMaxRepaymentMonths() != null
                                 ? company.getLoanMaxRepaymentMonths()
                                 : 24)
+                .standardWorkingHoursPerDay(
+                        company.getStandardWorkingHoursPerDay() != null
+                                ? company.getStandardWorkingHoursPerDay()
+                                : new BigDecimal("6.00"))
+                .requireCheckIn(company.isRequireCheckIn())
                 .build();
     }
 

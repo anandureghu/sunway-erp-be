@@ -177,6 +177,21 @@ public class Company {
     @Column(name = "loan_max_repayment_months", nullable = false)
     private Integer loanMaxRepaymentMonths = 24;
 
+    /**
+     * HR policy: attendance & working hours.
+     * `standardWorkingHoursPerDay` is the length of a full working day — it drives the
+     * "full day worked" threshold in attendance reports and the worked-day divisor in
+     * payroll. `requireCheckIn` toggles punch in/out: when false the org does not check
+     * in/out and every active employee is auto-marked present for the standard day.
+     */
+    @Builder.Default
+    @Column(name = "standard_working_hours_per_day", nullable = false, precision = 4, scale = 2)
+    private BigDecimal standardWorkingHoursPerDay = new BigDecimal("6.00");
+
+    @Builder.Default
+    @Column(name = "require_check_in", nullable = false)
+    private boolean requireCheckIn = true;
+
     @Transient
     private String invoiceHeaderSubtitle;
 

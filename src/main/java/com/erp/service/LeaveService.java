@@ -1017,6 +1017,10 @@ public class LeaveService {
         dto.setEmployeeName(leave.getEmployee() != null
                 ? (leave.getEmployee().getFirstName() + " " + leave.getEmployee().getLastName()).trim()
                 : null);
+        dto.setEmployeeNo(leave.getEmployee() != null ? leave.getEmployee().getEmployeeNo() : null);
+        dto.setDepartment(leave.getEmployee() != null && leave.getEmployee().getDepartment() != null
+                ? leave.getEmployee().getDepartment().getDepartmentName()
+                : null);
         dto.setLeaveCode(leave.getLeaveCode());
         dto.setLeaveType(leave.getLeaveType());
         dto.setStartDate(leave.getStartDate());
@@ -1062,8 +1066,9 @@ public class LeaveService {
     }
 
     private boolean isWeekend(LocalDate date) {
+        // Qatar workweek: Sunday–Thursday, with Friday & Saturday as the weekend.
         DayOfWeek day = date.getDayOfWeek();
-        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
+        return day == DayOfWeek.FRIDAY || day == DayOfWeek.SATURDAY;
     }
 
     private String getLeaveRole(Employee employee) {

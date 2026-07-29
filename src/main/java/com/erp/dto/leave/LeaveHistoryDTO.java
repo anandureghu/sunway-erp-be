@@ -12,6 +12,8 @@ public class LeaveHistoryDTO {
     private Long leaveId;
     private Long employeeId;
     private String employeeName;
+    private String employeeNo;
+    private String department;
     private String leaveCode;
     private String leaveType;
     private LocalDate startDate;

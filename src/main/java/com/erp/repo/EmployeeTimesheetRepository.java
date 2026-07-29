@@ -2,6 +2,7 @@ package com.erp.repo;
 
 
 import com.erp.domain.EmployeeTimesheet;
+import com.erp.domain.TimesheetStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
@@ -11,6 +12,9 @@ import java.util.Optional;
 public interface EmployeeTimesheetRepository extends JpaRepository<EmployeeTimesheet, Long> {
 
     Optional<EmployeeTimesheet> findByEmployeeIdAndAttendanceDate(Long employeeId, LocalDate attendanceDate);
+
+    /** Open sessions (checked in, never checked out) on or before a given day — for the auto-checkout job. */
+    List<EmployeeTimesheet> findByStatusAndAttendanceDateLessThanEqual(TimesheetStatus status, LocalDate date);
 
     List<EmployeeTimesheet> findByEmployeeIdAndAttendanceDateBetween(
             Long employeeId,

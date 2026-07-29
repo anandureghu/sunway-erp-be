@@ -53,7 +53,8 @@ public class PayrollService {
 
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_CLOSED = "CLOSED";
-    private static final double STANDARD_HOURS_PER_DAY = 8.0;
+    // Fallback used only when a company has no explicit standard-hours setting.
+    private static final double STANDARD_HOURS_PER_DAY = 6.0;
 
     /**
      * Employment-ending statuses. A payroll run for an employee in any of these
@@ -94,9 +95,12 @@ public class PayrollService {
                 dto.getPayPeriodEnd()
         );
 
-        double grossPay = round2(computation.earnedGrossPay() + computation.endOfServiceCompensation());
+        double grossPay = round2(computation.grossEarnings() + computation.endOfServiceCompensation());
+        // The funds check should reflect what actually posts to the ledger — the earned
+        // salary expense (gross minus loss of pay), not the pre-LOP gross.
+        double payrollExpense = round2(grossPay - computation.lopAmount());
         PayrollAccountStatusDTO accountStatus = resolvePayrollAccountStatus(
-                employee.getCompanyId(), grossPay);
+                employee.getCompanyId(), payrollExpense);
 
         return toPreviewDTO(computation, grossPay, accountStatus);
     }
@@ -210,7 +214,7 @@ public class PayrollService {
         );
 
         return Optional.of(new ProjectedPayrollAmounts(
-                computation.earnedGrossPay(),
+                computation.grossEarnings() + computation.endOfServiceCompensation(),
                 computation.totalDeductions(),
                 computation.netPayable()
         ));
@@ -230,8 +234,9 @@ public class PayrollService {
         payroll.setPayPeriodEnd(dto.getPayPeriodEnd());
         payroll.setPayDate(dto.getPayDate());
 
-        // Gross includes the end-of-service gratuity so it reconciles with net on a final run.
-        payroll.setGrossPay(round2(computation.earnedGrossPay() + computation.endOfServiceCompensation()));
+        // Gross is the full monthly package plus any end-of-service gratuity; loss of pay
+        // and loans are carried in `deductions`, so gross − deductions = net.
+        payroll.setGrossPay(round2(computation.grossEarnings() + computation.endOfServiceCompensation()));
         payroll.setEndOfServiceCompensation(computation.endOfServiceCompensation());
         payroll.setFinalSettlement(computation.finalSettlement());
         payroll.setLoanDeduction(computation.loanDeduction());
@@ -268,7 +273,11 @@ public class PayrollService {
                 .orElseThrow(() -> new RuntimeException(
                         "Configure payroll credit account under Finance → Default accounts → Process account defaults"));
 
-        BigDecimal amount = BigDecimal.valueOf(payroll.getGrossPay());
+        // Post the earned salary expense — full gross minus loss of pay. (Loans are
+        // recovered separately in applyLoanRecovery.) This is unchanged by moving LOP
+        // into the deductions bucket: gross now holds the full package, so subtract LOP.
+        double lop = payroll.getLopAmount() != null ? payroll.getLopAmount() : 0.0;
+        BigDecimal amount = BigDecimal.valueOf(round2(payroll.getGrossPay() - lop));
         String employeeLabel = employee.getEmployeeNo() != null && !employee.getEmployeeNo().isBlank()
                 ? employee.getEmployeeNo()
                 : String.valueOf(employee.getId());
@@ -318,11 +327,27 @@ public class PayrollService {
                 periodEnd
         );
 
-        double workedHours = timesheets.stream()
-                .mapToLong(this::resolveWorkedMinutes)
-                .sum() / 60.0;
-
-        double workedDays = workedHours / STANDARD_HOURS_PER_DAY;
+        double stdHoursPerDay = companyStandardHours(employee);
+        long stdMinutes = Math.round(stdHoursPerDay * 60.0);
+        double workedHours;
+        double workedDays;
+        if (!companyRequireCheckIn(employee)) {
+            // Organisation doesn't punch in/out — every working day counts as fully
+            // worked; unpaid leave (handled below) is the only thing that reduces pay.
+            workedDays = workingDays;
+            workedHours = workingDays * stdHoursPerDay;
+        } else {
+            // Align exactly with the Attendance History report: worked hours = sum of
+            // logged time; worked days = days that reached a full standard day (the
+            // report's "Days Worked" / daysPresent), not a fractional hours/standard.
+            long totalMinutes = timesheets.stream()
+                    .mapToLong(this::resolveWorkedMinutes)
+                    .sum();
+            workedHours = totalMinutes / 60.0;
+            workedDays = timesheets.stream()
+                    .filter(t -> resolveWorkedMinutes(t) >= stdMinutes)
+                    .count();
+        }
 
         List<EmployeeLeave> approvedLeaves = leaveRepo.findApprovedLeavesForPayrollPeriod(
                 employee.getId(),
@@ -349,7 +374,10 @@ public class PayrollService {
         double payableDays = Math.min(workedDays + paidLeaveDays, workingDays);
         double lopDays = Math.max(workingDays - payableDays, 0.0);
         double lopAmount = lopDays * perDaySalary;
-        double earnedGrossPay = Math.max(monthlyGross - lopAmount, 0.0);
+        // Gross earnings are the FULL monthly package; unpaid absence (LOP) is shown
+        // as a deduction below rather than silently shrinking the gross, so the payslip
+        // always reconciles: gross earnings − deductions = net pay.
+        double grossEarnings = monthlyGross;
 
         boolean finalSettlement = isFinalSettlement(employee);
 
@@ -368,8 +396,8 @@ public class PayrollService {
                         : Math.min(safe(loan.getMonthlyDeduction()), Math.max(safe(loan.getBalance()), 0.0)))
                 .sum();
 
-        double totalDeductions = loanDeduction;
-        double netPayable = (earnedGrossPay + endOfServiceCompensation) - totalDeductions;
+        double totalDeductions = lopAmount + loanDeduction;
+        double netPayable = (grossEarnings + endOfServiceCompensation) - totalDeductions;
 
         if (netPayable < 0) {
             netPayable = 0.0;
@@ -389,7 +417,7 @@ public class PayrollService {
                 round2(loanDeduction),
                 round2(totalDeductions),
                 round2(netPayable),
-                round2(earnedGrossPay),
+                round2(grossEarnings),
                 round2(endOfServiceCompensation),
                 finalSettlement
         );
@@ -555,6 +583,31 @@ public class PayrollService {
         return 0L;
     }
 
+    /** Company's standard full-day length in hours; falls back to {@link #STANDARD_HOURS_PER_DAY}. */
+    private double companyStandardHours(com.erp.domain.Employee employee) {
+        try {
+            if (employee.getCompany() != null
+                    && employee.getCompany().getStandardWorkingHoursPerDay() != null) {
+                return employee.getCompany().getStandardWorkingHoursPerDay().doubleValue();
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable — use default
+        }
+        return STANDARD_HOURS_PER_DAY;
+    }
+
+    /** Whether the company punches in/out (default true). */
+    private boolean companyRequireCheckIn(com.erp.domain.Employee employee) {
+        try {
+            if (employee.getCompany() != null) {
+                return employee.getCompany().isRequireCheckIn();
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable — assume required
+        }
+        return true;
+    }
+
     private int countWorkingDays(LocalDate start, LocalDate end) {
         int days = 0;
         for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
@@ -566,8 +619,9 @@ public class PayrollService {
     }
 
     private boolean isWeekend(LocalDate date) {
+        // Qatar workweek: Sunday–Thursday, with Friday & Saturday as the weekend.
         DayOfWeek day = date.getDayOfWeek();
-        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
+        return day == DayOfWeek.FRIDAY || day == DayOfWeek.SATURDAY;
     }
 
     private PayrollPreviewDTO toPreviewDTO(
@@ -588,7 +642,7 @@ public class PayrollService {
                 computation.loanDeduction(),
                 computation.totalDeductions(),
                 computation.netPayable(),
-                computation.earnedGrossPay(),
+                computation.grossEarnings(),
                 computation.endOfServiceCompensation(),
                 computation.finalSettlement(),
                 grossPay,
@@ -652,9 +706,16 @@ public class PayrollService {
         dto.setPayPeriodStart(payroll.getPayPeriodStart());
         dto.setPayPeriodEnd(payroll.getPayPeriodEnd());
         dto.setPayDate(payroll.getPayDate());
-        dto.setGrossPay(payroll.getGrossPay());
+        // Derive gross/deductions from the invariant fields (net, LOP, loan) so rows
+        // generated before LOP moved into the deductions bucket still reconcile:
+        // gross earnings = net + all deductions; deductions = loss of pay + loans.
+        double lop = payroll.getLopAmount() != null ? payroll.getLopAmount() : 0.0;
+        double loan = payroll.getLoanDeduction() != null ? payroll.getLoanDeduction() : 0.0;
+        double net = payroll.getNetPayable() != null ? payroll.getNetPayable() : 0.0;
+        double totalDeductions = round2(lop + loan);
+        dto.setGrossPay(round2(net + totalDeductions));
         dto.setLoanDeduction(payroll.getLoanDeduction());
-        dto.setTotalDeductions(payroll.getDeductions());
+        dto.setTotalDeductions(totalDeductions);
         dto.setNetPayable(payroll.getNetPayable());
         dto.setEndOfServiceCompensation(payroll.getEndOfServiceCompensation());
         dto.setFinalSettlement(payroll.isFinalSettlement());
@@ -723,7 +784,7 @@ public class PayrollService {
             double loanDeduction,
             double totalDeductions,
             double netPayable,
-            double earnedGrossPay,
+            double grossEarnings,
             double endOfServiceCompensation,
             boolean finalSettlement
     ) {

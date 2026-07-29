@@ -56,4 +56,12 @@ public class EmployeeResponseDTO {
      * which represents the security/permission role on the linked User.
      */
     private String designation;
+
+    /**
+     * Employment type/category derived from the current job assignment
+     * (employee_current_job). `employmentCategory` is Permanent / Contract / Intern /
+     * Consultant / Temporary; `employmentType` is Full-time / Part-time.
+     */
+    private String employmentCategory;
+    private String employmentType;
 }

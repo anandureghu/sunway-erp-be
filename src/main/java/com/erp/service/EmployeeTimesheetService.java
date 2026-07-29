@@ -25,8 +25,33 @@ import java.util.List;
 @Service
 public class EmployeeTimesheetService {
 
-    private static final double DEFAULT_AVG_HOURS_PER_DAY = 8.0;
-    private static final long MIN_WORKED_MINUTES_FOR_DAY = 360L;
+    // Fallbacks used only when a company has no explicit standard-hours setting.
+    private static final double DEFAULT_STD_HOURS_PER_DAY = 6.0;
+
+    /** Company's standard full-day length in hours (default 6). */
+    private double standardHours(Employee employee) {
+        try {
+            if (employee.getCompany() != null
+                    && employee.getCompany().getStandardWorkingHoursPerDay() != null) {
+                return employee.getCompany().getStandardWorkingHoursPerDay().doubleValue();
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable — fall through to default
+        }
+        return DEFAULT_STD_HOURS_PER_DAY;
+    }
+
+    /** Whether the company punches in/out (default true). */
+    private boolean requireCheckIn(Employee employee) {
+        try {
+            if (employee.getCompany() != null) {
+                return employee.getCompany().isRequireCheckIn();
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable — assume required
+        }
+        return true;
+    }
 
     private final EmployeeTimesheetRepository repository;
     private final EmployeeRepository employeeRepository;
@@ -55,6 +80,10 @@ public class EmployeeTimesheetService {
                     "Check-in is only available for active employees (current status: "
                             + employee.getStatus() + ").");
         }
+        if (!requireCheckIn(employee)) {
+            throw new RuntimeException(
+                    "Check-in is disabled for your organization — attendance is auto-marked present.");
+        }
 
         EmployeeTimesheet timesheet = repository
                 .findByEmployeeIdAndAttendanceDate(employeeId, today)
@@ -76,7 +105,10 @@ public class EmployeeTimesheetService {
         timesheet.setStatus(TimesheetStatus.CHECKED_IN);
 
         EmployeeTimesheet saved = repository.save(timesheet);
-        return mapToday(saved);
+        TimesheetTodayResponse response = mapToday(saved);
+        response.setRequireCheckIn(requireCheckIn(employee));
+        response.setStandardWorkingHoursPerDay(standardHours(employee));
+        return response;
     }
 
     @Transactional
@@ -84,6 +116,10 @@ public class EmployeeTimesheetService {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
         accessGuard.assertCanWrite(employee, AppModule.HR_REPORTS);
+        if (!requireCheckIn(employee)) {
+            throw new RuntimeException(
+                    "Check-out is disabled for your organization — attendance is auto-marked present.");
+        }
 
         LocalDate today = LocalDate.now();
 
@@ -105,7 +141,10 @@ public class EmployeeTimesheetService {
         timesheet.setStatus(TimesheetStatus.CHECKED_OUT);
 
         EmployeeTimesheet saved = repository.save(timesheet);
-        return mapToday(saved);
+        TimesheetTodayResponse response = mapToday(saved);
+        response.setRequireCheckIn(requireCheckIn(employee));
+        response.setStandardWorkingHoursPerDay(standardHours(employee));
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -114,19 +153,23 @@ public class EmployeeTimesheetService {
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
         accessGuard.assertCanRead(employee, AppModule.HR_REPORTS);
 
-        return repository.findByEmployeeIdAndAttendanceDate(employeeId, LocalDate.now())
+        TimesheetTodayResponse response = repository
+                .findByEmployeeIdAndAttendanceDate(employeeId, LocalDate.now())
                 .map(this::mapToday)
                 .orElseGet(() -> {
-                    TimesheetTodayResponse response = new TimesheetTodayResponse();
-                    response.setEmployeeId(employeeId);
-                    response.setDate(LocalDate.now());
-                    response.setCheckInTime(null);
-                    response.setCheckOutTime(null);
-                    response.setWorkedMinutes(0L);
-                    response.setWorkedDuration("0m");
-                    response.setStatus(TimesheetStatus.NOT_CHECKED_IN.name());
-                    return response;
+                    TimesheetTodayResponse r = new TimesheetTodayResponse();
+                    r.setEmployeeId(employeeId);
+                    r.setDate(LocalDate.now());
+                    r.setCheckInTime(null);
+                    r.setCheckOutTime(null);
+                    r.setWorkedMinutes(0L);
+                    r.setWorkedDuration("0m");
+                    r.setStatus(TimesheetStatus.NOT_CHECKED_IN.name());
+                    return r;
                 });
+        response.setRequireCheckIn(requireCheckIn(employee));
+        response.setStandardWorkingHoursPerDay(standardHours(employee));
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -135,27 +178,54 @@ public class EmployeeTimesheetService {
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
         accessGuard.assertCanRead(employee, AppModule.HR_REPORTS);
 
+        double stdHours = standardHours(employee);
+        MonthlySummaryResponse response = new MonthlySummaryResponse();
+        response.setAvgHoursPerDay(stdHours);
+
+        // Companies that don't punch in/out: every working day up to today is present
+        // for the standard day (no reliance on timesheet rows).
+        if (!requireCheckIn(employee)) {
+            int workingDays = countWorkingDaysUpToToday(year, month);
+            response.setDaysRecorded(workingDays);
+            response.setDaysPresent(workingDays);
+            response.setTotalHours(roundToSingleDecimal(workingDays * stdHours));
+            return response;
+        }
+
         List<EmployeeTimesheet> records = getMonthlyRecords(employeeId, year, month);
+        long minMinutes = Math.round(stdHours * 60.0);
 
         int daysRecorded = records.size();
-
         int daysPresent = (int) records.stream()
-                .filter(this::isPresentRecord)
+                .filter(t -> resolveWorkedMinutes(t) >= minMinutes)
                 .count();
-
         long totalMinutes = records.stream()
                 .mapToLong(this::resolveWorkedMinutes)
                 .sum();
 
-        double totalHours = roundToSingleDecimal(totalMinutes / 60.0);
-
-        MonthlySummaryResponse response = new MonthlySummaryResponse();
         response.setDaysRecorded(daysRecorded);
         response.setDaysPresent(daysPresent);
-        response.setTotalHours(totalHours);
-        response.setAvgHoursPerDay(DEFAULT_AVG_HOURS_PER_DAY);
+        response.setTotalHours(roundToSingleDecimal(totalMinutes / 60.0));
 
         return response;
+    }
+
+    /** Working days (Sun–Thu) from the 1st of the month through today (or month end if past). */
+    private int countWorkingDaysUpToToday(int year, int month) {
+        YearMonth ym = YearMonth.of(year, month);
+        LocalDate start = ym.atDay(1);
+        LocalDate today = LocalDate.now();
+        LocalDate end = ym.atEndOfMonth().isAfter(today) ? today : ym.atEndOfMonth();
+        if (end.isBefore(start)) return 0;
+        int count = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            // Qatar weekend: Friday & Saturday are off.
+            switch (d.getDayOfWeek()) {
+                case FRIDAY, SATURDAY -> { }
+                default -> count++;
+            }
+        }
+        return count;
     }
 
     @Transactional(readOnly = true)
@@ -211,11 +281,9 @@ public class EmployeeTimesheetService {
         response.setStatus(entity.getStatus() != null
                 ? entity.getStatus().name()
                 : TimesheetStatus.NOT_CHECKED_IN.name());
+        response.setAutoCheckedOut(entity.isAutoCheckedOut());
+        response.setNote(entity.getNote());
         return response;
-    }
-
-    private boolean isPresentRecord(EmployeeTimesheet entity) {
-        return resolveWorkedMinutes(entity) >= MIN_WORKED_MINUTES_FOR_DAY;
     }
 
     private long resolveWorkedMinutes(EmployeeTimesheet entity) {
