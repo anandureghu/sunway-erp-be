@@ -91,7 +91,9 @@ public class WarehouseService {
         User user = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        User manager = resolveManagerUser(dto.getManager(), companyId);
+        User manager = dto.getManager() == null
+                ? null
+                : resolveManagerUser(dto.getManager(), companyId);
 
         wh.setName(dto.getName());
         wh.setStatus(dto.getStatus());
