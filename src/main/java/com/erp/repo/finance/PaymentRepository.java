@@ -23,7 +23,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     List<Payment> findByCompany_IdAndArchivedTrueAndPaymentDirection(
             Long companyId, PaymentDirection paymentDirection);
-    List<Payment> findByInvoiceIdOrderByCreatedAtDesc(String invoiceId);
+    List<Payment> findByCompany_IdAndInvoiceIdOrderByCreatedAtDesc(Long companyId, String invoiceId);
 
     Optional<Payment> findFirstByPurchaseOrderIdAndPaymentDirection(
             Long purchaseOrderId, PaymentDirection paymentDirection);
@@ -31,7 +31,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByPurchaseOrderIdAndPaymentDirectionOrderByCreatedAtDesc(
             Long purchaseOrderId, PaymentDirection paymentDirection);
 
-    boolean existsByInvoiceIdAndPaymentMethod(String invoiceId, String paymentMethod);
+    boolean existsByCompany_IdAndInvoiceIdAndPaymentMethod(
+            Long companyId, String invoiceId, String paymentMethod);
 
     boolean existsByPurchaseOrderIdAndPaymentDirectionAndPaymentMethod(
             Long purchaseOrderId, PaymentDirection paymentDirection, String paymentMethod);
@@ -122,12 +123,17 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             """)
     long countPendingVendorPaymentsForCompany(@Param("companyId") Long companyId);
 
-    /** Sum of confirmed (non-pending, non-archived) payment amounts applied to an invoice. */
+    /**
+     * Sum of confirmed (non-pending, non-archived) payment amounts applied to an invoice,
+     * scoped to the invoice's company so identical invoice codes across tenants do not mix.
+     */
     @Query("""
             SELECT COALESCE(SUM(p.amount), 0) FROM Payment p
-            WHERE p.invoiceId = :invoiceId
+            WHERE p.company.id = :companyId
+              AND p.invoiceId = :invoiceId
               AND p.archived = false
               AND UPPER(p.paymentMethod) NOT IN ('PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT')
             """)
-    BigDecimal sumConfirmedAmountByInvoiceId(@Param("invoiceId") String invoiceId);
+    BigDecimal sumConfirmedAmountByCompanyIdAndInvoiceId(
+            @Param("companyId") Long companyId, @Param("invoiceId") String invoiceId);
 }

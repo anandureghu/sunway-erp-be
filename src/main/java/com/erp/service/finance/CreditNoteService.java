@@ -125,7 +125,7 @@ public class CreditNoteService {
 
         Long companyId = auth.getCurrentCompanyId();
 
-        Invoice invoice = invoiceRepository.findFirstByInvoiceIdOrderByCreatedAtDesc(dto.getInvoiceId())
+        Invoice invoice = invoiceRepository.findByCompany_IdAndInvoiceId(companyId, dto.getInvoiceId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
         if (invoice.getCompany() == null
@@ -199,16 +199,18 @@ public class CreditNoteService {
      */
     @Transactional
     public CreditNoteResponseDTO createAutomaticCreditNoteForRejection(
-            String invoiceId, BigDecimal amount, String reason, Long goodsReceiptId) {
+            Long companyId, String invoiceId, BigDecimal amount, String reason, Long goodsReceiptId) {
 
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             return null;
         }
+        if (companyId == null || invoiceId == null || invoiceId.isBlank()) {
+            throw new RuntimeException("Invoice not found");
+        }
 
-        Invoice invoice = invoiceRepository.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceId)
+        Invoice invoice = invoiceRepository.findByCompany_IdAndInvoiceId(companyId, invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
-        Long companyId = invoice.getCompany().getId();
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company doesn't exist"));
 

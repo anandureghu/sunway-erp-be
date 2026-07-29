@@ -152,7 +152,7 @@ public class PaymentService {
         payment.setPdfUrl("https://dummy.url/payments/" + payment.getPaymentCode() + ".pdf");
 
         Payment saved = paymentRepo.save(payment);
-        Invoice invoice = invoiceService.applyPayment(dto.getInvoiceId(), dto.getAmount());
+        Invoice invoice = invoiceService.applyPayment(company.getId(), dto.getInvoiceId(), dto.getAmount());
         postPaymentToAccounting(saved, invoice);
         if ("PAID".equalsIgnoreCase(invoice.getStatus())) {
             salesOrderRepo.findById(invoice.getOrderId())
@@ -300,8 +300,8 @@ public class PaymentService {
     }
 
     private void enrichInvoiceAmounts(PaymentResponseDTO.PaymentResponseDTOBuilder b, Payment p) {
-        if (p.getInvoiceId() != null && !p.getInvoiceId().isBlank()) {
-            invoiceRepo.findFirstByInvoiceIdOrderByCreatedAtDesc(p.getInvoiceId()).ifPresent(inv -> {
+        if (p.getInvoiceId() != null && !p.getInvoiceId().isBlank() && p.getCompany() != null) {
+            invoiceRepo.findByCompany_IdAndInvoiceId(p.getCompany().getId(), p.getInvoiceId()).ifPresent(inv -> {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
@@ -335,8 +335,9 @@ public class PaymentService {
     private void applyInvoiceProgress(PaymentResponseDTO.PaymentResponseDTOBuilder b, Invoice inv) {
         BigDecimal total = inv.getAmount() != null ? inv.getAmount() : BigDecimal.ZERO;
         BigDecimal outstanding = inv.getOutstanding() != null ? inv.getOutstanding() : total;
-        BigDecimal paid = inv.getInvoiceId() != null
-                ? paymentRepo.sumConfirmedAmountByInvoiceId(inv.getInvoiceId())
+        Long companyId = inv.getCompany() != null ? inv.getCompany().getId() : null;
+        BigDecimal paid = inv.getInvoiceId() != null && companyId != null
+                ? paymentRepo.sumConfirmedAmountByCompanyIdAndInvoiceId(companyId, inv.getInvoiceId())
                 : BigDecimal.ZERO;
         BigDecimal creditApplied = total.subtract(outstanding).subtract(paid);
         if (creditApplied.compareTo(BigDecimal.ZERO) < 0) {
@@ -373,7 +374,10 @@ public class PaymentService {
         if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
             throw new RuntimeException("Invoice ID is missing for this payment request");
         }
-        return invoiceRepo.findFirstByInvoiceIdOrderByCreatedAtDesc(payment.getInvoiceId())
+        if (payment.getCompany() == null) {
+            throw new RuntimeException("Invoice not found for this payment");
+        }
+        return invoiceRepo.findByCompany_IdAndInvoiceId(payment.getCompany().getId(), payment.getInvoiceId())
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this payment"));
     }
 
@@ -492,16 +496,16 @@ public class PaymentService {
         if (invoiceId == null || invoiceId.isBlank()) {
             return List.of();
         }
-        Invoice inv = invoiceRepo.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceId).orElse(null);
+        Long companyId = auth.getCurrentCompanyId();
+        if (companyId == null) {
+            return List.of();
+        }
+        Invoice inv = invoiceRepo.findByCompany_IdAndInvoiceId(companyId, invoiceId).orElse(null);
         if (inv == null) {
             return List.of();
         }
         assertInvoiceCompany(inv);
-        return paymentRepo.findByInvoiceIdOrderByCreatedAtDesc(invoiceId).stream()
-                .filter(p -> isSuperAdmin()
-                        || (auth.getCurrentCompanyId() != null
-                        && p.getCompany() != null
-                        && auth.getCurrentCompanyId().equals(p.getCompany().getId())))
+        return paymentRepo.findByCompany_IdAndInvoiceIdOrderByCreatedAtDesc(companyId, invoiceId).stream()
                 .map(this::toDTO)
                 .toList();
     }
@@ -592,7 +596,8 @@ public class PaymentService {
         payment.setAmount(confirmAmount);
         Payment saved = paymentRepo.save(payment);
 
-        Invoice updatedInvoice = invoiceService.applyPayment(saved.getInvoiceId(), saved.getAmount());
+        Invoice updatedInvoice = invoiceService.applyPayment(
+                saved.getCompany().getId(), saved.getInvoiceId(), saved.getAmount());
         postPaymentToAccounting(saved, updatedInvoice);
         if ("PARTIALLY_PAID".equalsIgnoreCase(updatedInvoice.getStatus())) {
             invoiceService.ensurePendingPaymentRequestForOutstanding(updatedInvoice);
@@ -670,7 +675,7 @@ public class PaymentService {
         Payment saved = paymentRepo.save(payment);
         postVendorPaymentToAccounting(saved);
         Invoice updatedPurchaseInvoice = invoiceService.applyPayment(
-                purchaseInvoice.getInvoiceId(), saved.getAmount());
+                purchaseInvoice.getCompany().getId(), purchaseInvoice.getInvoiceId(), saved.getAmount());
         if ("PARTIALLY_PAID".equalsIgnoreCase(updatedPurchaseInvoice.getStatus())) {
             vendorPayableService.ensurePendingVendorPayableForOutstanding(
                     po, updatedPurchaseInvoice.getOutstanding());

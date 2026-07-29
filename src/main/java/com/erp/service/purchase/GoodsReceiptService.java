@@ -262,7 +262,7 @@ public class GoodsReceiptService {
         String reason = "Goods rejected at inspection for purchase order " + po.getOrderNumber();
         if (settled) {
             creditNoteService.createAutomaticCreditNoteForRejection(
-                    invoice.getInvoiceId(), rejectedValue, reason, goodsReceiptId);
+                    invoice.getCompany().getId(), invoice.getInvoiceId(), rejectedValue, reason, goodsReceiptId);
         } else {
             invoiceService.reduceForRejectedGoods(po.getId(), rejectedValue, reason);
         }

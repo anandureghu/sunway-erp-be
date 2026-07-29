@@ -97,7 +97,10 @@ public class InvoiceService {
             return;
         }
 
-        List<Payment> payments = paymentRepo.findByInvoiceIdOrderByCreatedAtDesc(invoice.getInvoiceId());
+        Long companyId = invoice.getCompany() != null ? invoice.getCompany().getId() : null;
+        List<Payment> payments = companyId == null
+                ? List.of()
+                : paymentRepo.findByCompany_IdAndInvoiceIdOrderByCreatedAtDesc(companyId, invoice.getInvoiceId());
         for (Payment payment : payments) {
             String paymentId = payment.getId() != null ? String.valueOf(payment.getId()) : null;
             if (paymentId != null) {
@@ -482,7 +485,10 @@ public class InvoiceService {
         if ("PAID".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status)) {
             return;
         }
-        if (paymentRepo.existsByInvoiceIdAndPaymentMethod(invoice.getInvoiceId(), "PENDING_REQUEST")) {
+        Long companyId = invoice.getCompany() != null ? invoice.getCompany().getId() : null;
+        if (companyId == null
+                || paymentRepo.existsByCompany_IdAndInvoiceIdAndPaymentMethod(
+                        companyId, invoice.getInvoiceId(), "PENDING_REQUEST")) {
             return;
         }
         BigDecimal outstanding = invoice.getOutstanding() != null
@@ -702,8 +708,18 @@ public class InvoiceService {
     // APPLY PAYMENT
     // ============================================================
     public Invoice applyPayment(String invoiceId, BigDecimal amount) {
+        Long companyId = auth.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new RuntimeException("Invoice not found");
+        }
+        return applyPayment(companyId, invoiceId, amount);
+    }
 
-        Invoice inv = repo.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceId)
+    public Invoice applyPayment(Long companyId, String invoiceId, BigDecimal amount) {
+        if (companyId == null || invoiceId == null || invoiceId.isBlank()) {
+            throw new RuntimeException("Invoice not found");
+        }
+        Invoice inv = repo.findByCompany_IdAndInvoiceId(companyId, invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
 
         if ("CANCELLED".equalsIgnoreCase(inv.getStatus())) {
@@ -773,10 +789,12 @@ public class InvoiceService {
         if (purchaseOrderId == null || amount == null) {
             return;
         }
-        repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
-                .map(Invoice::getInvoiceId)
-                .filter(id -> id != null && !id.isBlank())
-                .ifPresent(invoiceCode -> applyPayment(invoiceCode, amount));
+        repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE).ifPresent(inv -> {
+            if (inv.getInvoiceId() == null || inv.getInvoiceId().isBlank() || inv.getCompany() == null) {
+                return;
+            }
+            applyPayment(inv.getCompany().getId(), inv.getInvoiceId(), amount);
+        });
     }
 
     /**
@@ -804,7 +822,11 @@ public class InvoiceService {
     }
 
     public InvoiceResponse getInvoiceByCode(String invoiceCode) {
-        Invoice inv = repo.findFirstByInvoiceIdOrderByCreatedAtDesc(invoiceCode)
+        Long companyId = auth.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new RuntimeException("Invoice not found");
+        }
+        Invoice inv = repo.findByCompany_IdAndInvoiceId(companyId, invoiceCode)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
         assertInvoiceInTenant(inv);
         return toDTO(inv);
@@ -1058,8 +1080,9 @@ public class InvoiceService {
 
         BigDecimal invoiceTotal = i.getAmount() != null ? i.getAmount() : BigDecimal.ZERO;
         BigDecimal outstandingAmount = i.getOutstanding() != null ? i.getOutstanding() : invoiceTotal;
-        BigDecimal paidAmount = i.getInvoiceId() != null
-                ? paymentRepo.sumConfirmedAmountByInvoiceId(i.getInvoiceId())
+        Long invoiceCompanyId = i.getCompany() != null ? i.getCompany().getId() : null;
+        BigDecimal paidAmount = i.getInvoiceId() != null && invoiceCompanyId != null
+                ? paymentRepo.sumConfirmedAmountByCompanyIdAndInvoiceId(invoiceCompanyId, i.getInvoiceId())
                 : BigDecimal.ZERO;
         // Whatever reduced the balance that wasn't cash was a directly-applied credit note.
         BigDecimal creditAppliedAmount = invoiceTotal.subtract(outstandingAmount).subtract(paidAmount);
