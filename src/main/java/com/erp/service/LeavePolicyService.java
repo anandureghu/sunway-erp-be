@@ -61,6 +61,19 @@ public class LeavePolicyService {
     @Transactional
     public void savePolicies(Long companyId, List<LeavePolicyRequestDTO> dtos) {
         assertSameTenant(companyId);
+        savePoliciesInternal(companyId, dtos);
+    }
+
+    /**
+     * Same as {@link #savePolicies} but skips the tenant guard — used by system
+     * bootstrap / company-create when no authenticated company context exists.
+     */
+    @Transactional
+    public void savePoliciesAsSystem(Long companyId, List<LeavePolicyRequestDTO> dtos) {
+        savePoliciesInternal(companyId, dtos);
+    }
+
+    private void savePoliciesInternal(Long companyId, List<LeavePolicyRequestDTO> dtos) {
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 

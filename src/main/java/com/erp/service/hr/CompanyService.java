@@ -25,6 +25,8 @@ import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
 import com.erp.service.file.FileStorageService;
+import com.erp.service.salary.EmployeeCompensationService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +50,8 @@ public class CompanyService {
     private final DocumentSequenceService     documentSequenceService;
     private final EmployeeRepository          employeeRepository;
     private final CompanyStorageService       companyStorageService;
+    private final QatarLaborLawDefaultsService qatarLaborLawDefaultsService;
+    private final EmployeeCompensationService employeeCompensationService;
 
     public CompanyService(
             CompanyRepository companyRepository,
@@ -60,7 +64,9 @@ public class CompanyService {
             FileStorageService fileStorageService,
             DocumentSequenceService documentSequenceService,
             EmployeeRepository employeeRepository,
-            CompanyStorageService companyStorageService) {
+            CompanyStorageService companyStorageService,
+            @Lazy QatarLaborLawDefaultsService qatarLaborLawDefaultsService,
+            @Lazy EmployeeCompensationService employeeCompensationService) {
 
         this.companyRepository         = companyRepository;
         this.invoiceSettingsRepository = invoiceSettingsRepository;
@@ -73,6 +79,8 @@ public class CompanyService {
         this.documentSequenceService   = documentSequenceService;
         this.employeeRepository        = employeeRepository;
         this.companyStorageService     = companyStorageService;
+        this.qatarLaborLawDefaultsService = qatarLaborLawDefaultsService;
+        this.employeeCompensationService = employeeCompensationService;
     }
 
     // ======================================================
@@ -169,6 +177,7 @@ public class CompanyService {
 
         Company saved = companyRepository.save(company);
         seedDefaultCompanyRoles(saved);
+        qatarLaborLawDefaultsService.applyToCompany(saved.getId());
         invoiceSettingsRepository.save(InvoiceSettingsDefaults.buildDefaults(saved));
         // Start this company's employee-number sequence at 1000 up front.
         documentSequenceService.initEmployeeSequence(saved.getId());
@@ -436,9 +445,53 @@ public class CompanyService {
         if (dto.getRequireCheckIn() != null) {
             company.setRequireCheckIn(dto.getRequireCheckIn());
         }
+        if (dto.getOtDayRateMultiplier() != null) {
+            company.setOtDayRateMultiplier(clampMultiplier(dto.getOtDayRateMultiplier()));
+        }
+        if (dto.getOtNightFridayHolidayRateMultiplier() != null) {
+            company.setOtNightFridayHolidayRateMultiplier(
+                    clampMultiplier(dto.getOtNightFridayHolidayRateMultiplier()));
+        }
+        if (dto.getOtNightStartTime() != null) {
+            company.setOtNightStartTime(dto.getOtNightStartTime());
+        }
+        if (dto.getOtNightEndTime() != null) {
+            company.setOtNightEndTime(dto.getOtNightEndTime());
+        }
+        if (dto.getOtMaxHoursPerDay() != null) {
+            BigDecimal cap = dto.getOtMaxHoursPerDay();
+            if (cap.compareTo(BigDecimal.ZERO) < 0) cap = BigDecimal.ZERO;
+            if (cap.compareTo(new BigDecimal("24")) > 0) cap = new BigDecimal("24");
+            company.setOtMaxHoursPerDay(cap);
+        }
+        if (dto.getMinimumMonthlyWage() != null) {
+            company.setMinimumMonthlyWage(nonNegative(dto.getMinimumMonthlyWage()));
+        }
+        boolean statutoryAllowanceChanged = false;
+        if (dto.getDefaultHousingAllowance() != null) {
+            company.setDefaultHousingAllowance(nonNegative(dto.getDefaultHousingAllowance()));
+            statutoryAllowanceChanged = true;
+        }
+        if (dto.getDefaultFoodAllowance() != null) {
+            company.setDefaultFoodAllowance(nonNegative(dto.getDefaultFoodAllowance()));
+            statutoryAllowanceChanged = true;
+        }
 
         companyRepository.save(company);
+        if (statutoryAllowanceChanged) {
+            employeeCompensationService.syncFollowingAllowancesFromCompany(companyId);
+        }
         return toHrPoliciesDto(company);
+    }
+
+    private static BigDecimal clampMultiplier(BigDecimal value) {
+        if (value.compareTo(BigDecimal.ONE) < 0) return BigDecimal.ONE;
+        if (value.compareTo(new BigDecimal("5")) > 0) return new BigDecimal("5");
+        return value;
+    }
+
+    private static BigDecimal nonNegative(BigDecimal value) {
+        return value.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : value;
     }
 
     private HrPoliciesDTO toHrPoliciesDto(Company company) {
@@ -471,6 +524,38 @@ public class CompanyService {
                                 ? company.getStandardWorkingHoursPerDay()
                                 : new BigDecimal("6.00"))
                 .requireCheckIn(company.isRequireCheckIn())
+                .otDayRateMultiplier(
+                        company.getOtDayRateMultiplier() != null
+                                ? company.getOtDayRateMultiplier()
+                                : QatarLaborLawDefaultsService.OT_DAY_MULTIPLIER)
+                .otNightFridayHolidayRateMultiplier(
+                        company.getOtNightFridayHolidayRateMultiplier() != null
+                                ? company.getOtNightFridayHolidayRateMultiplier()
+                                : QatarLaborLawDefaultsService.OT_NIGHT_FRIDAY_HOLIDAY_MULTIPLIER)
+                .otNightStartTime(
+                        company.getOtNightStartTime() != null
+                                ? company.getOtNightStartTime()
+                                : QatarLaborLawDefaultsService.OT_NIGHT_START)
+                .otNightEndTime(
+                        company.getOtNightEndTime() != null
+                                ? company.getOtNightEndTime()
+                                : QatarLaborLawDefaultsService.OT_NIGHT_END)
+                .otMaxHoursPerDay(
+                        company.getOtMaxHoursPerDay() != null
+                                ? company.getOtMaxHoursPerDay()
+                                : QatarLaborLawDefaultsService.OT_MAX_HOURS_PER_DAY)
+                .minimumMonthlyWage(
+                        company.getMinimumMonthlyWage() != null
+                                ? company.getMinimumMonthlyWage()
+                                : QatarLaborLawDefaultsService.MINIMUM_MONTHLY_WAGE)
+                .defaultHousingAllowance(
+                        company.getDefaultHousingAllowance() != null
+                                ? company.getDefaultHousingAllowance()
+                                : QatarLaborLawDefaultsService.DEFAULT_HOUSING_ALLOWANCE)
+                .defaultFoodAllowance(
+                        company.getDefaultFoodAllowance() != null
+                                ? company.getDefaultFoodAllowance()
+                                : QatarLaborLawDefaultsService.DEFAULT_FOOD_ALLOWANCE)
                 .build();
     }
 

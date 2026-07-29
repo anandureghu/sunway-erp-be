@@ -5,6 +5,7 @@ import com.erp.domain.security.AppModule;
 import com.erp.dto.leave.LeavePolicyRequestDTO;
 import com.erp.dto.leave.LeavePolicyResponseDTO;
 import com.erp.service.LeavePolicyService;
+import com.erp.service.hr.QatarLaborLawDefaultsService;
 import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import java.util.List;
 public class LeavePolicyController {
 
     private final LeavePolicyService service;
+    private final QatarLaborLawDefaultsService qatarLaborLawDefaultsService;
 
     // ======================================================
     // GET ALL LEAVE POLICIES
@@ -46,6 +48,22 @@ public class LeavePolicyController {
 
         service.savePolicies(companyId, dtos);
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Force-apply Qatar statutory leave defaults (Sick/Maternity/Hajj/Marriage/Bereavement)
+     * for every role in this company and re-sync employee balances. Does not change
+     * Annual / Emergency / Unpaid policies.
+     */
+    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.CREATE})
+    @PostMapping("/reset-qatar-defaults")
+    public ResponseEntity<List<LeavePolicyResponseDTO>> resetQatarDefaults(
+            @PathVariable("companyId") Long companyId) {
+
+        // Tenant guard (getAllPolicies asserts same company / SUPER_ADMIN).
+        service.getAllPolicies(companyId);
+        qatarLaborLawDefaultsService.applyLeaveDefaults(companyId);
+        return ResponseEntity.ok(service.getAllPolicies(companyId));
     }
 
     // ======================================================

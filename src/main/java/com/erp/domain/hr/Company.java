@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalTime;
 
 @Getter
 @Setter
@@ -191,6 +192,43 @@ public class Company {
     @Builder.Default
     @Column(name = "require_check_in", nullable = false)
     private boolean requireCheckIn = true;
+
+    /**
+     * Qatar labor-law company defaults (editable in HR Policies).
+     * OT multipliers are policy knobs for future overtime/payroll; night window
+     * is 21:00–03:00 by statute default; OT is capped at 2 hours/day.
+     */
+    @Builder.Default
+    @Column(name = "ot_day_rate_multiplier", nullable = false, precision = 6, scale = 2)
+    private BigDecimal otDayRateMultiplier = new BigDecimal("1.25");
+
+    @Builder.Default
+    @Column(name = "ot_night_friday_holiday_rate_multiplier", nullable = false, precision = 6, scale = 2)
+    private BigDecimal otNightFridayHolidayRateMultiplier = new BigDecimal("1.50");
+
+    @Builder.Default
+    @Column(name = "ot_night_start_time", nullable = false)
+    private LocalTime otNightStartTime = LocalTime.of(21, 0);
+
+    @Builder.Default
+    @Column(name = "ot_night_end_time", nullable = false)
+    private LocalTime otNightEndTime = LocalTime.of(3, 0);
+
+    @Builder.Default
+    @Column(name = "ot_max_hours_per_day", nullable = false, precision = 6, scale = 2)
+    private BigDecimal otMaxHoursPerDay = new BigDecimal("2.00");
+
+    @Builder.Default
+    @Column(name = "minimum_monthly_wage", nullable = false, precision = 12, scale = 2)
+    private BigDecimal minimumMonthlyWage = new BigDecimal("1000.00");
+
+    @Builder.Default
+    @Column(name = "default_housing_allowance", nullable = false, precision = 12, scale = 2)
+    private BigDecimal defaultHousingAllowance = new BigDecimal("500.00");
+
+    @Builder.Default
+    @Column(name = "default_food_allowance", nullable = false, precision = 12, scale = 2)
+    private BigDecimal defaultFoodAllowance = new BigDecimal("300.00");
 
     @Transient
     private String invoiceHeaderSubtitle;

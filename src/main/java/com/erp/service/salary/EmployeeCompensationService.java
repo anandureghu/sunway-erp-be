@@ -61,7 +61,7 @@ public class EmployeeCompensationService {
         EmployeeCompensation c = new EmployeeCompensation();
         c.setEmployee(employee);
 
-        mapAndCalculate(c, dto);
+        mapAndCalculate(c, dto, employee);
 
         c.setStatus("ACTIVE");
 
@@ -84,7 +84,7 @@ public class EmployeeCompensationService {
 
         validateSalaryBand(employeeId, dto.getBasicSalary());
 
-        mapAndCalculate(c, dto);
+        mapAndCalculate(c, dto, employee);
 
         compensationRepo.save(c);
     }
@@ -124,7 +124,16 @@ public class EmployeeCompensationService {
         dto.setBasicSalary(c.getBasicSalary());
 
         dto.setHousingType(c.getHousingType());
-        dto.setHousingAllowance(c.getHousingAllowance());
+        boolean housingFollows = c.isHousingFollowsCompanyDefault();
+        Double housingAmt = c.getHousingAllowance();
+        if (housingFollows && c.getHousingType() == BenefitType.ALLOWANCE) {
+            Double companyHousing = companyDefaultHousing(employee);
+            if (companyHousing != null) {
+                housingAmt = companyHousing;
+            }
+        }
+        dto.setHousingAllowance(housingAmt);
+        dto.setHousingFollowsCompanyDefault(housingFollows);
 
         dto.setTransportationType(c.getTransportationType());
         dto.setTransportationAllowance(c.getTransportationAllowance());
@@ -133,7 +142,25 @@ public class EmployeeCompensationService {
         dto.setTravelAllowance(c.getTravelAllowance());
 
         dto.setOtherAllowance(c.getOtherAllowance());
-        dto.setTotalCompensation(c.getTotalCompensation());
+        boolean foodFollows = c.isFoodFollowsCompanyDefault();
+        Double foodAmt = c.getFoodAllowance() != null ? c.getFoodAllowance() : 0.0;
+        if (foodFollows) {
+            Double companyFood = companyDefaultFood(employee);
+            if (companyFood != null) {
+                foodAmt = companyFood;
+            }
+        }
+        dto.setFoodAllowance(foodAmt);
+        dto.setFoodFollowsCompanyDefault(foodFollows);
+
+        double total =
+                safe(c.getBasicSalary())
+                        + safe(housingAmt)
+                        + safe(c.getTransportationAllowance())
+                        + safe(c.getTravelAllowance())
+                        + safe(c.getOtherAllowance())
+                        + safe(foodAmt);
+        dto.setTotalCompensation(total);
 
         dto.setStatus(c.getStatus());
         dto.setEffectiveFrom(c.getEffectiveFrom());
@@ -142,9 +169,50 @@ public class EmployeeCompensationService {
         return dto;
     }
 
+    /**
+     * Propagate company housing/food defaults onto ACTIVE compensation rows that
+     * still follow those defaults (never customized on the employee salary form).
+     */
+    @Transactional
+    public int syncFollowingAllowancesFromCompany(Long companyId) {
+        if (companyId == null) {
+            return 0;
+        }
+        var rows = compensationRepo.findActiveFollowingCompanyDefaults(companyId);
+        int updated = 0;
+        for (EmployeeCompensation c : rows) {
+            Employee employee = c.getEmployee();
+            if (employee == null || employee.getCompany() == null) {
+                continue;
+            }
+            boolean dirty = false;
+            if (c.isHousingFollowsCompanyDefault()
+                    && c.getHousingType() == BenefitType.ALLOWANCE) {
+                Double housing = companyDefaultHousing(employee);
+                if (housing != null && !almostEqual(c.getHousingAllowance(), housing)) {
+                    c.setHousingAllowance(housing);
+                    dirty = true;
+                }
+            }
+            if (c.isFoodFollowsCompanyDefault()) {
+                Double food = companyDefaultFood(employee);
+                if (food != null && !almostEqual(c.getFoodAllowance(), food)) {
+                    c.setFoodAllowance(food);
+                    dirty = true;
+                }
+            }
+            if (dirty) {
+                recalculateTotal(c);
+                compensationRepo.save(c);
+                updated++;
+            }
+        }
+        return updated;
+    }
+
     /* ================= CORE LOGIC ================= */
 
-    private void mapAndCalculate(EmployeeCompensation c, CompensationRequestDTO dto) {
+    private void mapAndCalculate(EmployeeCompensation c, CompensationRequestDTO dto, Employee employee) {
 
         if (dto.getBasicSalary() == null) {
             throw new RuntimeException("Basic salary is required");
@@ -152,14 +220,37 @@ public class EmployeeCompensationService {
 
         c.setBasicSalary(dto.getBasicSalary());
 
-        // HOUSING
+        Double companyHousingDefault = companyDefaultHousing(employee);
+        Double companyFoodDefault = companyDefaultFood(employee);
+
+        // HOUSING — follows company default until edited once
         BenefitType housingType = defaultType(dto.getHousingType());
         c.setHousingType(housingType);
-        c.setHousingAllowance(
-                housingType == BenefitType.ALLOWANCE
-                        ? require(dto.getHousingAllowance(), "Housing allowance required")
-                        : 0.0
-        );
+        if (housingType == BenefitType.ALLOWANCE) {
+            boolean housingFollows = resolveFollows(
+                    dto.getHousingFollowsCompanyDefault(),
+                    dto.getHousingAllowance(),
+                    c.isHousingFollowsCompanyDefault(),
+                    companyHousingDefault);
+            c.setHousingFollowsCompanyDefault(housingFollows);
+            if (housingFollows) {
+                Double housing = companyHousingDefault != null ? companyHousingDefault : dto.getHousingAllowance();
+                if (housing == null) {
+                    throw new RuntimeException("Housing allowance required");
+                }
+                c.setHousingAllowance(housing);
+            } else {
+                Double housing = dto.getHousingAllowance();
+                if (housing == null) {
+                    throw new RuntimeException("Housing allowance required");
+                }
+                c.setHousingAllowance(housing);
+            }
+        } else {
+            c.setHousingAllowance(0.0);
+            // Switching away from allowance keeps "follows" so flipping back re-attaches.
+            c.setHousingFollowsCompanyDefault(true);
+        }
 
         // TRANSPORT
         BenefitType transportType = defaultType(dto.getTransportationType());
@@ -182,19 +273,79 @@ public class EmployeeCompensationService {
         // OTHER
         c.setOtherAllowance(safe(dto.getOtherAllowance()));
 
-        // TOTAL
-        double total =
-                c.getBasicSalary()
-                        + c.getHousingAllowance()
-                        + c.getTransportationAllowance()
-                        + c.getTravelAllowance()
-                        + c.getOtherAllowance();
+        // FOOD — follows company default until edited once
+        boolean foodFollows = resolveFollows(
+                dto.getFoodFollowsCompanyDefault(),
+                dto.getFoodAllowance(),
+                c.isFoodFollowsCompanyDefault(),
+                companyFoodDefault);
+        c.setFoodFollowsCompanyDefault(foodFollows);
+        if (foodFollows) {
+            Double food = companyFoodDefault != null
+                    ? companyFoodDefault
+                    : (dto.getFoodAllowance() != null ? dto.getFoodAllowance() : 0.0);
+            c.setFoodAllowance(food);
+        } else {
+            c.setFoodAllowance(safe(dto.getFoodAllowance()));
+        }
 
-        c.setTotalCompensation(total);
+        recalculateTotal(c);
 
         c.setStatus(dto.getStatus() != null ? dto.getStatus() : "ACTIVE");
         c.setEffectiveFrom(dto.getEffectiveFrom());
         c.setEffectiveTo(dto.getEffectiveTo());
+    }
+
+    /**
+     * Explicit flag wins. Null amount = follow company default. Explicit amount
+     * matching the company default keeps following only if not already customized;
+     * any other amount marks the field as edited once.
+     */
+    private boolean resolveFollows(
+            Boolean requestedFollows,
+            Double amount,
+            boolean previousFollows,
+            Double companyDefault) {
+        if (requestedFollows != null) {
+            return requestedFollows;
+        }
+        if (amount == null) {
+            return true;
+        }
+        if (companyDefault != null && almostEqual(amount, companyDefault)) {
+            return previousFollows;
+        }
+        return false;
+    }
+
+    private void recalculateTotal(EmployeeCompensation c) {
+        c.setTotalCompensation(
+                safe(c.getBasicSalary())
+                        + safe(c.getHousingAllowance())
+                        + safe(c.getTransportationAllowance())
+                        + safe(c.getTravelAllowance())
+                        + safe(c.getOtherAllowance())
+                        + safe(c.getFoodAllowance()));
+    }
+
+    private static boolean almostEqual(Double a, Double b) {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return Math.abs(a - b) < 0.005;
+    }
+
+    private Double companyDefaultHousing(Employee employee) {
+        if (employee.getCompany() == null || employee.getCompany().getDefaultHousingAllowance() == null) {
+            return null;
+        }
+        return employee.getCompany().getDefaultHousingAllowance().doubleValue();
+    }
+
+    private Double companyDefaultFood(Employee employee) {
+        if (employee.getCompany() == null || employee.getCompany().getDefaultFoodAllowance() == null) {
+            return null;
+        }
+        return employee.getCompany().getDefaultFoodAllowance().doubleValue();
     }
 
     /* ================= SALARY BAND ENFORCEMENT ================= */

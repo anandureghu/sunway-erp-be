@@ -27,7 +27,12 @@ public class SalaryResponseDTO {
 
     /* ================= OTHER ================= */
     private Double otherAllowance;
+    private Double foodAllowance;
     private Double totalCompensation;
+
+    /** Still linked to company statutory defaults (auto-updates until edited once). */
+    private Boolean housingFollowsCompanyDefault;
+    private Boolean foodFollowsCompanyDefault;
 
     /* ================= STATUS ================= */
     private String status; // ACTIVE / INACTIVE
