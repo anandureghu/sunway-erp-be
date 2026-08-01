@@ -595,6 +595,8 @@ public class PurchaseOrderService {
                                         .unitCost(i.getUnitCost())
                                         .unitPrice(i.getUnitCost())
                                         .lineTotal(i.getLineTotal())
+                                        .receivedQty(i.getReceivedQty())
+                                        .rejectedQty(i.getRejectedQty())
                                         .build()
                         ).toList()
                 )
