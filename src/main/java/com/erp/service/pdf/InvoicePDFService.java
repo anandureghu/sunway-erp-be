@@ -23,6 +23,7 @@ import org.thymeleaf.context.Context;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.format.DateTimeFormatter;
@@ -171,7 +172,35 @@ public class InvoicePDFService {
             }
             BigDecimal grossSubtotal = netSubtotal.add(discountAmount);
             context.setVariable("subtotalFormatted", formatMoney(grossSubtotal, currencyCode));
-            context.setVariable("discountFormatted", formatMoney(discountAmount, currencyCode));
+            String discountLabel = formatMoney(discountAmount, currencyCode);
+            if (isPositive(discountAmount) && isPositive(grossSubtotal)) {
+                BigDecimal pct = discountAmount
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(grossSubtotal, 2, RoundingMode.HALF_UP);
+                // Prefer a shared line discount % when every sales line matches.
+                BigDecimal sharedPct = null;
+                if (isSales && salesOrder != null && salesOrder.getItems() != null
+                        && !salesOrder.getItems().isEmpty()) {
+                    BigDecimal first = null;
+                    boolean allSame = true;
+                    for (SalesOrderItemResponseDTO line : salesOrder.getItems()) {
+                        BigDecimal p = line.getDiscountPercent() != null
+                                ? line.getDiscountPercent()
+                                : BigDecimal.ZERO;
+                        if (first == null) first = p;
+                        else if (first.compareTo(p) != 0) {
+                            allSame = false;
+                            break;
+                        }
+                    }
+                    if (allSame && first != null && first.compareTo(BigDecimal.ZERO) > 0) {
+                        sharedPct = first;
+                    }
+                }
+                BigDecimal shown = sharedPct != null ? sharedPct : pct;
+                discountLabel = discountLabel + " (" + formatDecimal(shown) + "%)";
+            }
+            context.setVariable("discountFormatted", discountLabel);
             context.setVariable("taxFormatted", formatMoney(invoice.getTaxAmount(), currencyCode));
             context.setVariable("totalFormatted", formatMoney(invoice.getAmount(), currencyCode));
             context.setVariable("showDiscount", isPositive(discountAmount));
@@ -215,17 +244,22 @@ public class InvoicePDFService {
     }
 
     private InvoiceLineView toSalesLine(int index, SalesOrderItemResponseDTO item, String currencyCode) {
-        String discount = item.getDiscountPercent() != null
-                ? formatDecimal(item.getDiscountPercent()) + "%"
-                : "—";
+        BigDecimal unit = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
+        int qty = item.getQuantity() != null ? item.getQuantity() : 0;
+        BigDecimal gross = unit.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
+        String discount = "—";
+        if (item.getDiscountPercent() != null && item.getDiscountPercent().compareTo(BigDecimal.ZERO) > 0) {
+            discount = formatDecimal(item.getDiscountPercent()) + "%";
+        }
         return InvoiceLineView.builder()
                 .index(index)
                 .name(firstNonBlank(item.getItemName(), "—"))
                 .description(nullToEmpty(item.getItemDescription()))
-                .quantity(item.getQuantity() != null ? item.getQuantity() : 0)
-                .unitFormatted(formatMoney(item.getUnitPrice(), currencyCode))
+                .quantity(qty)
+                .unitFormatted(formatMoney(unit, currencyCode))
                 .discountFormatted(discount)
-                .amountFormatted(formatMoney(item.getLineTotal(), currencyCode))
+                // Exact line item amount before discount (unit × qty).
+                .amountFormatted(formatMoney(gross, currencyCode))
                 .build();
     }
 
