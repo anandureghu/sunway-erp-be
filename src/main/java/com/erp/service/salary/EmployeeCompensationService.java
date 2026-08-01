@@ -49,6 +49,8 @@ public class EmployeeCompensationService {
 
         accessGuard.assertCanWrite(employee, AppModule.SALARY);
 
+        applyBasicSalaryDefault(dto, employee);
+        validateMinimumBasicSalary(dto.getBasicSalary(), employee);
         validateSalaryBand(employeeId, dto.getBasicSalary());
 
         // 🔒 Deactivate old ACTIVE salary
@@ -82,6 +84,8 @@ public class EmployeeCompensationService {
                 .findByEmployeeAndStatus(employee, "ACTIVE")
                 .orElseThrow(() -> new RuntimeException("Active salary not found"));
 
+        applyBasicSalaryDefault(dto, employee);
+        validateMinimumBasicSalary(dto.getBasicSalary(), employee);
         validateSalaryBand(employeeId, dto.getBasicSalary());
 
         mapAndCalculate(c, dto, employee);
@@ -129,7 +133,8 @@ public class EmployeeCompensationService {
         if (housingFollows && c.getHousingType() == BenefitType.ALLOWANCE) {
             Double companyHousing = companyDefaultHousing(employee);
             if (companyHousing != null) {
-                housingAmt = companyHousing;
+                // Never display below company floor; never downgrade stored higher values.
+                housingAmt = Math.max(safe(housingAmt), companyHousing);
             }
         }
         dto.setHousingAllowance(housingAmt);
@@ -147,7 +152,7 @@ public class EmployeeCompensationService {
         if (foodFollows) {
             Double companyFood = companyDefaultFood(employee);
             if (companyFood != null) {
-                foodAmt = companyFood;
+                foodAmt = Math.max(safe(foodAmt), companyFood);
             }
         }
         dto.setFoodAllowance(foodAmt);
@@ -170,15 +175,15 @@ public class EmployeeCompensationService {
     }
 
     /**
-     * Propagate company housing/food defaults onto ACTIVE compensation rows that
-     * still follow those defaults (never customized on the employee salary form).
+     * Floor ACTIVE compensation amounts up to company statutory defaults.
+     * Never lowers existing higher values (including follower rows when defaults drop).
      */
     @Transactional
-    public int syncFollowingAllowancesFromCompany(Long companyId) {
+    public int floorStatutoryCompensationFromCompany(Long companyId) {
         if (companyId == null) {
             return 0;
         }
-        var rows = compensationRepo.findActiveFollowingCompanyDefaults(companyId);
+        var rows = compensationRepo.findActiveByCompanyId(companyId);
         int updated = 0;
         for (EmployeeCompensation c : rows) {
             Employee employee = c.getEmployee();
@@ -186,21 +191,27 @@ public class EmployeeCompensationService {
                 continue;
             }
             boolean dirty = false;
-            if (c.isHousingFollowsCompanyDefault()
-                    && c.getHousingType() == BenefitType.ALLOWANCE) {
-                Double housing = companyDefaultHousing(employee);
-                if (housing != null && !almostEqual(c.getHousingAllowance(), housing)) {
-                    c.setHousingAllowance(housing);
-                    dirty = true;
-                }
+
+            Double minBasic = companyMinBasic(employee);
+            if (minBasic != null && safe(c.getBasicSalary()) < minBasic) {
+                c.setBasicSalary(minBasic);
+                dirty = true;
             }
-            if (c.isFoodFollowsCompanyDefault()) {
-                Double food = companyDefaultFood(employee);
-                if (food != null && !almostEqual(c.getFoodAllowance(), food)) {
-                    c.setFoodAllowance(food);
-                    dirty = true;
-                }
+
+            Double housingFloor = companyDefaultHousing(employee);
+            if (housingFloor != null
+                    && c.getHousingType() == BenefitType.ALLOWANCE
+                    && safe(c.getHousingAllowance()) < housingFloor) {
+                c.setHousingAllowance(housingFloor);
+                dirty = true;
             }
+
+            Double foodFloor = companyDefaultFood(employee);
+            if (foodFloor != null && safe(c.getFoodAllowance()) < foodFloor) {
+                c.setFoodAllowance(foodFloor);
+                dirty = true;
+            }
+
             if (dirty) {
                 recalculateTotal(c);
                 compensationRepo.save(c);
@@ -238,11 +249,19 @@ public class EmployeeCompensationService {
                 if (housing == null) {
                     throw new RuntimeException("Housing allowance required");
                 }
+                // Never downgrade an existing higher allowance when company default drops.
+                if (c.getHousingAllowance() != null) {
+                    housing = Math.max(housing, c.getHousingAllowance());
+                }
                 c.setHousingAllowance(housing);
             } else {
                 Double housing = dto.getHousingAllowance();
                 if (housing == null) {
                     throw new RuntimeException("Housing allowance required");
+                }
+                // Floor custom amounts up to company default; never store below floor.
+                if (companyHousingDefault != null && housing < companyHousingDefault) {
+                    housing = companyHousingDefault;
                 }
                 c.setHousingAllowance(housing);
             }
@@ -284,9 +303,16 @@ public class EmployeeCompensationService {
             Double food = companyFoodDefault != null
                     ? companyFoodDefault
                     : (dto.getFoodAllowance() != null ? dto.getFoodAllowance() : 0.0);
+            if (c.getFoodAllowance() != null) {
+                food = Math.max(food, c.getFoodAllowance());
+            }
             c.setFoodAllowance(food);
         } else {
-            c.setFoodAllowance(safe(dto.getFoodAllowance()));
+            Double food = safe(dto.getFoodAllowance());
+            if (companyFoodDefault != null && food < companyFoodDefault) {
+                food = companyFoodDefault;
+            }
+            c.setFoodAllowance(food);
         }
 
         recalculateTotal(c);
@@ -294,6 +320,32 @@ public class EmployeeCompensationService {
         c.setStatus(dto.getStatus() != null ? dto.getStatus() : "ACTIVE");
         c.setEffectiveFrom(dto.getEffectiveFrom());
         c.setEffectiveTo(dto.getEffectiveTo());
+    }
+
+    /**
+     * Null/zero basic salary is treated as unconfigured → company min basic salary.
+     */
+    private void applyBasicSalaryDefault(CompensationRequestDTO dto, Employee employee) {
+        Double basic = dto.getBasicSalary();
+        if (basic != null && basic > 0) {
+            return;
+        }
+        Double minBasic = companyMinBasic(employee);
+        if (minBasic != null) {
+            dto.setBasicSalary(minBasic);
+        }
+    }
+
+    private void validateMinimumBasicSalary(Double basicSalary, Employee employee) {
+        Double minBasic = companyMinBasic(employee);
+        if (minBasic == null || basicSalary == null) {
+            return;
+        }
+        if (basicSalary < minBasic) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Basic salary cannot be below the company min basic salary of "
+                            + BigDecimal.valueOf(minBasic).toPlainString());
+        }
     }
 
     /**
@@ -332,6 +384,13 @@ public class EmployeeCompensationService {
         if (a == null && b == null) return true;
         if (a == null || b == null) return false;
         return Math.abs(a - b) < 0.005;
+    }
+
+    private Double companyMinBasic(Employee employee) {
+        if (employee.getCompany() == null || employee.getCompany().getMinimumMonthlyWage() == null) {
+            return null;
+        }
+        return employee.getCompany().getMinimumMonthlyWage().doubleValue();
     }
 
     private Double companyDefaultHousing(Employee employee) {

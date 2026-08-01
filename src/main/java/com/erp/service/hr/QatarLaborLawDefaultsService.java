@@ -7,8 +7,8 @@ import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.service.LeavePolicyService;
+import com.erp.service.hrsettings.JobCodeService;
 import com.erp.service.salary.EmployeeCompensationService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,18 +44,21 @@ public class QatarLaborLawDefaultsService {
     private final CompanyLeavePolicyRepository leavePolicyRepository;
     private final LeavePolicyService leavePolicyService;
     private final EmployeeCompensationService employeeCompensationService;
+    private final JobCodeService jobCodeService;
 
     public QatarLaborLawDefaultsService(
             CompanyRepository companyRepository,
             CompanyRoleRepository companyRoleRepository,
             CompanyLeavePolicyRepository leavePolicyRepository,
             LeavePolicyService leavePolicyService,
-            @Lazy EmployeeCompensationService employeeCompensationService) {
+            @Lazy EmployeeCompensationService employeeCompensationService,
+            @Lazy JobCodeService jobCodeService) {
         this.companyRepository = companyRepository;
         this.companyRoleRepository = companyRoleRepository;
         this.leavePolicyRepository = leavePolicyRepository;
         this.leavePolicyService = leavePolicyService;
         this.employeeCompensationService = employeeCompensationService;
+        this.jobCodeService = jobCodeService;
     }
 
     /** Company labor columns + leave matrix + balance sync. */
@@ -113,7 +116,8 @@ public class QatarLaborLawDefaultsService {
         company.setDefaultHousingAllowance(DEFAULT_HOUSING_ALLOWANCE);
         company.setDefaultFoodAllowance(DEFAULT_FOOD_ALLOWANCE);
         companyRepository.save(company);
-        employeeCompensationService.syncFollowingAllowancesFromCompany(companyId);
+        employeeCompensationService.floorStatutoryCompensationFromCompany(companyId);
+        jobCodeService.floorMinSalariesFromCompany(companyId);
     }
 
     private static LeavePolicyRequestDTO leave(

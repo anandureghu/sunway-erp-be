@@ -31,11 +31,11 @@ public interface EmployeeCompensationRepository
     @Query("""
         select c from EmployeeCompensation c
         join fetch c.employee e
+        join fetch e.company
         where e.company.id = :companyId
           and c.status = 'ACTIVE'
-          and (c.housingFollowsCompanyDefault = true or c.foodFollowsCompanyDefault = true)
     """)
-    List<EmployeeCompensation> findActiveFollowingCompanyDefaults(
+    List<EmployeeCompensation> findActiveByCompanyId(
             @Param("companyId") Long companyId
     );
 }

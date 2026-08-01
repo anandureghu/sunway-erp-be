@@ -25,6 +25,7 @@ import com.erp.repo.hr.CurrencyRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
 import com.erp.service.file.FileStorageService;
+import com.erp.service.hrsettings.JobCodeService;
 import com.erp.service.salary.EmployeeCompensationService;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.access.AccessDeniedException;
@@ -52,6 +53,7 @@ public class CompanyService {
     private final CompanyStorageService       companyStorageService;
     private final QatarLaborLawDefaultsService qatarLaborLawDefaultsService;
     private final EmployeeCompensationService employeeCompensationService;
+    private final JobCodeService              jobCodeService;
 
     public CompanyService(
             CompanyRepository companyRepository,
@@ -66,7 +68,8 @@ public class CompanyService {
             EmployeeRepository employeeRepository,
             CompanyStorageService companyStorageService,
             @Lazy QatarLaborLawDefaultsService qatarLaborLawDefaultsService,
-            @Lazy EmployeeCompensationService employeeCompensationService) {
+            @Lazy EmployeeCompensationService employeeCompensationService,
+            @Lazy JobCodeService jobCodeService) {
 
         this.companyRepository         = companyRepository;
         this.invoiceSettingsRepository = invoiceSettingsRepository;
@@ -81,6 +84,7 @@ public class CompanyService {
         this.companyStorageService     = companyStorageService;
         this.qatarLaborLawDefaultsService = qatarLaborLawDefaultsService;
         this.employeeCompensationService = employeeCompensationService;
+        this.jobCodeService            = jobCodeService;
     }
 
     // ======================================================
@@ -464,22 +468,24 @@ public class CompanyService {
             if (cap.compareTo(new BigDecimal("24")) > 0) cap = new BigDecimal("24");
             company.setOtMaxHoursPerDay(cap);
         }
+        boolean statutoryChanged = false;
         if (dto.getMinimumMonthlyWage() != null) {
             company.setMinimumMonthlyWage(nonNegative(dto.getMinimumMonthlyWage()));
+            statutoryChanged = true;
         }
-        boolean statutoryAllowanceChanged = false;
         if (dto.getDefaultHousingAllowance() != null) {
             company.setDefaultHousingAllowance(nonNegative(dto.getDefaultHousingAllowance()));
-            statutoryAllowanceChanged = true;
+            statutoryChanged = true;
         }
         if (dto.getDefaultFoodAllowance() != null) {
             company.setDefaultFoodAllowance(nonNegative(dto.getDefaultFoodAllowance()));
-            statutoryAllowanceChanged = true;
+            statutoryChanged = true;
         }
 
         companyRepository.save(company);
-        if (statutoryAllowanceChanged) {
-            employeeCompensationService.syncFollowingAllowancesFromCompany(companyId);
+        if (statutoryChanged) {
+            employeeCompensationService.floorStatutoryCompensationFromCompany(companyId);
+            jobCodeService.floorMinSalariesFromCompany(companyId);
         }
         return toHrPoliciesDto(company);
     }
