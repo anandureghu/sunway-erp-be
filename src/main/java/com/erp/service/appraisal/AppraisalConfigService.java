@@ -81,29 +81,29 @@ public class AppraisalConfigService {
         target.setEnableMidYear(dto.getEnableMidYear());
         target.setEnablePIP(dto.getEnablePIP());
 
-        // Preserve role configs whose KPI templates are already referenced by
+        // Preserve job-code configs whose KPI templates are already referenced by
         // existing employee appraisals — they must not be deleted/recreated.
-        Set<String> lockedRoleNames = target.getRoleConfigs().stream()
+        Set<String> lockedJobCodes = target.getRoleConfigs().stream()
                 .filter(role -> role.getGoalTemplates().stream()
                         .anyMatch(template ->
                                 employeeAppraisalGoalRepository.existsByTemplateId(template.getId())))
-                .map(AppraisalRoleConfig::getRoleName)
+                .map(AppraisalRoleConfig::getJobCode)
                 .collect(Collectors.toSet());
 
-        target.getRoleConfigs().removeIf(role -> !lockedRoleNames.contains(role.getRoleName()));
+        target.getRoleConfigs().removeIf(role -> !lockedJobCodes.contains(role.getJobCode()));
         configRepository.saveAndFlush(target);
 
-        if (dto.getRoles() != null) {
-            for (AppraisalRoleConfigRequestDTO roleDTO : dto.getRoles()) {
-                String roleName = roleDTO.getRoleName();
-                if (lockedRoleNames.contains(roleName)) continue;
+        if (dto.getJobConfigs() != null) {
+            for (AppraisalRoleConfigRequestDTO jobDTO : dto.getJobConfigs()) {
+                String jobCode = jobDTO.getJobCode();
+                if (lockedJobCodes.contains(jobCode)) continue;
 
                 AppraisalRoleConfig role = new AppraisalRoleConfig();
-                role.setRoleName(roleName);
+                role.setJobCode(jobCode);
                 role.setConfig(target);
 
-                if (roleDTO.getGoals() != null) {
-                    for (AppraisalGoalTemplateRequestDTO goalDTO : roleDTO.getGoals()) {
+                if (jobDTO.getGoals() != null) {
+                    for (AppraisalGoalTemplateRequestDTO goalDTO : jobDTO.getGoals()) {
                         AppraisalGoalTemplate goal = new AppraisalGoalTemplate();
                         goal.setKpi(goalDTO.getKpi());
                         goal.setDescription(goalDTO.getDescription());
@@ -214,7 +214,7 @@ public class AppraisalConfigService {
 
         for (AppraisalRoleConfig sourceRole : source.getRoleConfigs()) {
             AppraisalRoleConfig role = new AppraisalRoleConfig();
-            role.setRoleName(sourceRole.getRoleName());
+            role.setJobCode(sourceRole.getJobCode());
             role.setConfig(copy);
             for (AppraisalGoalTemplate sourceGoal : sourceRole.getGoalTemplates()) {
                 AppraisalGoalTemplate goal = new AppraisalGoalTemplate();
@@ -382,13 +382,13 @@ public class AppraisalConfigService {
         config.setEnableMidYear(dto.getEnableMidYear());
         config.setEnablePIP(dto.getEnablePIP());
 
-        if (dto.getRoles() != null) {
-            for (AppraisalRoleConfigRequestDTO roleDTO : dto.getRoles()) {
+        if (dto.getJobConfigs() != null) {
+            for (AppraisalRoleConfigRequestDTO jobDTO : dto.getJobConfigs()) {
                 AppraisalRoleConfig role = new AppraisalRoleConfig();
-                role.setRoleName(roleDTO.getRoleName());
+                role.setJobCode(jobDTO.getJobCode());
                 role.setConfig(config);
-                if (roleDTO.getGoals() != null) {
-                    for (AppraisalGoalTemplateRequestDTO goalDTO : roleDTO.getGoals()) {
+                if (jobDTO.getGoals() != null) {
+                    for (AppraisalGoalTemplateRequestDTO goalDTO : jobDTO.getGoals()) {
                         AppraisalGoalTemplate goal = new AppraisalGoalTemplate();
                         goal.setKpi(goalDTO.getKpi());
                         goal.setDescription(goalDTO.getDescription());
@@ -417,7 +417,7 @@ public class AppraisalConfigService {
                 return goalDTO;
             }).toList();
             return RoleConfigResponseDTO.builder()
-                    .roleName(role.getRoleName())
+                    .jobCode(role.getJobCode())
                     .goals(goalDTOs)
                     .build();
         }).toList();
@@ -434,7 +434,7 @@ public class AppraisalConfigService {
                 .enableSelfAssessment(config.getEnableSelfAssessment())
                 .enableMidYear(config.getEnableMidYear())
                 .enablePIP(config.getEnablePIP())
-                .roles(roleDTOs)
+                .jobConfigs(roleDTOs)
                 .build();
     }
 
@@ -448,7 +448,7 @@ public class AppraisalConfigService {
                     .sum();
             if (totalWeight != 100) {
                 throw new IllegalStateException(
-                        "Total weight for role '" + role.getRoleName() +
+                        "Total weight for job code '" + role.getJobCode() +
                                 "' must equal 100. Current: " + totalWeight);
             }
         }

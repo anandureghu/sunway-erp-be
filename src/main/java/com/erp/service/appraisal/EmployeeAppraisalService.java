@@ -1,11 +1,13 @@
 package com.erp.service.appraisal;
 
 import com.erp.domain.Employee;
+import com.erp.domain.EmployeeCurrentJob;
 import com.erp.domain.appraisal.*;
 import com.erp.dto.appraisal.EmployeeAppraisalRequestDTO;
 import com.erp.dto.appraisal.EmployeeAppraisalResponseDTO;
 import com.erp.dto.appraisal.EmployeeGoalDTO;
 import com.erp.repo.EmployeeAppraisalRepository;
+import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.appraisal.AppraisalConfigRepository;
 import com.erp.repo.appraisal.AppraisalGoalTemplateRepository;
@@ -31,6 +33,7 @@ public class EmployeeAppraisalService {
     private final AppraisalConfigRepository       configRepository;
     private final AppraisalRoleConfigRepository   roleConfigRepository;
     private final AppraisalGoalTemplateRepository templateRepository;
+    private final EmployeeCurrentJobRepo          currentJobRepository;
     private final AuthContext                     authContext;
 
     private static final Set<String> VALID_MONTHS = Set.of(
@@ -74,18 +77,23 @@ public class EmployeeAppraisalService {
                             + config.getCycleName() + "'.");
         }
 
-        // ✅ Use companyRole ("Admin", "Manager") — matches what HR configured in appraisal settings
-        //    Falls back to security enum name only if companyRole is not set
-        String employeeRoleName = (employee.getUser() != null && employee.getUser().getCompanyRole() != null
-                && !employee.getUser().getCompanyRole().isBlank())
-                ? employee.getUser().getCompanyRole()
-                : employee.getRole();
+        // Appraisal KPIs are configured per job code — resolve the employee's
+        // current job code and match it against the cycle's job configs.
+        EmployeeCurrentJob currentJob = currentJobRepository.findByEmployee_Id(employeeId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Employee has no current job assignment. Assign a job code before "
+                                + "creating an appraisal."));
+        String jobCode = currentJob.getJobCode() != null ? currentJob.getJobCode().getCode() : null;
+        if (jobCode == null || jobCode.isBlank()) {
+            throw new IllegalStateException(
+                    "Employee's current job has no job code assigned.");
+        }
 
         AppraisalRoleConfig roleConfig = roleConfigRepository
-                .findByConfigIdAndRoleName(config.getId(), employeeRoleName)
+                .findByConfigIdAndJobCode(config.getId(), jobCode)
                 .orElseThrow(() -> new IllegalStateException(
-                        "Cycle '" + config.getCycleName() + "' has no KPIs configured for role '"
-                                + employeeRoleName + "'. Add this role to the cycle, or pick a cycle "
+                        "Cycle '" + config.getCycleName() + "' has no KPIs configured for job code '"
+                                + jobCode + "'. Add this job code to the cycle, or pick a cycle "
                                 + "that covers it."));
 
         List<AppraisalGoalTemplate> templates =
@@ -93,7 +101,7 @@ public class EmployeeAppraisalService {
 
         if (templates.isEmpty()) {
             throw new IllegalStateException(
-                    "No active KPI templates found for role: " + employee.getRole());
+                    "No active KPI templates found for job code: " + jobCode);
         }
 
         EmployeeAppraisal appraisal = new EmployeeAppraisal();

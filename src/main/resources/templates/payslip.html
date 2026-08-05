@@ -90,23 +90,6 @@
     .netpay-amount { color: #ffffff; font-size: 22px; font-weight: 800; text-align: right; font-family: "Courier New", monospace; }
     .netpay-cur { font-size: 13px; font-weight: 600; opacity: 0.75; margin-right: 3px; }
 
-    /* ── LOP amount callout ── */
-    .lop-bar {
-      width: 100%; border-collapse: collapse; margin-top: 14px;
-      background: #fef2f2; border: 1px solid #fecaca;
-    }
-    .lop-bar td { padding: 13px 18px; vertical-align: middle; }
-    .lop-bar .lop-label {
-      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
-      color: #b91c1c;
-    }
-    .lop-bar .lop-sub { font-size: 10px; color: #ef9a9a; margin-top: 2px; font-weight: 600; }
-    .lop-bar .lop-value {
-      text-align: right; font-size: 19px; font-weight: 800; color: #dc2626;
-      font-family: "Courier New", monospace; white-space: nowrap;
-    }
-    .lop-bar .lop-cur { font-size: 12px; font-weight: 600; opacity: 0.8; margin-right: 3px; }
-
     /* ── Status pill ── */
     .pay-status {
       display: inline-block; padding: 6px 14px; border-radius: 16px;
@@ -178,19 +161,6 @@
       <td><div class="info-label">Paid Leave Days</div><div class="info-value mono" th:text="${paidLeaveDays != null ? #numbers.formatDecimal(paidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
       <td><div class="info-label">Unpaid Leave Days</div><div class="info-value mono" th:text="${unpaidLeaveDays != null ? #numbers.formatDecimal(unpaidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
       <td><div class="info-label">Loss of Pay (LOP) Days</div><div class="info-value mono" th:text="${lopDays != null ? #numbers.formatDecimal(lopDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
-    </tr>
-  </table>
-
-  <table class="lop-bar">
-    <tr>
-      <td>
-        <div class="lop-label">Loss of Pay (LOP) Amount</div>
-        <div class="lop-sub">Deducted for unpaid absence — shown again under Deductions</div>
-      </td>
-      <td class="lop-value">
-        <span class="lop-cur" th:text="${currencyCode}">USD</span>
-        <span th:text="${#numbers.formatDecimal(lopAmount != null ? lopAmount : 0,1,'COMMA',2,'POINT')}">0.00</span>
-      </td>
     </tr>
   </table>
 </div>

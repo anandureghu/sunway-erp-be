@@ -9,6 +9,6 @@ import java.util.List;
 @Builder
 public class RoleConfigResponseDTO {
 
-    private String roleName;
+    private String jobCode;
     private List<EmployeeGoalDTO> goals;
 }

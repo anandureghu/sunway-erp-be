@@ -19,7 +19,13 @@ public class AppraisalRoleConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String roleName;
+    /**
+     * The job code this KPI set applies to (e.g. "ENG-003"). Appraisal configs
+     * are keyed by job code; persisted in the legacy {@code role_name} column so
+     * no destructive rename of a live table is required.
+     */
+    @Column(name = "role_name")
+    private String jobCode;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "config_id")

@@ -6,6 +6,6 @@ import java.util.List;
 @Data
 public class AppraisalRoleConfigRequestDTO {
 
-    private String roleName;
+    private String jobCode;
     private List<AppraisalGoalTemplateRequestDTO> goals;
 }
