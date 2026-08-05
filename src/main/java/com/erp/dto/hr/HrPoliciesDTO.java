@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
 
 /**
  * Focused payload for the company's HR policies — annual leave accrual and
@@ -36,4 +37,16 @@ public class HrPoliciesDTO {
     // ---- Attendance & working hours ----
     private BigDecimal standardWorkingHoursPerDay;
     private Boolean requireCheckIn;
+
+    // ---- Overtime (Qatar labor-law defaults; editable) ----
+    private BigDecimal otDayRateMultiplier;
+    private BigDecimal otNightFridayHolidayRateMultiplier;
+    private LocalTime otNightStartTime;
+    private LocalTime otNightEndTime;
+    private BigDecimal otMaxHoursPerDay;
+
+    // ---- Statutory compensation defaults ----
+    private BigDecimal minimumMonthlyWage;
+    private BigDecimal defaultHousingAllowance;
+    private BigDecimal defaultFoodAllowance;
 }

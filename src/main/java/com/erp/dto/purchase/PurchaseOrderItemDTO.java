@@ -30,4 +30,8 @@ public class PurchaseOrderItemDTO {
      */
     private BigDecimal unitPrice;
     private BigDecimal lineTotal;
+    /** Cumulative accepted quantity posted against this PO line. */
+    private Integer receivedQty;
+    /** Cumulative rejected quantity against this PO line. */
+    private Integer rejectedQty;
 }

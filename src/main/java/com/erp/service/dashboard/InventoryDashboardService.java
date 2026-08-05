@@ -79,11 +79,11 @@ public class InventoryDashboardService {
         long distinctSkus = stockRepo.countDistinctItemsForReport(companyId, null, null);
         Object[] totalsRow = normalizeRow(stockRepo.sumTotalsForReport(companyId, null, null));
         long onHand = toLong(valueAt(totalsRow, 0));
-        long reservedFromStock = toLong(valueAt(totalsRow, 1));
+        // Available / reserved must share the same ledger: IWS reserved.
+        // Confirmed SO qty is already consumed from on-hand — counting it as
+        // "reserved" made Available ≈ On Hand while Reserved looked inflated.
+        long totalReserved = toLong(valueAt(totalsRow, 1));
         long available = toLong(valueAt(totalsRow, 2));
-
-        Long rawReservedOrders = salesOrderRepo.sumConfirmedOrderQuantity(companyId);
-        long totalReserved = rawReservedOrders != null ? rawReservedOrders : reservedFromStock;
 
         List<PurchaseOrderStatus> openOrderStatuses = List.of(
                 PurchaseOrderStatus.APPROVED,
@@ -145,9 +145,9 @@ public class InventoryDashboardService {
 
         long soConfirmed = salesOrderRepo.countByCompanyIdAndArchivedFalseAndStatus(
                 companyId, "CONFIRMED");
-        long inTransit = shipmentRepo.countByCompanyIdAndStatus(companyId, "IN_TRANSIT")
-                + shipmentRepo.countByCompanyIdAndStatus(companyId, "DISPATCHED")
-                + shipmentRepo.countByCompanyIdAndStatus(companyId, "OUT_FOR_DELIVERY");
+        long inTransit = shipmentRepo.countActiveByCompanyIdAndStatus(companyId, "IN_TRANSIT")
+                + shipmentRepo.countActiveByCompanyIdAndStatus(companyId, "DISPATCHED")
+                + shipmentRepo.countActiveByCompanyIdAndStatus(companyId, "OUT_FOR_DELIVERY");
         long deliveredThisMonth = shipmentRepo.countDeliveredSince(companyId, startOfMonth);
 
         InventorySalesPipelineDTO salesPipeline = InventorySalesPipelineDTO.builder()

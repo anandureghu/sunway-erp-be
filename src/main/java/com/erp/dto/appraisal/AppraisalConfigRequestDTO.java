@@ -19,7 +19,7 @@ public class AppraisalConfigRequestDTO {
     private Boolean enableMidYear;
     private Boolean enablePIP;
 
-    private List<AppraisalRoleConfigRequestDTO> roles;
+    private List<AppraisalRoleConfigRequestDTO> jobConfigs;
     private List<RatingScaleItemDTO> ratingScale;
     private List<PhaseItemDTO> phases;
 }

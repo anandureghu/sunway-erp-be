@@ -20,6 +20,9 @@ public class CustomerEmailService {
     @Value("${app.mail.from:no-reply@sunwayerp.local}")
     private String fromAddress;
 
+    @Value("${app.mail.enabled:false}")
+    private boolean mailEnabled;
+
     public void sendInvoiceCreatedEmail(Customer customer, Invoice invoice) {
         if (customer == null || customer.getEmail() == null || customer.getEmail().isBlank()) {
             return;
@@ -50,17 +53,26 @@ public class CustomerEmailService {
     }
 
     private void sendMail(String to, String subject, String text) {
+        if (!mailEnabled) {
+            log.debug("Mail disabled. Skipping email to {} with subject '{}'", to, subject);
+            return;
+        }
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
         if (mailSender == null) {
             log.info("Email provider not configured. Skipping email to {} with subject '{}'", to, subject);
             return;
         }
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromAddress);
-        message.setTo(to);
-        message.setSubject(subject);
-        message.setText(text);
-        mailSender.send(message);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromAddress);
+            message.setTo(to);
+            message.setSubject(subject);
+            message.setText(text);
+            mailSender.send(message);
+        } catch (Exception e) {
+            // Never fail the business transaction (e.g. payment confirm) because SMTP auth failed.
+            log.warn("Failed to send email to {} subject '{}': {}", to, subject, e.getMessage());
+        }
     }
 }

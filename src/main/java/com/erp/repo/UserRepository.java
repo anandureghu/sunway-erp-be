@@ -11,7 +11,17 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
+    /** Prefer {@link #findDistinctByEmployeeCompanyId} — users.company_id is stale under multi-membership. */
     List<User> findByCompany_IdOrderByCreatedAtDesc(Long companyId);
+
+    /** Users with an Employee membership in the given company (true tenant membership). */
+    @Query("""
+            SELECT DISTINCT e.user FROM Employee e
+            WHERE e.company.id = :companyId
+              AND e.user IS NOT NULL
+            ORDER BY e.user.fullName
+            """)
+    List<User> findDistinctByEmployeeCompanyId(@Param("companyId") Long companyId);
 
     @Query("""
             SELECT DISTINCT u FROM User u

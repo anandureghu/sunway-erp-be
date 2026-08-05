@@ -15,7 +15,7 @@ import java.util.Optional;
 
 public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
-    Optional<Invoice> findFirstByInvoiceIdOrderByCreatedAtDesc(String invoiceId);
+    Optional<Invoice> findByCompany_IdAndInvoiceId(Long companyId, String invoiceId);
 
     List<Invoice> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 

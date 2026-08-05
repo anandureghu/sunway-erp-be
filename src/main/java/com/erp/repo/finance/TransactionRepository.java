@@ -15,6 +15,14 @@ import java.util.List;
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
     List<Transaction> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
+    @Query("""
+            SELECT t FROM Transaction t
+            WHERE t.company.id = :companyId
+              AND (t.archived IS NULL OR t.archived = false)
+            ORDER BY t.createdAt DESC
+            """)
+    List<Transaction> findActiveByCompanyIdOrderByCreatedAtDesc(@Param("companyId") Long companyId);
+
     Page<Transaction> findByCompany_IdAndArchivedTrueAndTransactionTypeNotOrderByCreatedAtDesc(
             Long companyId, String transactionType, Pageable pageable);
 
@@ -71,6 +79,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             JOIN t.creditAccount a
             WHERE t.company.id = :companyId
               AND a.type IN :types
+              AND (t.archived IS NULL OR t.archived = false)
               AND (:from IS NULL OR t.transactionDate >= :from)
               AND (:to IS NULL OR t.transactionDate <= :to)
             GROUP BY a.accountName, a.accountCode
@@ -94,6 +103,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             JOIN t.debitAccount a
             WHERE t.company.id = :companyId
               AND a.type IN :types
+              AND (t.archived IS NULL OR t.archived = false)
               AND (:from IS NULL OR t.transactionDate >= :from)
               AND (:to IS NULL OR t.transactionDate <= :to)
             GROUP BY a.accountName, a.accountCode

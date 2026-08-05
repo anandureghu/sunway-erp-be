@@ -113,6 +113,14 @@ public class GoodsReceiptService {
             throw new ConflictException("Purchase order not ready for receiving");
         }
 
+        boolean hasOpenIntake = repo.findByPurchaseOrderId(po.getId()).stream()
+                .anyMatch(existing -> !existing.isArchived()
+                        && existing.getStatus() == GoodsReceiptStatus.PENDING_INSPECTION);
+        if (hasOpenIntake) {
+            throw new ConflictException(
+                    "This purchase order already has a goods receipt awaiting inspection.");
+        }
+
         Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
         User user = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
 
@@ -262,7 +270,7 @@ public class GoodsReceiptService {
         String reason = "Goods rejected at inspection for purchase order " + po.getOrderNumber();
         if (settled) {
             creditNoteService.createAutomaticCreditNoteForRejection(
-                    invoice.getInvoiceId(), rejectedValue, reason, goodsReceiptId);
+                    invoice.getCompany().getId(), invoice.getInvoiceId(), rejectedValue, reason, goodsReceiptId);
         } else {
             invoiceService.reduceForRejectedGoods(po.getId(), rejectedValue, reason);
         }
@@ -357,12 +365,13 @@ public class GoodsReceiptService {
     }
 
     private BigDecimal resolveUnitCost(BigDecimal requested, GoodsReceiptItem item) {
-        if (requested != null) {
-            return requested;
-        }
+        // Always prefer the PO line cost so receive cannot override confirmed purchase price.
         PurchaseOrderItem poItem = item.getPurchaseOrderItem();
         if (poItem != null && poItem.getUnitCost() != null) {
             return poItem.getUnitCost();
+        }
+        if (requested != null) {
+            return requested;
         }
         return item.getItem().getCostPrice() != null ? item.getItem().getCostPrice() : BigDecimal.ZERO;
     }

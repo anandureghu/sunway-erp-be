@@ -28,6 +28,17 @@ public class CompensationRequestDTO {
     /* ================= OTHER ================= */
     private Double otherAllowance;
 
+    /* ================= FOOD ================= */
+    private Double foodAllowance;
+
+    /**
+     * When true (or amount null), housing tracks company default.
+     * Once false, company default changes no longer overwrite this row.
+     */
+    private Boolean housingFollowsCompanyDefault;
+
+    private Boolean foodFollowsCompanyDefault;
+
     /* ================= STATUS ================= */
     private String status; // ACTIVE / INACTIVE
 

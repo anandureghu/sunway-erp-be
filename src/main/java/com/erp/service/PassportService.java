@@ -28,10 +28,16 @@ public class PassportService {
 
     // ---------------- GET ----------------
     public PassportResponseDTO getByEmployee(Long employeeId) {
-        Passport passport = passportRepo.findByEmployeeId(employeeId)
-                .orElseThrow(() -> new RuntimeException("Passport not found"));
-        assertSameTenant(passport.getEmployee());
-        return toDTO(passport);
+        // A new employee with no passport yet is a normal empty state, not an
+        // error. Return null (HTTP 200 with empty body) so the tab shows a blank
+        // form, instead of throwing a 500 that spams the error log every time the
+        // Passport tab is opened for someone without a passport.
+        return passportRepo.findByEmployeeId(employeeId)
+                .map(passport -> {
+                    assertSameTenant(passport.getEmployee());
+                    return toDTO(passport);
+                })
+                .orElse(null);
     }
 
     // ---------------- CREATE ----------------

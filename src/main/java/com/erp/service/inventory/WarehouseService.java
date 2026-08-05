@@ -1,11 +1,13 @@
 package com.erp.service.inventory;
 
+import com.erp.domain.Employee;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.inventory.WarehouseCreateDTO;
 import com.erp.dto.inventory.WarehouseResponseDTO;
 import com.erp.dto.inventory.WarehouseUpdateDTO;
+import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.WarehouseRepository;
@@ -22,17 +24,20 @@ public class WarehouseService {
     private final WarehouseRepository repo;
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
+    private final EmployeeRepository employeeRepo;
     private final AuthContext auth;
 
     public WarehouseService(
             WarehouseRepository repo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
+            EmployeeRepository employeeRepo,
             AuthContext auth
     ) {
         this.repo = repo;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
+        this.employeeRepo = employeeRepo;
         this.auth = auth;
     }
 
@@ -54,8 +59,7 @@ public class WarehouseService {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        User manager = userRepo.findById(dto.getManager())
-                .orElseThrow(() -> new RuntimeException("User for manager not found"));
+        User manager = resolveManagerUser(dto.getManager(), companyId);
 
         Warehouse wh = Warehouse.builder()
                 .code(dto.getCode())
@@ -82,12 +86,14 @@ public class WarehouseService {
     public WarehouseResponseDTO update(Long id, WarehouseUpdateDTO dto) {
 
         Warehouse wh = getWarehouseEntity(id);
+        Long companyId = wh.getCompany().getId();
 
         User user = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        User manager = userRepo.findById(dto.getManager())
-                .orElseThrow(() -> new RuntimeException("User for manager not found"));
+        User manager = dto.getManager() == null
+                ? null
+                : resolveManagerUser(dto.getManager(), companyId);
 
         wh.setName(dto.getName());
         wh.setStatus(dto.getStatus());
@@ -114,9 +120,10 @@ public class WarehouseService {
     // List
     // --------------------------
     public List<WarehouseResponseDTO> list() {
-        return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
+        Long companyId = auth.getCurrentCompanyId();
+        return repo.findByCompanyIdOrderByCreatedAtDesc(companyId)
                 .stream()
-                .map(this::toDTO)
+                .map(wh -> toDTO(clearCrossTenantManager(wh, companyId)))
                 .toList();
     }
 
@@ -139,7 +146,54 @@ public class WarehouseService {
                 );
     }
 
+    /**
+     * Resolves a warehouse manager User that must have an Employee membership in the
+     * given company. Accepts a user id (preferred) or an employee id for older clients.
+     */
+    private User resolveManagerUser(Long managerRef, Long companyId) {
+        if (managerRef == null) {
+            return null;
+        }
+        if (companyId == null) {
+            throw new RuntimeException("Company not found");
+        }
+
+        if (employeeRepo.existsByUser_IdAndCompany_Id(managerRef, companyId)) {
+            return userRepo.findById(managerRef)
+                    .orElseThrow(() -> new RuntimeException("User for manager not found"));
+        }
+
+        Employee asEmployee = employeeRepo.findById(managerRef).orElse(null);
+        if (asEmployee != null
+                && asEmployee.getCompany() != null
+                && companyId.equals(asEmployee.getCompany().getId())
+                && asEmployee.getUser() != null) {
+            return asEmployee.getUser();
+        }
+
+        throw new RuntimeException("Manager must belong to the current company");
+    }
+
+    /** Persistently clears a manager FK that points to a user outside this warehouse's tenant. */
+    private Warehouse clearCrossTenantManager(Warehouse wh, Long companyId) {
+        User manager = wh.getManager();
+        if (manager == null || companyId == null) {
+            return wh;
+        }
+        if (employeeRepo.existsByUser_IdAndCompany_Id(manager.getId(), companyId)) {
+            return wh;
+        }
+        wh.setManager(null);
+        return repo.save(wh);
+    }
+
     private WarehouseResponseDTO toDTO(Warehouse wh) {
+        User manager = wh.getManager();
+        Long companyId = wh.getCompany() != null ? wh.getCompany().getId() : null;
+        boolean managerInTenant = manager != null
+                && companyId != null
+                && employeeRepo.existsByUser_IdAndCompany_Id(manager.getId(), companyId);
+
         return WarehouseResponseDTO.builder()
                 .id(wh.getId())
                 .code(wh.getCode())
@@ -150,8 +204,8 @@ public class WarehouseService {
                 .country(wh.getCountry())
                 .pin(wh.getPin())
                 .phone(wh.getPhone())
-                .managerId(wh.getManager().getId())
-                .managerName(wh.getManager().getFullName())
+                .managerId(managerInTenant ? manager.getId() : null)
+                .managerName(managerInTenant ? manager.getFullName() : null)
                 .contactPersonName(wh.getContactPersonName())
                 .build();
     }

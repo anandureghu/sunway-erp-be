@@ -53,6 +53,24 @@ public class EmployeeCompensation {
     @Column(nullable = false)
     private Double otherAllowance;
 
+    /** Food allowance (Qatar statutory default when blank at create/update). */
+    @Column(name = "food_allowance", nullable = false)
+    private Double foodAllowance = 0.0;
+
+    /**
+     * When true, housing allowance tracks the company's default_housing_allowance
+     * until the employee salary record is saved with a custom amount once.
+     */
+    @Column(name = "housing_follows_company_default", nullable = false)
+    private boolean housingFollowsCompanyDefault = true;
+
+    /**
+     * When true, food allowance tracks the company's default_food_allowance
+     * until edited once on the employee salary record.
+     */
+    @Column(name = "food_follows_company_default", nullable = false)
+    private boolean foodFollowsCompanyDefault = true;
+
     @Column(nullable = false)
     private Double totalCompensation;
 

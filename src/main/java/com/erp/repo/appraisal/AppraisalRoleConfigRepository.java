@@ -9,5 +9,5 @@ public interface AppraisalRoleConfigRepository
         extends JpaRepository<AppraisalRoleConfig, Long> {
 
     Optional<AppraisalRoleConfig>
-    findByConfigIdAndRoleName(Long configId, String roleName);
+    findByConfigIdAndJobCode(Long configId, String jobCode);
 }

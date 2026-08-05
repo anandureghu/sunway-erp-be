@@ -67,8 +67,12 @@ public class VendorService {
         assertSameTenant(vendor);
         if (status) {
             vendor.setApproved(true);
+            vendor.setRejected(false);
+            vendor.setActive(true);
         } else {
             vendor.setRejected(true);
+            vendor.setApproved(false);
+            vendor.setActive(false);
         }
         vendorRepo.save(vendor);
         return status;

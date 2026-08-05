@@ -23,5 +23,5 @@ public class AppraisalConfigResponseDTO {
     private Boolean enableMidYear;
     private Boolean enablePIP;
 
-    private List<RoleConfigResponseDTO> roles;
+    private List<RoleConfigResponseDTO> jobConfigs;
 }

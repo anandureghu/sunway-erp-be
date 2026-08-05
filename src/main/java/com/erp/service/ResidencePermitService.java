@@ -29,10 +29,16 @@ public class ResidencePermitService {
     /* ================= GET ================= */
 
     public ResidencePermitResponseDTO getByEmployee(Long employeeId) {
-        ResidencePermit permit = permitRepo.findByEmployeeId(employeeId)
-                .orElseThrow(() -> new RuntimeException("Residence permit not found"));
-        assertSameTenant(permit.getEmployee());
-        return toDTO(permit);
+        // No residence permit yet is a normal empty state, not an error. Return
+        // null (HTTP 200 with empty body) so the tab shows a blank form, instead
+        // of throwing a 500 that spams the error log every time the Residence
+        // Permit tab is opened for someone without a permit.
+        return permitRepo.findByEmployeeId(employeeId)
+                .map(permit -> {
+                    assertSameTenant(permit.getEmployee());
+                    return toDTO(permit);
+                })
+                .orElse(null);
     }
 
     /* ================= CREATE ================= */

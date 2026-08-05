@@ -47,13 +47,20 @@ public class JobCodeService {
 
         validateSalaryRange(dto.getMinSalary(), dto.getMaxSalary());
 
+        BigDecimal minSalary = applyCompanyMinBasicFloor(dto.getMinSalary(), company);
+        BigDecimal maxSalary = dto.getMaxSalary();
+        if (maxSalary != null && minSalary != null && maxSalary.compareTo(minSalary) < 0) {
+            maxSalary = minSalary;
+        }
+        validateSalaryRange(minSalary, maxSalary);
+
         JobCode jobCode = JobCode.builder()
                 .code(code)
                 .title(dto.getTitle())
                 .level(dto.getLevel())
                 .salaryGrade(dto.getSalaryGrade())
-                .minSalary(dto.getMinSalary())
-                .maxSalary(dto.getMaxSalary())
+                .minSalary(minSalary)
+                .maxSalary(maxSalary)
                 .active(dto.getActive())
                 .company(company)
                 .build();
@@ -141,12 +148,22 @@ public class JobCodeService {
 
         validateSalaryRange(dto.getMinSalary(), dto.getMaxSalary());
 
+        Company company = existing.getCompany() != null
+                ? existing.getCompany()
+                : requireCurrentCompany();
+        BigDecimal minSalary = applyCompanyMinBasicFloor(dto.getMinSalary(), company);
+        BigDecimal maxSalary = dto.getMaxSalary();
+        if (maxSalary != null && minSalary != null && maxSalary.compareTo(minSalary) < 0) {
+            maxSalary = minSalary;
+        }
+        validateSalaryRange(minSalary, maxSalary);
+
         existing.setCode(code);
         existing.setTitle(dto.getTitle());
         existing.setLevel(dto.getLevel());
         existing.setSalaryGrade(dto.getSalaryGrade());
-        existing.setMinSalary(dto.getMinSalary());
-        existing.setMaxSalary(dto.getMaxSalary());
+        existing.setMinSalary(minSalary);
+        existing.setMaxSalary(maxSalary);
         existing.setActive(dto.getActive());
 
         return mapToDTO(repository.save(existing));
@@ -190,6 +207,65 @@ public class JobCodeService {
         if (min != null && max != null && min.compareTo(max) > 0) {
             throw new IllegalArgumentException("Min salary cannot exceed max salary");
         }
+    }
+
+    /**
+     * Null or below-floor min salary → company min basic salary.
+     */
+    private BigDecimal applyCompanyMinBasicFloor(BigDecimal minSalary, Company company) {
+        BigDecimal floor = companyMinBasic(company);
+        if (floor == null) {
+            return minSalary;
+        }
+        if (minSalary == null || minSalary.compareTo(floor) < 0) {
+            return floor;
+        }
+        return minSalary;
+    }
+
+    private BigDecimal companyMinBasic(Company company) {
+        if (company == null || company.getMinimumMonthlyWage() == null) {
+            return null;
+        }
+        return company.getMinimumMonthlyWage();
+    }
+
+    /**
+     * Floor every job-code minSalary up to company min basic salary.
+     * Never lowers higher mins; raises maxSalary when it would fall below the new min.
+     */
+    public int floorMinSalariesFromCompany(Long companyId) {
+        if (companyId == null) {
+            return 0;
+        }
+        Company company = companyRepository.findById(companyId).orElse(null);
+        if (company == null) {
+            return 0;
+        }
+        BigDecimal floor = companyMinBasic(company);
+        if (floor == null) {
+            return 0;
+        }
+        int updated = 0;
+        for (JobCode jobCode : repository.findByCompany_Id(companyId)) {
+            boolean dirty = false;
+            BigDecimal min = jobCode.getMinSalary();
+            if (min == null || min.compareTo(floor) < 0) {
+                jobCode.setMinSalary(floor);
+                min = floor;
+                dirty = true;
+            }
+            BigDecimal max = jobCode.getMaxSalary();
+            if (max != null && max.compareTo(min) < 0) {
+                jobCode.setMaxSalary(min);
+                dirty = true;
+            }
+            if (dirty) {
+                repository.save(jobCode);
+                updated++;
+            }
+        }
+        return updated;
     }
 
     private JobCodeResponseDTO mapToDTO(JobCode jobCode) {
