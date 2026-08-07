@@ -12,14 +12,17 @@ import com.erp.dto.auth.LoginTwoFactorCompleteRequest;
 import com.erp.dto.auth.OtpVerifyRequest;
 import com.erp.dto.auth.OtpVerifyResponse;
 import com.erp.dto.auth.RegisterRequest;
+import com.erp.dto.subscription.SubscriptionStatusResponse;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.security.JwtService;
 import com.erp.security.context.AuthContext;
 import com.erp.domain.auth.OtpPurpose;
 import com.erp.service.auth.OtpService;
+import com.erp.service.subscription.SubscriptionService;
 import io.jsonwebtoken.Claims;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +38,7 @@ public class AuthService {
     private final JwtService jwt;
     private final AuthContext authContext;
     private final OtpService otpService;
+    private final SubscriptionService subscriptionService;
     private final long preAuthTokenMinutes;
 
     public AuthService(UserRepository userRepository,
@@ -43,6 +47,7 @@ public class AuthService {
                        JwtService jwt,
                        AuthContext authContext,
                        OtpService otpService,
+                       @Lazy SubscriptionService subscriptionService,
                        @Value("${app.auth.pre-auth-token-minutes:5}") long preAuthTokenMinutes) {
         this.userRepository     = userRepository;
         this.employeeRepository = employeeRepository;
@@ -50,6 +55,7 @@ public class AuthService {
         this.jwt                = jwt;
         this.authContext        = authContext;
         this.otpService         = otpService;
+        this.subscriptionService = subscriptionService;
         this.preAuthTokenMinutes = preAuthTokenMinutes;
     }
 
@@ -107,7 +113,8 @@ public class AuthService {
                 tokens.getAccessToken(),
                 tokens.getRefreshToken(),
                 companies,
-                requiresSelection);
+                requiresSelection,
+                tokens.getSubscriptionStatus());
     }
 
     public LoginResponse completeLoginTwoFactor(LoginTwoFactorCompleteRequest req) {
@@ -151,7 +158,8 @@ public class AuthService {
                 tokens.getAccessToken(),
                 tokens.getRefreshToken(),
                 companies,
-                requiresSelection);
+                requiresSelection,
+                tokens.getSubscriptionStatus());
     }
 
     /**
@@ -270,6 +278,21 @@ public class AuthService {
         JwtResponse response = new JwtResponse(access, refresh);
         response.setCompanies(companies);
         response.setRequiresCompanySelection(requiresSelection);
+        Long companyId = emp.getCompany() != null ? emp.getCompany().getId() : null;
+        if (companyId != null) {
+            boolean includeAmount = u.getRole() == Role.SUPER_ADMIN;
+            try {
+                response.setSubscriptionStatus(
+                        subscriptionService.getStatusForCompany(companyId, includeAmount));
+            } catch (Exception ex) {
+                // Never fail login if subscription lookup fails
+                response.setSubscriptionStatus(SubscriptionStatusResponse.builder()
+                        .companyId(companyId)
+                        .locked(false)
+                        .showWarningBanner(false)
+                        .build());
+            }
+        }
         return response;
     }
 

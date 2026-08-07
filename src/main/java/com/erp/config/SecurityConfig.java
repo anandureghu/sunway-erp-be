@@ -3,6 +3,7 @@ package com.erp.config;
 import com.erp.security.AdminLogContextFilter;
 import com.erp.security.JwtAuthenticationFilter;
 import com.erp.security.RestAuthenticationEntryPoint;
+import com.erp.security.SubscriptionAccessFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +29,7 @@ import java.util.List;
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final AdminLogContextFilter adminLogContextFilter;
+    private final SubscriptionAccessFilter subscriptionAccessFilter;
     private final RestAuthenticationEntryPoint entryPoint;
 
     @Value("${app.cors.allowed-origins}") private String allowedOriginsCsv;
@@ -35,10 +37,12 @@ public class SecurityConfig {
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthFilter,
             AdminLogContextFilter adminLogContextFilter,
+            SubscriptionAccessFilter subscriptionAccessFilter,
             RestAuthenticationEntryPoint entryPoint
     ) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.adminLogContextFilter = adminLogContextFilter;
+        this.subscriptionAccessFilter = subscriptionAccessFilter;
         this.entryPoint = entryPoint;
     }
 
@@ -74,7 +78,8 @@ public class SecurityConfig {
 
                 .headers(h -> h.frameOptions(f -> f.disable()))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(adminLogContextFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(adminLogContextFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(subscriptionAccessFilter, AdminLogContextFilter.class);
 
         return http.build();
     }

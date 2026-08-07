@@ -1,5 +1,6 @@
 package com.erp.dto.auth;
 
+import com.erp.dto.subscription.SubscriptionStatusResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
@@ -28,6 +29,7 @@ public class LoginResponse {
     private final String tokenType = "Bearer";
     private List<CompanySummary> companies;
     private boolean requiresCompanySelection;
+    private SubscriptionStatusResponse subscriptionStatus;
 
     public LoginResponse() {}
 
@@ -54,12 +56,23 @@ public class LoginResponse {
             List<CompanySummary> companies,
             boolean requiresCompanySelection
     ) {
+        return authenticated(accessToken, refreshToken, companies, requiresCompanySelection, null);
+    }
+
+    public static LoginResponse authenticated(
+            String accessToken,
+            String refreshToken,
+            List<CompanySummary> companies,
+            boolean requiresCompanySelection,
+            SubscriptionStatusResponse subscriptionStatus
+    ) {
         LoginResponse response = new LoginResponse();
         response.requiresTwoFactor = false;
         response.accessToken = accessToken;
         response.refreshToken = refreshToken;
         response.companies = companies;
         response.requiresCompanySelection = requiresCompanySelection;
+        response.subscriptionStatus = subscriptionStatus;
         return response;
     }
 }
