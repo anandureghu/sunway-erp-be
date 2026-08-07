@@ -6,6 +6,8 @@ import com.erp.dto.inventory.ItemCsvImportResultDTO;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.inventory.ItemCsvColumnMapperService.MappingResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,12 +17,14 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * CSV bulk import for inventory items. Lives outside {@link ItemService} so each
- * successful {@code create} commits independently — a bad row does not roll back prior rows.
+ * CSV bulk import for inventory items. Accepts arbitrary client spreadsheet headers;
+ * OpenAI (when configured) maps them onto canonical fields, with leftovers stored in
+ * {@code Item.metadata}. Each successful create commits independently.
  */
 @Service
 public class ItemCsvImportService {
@@ -29,26 +33,25 @@ public class ItemCsvImportService {
     private final ItemRepository itemRepo;
     private final WarehouseRepository warehouseRepo;
     private final AuthContext auth;
+    private final ItemCsvColumnMapperService columnMapper;
+    private final ObjectMapper objectMapper;
 
     public ItemCsvImportService(
             ItemService itemService,
             ItemRepository itemRepo,
             WarehouseRepository warehouseRepo,
-            AuthContext auth
+            AuthContext auth,
+            ItemCsvColumnMapperService columnMapper,
+            ObjectMapper objectMapper
     ) {
         this.itemService = itemService;
         this.itemRepo = itemRepo;
         this.warehouseRepo = warehouseRepo;
         this.auth = auth;
+        this.columnMapper = columnMapper;
+        this.objectMapper = objectMapper;
     }
 
-    /**
-     * Bulk-create inventory items from a CSV upload. Expected headers (case-insensitive):
-     * sku, name, category, warehouse (id or name), quantity, unitMeasure, and optional
-     * barcode, brand, type, subCategory, costPrice, sellingPrice, status, reorderLevel,
-     * minimum, maximum, location, description.
-     * Duplicate SKUs within the company are skipped.
-     */
     public ItemCsvImportResultDTO importCsv(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("CSV file is required");
@@ -56,6 +59,9 @@ public class ItemCsvImportService {
 
         Long companyId = auth.getCurrentCompanyId();
         List<Warehouse> warehouses = warehouseRepo.findByCompanyIdOrderByCreatedAtDesc(companyId);
+        if (warehouses.isEmpty()) {
+            throw new IllegalArgumentException("Create at least one warehouse before importing items");
+        }
         Map<String, Warehouse> warehouseByName = new HashMap<>();
         Map<String, Warehouse> warehouseById = new HashMap<>();
         for (Warehouse wh : warehouses) {
@@ -64,11 +70,14 @@ public class ItemCsvImportService {
             }
             warehouseById.put(String.valueOf(wh.getId()), wh);
         }
+        Warehouse defaultWarehouse = warehouses.get(0);
 
         int created = 0;
         int skipped = 0;
         int failed = 0;
         List<ItemCsvImportResultDTO.RowError> errors = new ArrayList<>();
+        Map<String, String> fieldMapping = Map.of();
+        boolean aiMapped = false;
 
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
@@ -80,26 +89,54 @@ public class ItemCsvImportService {
                 headerLine = headerLine.substring(1);
             }
 
-            Map<String, Integer> headerIndex = parseCsvHeader(headerLine);
-            requireHeader(headerIndex, "sku");
-            requireHeader(headerIndex, "name");
-            requireHeader(headerIndex, "category");
-            requireHeader(headerIndex, "warehouse");
+            List<String> headers = parseCsvLine(headerLine);
+            if (headers.isEmpty() || headers.stream().allMatch(h -> h == null || h.isBlank())) {
+                throw new IllegalArgumentException("CSV header row is empty");
+            }
 
+            // Buffer a few sample + all data rows so we can map headers with AI first.
+            List<List<String>> allRows = new ArrayList<>();
             String line;
-            int rowNum = 1;
             while ((line = reader.readLine()) != null) {
-                rowNum++;
                 if (line.isBlank()) {
                     continue;
                 }
-                List<String> cols = parseCsvLine(line);
-                String sku = cell(cols, headerIndex, "sku");
+                allRows.add(parseCsvLine(line));
+            }
+
+            List<List<String>> samples = allRows.stream().limit(3).toList();
+            MappingResult mappingResult = columnMapper.mapHeaders(headers, samples);
+            fieldMapping = mappingResult.mapping();
+            aiMapped = mappingResult.aiMapped();
+
+            Map<String, Integer> canonicalIndex = buildCanonicalIndex(headers, fieldMapping);
+            if (!canonicalIndex.containsKey("sku") && !canonicalIndex.containsKey("name")) {
+                throw new IllegalArgumentException(
+                        "Could not map required columns (need at least sku or name). "
+                                + "Detected headers: " + String.join(", ", headers));
+            }
+
+            int rowNum = 1;
+            for (List<String> cols : allRows) {
+                rowNum++;
+                String sku = null;
                 try {
-                    if (sku == null || sku.isBlank()) {
-                        throw new IllegalArgumentException("SKU is required");
+                    Map<String, String> valuesByField = extractCanonicalValues(headers, cols, fieldMapping);
+                    Map<String, String> metadata = extractMetadata(headers, cols, fieldMapping);
+
+                    sku = blankToNull(valuesByField.get("sku"));
+                    String name = blankToNull(valuesByField.get("name"));
+                    if (sku == null && name == null) {
+                        throw new IllegalArgumentException("SKU or name is required");
+                    }
+                    if (sku == null) {
+                        sku = synthesizeSku(name, rowNum);
                     }
                     sku = sku.trim().toUpperCase();
+                    if (name == null) {
+                        name = sku;
+                    }
+
                     if (itemRepo.existsBySkuAndCompanyId(sku, companyId)) {
                         skipped++;
                         errors.add(ItemCsvImportResultDTO.RowError.builder()
@@ -110,28 +147,11 @@ public class ItemCsvImportService {
                         continue;
                     }
 
-                    String name = cell(cols, headerIndex, "name");
-                    if (name == null || name.isBlank()) {
-                        throw new IllegalArgumentException("Name is required");
-                    }
-                    String category = cell(cols, headerIndex, "category");
-                    if (category == null || category.isBlank()) {
-                        throw new IllegalArgumentException("Category is required");
-                    }
+                    String category = blankToDefault(valuesByField.get("category"), "General");
+                    Warehouse warehouse = resolveWarehouse(
+                            valuesByField.get("warehouse"), warehouseById, warehouseByName, defaultWarehouse);
 
-                    String warehouseRaw = cell(cols, headerIndex, "warehouse");
-                    if (warehouseRaw == null || warehouseRaw.isBlank()) {
-                        throw new IllegalArgumentException("Warehouse is required (id or name)");
-                    }
-                    Warehouse warehouse = warehouseById.get(warehouseRaw.trim());
-                    if (warehouse == null) {
-                        warehouse = warehouseByName.get(warehouseRaw.trim().toLowerCase());
-                    }
-                    if (warehouse == null) {
-                        throw new IllegalArgumentException("Warehouse not found: " + warehouseRaw);
-                    }
-
-                    Integer quantity = parseOptionalInt(cell(cols, headerIndex, "quantity"));
+                    Integer quantity = parseOptionalInt(valuesByField.get("quantity"));
                     if (quantity == null) {
                         quantity = 0;
                     }
@@ -145,19 +165,25 @@ public class ItemCsvImportService {
                     dto.setCategory(category.trim());
                     dto.setWarehouse(warehouse.getId());
                     dto.setQuantity(quantity);
-                    dto.setUnitMeasure(blankToDefault(cell(cols, headerIndex, "unitmeasure"), "pcs"));
-                    dto.setBarcode(blankToNull(cell(cols, headerIndex, "barcode")));
-                    dto.setBrand(blankToNull(cell(cols, headerIndex, "brand")));
-                    dto.setType(blankToDefault(cell(cols, headerIndex, "type"), "product"));
-                    dto.setSubCategory(blankToNull(cell(cols, headerIndex, "subcategory")));
-                    dto.setLocation(blankToNull(cell(cols, headerIndex, "location")));
-                    dto.setDescription(blankToNull(cell(cols, headerIndex, "description")));
-                    dto.setStatus(blankToDefault(cell(cols, headerIndex, "status"), "active"));
-                    dto.setCostPrice(parseOptionalDecimal(cell(cols, headerIndex, "costprice")));
-                    dto.setSellingPrice(parseOptionalDecimal(cell(cols, headerIndex, "sellingprice")));
-                    dto.setReorderLevel(parseOptionalInt(cell(cols, headerIndex, "reorderlevel")));
-                    dto.setMinimum(parseOptionalInt(cell(cols, headerIndex, "minimum")));
-                    dto.setMaximum(parseOptionalInt(cell(cols, headerIndex, "maximum")));
+                    dto.setUnitMeasure(blankToDefault(valuesByField.get("unitMeasure"), "pcs"));
+                    dto.setBarcode(blankToNull(valuesByField.get("barcode")));
+                    dto.setBrand(blankToNull(valuesByField.get("brand")));
+                    dto.setType(blankToDefault(valuesByField.get("type"), "product"));
+                    dto.setSubCategory(blankToNull(valuesByField.get("subCategory")));
+                    dto.setLocation(blankToNull(valuesByField.get("location")));
+                    dto.setDescription(blankToNull(valuesByField.get("description")));
+                    dto.setSerialNo(blankToNull(valuesByField.get("serialNo")));
+                    dto.setDateReceived(blankToNull(valuesByField.get("dateReceived")));
+                    dto.setExpiryDate(blankToNull(valuesByField.get("expiryDate")));
+                    dto.setStatus(blankToDefault(valuesByField.get("status"), "active"));
+                    dto.setCostPrice(parseOptionalDecimal(valuesByField.get("costPrice")));
+                    dto.setSellingPrice(parseOptionalDecimal(valuesByField.get("sellingPrice")));
+                    dto.setReorderLevel(parseOptionalInt(valuesByField.get("reorderLevel")));
+                    dto.setMinimum(parseOptionalInt(valuesByField.get("minimum")));
+                    dto.setMaximum(parseOptionalInt(valuesByField.get("maximum")));
+                    if (!metadata.isEmpty()) {
+                        dto.setMetadata(objectMapper.writeValueAsString(metadata));
+                    }
 
                     itemService.create(dto, null);
                     created++;
@@ -180,45 +206,92 @@ public class ItemCsvImportService {
                 .created(created)
                 .skipped(skipped)
                 .failed(failed)
+                .fieldMapping(fieldMapping)
+                .aiMapped(aiMapped)
                 .errors(errors)
                 .build();
     }
 
-    private static Map<String, Integer> parseCsvHeader(String headerLine) {
-        List<String> headers = parseCsvLine(headerLine);
+    private static Map<String, Integer> buildCanonicalIndex(
+            List<String> headers, Map<String, String> fieldMapping) {
         Map<String, Integer> index = new HashMap<>();
         for (int i = 0; i < headers.size(); i++) {
-            String key = normalizeHeader(headers.get(i));
-            if (!key.isEmpty()) {
-                index.put(key, i);
+            String header = headers.get(i);
+            String canonical = fieldMapping.get(header);
+            if (canonical != null && !canonical.isBlank() && !index.containsKey(canonical)) {
+                index.put(canonical, i);
             }
         }
         return index;
     }
 
-    private static String normalizeHeader(String raw) {
-        if (raw == null) {
-            return "";
+    private static Map<String, String> extractCanonicalValues(
+            List<String> headers, List<String> cols, Map<String, String> fieldMapping) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (int i = 0; i < headers.size(); i++) {
+            String header = headers.get(i);
+            String canonical = fieldMapping.get(header);
+            if (canonical == null || canonical.isBlank()) {
+                continue;
+            }
+            if (values.containsKey(canonical)) {
+                continue;
+            }
+            String value = i < cols.size() ? cols.get(i) : null;
+            values.put(canonical, value);
         }
-        return raw.trim().toLowerCase()
-                .replace(" ", "")
-                .replace("_", "")
-                .replace("/", "")
-                .replace("-", "");
+        return values;
     }
 
-    private static void requireHeader(Map<String, Integer> headerIndex, String key) {
-        if (!headerIndex.containsKey(key)) {
-            throw new IllegalArgumentException("Missing required CSV column: " + key);
+    private static Map<String, String> extractMetadata(
+            List<String> headers, List<String> cols, Map<String, String> fieldMapping) {
+        Map<String, String> metadata = new LinkedHashMap<>();
+        for (int i = 0; i < headers.size(); i++) {
+            String header = headers.get(i);
+            if (header == null || header.isBlank()) {
+                continue;
+            }
+            String canonical = fieldMapping.get(header);
+            if (canonical != null && !canonical.isBlank()) {
+                continue;
+            }
+            String value = i < cols.size() ? cols.get(i) : null;
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            metadata.put(header.trim(), value.trim());
         }
+        return metadata;
     }
 
-    private static String cell(List<String> cols, Map<String, Integer> headerIndex, String key) {
-        Integer idx = headerIndex.get(key);
-        if (idx == null || idx < 0 || idx >= cols.size()) {
-            return null;
+    private static Warehouse resolveWarehouse(
+            String warehouseRaw,
+            Map<String, Warehouse> byId,
+            Map<String, Warehouse> byName,
+            Warehouse defaultWarehouse
+    ) {
+        if (warehouseRaw == null || warehouseRaw.isBlank()) {
+            return defaultWarehouse;
         }
-        return cols.get(idx);
+        Warehouse warehouse = byId.get(warehouseRaw.trim());
+        if (warehouse == null) {
+            warehouse = byName.get(warehouseRaw.trim().toLowerCase());
+        }
+        if (warehouse == null) {
+            throw new IllegalArgumentException("Warehouse not found: " + warehouseRaw);
+        }
+        return warehouse;
+    }
+
+    private static String synthesizeSku(String name, int rowNum) {
+        String base = name == null ? "ITEM" : name.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
+        if (base.length() > 20) {
+            base = base.substring(0, 20);
+        }
+        if (base.isBlank()) {
+            base = "ITEM";
+        }
+        return base + "-" + rowNum;
     }
 
     private static List<String> parseCsvLine(String line) {
@@ -268,7 +341,7 @@ public class ItemCsvImportService {
         if (cleaned == null) {
             return null;
         }
-        return Integer.parseInt(cleaned.replace(",", ""));
+        return Integer.parseInt(cleaned.replace(",", "").replaceAll("[^0-9\\-]", ""));
     }
 
     private static BigDecimal parseOptionalDecimal(String value) {
@@ -276,6 +349,6 @@ public class ItemCsvImportService {
         if (cleaned == null) {
             return null;
         }
-        return new BigDecimal(cleaned.replace(",", ""));
+        return new BigDecimal(cleaned.replace(",", "").replaceAll("[^0-9.\\-]", ""));
     }
 }

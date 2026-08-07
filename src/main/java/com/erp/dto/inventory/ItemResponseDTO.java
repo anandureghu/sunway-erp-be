@@ -41,6 +41,9 @@ public class ItemResponseDTO {
 
     private String status;
 
+    /** JSON object of unmapped import columns (header → value). */
+    private String metadata;
+
     private Instant createdAt;
     private Instant updatedAt;
     private Long warehouse_id;

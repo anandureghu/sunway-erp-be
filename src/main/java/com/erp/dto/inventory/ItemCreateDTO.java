@@ -33,5 +33,7 @@ public class ItemCreateDTO {
     private String status;
     private String imageUrl;
     private String description;
+    /** JSON object of unmapped import columns (header → value). */
+    private String metadata;
     private Long warehouse;
 }

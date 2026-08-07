@@ -83,6 +83,13 @@ public class Item {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    /**
+     * Extra source columns from bulk import that do not map to first-class fields.
+     * Stored as a JSON object of original header → value.
+     */
+    @Column(columnDefinition = "LONGTEXT")
+    private String metadata;
+
     /* ===== AUDIT ===== */
 
     @ManyToOne(fetch = FetchType.LAZY)
