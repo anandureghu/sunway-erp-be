@@ -3,6 +3,7 @@ package com.erp.controller.inventory;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.inventory.ItemCreateDTO;
+import com.erp.dto.inventory.ItemCsvImportResultDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemStockAdjustDTO;
 import com.erp.dto.inventory.ItemStockReceiveDTO;
@@ -11,6 +12,7 @@ import com.erp.dto.inventory.ItemWarehouseStockRowDTO;
 import com.erp.dto.inventory.StockBatchResponseDTO;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
+import com.erp.service.inventory.ItemCsvImportService;
 import com.erp.service.inventory.ItemService;
 import com.erp.service.inventory.ItemWarehouseStockService;
 import com.erp.service.inventory.StockBatchService;
@@ -26,18 +28,21 @@ import java.util.List;
 public class ItemController {
 
     private final ItemService service;
+    private final ItemCsvImportService csvImportService;
     private final ItemWarehouseStockService itemWarehouseStockService;
     private final StockBatchService stockBatchService;
     private final AuthContext auth;
 
     public ItemController(
             ItemService service,
+            ItemCsvImportService csvImportService,
             FileStorageService fileStorageService,
             ItemWarehouseStockService itemWarehouseStockService,
             StockBatchService stockBatchService,
             AuthContext auth
     ) {
         this.service = service;
+        this.csvImportService = csvImportService;
         this.itemWarehouseStockService = itemWarehouseStockService;
         this.stockBatchService = stockBatchService;
         this.auth = auth;
@@ -50,6 +55,12 @@ public class ItemController {
             @RequestPart(value = "image", required = false) MultipartFile image
     ) {
         return service.create(dto, image);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.CREATE})
+    @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ItemCsvImportResultDTO importCsv(@RequestPart("file") MultipartFile file) {
+        return csvImportService.importCsv(file);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})

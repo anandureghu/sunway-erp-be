@@ -243,6 +243,73 @@ public class CreditNoteService {
         return mapToResponse(creditNote);
     }
 
+    /**
+     * Standing customer credit for a paid sales invoice when goods are returned.
+     * Available to apply on future payments or cash out anytime.
+     */
+    @Transactional
+    public CreditNoteResponseDTO createAutomaticCreditNoteForCustomerReturn(
+            Long companyId, String invoiceId, BigDecimal amount, String reason, Long customerId) {
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        if (companyId == null || invoiceId == null || invoiceId.isBlank()) {
+            throw new RuntimeException("Invoice not found");
+        }
+
+        Invoice invoice = invoiceRepository.findByCompany_IdAndInvoiceId(companyId, invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company doesn't exist"));
+
+        Long resolvedCustomerId = customerId != null ? customerId : resolveCustomerId(invoice);
+
+        CreditNote creditNote = CreditNote.builder()
+                .creditNoteNumber(documentSequenceService.generateNext("CN"))
+                .invoice(invoice)
+                .company(company)
+                .amount(amount)
+                .remainingAmount(amount)
+                .status("AVAILABLE")
+                .source("AUTO_CUSTOMER_RETURN")
+                .customerId(resolvedCustomerId)
+                .creditDate(java.time.LocalDate.now())
+                .reason(reason)
+                .createdAt(OffsetDateTime.now())
+                .build();
+
+        creditNoteRepository.save(creditNote);
+        return mapToResponse(creditNote);
+    }
+
+    /**
+     * Cashes out remaining standing credit so the customer can redeem it as cash anytime.
+     */
+    @Transactional
+    public CreditNoteResponseDTO cashOut(Long creditNoteId) {
+        Long companyId = auth.getCurrentCompanyId();
+        CreditNote note = creditNoteRepository.findById(creditNoteId)
+                .orElseThrow(() -> new RuntimeException("Credit note not found"));
+
+        if (note.getCompany() == null || !companyId.equals(note.getCompany().getId())) {
+            throw new RuntimeException("Credit note not found or access denied");
+        }
+        if (note.getRemainingAmount() == null || note.getRemainingAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("Credit note has no remaining balance to cash out");
+        }
+        String status = note.getStatus() == null ? "" : note.getStatus().toUpperCase();
+        if (!"AVAILABLE".equals(status) && !"PARTIALLY_APPLIED".equals(status)) {
+            throw new RuntimeException("Only available credit notes can be cashed out");
+        }
+
+        note.setRemainingAmount(BigDecimal.ZERO);
+        note.setStatus("CASHED");
+        creditNoteRepository.save(note);
+        return mapToResponse(note);
+    }
+
     private CreditNoteResponseDTO mapToResponse(CreditNote creditNote) {
 
         Invoice invoice = creditNote.getInvoice();

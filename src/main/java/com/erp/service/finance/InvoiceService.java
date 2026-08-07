@@ -651,6 +651,38 @@ public class InvoiceService {
         repo.save(invoice);
     }
 
+    /**
+     * Reduces a sales invoice when the customer returns goods and the invoice is not yet fully paid.
+     * Mirrors {@link #reduceForRejectedGoods} for the AR side.
+     */
+    @Transactional
+    public void reduceForReturnedSalesGoods(Long salesOrderId, BigDecimal returnedAmount, String reason) {
+        if (returnedAmount == null || returnedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        Optional<Invoice> existing = repo.findByOrderIdAndType(salesOrderId, InvoiceType.SALES);
+        if (existing.isEmpty()) {
+            log.warn("No sales invoice found for SO {} to reduce for returned goods ({}); {}",
+                    salesOrderId, returnedAmount, reason);
+            return;
+        }
+
+        Invoice invoice = existing.get();
+        BigDecimal amount = clampNonNegative(nullToZero(invoice.getAmount()).subtract(returnedAmount));
+        BigDecimal subtotal = clampNonNegative(nullToZero(invoice.getSubtotalAmount()).subtract(returnedAmount));
+        BigDecimal outstanding = clampNonNegative(nullToZero(invoice.getOutstanding()).subtract(returnedAmount));
+        BigDecimal openAmount = clampNonNegative(nullToZero(invoice.getOpenAmount()).subtract(returnedAmount));
+
+        invoice.setAmount(amount);
+        invoice.setSubtotalAmount(subtotal);
+        invoice.setOutstanding(outstanding);
+        invoice.setOpenAmount(openAmount);
+        if (outstanding.compareTo(BigDecimal.ZERO) == 0) {
+            invoice.setStatus("ADJUSTED");
+        }
+        repo.save(invoice);
+    }
+
     private static BigDecimal nullToZero(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
     }

@@ -44,4 +44,11 @@ public class CreditNoteController {
     public CreditNoteResponseDTO createCreditNote(@RequestBody CreateCreditNoteDTO dto) {
         return creditNoteService.createCreditNote(dto);
     }
+
+    /** Cash out remaining standing credit (customer or supplier) at any time. */
+    @RequiresPermission(module = AppModule.FINANCE_INVOICE, action = {AppAction.EDIT, AppAction.CREATE})
+    @PostMapping("/{id}/cash-out")
+    public CreditNoteResponseDTO cashOut(@PathVariable("id") Long id) {
+        return creditNoteService.cashOut(id);
+    }
 }
