@@ -11,6 +11,7 @@ public class PayslipDocumentDTO {
     private String lastName;
     private String department;
     private String designation;
+    private String status;
     private LocalDate dateOfJoining;
 
     private Integer workingDays;
@@ -19,6 +20,7 @@ public class PayslipDocumentDTO {
 
     private Double workedDays;
     private Double workedHours;
+    private Double overtimeHours;
     private Double paidLeaveDays;
     private Double unpaidLeaveDays;
     private Double payableDays;

@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -63,6 +64,9 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     boolean existsByUser_IdAndCompany_Id(Long userId, Long companyId);
 
     List<Employee> findByCompany_IdAndStatus(Long companyId, EmployeeStatus employeeStatus);
+
+    List<Employee> findByCompany_IdAndStatusIn(
+            Long companyId, Collection<EmployeeStatus> statuses);
 
     // ======================================================
     //  Dashboard aggregations

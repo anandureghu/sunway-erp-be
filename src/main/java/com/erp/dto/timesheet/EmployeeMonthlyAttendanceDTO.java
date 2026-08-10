@@ -24,6 +24,13 @@ public class EmployeeMonthlyAttendanceDTO {
     private int daysPresent;
     /** Total worked hours across the month (one decimal). */
     private double totalHours;
+    /** Total overtime hours across the month — hours beyond the standard day, daily-capped. */
+    private double overtimeHours;
+    /**
+     * True when this company does not punch in/out, so overtime cannot be derived from
+     * timesheets and is instead entered manually per month (editable in the Time Sheets tab).
+     */
+    private boolean editableOvertime;
 
     // ── today's live status (only meaningful when the queried month is current) ──
     /** CHECKED_IN | CHECKED_OUT | NOT_CHECKED_IN for today. */

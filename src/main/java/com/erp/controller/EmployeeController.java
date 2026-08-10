@@ -176,6 +176,22 @@ public class EmployeeController {
     }
 
     // ======================================================
+    // PROBATION: list under-probation + confirm
+    // ======================================================
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_ALL})
+    @GetMapping("/under-probation")
+    public ResponseEntity<List<EmployeeResponseDTO>> underProbation() {
+        return ResponseEntity.ok(employeeService.listUnderProbation());
+    }
+
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.APPROVE})
+    @PutMapping("/{id}/confirm")
+    public ResponseEntity<EmployeeResponseDTO> confirmEmployee(
+            @PathVariable("id") Long id) {
+        return ResponseEntity.ok(employeeService.confirmEmployee(id));
+    }
+
+    // ======================================================
     // HELPER
     // ======================================================
     private User getAuthUser() {

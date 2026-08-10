@@ -165,6 +165,12 @@ public class LeaveService {
         Employee employee = getEmployee(employeeId);
         validateEmployeeOwnership(employeeId, employee);
 
+        // Probationary employees cannot take leave until they are confirmed.
+        if (employee.getStatus() == EmployeeStatus.UNDER_PROBATION) {
+            throw new IllegalArgumentException(
+                    "Employees under probation cannot apply for leave until they are confirmed.");
+        }
+
         // Realtime overlap guard: an employee can't hold two leaves over the
         // same dates. They may still book a future, non-overlapping leave even
         // while currently on leave.

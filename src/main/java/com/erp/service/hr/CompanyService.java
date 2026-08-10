@@ -454,6 +454,9 @@ public class CompanyService {
         if (dto.getRequireCheckIn() != null) {
             company.setRequireCheckIn(dto.getRequireCheckIn());
         }
+        if (dto.getProbationPeriodMonths() != null) {
+            company.setProbationPeriodMonths(Math.max(dto.getProbationPeriodMonths(), 0));
+        }
         if (dto.getOtDayRateMultiplier() != null) {
             company.setOtDayRateMultiplier(clampMultiplier(dto.getOtDayRateMultiplier()));
         }
@@ -535,6 +538,10 @@ public class CompanyService {
                                 ? company.getStandardWorkingHoursPerDay()
                                 : new BigDecimal("6.00"))
                 .requireCheckIn(company.isRequireCheckIn())
+                .probationPeriodMonths(
+                        company.getProbationPeriodMonths() != null
+                                ? company.getProbationPeriodMonths()
+                                : 3)
                 .otDayRateMultiplier(
                         company.getOtDayRateMultiplier() != null
                                 ? company.getOtDayRateMultiplier()

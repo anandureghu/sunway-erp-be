@@ -24,16 +24,15 @@ public class EmployeeTimesheetController {
         this.service = service;
     }
 
-    // HR_REPORTS — checking in is the employee recording their own attendance;
-    // CREATE_OWN/CREATE_ALL grants scope this via the {employeeId} path variable.
-    @RequiresPermission(module = AppModule.HR_REPORTS, action = {AppAction.CREATE})
+    // Self-service attendance: any authenticated employee may punch their OWN
+    // shift (enforced in the service via assertSelfServiceWrite); an HR user needs
+    // the HR_REPORTS *_ALL grant to punch on someone else's behalf. No coarse
+    // @RequiresPermission here, since that would block ordinary employees.
     @PostMapping("/checkin")
     public ResponseEntity<TimesheetTodayResponse> checkIn(@PathVariable Long employeeId) {
         return ResponseEntity.ok(service.checkIn(employeeId));
     }
 
-    // HR_REPORTS — checking out modifies today's attendance record.
-    @RequiresPermission(module = AppModule.HR_REPORTS, action = {AppAction.EDIT})
     @PostMapping("/checkout")
     public ResponseEntity<TimesheetTodayResponse> checkOut(@PathVariable Long employeeId) {
         return ResponseEntity.ok(service.checkOut(employeeId));

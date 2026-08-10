@@ -21,6 +21,7 @@ public class PayrollPreviewDTO {
     private double totalDeductions;
     private double netPayable;
     private double earnedGrossPay;
+    private double overtimePay;
     private double endOfServiceCompensation;
     private boolean finalSettlement;
     private double grossPay;

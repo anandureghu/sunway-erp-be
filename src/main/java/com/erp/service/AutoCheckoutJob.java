@@ -13,7 +13,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +34,10 @@ import java.util.Map;
 public class AutoCheckoutJob {
 
     private static final double DEFAULT_STD_HOURS = 6.0;
+    private static final double DEFAULT_OT_MAX_HOURS = 2.0;
     private static final String AUTO_NOTE = "Auto-checkout — employee did not check out.";
+    private static final String MAX_SHIFT_NOTE =
+            "Auto-checkout — maximum shift (standard + overtime) reached.";
 
     private final EmployeeTimesheetRepository timesheetRepo;
     private final EmployeeRepository employeeRepo;
@@ -76,6 +81,51 @@ public class AutoCheckoutJob {
         log.info("Auto-checkout: closed {} forgotten session(s) up to {}", closed, cutoff);
     }
 
+    /**
+     * Intraday sweep: auto-check-out anyone still checked in past their maximum shift
+     * (standard hours + the overtime cap), so overtime never runs beyond the policy.
+     * Worked time is capped at the shift limit and the row is flagged auto-checked-out.
+     */
+    @Transactional
+    @Scheduled(fixedRate = 900_000) // every 15 minutes
+    public void enforceMaxShift() {
+        List<EmployeeTimesheet> open =
+                timesheetRepo.findByStatusAndAttendanceDate(TimesheetStatus.CHECKED_IN, LocalDate.now());
+        if (open.isEmpty()) {
+            return;
+        }
+
+        Map<Long, Double> stdCache = new HashMap<>();
+        Map<Long, Double> otCache = new HashMap<>();
+        LocalDateTime now = LocalDateTime.now();
+        int closed = 0;
+
+        for (EmployeeTimesheet t : open) {
+            if (t.getCheckInTime() == null) {
+                continue;
+            }
+            double capHours = resolveStandardHours(t.getEmployeeId(), stdCache)
+                    + resolveOtMax(t.getEmployeeId(), otCache);
+            long capMinutes = Math.round(capHours * 60.0);
+            long elapsed = Duration.between(t.getCheckInTime(), now).toMinutes();
+            if (elapsed < capMinutes) {
+                continue;
+            }
+
+            t.setCheckOutTime(t.getCheckInTime().plusMinutes(capMinutes));
+            t.setWorkedMinutes(capMinutes);
+            t.setStatus(TimesheetStatus.CHECKED_OUT);
+            t.setAutoCheckedOut(true);
+            t.setNote(MAX_SHIFT_NOTE);
+            timesheetRepo.save(t);
+            closed++;
+        }
+
+        if (closed > 0) {
+            log.info("Max-shift auto-checkout: closed {} session(s) at the shift cap.", closed);
+        }
+    }
+
     /** Company standard working hours for the employee, memoised per company. */
     private double resolveStandardHours(Long employeeId, Map<Long, Double> cache) {
         Employee employee = employeeRepo.findById(employeeId).orElse(null);
@@ -92,5 +142,23 @@ public class AutoCheckoutJob {
                 : DEFAULT_STD_HOURS;
         cache.put(companyId, hours);
         return hours;
+    }
+
+    /** Company overtime cap (hours/day) for the employee, memoised per company. */
+    private double resolveOtMax(Long employeeId, Map<Long, Double> cache) {
+        Employee employee = employeeRepo.findById(employeeId).orElse(null);
+        if (employee == null || employee.getCompany() == null) {
+            return DEFAULT_OT_MAX_HOURS;
+        }
+        Long companyId = employee.getCompany().getId();
+        Double cached = cache.get(companyId);
+        if (cached != null) {
+            return cached;
+        }
+        double ot = employee.getCompany().getOtMaxHoursPerDay() != null
+                ? employee.getCompany().getOtMaxHoursPerDay().doubleValue()
+                : DEFAULT_OT_MAX_HOURS;
+        cache.put(companyId, ot);
+        return ot;
     }
 }

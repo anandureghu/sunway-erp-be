@@ -4,6 +4,7 @@ import com.erp.domain.Employee;
 import com.erp.domain.EmployeeStatus;
 import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.TimesheetStatus;
+import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.timesheet.AttendanceHistoryItemResponse;
 import com.erp.dto.timesheet.MonthlySummaryResponse;
@@ -27,6 +28,7 @@ public class EmployeeTimesheetService {
 
     // Fallbacks used only when a company has no explicit standard-hours setting.
     private static final double DEFAULT_STD_HOURS_PER_DAY = 6.0;
+    private static final double DEFAULT_OT_MAX_HOURS = 2.0;
 
     /** Company's standard full-day length in hours (default 6). */
     private double standardHours(Employee employee) {
@@ -39,6 +41,24 @@ public class EmployeeTimesheetService {
             // lazy company not loadable — fall through to default
         }
         return DEFAULT_STD_HOURS_PER_DAY;
+    }
+
+    /** Company's max overtime hours per day (default 2). */
+    private double otMaxHours(Employee employee) {
+        try {
+            if (employee.getCompany() != null
+                    && employee.getCompany().getOtMaxHoursPerDay() != null) {
+                return employee.getCompany().getOtMaxHoursPerDay().doubleValue();
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable — fall through to default
+        }
+        return DEFAULT_OT_MAX_HOURS;
+    }
+
+    /** Longest paid shift: standard hours + the overtime cap, in minutes. */
+    private long maxShiftMinutes(Employee employee) {
+        return Math.round((standardHours(employee) + otMaxHours(employee)) * 60.0);
     }
 
     /** Whether the company punches in/out (default true). */
@@ -74,7 +94,8 @@ public class EmployeeTimesheetService {
         // (inactive / on leave / resigned …) cannot check in.
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
-        accessGuard.assertCanWrite(employee, AppModule.HR_REPORTS);
+        // Self-service: an employee punches their own attendance; HR needs CREATE_ALL.
+        accessGuard.assertSelfServiceWrite(employee, AppModule.HR_REPORTS, AppAction.CREATE);
         if (employee.getStatus() != EmployeeStatus.ACTIVE) {
             throw new RuntimeException(
                     "Check-in is only available for active employees (current status: "
@@ -115,7 +136,8 @@ public class EmployeeTimesheetService {
     public TimesheetTodayResponse checkOut(Long employeeId) {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
-        accessGuard.assertCanWrite(employee, AppModule.HR_REPORTS);
+        // Self-service: an employee punches their own attendance; HR needs EDIT_ALL.
+        accessGuard.assertSelfServiceWrite(employee, AppModule.HR_REPORTS, AppAction.EDIT);
         if (!requireCheckIn(employee)) {
             throw new RuntimeException(
                     "Check-out is disabled for your organization — attendance is auto-marked present.");
@@ -137,7 +159,10 @@ public class EmployeeTimesheetService {
 
         LocalDateTime now = LocalDateTime.now();
         timesheet.setCheckOutTime(now);
-        timesheet.setWorkedMinutes(calculateWorkedMinutes(timesheet.getCheckInTime(), now));
+        // Paid minutes are capped at the standard day + overtime cap, so a very long
+        // session never records more overtime than the policy allows.
+        long worked = calculateWorkedMinutes(timesheet.getCheckInTime(), now);
+        timesheet.setWorkedMinutes(Math.min(worked, maxShiftMinutes(employee)));
         timesheet.setStatus(TimesheetStatus.CHECKED_OUT);
 
         EmployeeTimesheet saved = repository.save(timesheet);

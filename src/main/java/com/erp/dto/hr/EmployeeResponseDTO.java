@@ -23,6 +23,7 @@ public class EmployeeResponseDTO {
     private String maritalStatus;
     private LocalDate dateOfBirth;
     private LocalDate joinDate;
+    private LocalDate probationEndDate;
 
     private String birthplace;
     private String hometown;

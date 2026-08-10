@@ -57,7 +57,7 @@ public class Employee {
     private String gender;
 
     /**
-     * ACTIVE | INACTIVE | ON_LEAVE
+     * ACTIVE | INACTIVE | ON_LEAVE | UNDER_PROBATION | RESIGNED | TERMINATED | RETIRED
      */
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
@@ -69,6 +69,13 @@ public class Employee {
     private String maritalStatus;
 
     private LocalDate joinDate;
+
+    /**
+     * When probation ends for a new hire (join date + company probation months).
+     * Null once the employee is confirmed, or when probation is disabled.
+     */
+    @Column(name = "probation_end_date")
+    private LocalDate probationEndDate;
 
     /* ================= PERSONAL FIELDS ================= */
 

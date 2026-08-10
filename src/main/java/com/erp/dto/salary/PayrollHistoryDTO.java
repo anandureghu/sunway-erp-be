@@ -17,5 +17,6 @@ public class PayrollHistoryDTO {
     private Double totalDeductions;
     private Double netPayable;
     private Double endOfServiceCompensation;
+    private Double overtimeHours;
     private Boolean finalSettlement;
 }
