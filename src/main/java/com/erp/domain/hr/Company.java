@@ -194,6 +194,15 @@ public class Company {
     private boolean requireCheckIn = true;
 
     /**
+     * HR policy: probation period (in months) applied to newly created employees.
+     * New hires start {@code UNDER_PROBATION} and must be confirmed once it ends.
+     * Zero disables probation — new hires are created {@code ACTIVE}.
+     */
+    @Builder.Default
+    @Column(name = "probation_period_months", nullable = false)
+    private Integer probationPeriodMonths = 3;
+
+    /**
      * Qatar labor-law company defaults (editable in HR Policies).
      * OT multipliers are policy knobs for future overtime/payroll; night window
      * is 21:00–03:00 by statute default; OT is capped at 2 hours/day.

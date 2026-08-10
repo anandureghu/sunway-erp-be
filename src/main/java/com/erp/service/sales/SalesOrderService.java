@@ -438,9 +438,11 @@ public class SalesOrderService {
                 .items(
                         so.getItems().stream().map(i ->
                                 SalesOrderItemResponseDTO.builder()
+                                        .id(i.getId())
                                         .itemId(i.getItem().getId())
                                         .itemName(i.getItem().getName())
                                         .quantity(i.getQuantity())
+                                        .returnedQty(i.getReturnedQty() == null ? 0 : i.getReturnedQty())
                                         .unitPrice(i.getUnitPrice())
                                         .lineSubtotal(i.getLineSubtotal() == null ? BigDecimal.ZERO : i.getLineSubtotal())
                                         .discountPercent(i.getDiscountPercent() == null ? BigDecimal.ZERO : i.getDiscountPercent())

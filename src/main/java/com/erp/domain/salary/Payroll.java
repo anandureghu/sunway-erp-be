@@ -74,6 +74,13 @@ public class Payroll {
     @Column(name = "worked_hours", nullable = false)
     private Double workedHours = 0.0;
 
+    @Column(name = "overtime_hours", nullable = false)
+    private Double overtimeHours = 0.0;
+
+    /** Monetary value of overtime, paid on top of the monthly package (OT hours × hourly rate × day multiplier). */
+    @Column(name = "overtime_pay", nullable = false)
+    private Double overtimePay = 0.0;
+
     @Column(name = "worked_days", nullable = false)
     private Double workedDays = 0.0;
 
@@ -132,6 +139,8 @@ public class Payroll {
         netPayable = safe(netPayable);
         endOfServiceCompensation = safe(endOfServiceCompensation);
         workedHours = safe(workedHours);
+        overtimeHours = safe(overtimeHours);
+        overtimePay = safe(overtimePay);
         workedDays = safe(workedDays);
         paidLeaveDays = safe(paidLeaveDays);
         unpaidLeaveDays = safe(unpaidLeaveDays);

@@ -50,7 +50,7 @@ public class CreditNote {
 
     private String project;
 
-    /** "MANUAL" (default, user-entered) or "AUTO_REJECTION" (system-generated on inspection rejection). */
+    /** "MANUAL" (default), "AUTO_REJECTION" (purchase inspection), or "AUTO_CUSTOMER_RETURN". */
     @Column(nullable = false)
     @Builder.Default
     private String source = "MANUAL";

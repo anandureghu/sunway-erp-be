@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,6 +48,27 @@ public class HrAttendanceReportController {
         int resolvedMonth = month != null ? month : now.getMonthValue();
 
         return ResponseEntity.ok(service.getMonthlySummary(resolvedYear, resolvedMonth));
+    }
+
+    /**
+     * Set the manually-entered overtime for one employee for one month. Used by no-punch
+     * companies where overtime cannot be derived from timesheets. HR-gated in the service.
+     */
+    @PutMapping("/overtime")
+    public ResponseEntity<Void> setOvertime(@RequestBody OvertimeOverrideRequest body) {
+        LocalDate now = LocalDate.now();
+        int resolvedYear = body.year() != null ? body.year() : now.getYear();
+        int resolvedMonth = body.month() != null ? body.month() : now.getMonthValue();
+        service.setOvertimeOverride(body.employeeId(), resolvedYear, resolvedMonth,
+                body.overtimeHours() != null ? body.overtimeHours() : 0.0);
+        return ResponseEntity.noContent().build();
+    }
+
+    public record OvertimeOverrideRequest(
+            Long employeeId,
+            Integer year,
+            Integer month,
+            Double overtimeHours) {
     }
 
     @PostMapping("/archive")

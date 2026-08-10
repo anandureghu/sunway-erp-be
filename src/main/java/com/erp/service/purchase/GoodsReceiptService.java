@@ -231,13 +231,17 @@ public class GoodsReceiptService {
                 poItem.setRejectedQty((poItem.getRejectedQty() == null ? 0 : poItem.getRejectedQty()) + rejected);
 
                 if (rejected > 0 && poItem.getUnitCost() != null) {
-                    totalRejectedValue = totalRejectedValue.add(
-                            poItem.getUnitCost().multiply(BigDecimal.valueOf(rejected)));
+                    BigDecimal rejectedValue = poItem.getUnitCost().multiply(BigDecimal.valueOf(rejected));
+                    totalRejectedValue = totalRejectedValue.add(rejectedValue);
+                    // Reduce line cost so PO totals reflect what was actually kept
+                    BigDecimal currentLine = poItem.getLineTotal() != null ? poItem.getLineTotal() : BigDecimal.ZERO;
+                    poItem.setLineTotal(currentLine.subtract(rejectedValue).max(BigDecimal.ZERO));
                 }
             }
         }
 
         recomputePurchaseOrderStatus(po);
+        recomputePurchaseOrderTotal(po);
         poRepo.save(po);
 
         if (totalRejectedValue.compareTo(BigDecimal.ZERO) > 0) {
@@ -294,6 +298,21 @@ public class GoodsReceiptService {
         } else if (anyResolved) {
             po.setStatus(PurchaseOrderStatus.PARTIALLY_RECEIVED);
         }
+    }
+
+    /** Rebuild PO total from line totals after rejection cost adjustments. */
+    private void recomputePurchaseOrderTotal(PurchaseOrder po) {
+        if (po.getItems() == null || po.getItems().isEmpty()) {
+            po.setTotalAmount(BigDecimal.ZERO);
+            return;
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (PurchaseOrderItem line : po.getItems()) {
+            if (line.getLineTotal() != null) {
+                total = total.add(line.getLineTotal());
+            }
+        }
+        po.setTotalAmount(total);
     }
 
     /**

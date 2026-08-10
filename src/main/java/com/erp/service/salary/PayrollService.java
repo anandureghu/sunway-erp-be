@@ -19,6 +19,7 @@ import com.erp.dto.salary.PayrollPreviewDTO;
 import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.EmployeeLeaveRepository;
 import com.erp.repo.EmployeeLoanRepository;
+import com.erp.repo.EmployeeOvertimeOverrideRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.EmployeeTimesheetRepository;
 import com.erp.repo.salary.EmployeeBankDetailsRepository;
@@ -71,6 +72,7 @@ public class PayrollService {
     private final EmployeeBankDetailsRepository bankRepo;
     private final EmployeeLoanRepository loanRepo;
     private final EmployeeTimesheetRepository timesheetRepo;
+    private final EmployeeOvertimeOverrideRepository overtimeOverrideRepo;
     private final EmployeeLeaveRepository leaveRepo;
     private final CompanyLeavePolicyRepository leavePolicyRepo;
     private final PayrollRepository payrollRepo;
@@ -95,7 +97,8 @@ public class PayrollService {
                 dto.getPayPeriodEnd()
         );
 
-        double grossPay = round2(computation.grossEarnings() + computation.endOfServiceCompensation());
+        double grossPay = round2(computation.grossEarnings() + computation.endOfServiceCompensation()
+                + computation.overtimePay());
         // The funds check should reflect what actually posts to the ledger — the earned
         // salary expense (gross minus loss of pay), not the pre-LOP gross.
         double payrollExpense = round2(grossPay - computation.lopAmount());
@@ -143,7 +146,7 @@ public class PayrollService {
         assertCallerCompany(companyId);
         validateRequest(dto);
 
-        List<Employee> employees = getActiveEmployeesByCompany(companyId);
+        List<Employee> employees = getPayableEmployeesByCompany(companyId);
 
         int generatedCount = 0;
 
@@ -214,7 +217,8 @@ public class PayrollService {
         );
 
         return Optional.of(new ProjectedPayrollAmounts(
-                computation.grossEarnings() + computation.endOfServiceCompensation(),
+                computation.grossEarnings() + computation.endOfServiceCompensation()
+                        + computation.overtimePay(),
                 computation.totalDeductions(),
                 computation.netPayable()
         ));
@@ -236,7 +240,8 @@ public class PayrollService {
 
         // Gross is the full monthly package plus any end-of-service gratuity; loss of pay
         // and loans are carried in `deductions`, so gross − deductions = net.
-        payroll.setGrossPay(round2(computation.grossEarnings() + computation.endOfServiceCompensation()));
+        payroll.setGrossPay(round2(computation.grossEarnings() + computation.endOfServiceCompensation()
+                + computation.overtimePay()));
         payroll.setEndOfServiceCompensation(computation.endOfServiceCompensation());
         payroll.setFinalSettlement(computation.finalSettlement());
         payroll.setLoanDeduction(computation.loanDeduction());
@@ -244,6 +249,8 @@ public class PayrollService {
         payroll.setNetPayable(computation.netPayable());
 
         payroll.setWorkedHours(computation.workedHours());
+        payroll.setOvertimeHours(computation.overtimeHours());
+        payroll.setOvertimePay(computation.overtimePay());
         payroll.setWorkedDays(computation.workedDays());
         payroll.setPaidLeaveDays(computation.paidLeaveDays());
         payroll.setUnpaidLeaveDays(computation.unpaidLeaveDays());
@@ -292,11 +299,24 @@ public class PayrollService {
                 desc);
     }
 
-    private List<Employee> getActiveEmployeesByCompany(Long companyId) {
-        List<Employee> employees = employeeRepo.findByCompany_IdAndStatus(companyId, EmployeeStatus.ACTIVE);
+    /**
+     * Statuses eligible for a bulk payroll run: currently ACTIVE and ON_LEAVE.
+     * UNDER_PROBATION joins this set when the probation feature ships — a
+     * probationary employee is still paid.
+     */
+    private static final Set<EmployeeStatus> PAYABLE_STATUSES =
+            EnumSet.of(
+                    EmployeeStatus.ACTIVE,
+                    EmployeeStatus.ON_LEAVE,
+                    EmployeeStatus.UNDER_PROBATION);
+
+    private List<Employee> getPayableEmployeesByCompany(Long companyId) {
+        List<Employee> employees =
+                employeeRepo.findByCompany_IdAndStatusIn(companyId, PAYABLE_STATUSES);
 
         if (employees == null || employees.isEmpty()) {
-            throw new RuntimeException("No active employees found for company id: " + companyId);
+            throw new RuntimeException(
+                    "No payable (active / on-leave) employees found for company id: " + companyId);
         }
 
         return employees;
@@ -349,6 +369,26 @@ public class PayrollService {
                     .count();
         }
 
+        // Overtime = hours logged beyond the standard for the whole period. In a
+        // no-punch organisation there are no punches to derive it from, so it comes
+        // from the manual monthly override HR keyed in the Time Sheets tab (0 if none).
+        double overtimeHours;
+        if (!companyRequireCheckIn(employee)) {
+            overtimeHours = overtimeOverrideRepo
+                    .findByEmployee_IdAndYearAndMonth(
+                            employee.getId(), periodStart.getYear(), periodStart.getMonthValue())
+                    .map(o -> Math.max(0.0, o.getOvertimeHours()))
+                    .orElse(0.0);
+        } else {
+            overtimeHours = Math.max(0.0, workedHours - (workingDays * stdHoursPerDay));
+        }
+
+        // Overtime is paid ON TOP of the monthly package: hourly rate is the package
+        // spread over the month's working hours (per-day salary ÷ standard hours), and
+        // each OT hour earns that rate uplifted by the company's day multiplier.
+        double hourlyRate = stdHoursPerDay > 0 ? perDaySalary / stdHoursPerDay : 0.0;
+        double overtimePay = overtimeHours * hourlyRate * companyOtMultiplier(employee);
+
         List<EmployeeLeave> approvedLeaves = leaveRepo.findApprovedLeavesForPayrollPeriod(
                 employee.getId(),
                 periodStart,
@@ -397,7 +437,7 @@ public class PayrollService {
                 .sum();
 
         double totalDeductions = lopAmount + loanDeduction;
-        double netPayable = (grossEarnings + endOfServiceCompensation) - totalDeductions;
+        double netPayable = (grossEarnings + endOfServiceCompensation + overtimePay) - totalDeductions;
 
         if (netPayable < 0) {
             netPayable = 0.0;
@@ -408,6 +448,8 @@ public class PayrollService {
                 workingDays,
                 round2(perDaySalary),
                 round2(workedHours),
+                round2(overtimeHours),
+                round2(overtimePay),
                 round2(workedDays),
                 round2(paidLeaveDays),
                 round2(unpaidLeaveDays),
@@ -569,6 +611,14 @@ public class PayrollService {
         if (dto.getPayDate().isBefore(dto.getPayPeriodEnd())) {
             throw new IllegalArgumentException("Pay date cannot be before pay period end");
         }
+
+        // Payroll may only be processed for a period that has already begun — the
+        // current (ongoing) month is fine, but a period that has not started yet is
+        // rejected. The pay date itself may be in the future (pay-later).
+        if (dto.getPayPeriodStart().isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException(
+                    "Payroll cannot be processed for a future period that has not started yet.");
+        }
     }
 
     private long resolveWorkedMinutes(EmployeeTimesheet timesheet) {
@@ -594,6 +644,22 @@ public class PayrollService {
             // lazy company not loadable — use default
         }
         return STANDARD_HOURS_PER_DAY;
+    }
+
+    /** Daytime overtime multiplier from company policy (default 1.25). */
+    private double companyOtMultiplier(com.erp.domain.Employee employee) {
+        try {
+            if (employee.getCompany() != null
+                    && employee.getCompany().getOtDayRateMultiplier() != null) {
+                double m = employee.getCompany().getOtDayRateMultiplier().doubleValue();
+                if (m > 0) {
+                    return m;
+                }
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable — use default
+        }
+        return 1.25;
     }
 
     /** Whether the company punches in/out (default true). */
@@ -643,6 +709,7 @@ public class PayrollService {
                 computation.totalDeductions(),
                 computation.netPayable(),
                 computation.grossEarnings(),
+                computation.overtimePay(),
                 computation.endOfServiceCompensation(),
                 computation.finalSettlement(),
                 grossPay,
@@ -718,6 +785,7 @@ public class PayrollService {
         dto.setTotalDeductions(totalDeductions);
         dto.setNetPayable(payroll.getNetPayable());
         dto.setEndOfServiceCompensation(payroll.getEndOfServiceCompensation());
+        dto.setOvertimeHours(payroll.getOvertimeHours());
         dto.setFinalSettlement(payroll.isFinalSettlement());
         return dto;
     }
@@ -775,6 +843,8 @@ public class PayrollService {
             int workingDays,
             double perDaySalary,
             double workedHours,
+            double overtimeHours,
+            double overtimePay,
             double workedDays,
             double paidLeaveDays,
             double unpaidLeaveDays,

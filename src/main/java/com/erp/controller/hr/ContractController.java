@@ -2,6 +2,7 @@ package com.erp.controller.hr;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.erp.dto.hr.ContractRenewRequestDTO;
 import com.erp.dto.hr.ContractRequestDTO;
 import com.erp.dto.hr.ContractResponseDTO;
 import com.erp.service.common.ContractService;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -121,6 +124,31 @@ public class ContractController {
         }
 
         return ResponseEntity.ok(contract);
+    }
+
+    // ====================================================
+    // CONTRACT RENEWALS (HR review / renew / let expire)
+    // ====================================================
+
+    @GetMapping("/renewables")
+    public ResponseEntity<List<ContractResponseDTO>> listRenewables() {
+        return ResponseEntity.ok(contractService.listRenewables());
+    }
+
+    @PutMapping("/{contractId}/renew")
+    public ResponseEntity<ContractResponseDTO> renewContract(
+            @PathVariable("contractId") Long contractId,
+            @RequestBody(required = false) ContractRenewRequestDTO body
+    ) {
+        LocalDate newExpiration = body != null ? body.getExpirationDate() : null;
+        return ResponseEntity.ok(contractService.renewContract(contractId, newExpiration));
+    }
+
+    @PutMapping("/{contractId}/expire")
+    public ResponseEntity<ContractResponseDTO> expireContract(
+            @PathVariable("contractId") Long contractId
+    ) {
+        return ResponseEntity.ok(contractService.expireContract(contractId));
     }
 
     // ====================================================

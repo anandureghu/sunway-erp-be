@@ -38,6 +38,9 @@ public class HrPoliciesDTO {
     private BigDecimal standardWorkingHoursPerDay;
     private Boolean requireCheckIn;
 
+    // ---- Probation ----
+    private Integer probationPeriodMonths;
+
     // ---- Overtime (Qatar labor-law defaults; editable) ----
     private BigDecimal otDayRateMultiplier;
     private BigDecimal otNightFridayHolidayRateMultiplier;

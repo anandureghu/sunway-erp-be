@@ -1,6 +1,7 @@
 package com.erp.service.common;
 
 import com.erp.domain.Employee;
+import com.erp.domain.enums.ContractStatus;
 import com.erp.domain.hr.AllowanceType;
 import com.erp.domain.hr.Contract;
 import com.erp.domain.hr.SalaryAllowance;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -156,6 +158,60 @@ public class ContractService {
                     return mapToResponse(contract);
                 })
                 .orElse(null);
+    }
+
+    // ================= RENEWALS =================
+
+    /** Contracts HR should review for renewal — active or already expired, soonest first. */
+    @Transactional(readOnly = true)
+    public List<ContractResponseDTO> listRenewables() {
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) return List.of();
+        return contractRepository
+                .findByCompany_IdAndDeletedFalseAndStatusInOrderByExpirationDateAsc(
+                        companyId, List.of(ContractStatus.ACTIVE, ContractStatus.EXPIRED))
+                .stream()
+                .filter(c -> c.getExpirationDate() != null)
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    /** Renew a contract — extend its expiry (explicit date, or by its period) and set it ACTIVE. */
+    public ContractResponseDTO renewContract(Long contractId, LocalDate newExpirationDate) {
+        Contract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Contract not found"));
+        assertSameTenant(contract);
+
+        // A lapsed contract extends forward from today, not from a past expiry.
+        LocalDate base = contract.getExpirationDate() != null
+                ? contract.getExpirationDate() : LocalDate.now();
+        if (base.isBefore(LocalDate.now())) {
+            base = LocalDate.now();
+        }
+        int months = contract.getContractPeriodMonths() != null
+                && contract.getContractPeriodMonths() > 0
+                ? contract.getContractPeriodMonths() : 12;
+        LocalDate resolved = newExpirationDate != null
+                ? newExpirationDate : base.plusMonths(months);
+
+        if (!resolved.isAfter(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "A renewed contract must expire in the future.");
+        }
+        contract.setExpirationDate(resolved);
+        contract.setStatus(ContractStatus.ACTIVE);
+        return mapToResponse(contract);
+    }
+
+    /** Let a contract expire — mark it EXPIRED without renewing. */
+    public ContractResponseDTO expireContract(Long contractId) {
+        Contract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Contract not found"));
+        assertSameTenant(contract);
+        contract.setStatus(ContractStatus.EXPIRED);
+        return mapToResponse(contract);
     }
 
     // ================= DELETE =================

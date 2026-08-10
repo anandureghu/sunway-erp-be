@@ -137,8 +137,13 @@
     </tr>
     <tr>
       <td><div class="info-label">Pay Period</div><div class="info-value mono" th:text="${payPeriod}">March 2026</div></td>
-      <td><div class="info-label">Payment Method</div><div class="info-value">Bank Transfer</div></td>
+      <td><div class="info-label">Employment Status</div><div class="info-value" th:text="${status}">Active</div></td>
       <td><div class="info-label">Currency</div><div class="info-value mono" th:text="${currencyCode}">USD</div></td>
+    </tr>
+    <tr>
+      <td><div class="info-label">Payment Method</div><div class="info-value">Bank Transfer</div></td>
+      <td></td>
+      <td></td>
     </tr>
   </table>
 </div>
@@ -160,7 +165,7 @@
     <tr>
       <td><div class="info-label">Paid Leave Days</div><div class="info-value mono" th:text="${paidLeaveDays != null ? #numbers.formatDecimal(paidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
       <td><div class="info-label">Unpaid Leave Days</div><div class="info-value mono" th:text="${unpaidLeaveDays != null ? #numbers.formatDecimal(unpaidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
-      <td><div class="info-label">Loss of Pay (LOP) Days</div><div class="info-value mono" th:text="${lopDays != null ? #numbers.formatDecimal(lopDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
+      <td><div class="info-label">Overtime Hours</div><div class="info-value mono" th:text="${overtimeHours != null ? #numbers.formatDecimal(overtimeHours,1,'COMMA',2,'POINT') : '0.00'}">0.00</div></td>
     </tr>
   </table>
 </div>

@@ -56,6 +56,26 @@ public class EmployeeAccessGuard {
     }
 
     /**
+     * Self-service write: an employee may always act on their own row (e.g. punch
+     * their own attendance) with no module grant. Acting on someone else's row
+     * requires the module's *_ALL grant for the action. SUPER_ADMIN bypasses;
+     * tenant is always enforced.
+     */
+    public void assertSelfServiceWrite(Employee employee, AppModule module, AppAction action) {
+        assertSameTenant(employee);
+        if (isSuperAdmin() || isOwnEmployee(employee)) {
+            return;
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        AppAction all = allVariant(action);
+        if (all != null && permissionCheckService.hasAccess(auth, module, all)) {
+            return;
+        }
+        throw new AccessDeniedException(
+                "Access denied: you can only record your own attendance");
+    }
+
+    /**
      * Ownership-aware write check for a specific action. Passes if the caller is
      * SUPER_ADMIN, has the *_ALL grant for the action, or has the *_OWN grant and
      * the employee is the caller's own record. APPROVE is treated as an "all"

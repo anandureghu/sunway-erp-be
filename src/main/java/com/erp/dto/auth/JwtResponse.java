@@ -1,5 +1,6 @@
 package com.erp.dto.auth;
 
+import com.erp.dto.subscription.SubscriptionStatusResponse;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -13,6 +14,7 @@ public class JwtResponse {
     private final String tokenType = "Bearer";
     private List<CompanySummary> companies;
     private boolean requiresCompanySelection;
+    private SubscriptionStatusResponse subscriptionStatus;
 
     public JwtResponse() {}
 

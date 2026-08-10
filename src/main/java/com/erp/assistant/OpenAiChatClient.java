@@ -33,6 +33,18 @@ public class OpenAiChatClient {
             List<Map<String, Object>> messages,
             List<Map<String, Object>> tools
     ) {
+        return complete(messages, tools, false);
+    }
+
+    /**
+     * @param jsonObject when true, requests {@code response_format: json_object} so the model
+     *                   returns a single JSON object (useful for structured mapping tasks).
+     */
+    public OpenAiChatResult complete(
+            List<Map<String, Object>> messages,
+            List<Map<String, Object>> tools,
+            boolean jsonObject
+    ) {
         if (!properties.isConfigured()) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
@@ -45,6 +57,9 @@ public class OpenAiChatClient {
         if (tools != null && !tools.isEmpty()) {
             body.put("tools", tools);
             body.put("tool_choice", "auto");
+        }
+        if (jsonObject) {
+            body.put("response_format", Map.of("type", "json_object"));
         }
 
         HttpRequest request;

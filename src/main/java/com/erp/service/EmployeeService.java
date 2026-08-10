@@ -145,6 +145,23 @@ public class EmployeeService {
             throw new RuntimeException("User save failed");
         }
 
+        // Probation: a new hire with no explicit status starts UNDER_PROBATION when
+        // the company sets a probation period, and is confirmed once it ends. An
+        // explicit status on the request always wins. Zero months = created ACTIVE.
+        EmployeeStatus status = dto.getStatus();
+        java.time.LocalDate probationEndDate = null;
+        if (status == null) {
+            Integer months = company.getProbationPeriodMonths();
+            java.time.LocalDate joinDate = dto.getJoinDate() != null
+                    ? dto.getJoinDate() : java.time.LocalDate.now();
+            if (months != null && months > 0) {
+                status = EmployeeStatus.UNDER_PROBATION;
+                probationEndDate = joinDate.plusMonths(months);
+            } else {
+                status = EmployeeStatus.ACTIVE;
+            }
+        }
+
         // ✅ CREATE EMPLOYEE
         Employee employee = Employee.builder()
                 .employeeNo(employeeNo)
@@ -153,7 +170,8 @@ public class EmployeeService {
                 .lastName(dto.getLastName())
                 .gender(dto.getGender())
                 .prefix(dto.getPrefix())
-                .status(dto.getStatus() != null ? dto.getStatus() : EmployeeStatus.ACTIVE)
+                .status(status)
+                .probationEndDate(probationEndDate)
                 .maritalStatus(dto.getMaritalStatus())
                 .dateOfBirth(dto.getDateOfBirth())
                 .joinDate(dto.getJoinDate())
@@ -493,6 +511,35 @@ public class EmployeeService {
     // DTO MAPPER
     // ======================================================
 
+    /* ================= PROBATION / CONFIRMATION ================= */
+
+    /** New hires still under probation in the caller's company (for the Confirm tab). */
+    @Transactional(readOnly = true)
+    public List<EmployeeResponseDTO> listUnderProbation() {
+        Long companyId = resolveCurrentCompanyId();
+        return employeeRepository
+                .findByCompany_IdAndStatus(companyId, EmployeeStatus.UNDER_PROBATION)
+                .stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    /** Confirm a probationary employee — they become ACTIVE and probation clears. */
+    @Transactional
+    public EmployeeResponseDTO confirmEmployee(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        assertTenantCompanyScope(
+                employee.getCompany() != null ? employee.getCompany().getId() : null);
+        if (employee.getStatus() != EmployeeStatus.UNDER_PROBATION) {
+            throw new IllegalStateException(
+                    "Only employees under probation can be confirmed.");
+        }
+        employee.setStatus(EmployeeStatus.ACTIVE);
+        employee.setProbationEndDate(null);
+        return toDTO(employeeRepository.save(employee));
+    }
+
     private EmployeeResponseDTO toDTO(Employee e) {
 
         Company             c  = e.getCompany();
@@ -530,6 +577,7 @@ public class EmployeeService {
                 .gender(e.getGender())
                 .prefix(e.getPrefix())
                 .status(e.getStatus() != null ? e.getStatus().name() : null)
+                .probationEndDate(e.getProbationEndDate())
                 .maritalStatus(e.getMaritalStatus())
                 .dateOfBirth(e.getDateOfBirth())
                 .joinDate(e.getJoinDate())

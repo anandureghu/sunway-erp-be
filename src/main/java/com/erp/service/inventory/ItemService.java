@@ -105,6 +105,7 @@ public class ItemService {
                 .reorderLevel(dto.getReorderLevel())
                 .status(dto.getStatus())
                 .description(dto.getDescription())
+                .metadata(dto.getMetadata() != null && !dto.getMetadata().isBlank() ? dto.getMetadata().trim() : null)
                 .company(company)
                 .warehouse(warehouse)
                 .createdBy(user)
@@ -178,6 +179,9 @@ public class ItemService {
             item.setImageUrl(dto.getImageUrl());
         }
         item.setDescription(dto.getDescription());
+        if (dto.getMetadata() != null) {
+            item.setMetadata(dto.getMetadata().isBlank() ? null : dto.getMetadata().trim());
+        }
         item.setUpdatedBy(user);
         item.setWarehouse(warehouse);
         item.setUpdatedAt(Instant.now());
@@ -439,6 +443,7 @@ public class ItemService {
                 .unitSale(item.getUnitSale())
                 .status(item.getStatus())
                 .imageUrl(imageUrl)
+                .metadata(item.getMetadata())
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
                 .warehouse_id(item.getWarehouse().getId())
@@ -487,6 +492,7 @@ public class ItemService {
                 .unitSale(item.getUnitSale())
                 .status(item.getStatus())
                 .imageUrl(imageUrl)
+                .metadata(item.getMetadata())
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
                 .warehouse_id(warehouse.getId())

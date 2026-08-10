@@ -26,6 +26,9 @@ public interface EmployeeLoanRepository extends JpaRepository<EmployeeLoan, Long
     /** True if the employee has any loan in one of the given statuses. */
     boolean existsByEmployeeIdAndStatusIn(Long employeeId, List<String> statuses);
 
+    /** True if a loan code is already used within a company (uniqueness guard). */
+    boolean existsByCompany_IdAndLoanCode(Long companyId, String loanCode);
+
     @Query("""
         select l from EmployeeLoan l
         where l.employee.company.id = :companyId

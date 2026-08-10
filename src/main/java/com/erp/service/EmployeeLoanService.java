@@ -1,6 +1,7 @@
 package com.erp.service;
 
 import com.erp.domain.Employee;
+import com.erp.domain.EmployeeStatus;
 import com.erp.domain.EmployeeLoan;
 import com.erp.domain.LoanSequence;
 import com.erp.domain.LoanType;
@@ -49,11 +50,22 @@ public class EmployeeLoanService {
                     return sequenceRepo.save(newSeq);
                 });
 
-        Long nextNumber = sequence.getCurrentSequence() + 1;
+        // Self-healing against code drift: the per-company loan counter was reset
+        // when loan codes moved to company scope, but pre-existing loans kept their
+        // old codes (e.g. HOU-0001). Skip any number whose code already exists so a
+        // fresh counter can never collide with an older loan.
+        Long companyId = company.getId();
+        Long nextNumber = sequence.getCurrentSequence();
+        String code;
+        do {
+            nextNumber++;
+            code = String.format("%s-%04d", loanType.getPrefix(), nextNumber);
+        } while (loanRepo.existsByCompany_IdAndLoanCode(companyId, code));
+
         sequence.setCurrentSequence(nextNumber);
         sequenceRepo.save(sequence);
 
-        return String.format("%s-%04d", loanType.getPrefix(), nextNumber);
+        return code;
     }
 
     /* ================= APPLY LOAN ================= */
@@ -75,6 +87,13 @@ public class EmployeeLoanService {
         }
 
         assertSameTenant(employee);
+
+        // Probationary employees cannot borrow until they are confirmed.
+        if (employee.getStatus() == EmployeeStatus.UNDER_PROBATION) {
+            throw new RuntimeException(
+                    "Employees under probation cannot apply for a loan until they are confirmed.");
+        }
+
         validateLoanPolicy(employee, dto.getLoanPeriod());
         validateLoanAgainstSalary(employee, dto.getLoanAmount(), dto.getLoanPeriod());
 

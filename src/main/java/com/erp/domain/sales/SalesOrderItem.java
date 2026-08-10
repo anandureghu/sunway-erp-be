@@ -31,6 +31,11 @@ public class SalesOrderItem {
 
     private Integer quantity;
 
+    /** Cumulative quantity returned by the customer against this line. */
+    @Column(name = "returned_qty", nullable = false)
+    @Builder.Default
+    private Integer returnedQty = 0;
+
     @Column(precision = 18, scale = 2)
     private BigDecimal unitPrice;
 

@@ -85,6 +85,7 @@ public class PayslipDocumentService {
                 ? employee.getDepartment().getDepartmentName()
                 : "—");
         dto.setDesignation(resolveDesignation(employee));
+        dto.setStatus(humanizeStatus(employee.getStatus()));
         dto.setDateOfJoining(employee.getJoinDate());
 
         if (employee.getCompany() != null && employee.getCompany().getCurrency() != null) {
@@ -109,6 +110,7 @@ public class PayslipDocumentService {
         dto.setLeaveTaken(payroll.getLeaveTaken());
         dto.setWorkedDays(payroll.getWorkedDays());
         dto.setWorkedHours(payroll.getWorkedHours());
+        dto.setOvertimeHours(payroll.getOvertimeHours());
         dto.setPaidLeaveDays(payroll.getPaidLeaveDays());
         dto.setUnpaidLeaveDays(payroll.getUnpaidLeaveDays());
         dto.setPayableDays(payroll.getPayableDays());
@@ -116,6 +118,11 @@ public class PayslipDocumentService {
         dto.setLopAmount(payroll.getLopAmount());
 
         List<LineItemDTO> earnings = buildEarnings(compensation);
+        // Overtime is paid on top of the monthly package — show it as its own earnings
+        // line so the gross reconciles (basic + allowances + overtime + gratuity = gross).
+        if (payroll.getOvertimePay() != null && payroll.getOvertimePay() > 0) {
+            earnings.add(line("Overtime Pay", payroll.getOvertimePay()));
+        }
         if (payroll.getEndOfServiceCompensation() != null && payroll.getEndOfServiceCompensation() > 0) {
             earnings.add(line("End of Service Compensation", payroll.getEndOfServiceCompensation()));
         }
@@ -195,7 +202,7 @@ public class PayslipDocumentService {
         loans.stream()
                 .filter(l -> l.getMonthlyDeduction() > 0)
                 .forEach(l -> list.add(
-                        line("Loan — " + l.getLoanCode() + " (" + l.getLoanType().getName() + ")",
+                        line("Loan " + l.getLoanCode() + " (" + l.getLoanType().getName() + ")",
                                 l.getMonthlyDeduction())
                 ));
 
@@ -221,6 +228,7 @@ public class PayslipDocumentService {
         ctx.setVariable("lastName", esc(dto.getLastName()));
         ctx.setVariable("department", esc(dto.getDepartment()));
         ctx.setVariable("designation", esc(dto.getDesignation()));
+        ctx.setVariable("status", esc(dto.getStatus()));
         ctx.setVariable("dateOfJoining", formatDate(dto.getDateOfJoining()));
 
         ctx.setVariable("workingDays", dto.getWorkingDays());
@@ -228,6 +236,7 @@ public class PayslipDocumentService {
         ctx.setVariable("leaveTaken", dto.getLeaveTaken());
         ctx.setVariable("workedDays", dto.getWorkedDays());
         ctx.setVariable("workedHours", dto.getWorkedHours());
+        ctx.setVariable("overtimeHours", dto.getOvertimeHours());
         ctx.setVariable("paidLeaveDays", dto.getPaidLeaveDays());
         ctx.setVariable("unpaidLeaveDays", dto.getUnpaidLeaveDays());
         ctx.setVariable("payableDays", dto.getPayableDays());
@@ -313,6 +322,20 @@ public class PayslipDocumentService {
                 || !currentCompanyId.equals(employeeCompanyId)) {
             throw new AccessDeniedException("This employee belongs to a different company");
         }
+    }
+
+    /** Enum name → title case, e.g. UNDER_PROBATION → "Under Probation". */
+    private String humanizeStatus(com.erp.domain.EmployeeStatus s) {
+        if (s == null) return "—";
+        String[] parts = s.name().toLowerCase().split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p.isEmpty()) continue;
+            sb.append(Character.toUpperCase(p.charAt(0)));
+            if (p.length() > 1) sb.append(p.substring(1));
+            sb.append(' ');
+        }
+        return sb.toString().trim();
     }
 
     private String resolveDesignation(Employee employee) {

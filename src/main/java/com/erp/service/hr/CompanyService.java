@@ -27,6 +27,7 @@ import com.erp.service.DocumentSequenceService;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.hrsettings.JobCodeService;
 import com.erp.service.salary.EmployeeCompensationService;
+import com.erp.service.subscription.SubscriptionService;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,7 @@ public class CompanyService {
     private final QatarLaborLawDefaultsService qatarLaborLawDefaultsService;
     private final EmployeeCompensationService employeeCompensationService;
     private final JobCodeService              jobCodeService;
+    private final SubscriptionService         subscriptionService;
 
     public CompanyService(
             CompanyRepository companyRepository,
@@ -69,7 +71,8 @@ public class CompanyService {
             CompanyStorageService companyStorageService,
             @Lazy QatarLaborLawDefaultsService qatarLaborLawDefaultsService,
             @Lazy EmployeeCompensationService employeeCompensationService,
-            @Lazy JobCodeService jobCodeService) {
+            @Lazy JobCodeService jobCodeService,
+            @Lazy SubscriptionService subscriptionService) {
 
         this.companyRepository         = companyRepository;
         this.invoiceSettingsRepository = invoiceSettingsRepository;
@@ -85,6 +88,7 @@ public class CompanyService {
         this.qatarLaborLawDefaultsService = qatarLaborLawDefaultsService;
         this.employeeCompensationService = employeeCompensationService;
         this.jobCodeService            = jobCodeService;
+        this.subscriptionService       = subscriptionService;
     }
 
     // ======================================================
@@ -185,6 +189,7 @@ public class CompanyService {
         invoiceSettingsRepository.save(InvoiceSettingsDefaults.buildDefaults(saved));
         // Start this company's employee-number sequence at 1000 up front.
         documentSequenceService.initEmployeeSequence(saved.getId());
+        subscriptionService.seedFreeForCompany(saved);
 
         if (logo != null && !logo.isEmpty()) {
             FileUploadResult upload = fileStorageService.upload(
@@ -449,6 +454,9 @@ public class CompanyService {
         if (dto.getRequireCheckIn() != null) {
             company.setRequireCheckIn(dto.getRequireCheckIn());
         }
+        if (dto.getProbationPeriodMonths() != null) {
+            company.setProbationPeriodMonths(Math.max(dto.getProbationPeriodMonths(), 0));
+        }
         if (dto.getOtDayRateMultiplier() != null) {
             company.setOtDayRateMultiplier(clampMultiplier(dto.getOtDayRateMultiplier()));
         }
@@ -530,6 +538,10 @@ public class CompanyService {
                                 ? company.getStandardWorkingHoursPerDay()
                                 : new BigDecimal("6.00"))
                 .requireCheckIn(company.isRequireCheckIn())
+                .probationPeriodMonths(
+                        company.getProbationPeriodMonths() != null
+                                ? company.getProbationPeriodMonths()
+                                : 3)
                 .otDayRateMultiplier(
                         company.getOtDayRateMultiplier() != null
                                 ? company.getOtDayRateMultiplier()
