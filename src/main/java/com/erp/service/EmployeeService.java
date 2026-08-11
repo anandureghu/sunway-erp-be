@@ -125,8 +125,12 @@ public class EmployeeService {
         // ✅ Generate values — per-company employee number (starts at 1000).
         String employeeNo = documentSequenceService.nextEmployeeNo(company.getId());
 
-        String username = EmployeeUserUtil.generateUsername(dto.getFirstName(), dto.getLastName());
-        String email = EmployeeUserUtil.generateEmail(username, company);
+        // Username/email are globally unique in the users table, but the base is derived
+        // purely from the name — so a same-named person in ANOTHER company would collide.
+        // Append an incrementing suffix until free (login password follows the final name).
+        String username = uniqueUsername(
+                EmployeeUserUtil.generateUsername(dto.getFirstName(), dto.getLastName()));
+        String email = uniqueEmail(EmployeeUserUtil.generateEmail(username, company));
         String rawPassword = EmployeeUserUtil.generateDefaultPassword(username);
 
         // ✅ CREATE + SAVE USER FIRST
@@ -717,6 +721,32 @@ public class EmployeeService {
         if (current == null || !current.equals(requestedCompanyId)) {
             throw new AccessDeniedException("Access denied for this company");
         }
+    }
+
+    /** A username not yet taken globally — appends 1, 2, … to the base until free. */
+    private String uniqueUsername(String base) {
+        String candidate = base;
+        int suffix = 1;
+        while (userRepository.existsByUsername(candidate)) {
+            candidate = base + suffix++;
+        }
+        return candidate;
+    }
+
+    /** An email not yet taken globally — suffixes the local part (before @) until free. */
+    private String uniqueEmail(String base) {
+        if (!userRepository.existsByEmail(base)) {
+            return base;
+        }
+        int at = base.indexOf('@');
+        String local = at >= 0 ? base.substring(0, at) : base;
+        String domain = at >= 0 ? base.substring(at) : "";
+        String candidate = base;
+        int suffix = 1;
+        while (userRepository.existsByEmail(candidate)) {
+            candidate = local + (suffix++) + domain;
+        }
+        return candidate;
     }
 
     private CompanyRole resolveCompanyRole(Company company, Long companyRoleId, String companyRoleName) {
