@@ -454,6 +454,18 @@ public class CompanyService {
         if (dto.getRequireCheckIn() != null) {
             company.setRequireCheckIn(dto.getRequireCheckIn());
         }
+        if (dto.getMaxShiftCheckoutGraceMinutes() != null) {
+            int minutes = dto.getMaxShiftCheckoutGraceMinutes();
+            // 0 clears the policy (check out at the max-shift cap with no grace).
+            if (minutes <= 0) {
+                company.setMaxShiftCheckoutGraceMinutes(null);
+            } else if (minutes == 15 || minutes == 20 || minutes == 30) {
+                company.setMaxShiftCheckoutGraceMinutes(minutes);
+            } else {
+                throw new IllegalArgumentException(
+                        "Max-shift checkout grace must be 15, 20, or 30 minutes (or 0 for none)");
+            }
+        }
         if (dto.getProbationPeriodMonths() != null) {
             company.setProbationPeriodMonths(Math.max(dto.getProbationPeriodMonths(), 0));
         }
@@ -538,6 +550,7 @@ public class CompanyService {
                                 ? company.getStandardWorkingHoursPerDay()
                                 : new BigDecimal("6.00"))
                 .requireCheckIn(company.isRequireCheckIn())
+                .maxShiftCheckoutGraceMinutes(company.getMaxShiftCheckoutGraceMinutes())
                 .probationPeriodMonths(
                         company.getProbationPeriodMonths() != null
                                 ? company.getProbationPeriodMonths()

@@ -73,6 +73,26 @@ public class EmployeeTimesheetService {
         return true;
     }
 
+    private int checkoutGraceMinutes(Employee employee) {
+        try {
+            if (employee.getCompany() != null
+                    && employee.getCompany().getMaxShiftCheckoutGraceMinutes() != null) {
+                return Math.max(0, employee.getCompany().getMaxShiftCheckoutGraceMinutes());
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable
+        }
+        return 0;
+    }
+
+    private void applyShiftPolicy(TimesheetTodayResponse response, Employee employee) {
+        response.setRequireCheckIn(requireCheckIn(employee));
+        response.setStandardWorkingHoursPerDay(standardHours(employee));
+        response.setOtMaxHoursPerDay(otMaxHours(employee));
+        response.setMaxShiftMinutes(maxShiftMinutes(employee));
+        response.setMaxShiftCheckoutGraceMinutes(checkoutGraceMinutes(employee));
+    }
+
     private final EmployeeTimesheetRepository repository;
     private final EmployeeRepository employeeRepository;
     private final EmployeeAccessGuard accessGuard;
@@ -127,8 +147,7 @@ public class EmployeeTimesheetService {
 
         EmployeeTimesheet saved = repository.save(timesheet);
         TimesheetTodayResponse response = mapToday(saved);
-        response.setRequireCheckIn(requireCheckIn(employee));
-        response.setStandardWorkingHoursPerDay(standardHours(employee));
+        applyShiftPolicy(response, employee);
         return response;
     }
 
@@ -167,8 +186,7 @@ public class EmployeeTimesheetService {
 
         EmployeeTimesheet saved = repository.save(timesheet);
         TimesheetTodayResponse response = mapToday(saved);
-        response.setRequireCheckIn(requireCheckIn(employee));
-        response.setStandardWorkingHoursPerDay(standardHours(employee));
+        applyShiftPolicy(response, employee);
         return response;
     }
 
@@ -192,8 +210,7 @@ public class EmployeeTimesheetService {
                     r.setStatus(TimesheetStatus.NOT_CHECKED_IN.name());
                     return r;
                 });
-        response.setRequireCheckIn(requireCheckIn(employee));
-        response.setStandardWorkingHoursPerDay(standardHours(employee));
+        applyShiftPolicy(response, employee);
         return response;
     }
 
