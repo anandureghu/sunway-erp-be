@@ -21,10 +21,14 @@ import com.erp.domain.auth.OtpPurpose;
 import com.erp.service.auth.OtpService;
 import com.erp.service.subscription.SubscriptionService;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -207,22 +211,40 @@ public class AuthService {
     }
 
     public JwtResponse refresh(String refreshToken) {
-        var claims = jwt.parse(refreshToken).getBody();
+        Claims claims;
+        try {
+            claims = jwt.parse(refreshToken).getBody();
+        } catch (ExpiredJwtException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Session expired. Please sign in again.");
+        } catch (JwtException | IllegalArgumentException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid session. Please sign in again.");
+        }
+
         String username = claims.getSubject();
 
         User u = userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("User not found for refresh"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Invalid session. Please sign in again."));
 
         Long employeeId = parseLong(claims.get("employeeId"));
         Employee emp;
         if (employeeId != null) {
             emp = employeeRepository.findById(employeeId)
                     .filter(e -> e.getUser() != null && e.getUser().getId().equals(u.getId()))
-                    .orElseThrow(() -> new IllegalArgumentException("User not found for refresh"));
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.UNAUTHORIZED,
+                            "Invalid session. Please sign in again."));
         } else {
             emp = employeeRepository.findAllByUser_Id(u.getId()).stream()
                     .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("User not found for refresh"));
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.UNAUTHORIZED,
+                            "Invalid session. Please sign in again."));
         }
 
         List<CompanySummary> companies = employeeRepository.findAllByUser_Id(u.getId()).stream()
