@@ -142,11 +142,19 @@ public class PayrollBankFileExportService {
 
             double basic = nz(comp.getBasicSalary());
             double housing = comp.getHousingType() == BenefitType.ALLOWANCE ? nz(comp.getHousingAllowance()) : 0d;
-            double food = 0d;
+            double food = nz(comp.getFoodAllowance());
             double transport = comp.getTransportationType() == BenefitType.ALLOWANCE ? nz(comp.getTransportationAllowance()) : 0d;
-            double overtime = 0d;
+            double overtime = payroll != null ? nz(payroll.getOvertimePay()) : 0d;
             double travelAllow = comp.getTravelType() == BenefitType.ALLOWANCE ? nz(comp.getTravelAllowance()) : 0d;
             double otherAllow = nz(comp.getOtherAllowance());
+            // WPS: Net ≈ Basic + Extra Income − Deductions. Extra Income is the aggregate of
+            // everything above basic (allowances + OT). Housing/Food/Transport/OT columns are
+            // optional MoL breakdowns and are not validated against Extra Income.
+            // Extra Field 1/2 are reserved for future use — leave blank (do not repeat amounts).
+            double extraIncome = housing + food + transport + travelAllow + otherAllow + overtime;
+            double extraHours = payroll != null && payroll.getOvertimeHours() != null
+                    ? nz(payroll.getOvertimeHours())
+                    : 0d;
 
             detailRows.add(new DetailRow(
                     qid,
@@ -161,8 +169,8 @@ public class PayrollBankFileExportService {
                     transport,
                     overtime,
                     deductions,
-                    travelAllow,
-                    otherAllow
+                    extraIncome,
+                    extraHours
             ));
         }
 
@@ -318,8 +326,8 @@ public class PayrollBankFileExportService {
         cols.add(String.valueOf(WORKING_DAYS));
         cols.add(fmtAmount(r.net));
         cols.add(fmtAmount(r.basic));
-        cols.add("0");
-        cols.add("0");
+        cols.add(fmtAmount(r.extraHours));
+        cols.add(fmtAmount(r.extraIncome));
         cols.add(fmtAmount(r.deductions));
         cols.add("Normal");
         cols.add("");
@@ -328,8 +336,9 @@ public class PayrollBankFileExportService {
         cols.add(fmtAmount(r.transport));
         cols.add(fmtAmount(r.overtime));
         cols.add("0");
-        cols.add(fmtAmount(r.travelAllow));
-        cols.add(fmtAmount(r.otherAllow));
+        // Extra Field 1 / 2 — WPS reserved; do not mirror allowance amounts here.
+        cols.add("");
+        cols.add("");
         if (cols.size() != DETAIL_COLS) {
             throw new IllegalStateException("Detail column mismatch: " + cols.size());
         }
@@ -404,7 +413,7 @@ public class PayrollBankFileExportService {
             double transport,
             double overtime,
             double deductions,
-            double travelAllow,
-            double otherAllow
+            double extraIncome,
+            double extraHours
     ) {}
 }

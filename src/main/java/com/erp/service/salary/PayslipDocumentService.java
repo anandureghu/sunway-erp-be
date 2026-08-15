@@ -150,25 +150,35 @@ public class PayslipDocumentService {
     private List<LineItemDTO> buildEarnings(EmployeeCompensation c) {
         List<LineItemDTO> list = new ArrayList<>();
 
-        list.add(line("Basic Salary", c.getBasicSalary()));
+        list.add(line("Basic Salary", amt(c.getBasicSalary())));
 
-        if (c.getHousingType() == BenefitType.ALLOWANCE && c.getHousingAllowance() > 0) {
-            list.add(line("Housing Allowance", c.getHousingAllowance()));
+        // Only cash allowances appear as line items. COMPANY_PROVIDED benefits are
+        // stored as 0 on the compensation record and are not paid via payroll.
+        if (c.getHousingType() == BenefitType.ALLOWANCE && amt(c.getHousingAllowance()) > 0) {
+            list.add(line("Housing Allowance", amt(c.getHousingAllowance())));
         }
 
-        if (c.getTransportationType() == BenefitType.ALLOWANCE && c.getTransportationAllowance() > 0) {
-            list.add(line("Transport Allowance", c.getTransportationAllowance()));
+        if (amt(c.getFoodAllowance()) > 0) {
+            list.add(line("Food Allowance", amt(c.getFoodAllowance())));
         }
 
-        if (c.getTravelType() == BenefitType.ALLOWANCE && c.getTravelAllowance() > 0) {
-            list.add(line("Travel Allowance", c.getTravelAllowance()));
+        if (c.getTransportationType() == BenefitType.ALLOWANCE && amt(c.getTransportationAllowance()) > 0) {
+            list.add(line("Transport Allowance", amt(c.getTransportationAllowance())));
         }
 
-        if (c.getOtherAllowance() > 0) {
-            list.add(line("Other Allowance", c.getOtherAllowance()));
+        if (c.getTravelType() == BenefitType.ALLOWANCE && amt(c.getTravelAllowance()) > 0) {
+            list.add(line("Travel Allowance", amt(c.getTravelAllowance())));
+        }
+
+        if (amt(c.getOtherAllowance()) > 0) {
+            list.add(line("Other Allowance", amt(c.getOtherAllowance())));
         }
 
         return list;
+    }
+
+    private static double amt(Double value) {
+        return value != null ? value : 0.0;
     }
 
     private List<LineItemDTO> buildDeductions(List<EmployeeLoan> loans, Payroll payroll) {
