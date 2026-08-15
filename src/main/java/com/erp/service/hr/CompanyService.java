@@ -466,6 +466,18 @@ public class CompanyService {
                         "Max-shift checkout grace must be 15, 20, or 30 minutes (or 0 for none)");
             }
         }
+        if (dto.getSessionIdleTimeoutMinutes() != null) {
+            int minutes = dto.getSessionIdleTimeoutMinutes();
+            // 0 clears the policy (idle session timeout Off).
+            if (minutes <= 0) {
+                company.setSessionIdleTimeoutMinutes(null);
+            } else if (minutes == 15 || minutes == 20 || minutes == 30) {
+                company.setSessionIdleTimeoutMinutes(minutes);
+            } else {
+                throw new IllegalArgumentException(
+                        "Session idle timeout must be 15, 20, or 30 minutes (or 0 for Off)");
+            }
+        }
         if (dto.getProbationPeriodMonths() != null) {
             company.setProbationPeriodMonths(Math.max(dto.getProbationPeriodMonths(), 0));
         }
@@ -551,6 +563,7 @@ public class CompanyService {
                                 : new BigDecimal("6.00"))
                 .requireCheckIn(company.isRequireCheckIn())
                 .maxShiftCheckoutGraceMinutes(company.getMaxShiftCheckoutGraceMinutes())
+                .sessionIdleTimeoutMinutes(company.getSessionIdleTimeoutMinutes())
                 .probationPeriodMonths(
                         company.getProbationPeriodMonths() != null
                                 ? company.getProbationPeriodMonths()
