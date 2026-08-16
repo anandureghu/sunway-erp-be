@@ -15,6 +15,12 @@ public class TimesheetTodayResponse {
     /** Company policy: whether punch in/out is used at all (drives the UI). */
     private Boolean requireCheckIn;
     private Double standardWorkingHoursPerDay;
+    /** Max overtime hours/day from company policy. */
+    private Double otMaxHoursPerDay;
+    /** Max paid shift length in minutes (standard + OT cap). */
+    private Long maxShiftMinutes;
+    /** Grace minutes after max shift before automatic check-out. */
+    private Integer maxShiftCheckoutGraceMinutes;
 
     public Long getEmployeeId() {
         return employeeId;
@@ -86,5 +92,29 @@ public class TimesheetTodayResponse {
 
     public void setStandardWorkingHoursPerDay(Double standardWorkingHoursPerDay) {
         this.standardWorkingHoursPerDay = standardWorkingHoursPerDay;
+    }
+
+    public Double getOtMaxHoursPerDay() {
+        return otMaxHoursPerDay;
+    }
+
+    public void setOtMaxHoursPerDay(Double otMaxHoursPerDay) {
+        this.otMaxHoursPerDay = otMaxHoursPerDay;
+    }
+
+    public Long getMaxShiftMinutes() {
+        return maxShiftMinutes;
+    }
+
+    public void setMaxShiftMinutes(Long maxShiftMinutes) {
+        this.maxShiftMinutes = maxShiftMinutes;
+    }
+
+    public Integer getMaxShiftCheckoutGraceMinutes() {
+        return maxShiftCheckoutGraceMinutes;
+    }
+
+    public void setMaxShiftCheckoutGraceMinutes(Integer maxShiftCheckoutGraceMinutes) {
+        this.maxShiftCheckoutGraceMinutes = maxShiftCheckoutGraceMinutes;
     }
 }

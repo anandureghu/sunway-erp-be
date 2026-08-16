@@ -79,6 +79,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    @ExceptionHandler(io.jsonwebtoken.JwtException.class)
+    public ResponseEntity<Map<String, Object>> handleJwt(
+            io.jsonwebtoken.JwtException ex,
+            HttpServletRequest request) {
+        // Expired/invalid refresh or access tokens are expected client states — not server faults.
+        log.warn(
+                "JWT rejected on {} {}: {}",
+                request.getMethod(),
+                formatRequestUri(request),
+                ex.getMessage());
+        Map<String, Object> body = Map.of(
+                "error", "Unauthorized",
+                "message", ex instanceof io.jsonwebtoken.ExpiredJwtException
+                        ? "Session expired. Please sign in again."
+                        : "Invalid session. Please sign in again.");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String,Object>> handleOther(Exception ex, HttpServletRequest request) {
         log.error(

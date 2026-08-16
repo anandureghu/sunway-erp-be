@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -89,12 +90,18 @@ public class EmployeeAppraisalService {
                     "Employee's current job has no job code assigned.");
         }
 
-        AppraisalRoleConfig roleConfig = roleConfigRepository
-                .findByConfigIdAndJobCode(config.getId(), jobCode)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Cycle '" + config.getCycleName() + "' has no KPIs configured for job code '"
-                                + jobCode + "'. Add this job code to the cycle, or pick a cycle "
-                                + "that covers it."));
+        // KPI sets are keyed by job code. Match the employee's job code by its code
+        // first, then by the job-code title, then by the employee's company-role name.
+        // The last is a bridge for cycles configured before the role→job-code refactor,
+        // whose role_config rows still hold the old company-role names.
+        String jobTitle = currentJob.getJobCode() != null ? currentJob.getJobCode().getTitle() : null;
+        String companyRole = employee.getCompanyRole();
+        AppraisalRoleConfig roleConfig =
+                findRoleConfig(config.getId(), jobCode, jobTitle, companyRole)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Cycle '" + config.getCycleName() + "' has no KPIs configured for job "
+                                        + "code '" + jobCode + "'. Add this job code to the cycle in "
+                                        + "HR Settings → Appraisal → Goals, or pick a cycle that covers it."));
 
         List<AppraisalGoalTemplate> templates =
                 templateRepository.findByRoleConfigIdAndActiveTrue(roleConfig.getId());
@@ -122,6 +129,21 @@ public class EmployeeAppraisalService {
         }
 
         return mapToResponse(appraisalRepository.save(appraisal));
+    }
+
+    /** First role config in the cycle matching any of the given keys (code, title, role). */
+    private Optional<AppraisalRoleConfig> findRoleConfig(Long configId, String... keys) {
+        for (String key : keys) {
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            Optional<AppraisalRoleConfig> found =
+                    roleConfigRepository.findByConfigIdAndJobCode(configId, key.trim());
+            if (found.isPresent()) {
+                return found;
+            }
+        }
+        return Optional.empty();
     }
 
     /* =========================================================

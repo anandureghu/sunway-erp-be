@@ -194,6 +194,23 @@ public class Company {
     private boolean requireCheckIn = true;
 
     /**
+     * HR policy: minutes of grace after the max shift (standard + OT cap) before
+     * the system automatically checks the employee out. {@code null}/{@code 0}
+     * means check out at the cap with no extra grace. Typical values: 15, 20, 30.
+     */
+    @Column(name = "max_shift_checkout_grace_minutes")
+    private Integer maxShiftCheckoutGraceMinutes;
+
+    /**
+     * HR policy: ERP UI session idle timeout in minutes. After this many minutes of
+     * client inactivity the frontend signs the user out. Session security only —
+     * unrelated to attendance auto check-out. {@code null}/{@code 0} = disabled (Off).
+     * Allowed values: 15, 20, 30.
+     */
+    @Column(name = "session_idle_timeout_minutes")
+    private Integer sessionIdleTimeoutMinutes;
+
+    /**
      * HR policy: probation period (in months) applied to newly created employees.
      * New hires start {@code UNDER_PROBATION} and must be confirmed once it ends.
      * Zero disables probation — new hires are created {@code ACTIVE}.

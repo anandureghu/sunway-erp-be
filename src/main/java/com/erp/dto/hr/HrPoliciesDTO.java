@@ -37,6 +37,14 @@ public class HrPoliciesDTO {
     // ---- Attendance & working hours ----
     private BigDecimal standardWorkingHoursPerDay;
     private Boolean requireCheckIn;
+    /** Grace minutes after max shift before auto attendance check-out; null/0 = none. */
+    private Integer maxShiftCheckoutGraceMinutes;
+
+    /**
+     * ERP UI session idle timeout (minutes). Session security — not attendance.
+     * null/0 = Off; allowed values: 15, 20, 30.
+     */
+    private Integer sessionIdleTimeoutMinutes;
 
     // ---- Probation ----
     private Integer probationPeriodMonths;

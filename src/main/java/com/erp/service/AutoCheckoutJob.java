@@ -83,11 +83,12 @@ public class AutoCheckoutJob {
 
     /**
      * Intraday sweep: auto-check-out anyone still checked in past their maximum shift
-     * (standard hours + the overtime cap), so overtime never runs beyond the policy.
-     * Worked time is capped at the shift limit and the row is flagged auto-checked-out.
+     * (standard hours + overtime cap) plus the company's optional grace minutes.
+     * Worked time is capped at the shift limit (grace is unpaid buffer before punch-out)
+     * and the row is flagged auto-checked-out.
      */
     @Transactional
-    @Scheduled(fixedRate = 900_000) // every 15 minutes
+    @Scheduled(fixedRate = 60_000) // every minute so grace windows are timely
     public void enforceMaxShift() {
         List<EmployeeTimesheet> open =
                 timesheetRepo.findByStatusAndAttendanceDate(TimesheetStatus.CHECKED_IN, LocalDate.now());
@@ -97,6 +98,7 @@ public class AutoCheckoutJob {
 
         Map<Long, Double> stdCache = new HashMap<>();
         Map<Long, Double> otCache = new HashMap<>();
+        Map<Long, Integer> graceCache = new HashMap<>();
         LocalDateTime now = LocalDateTime.now();
         int closed = 0;
 
@@ -107,8 +109,10 @@ public class AutoCheckoutJob {
             double capHours = resolveStandardHours(t.getEmployeeId(), stdCache)
                     + resolveOtMax(t.getEmployeeId(), otCache);
             long capMinutes = Math.round(capHours * 60.0);
+            int graceMinutes = resolveGrace(t.getEmployeeId(), graceCache);
             long elapsed = Duration.between(t.getCheckInTime(), now).toMinutes();
-            if (elapsed < capMinutes) {
+            // Auto-checkout only after the grace window past the max shift.
+            if (elapsed < capMinutes + graceMinutes) {
                 continue;
             }
 
@@ -116,7 +120,9 @@ public class AutoCheckoutJob {
             t.setWorkedMinutes(capMinutes);
             t.setStatus(TimesheetStatus.CHECKED_OUT);
             t.setAutoCheckedOut(true);
-            t.setNote(MAX_SHIFT_NOTE);
+            t.setNote(graceMinutes > 0
+                    ? MAX_SHIFT_NOTE + " Grace of " + graceMinutes + " minutes applied."
+                    : MAX_SHIFT_NOTE);
             timesheetRepo.save(t);
             closed++;
         }
@@ -160,5 +166,22 @@ public class AutoCheckoutJob {
                 : DEFAULT_OT_MAX_HOURS;
         cache.put(companyId, ot);
         return ot;
+    }
+
+    /** Grace minutes after max shift before auto check-out (0 = none). */
+    private int resolveGrace(Long employeeId, Map<Long, Integer> cache) {
+        Employee employee = employeeRepo.findById(employeeId).orElse(null);
+        if (employee == null || employee.getCompany() == null) {
+            return 0;
+        }
+        Long companyId = employee.getCompany().getId();
+        Integer cached = cache.get(companyId);
+        if (cached != null) {
+            return cached;
+        }
+        Integer grace = employee.getCompany().getMaxShiftCheckoutGraceMinutes();
+        int value = grace != null && grace > 0 ? grace : 0;
+        cache.put(companyId, value);
+        return value;
     }
 }
