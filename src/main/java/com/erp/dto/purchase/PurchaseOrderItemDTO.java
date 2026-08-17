@@ -12,6 +12,8 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PurchaseOrderItemDTO {
+    /** Persistent purchase-order line id (required for multi-line / duplicate-item receives). */
+    private Long id;
     private Long itemId;
     /** Resolved item label for display (e.g. invoice PDF). */
     private String itemName;

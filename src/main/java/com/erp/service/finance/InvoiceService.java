@@ -445,7 +445,11 @@ public class InvoiceService {
         if (inv.getType() != InvoiceType.PURCHASE) {
             throw new RuntimeException("Supplier documents apply only to purchase invoices");
         }
-        inv.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+        // Keep GENERATED so rejection finance can still auto-adjust the invoice.
+        // Only mark SUPPLIER_UPLOAD when there was no system-generated source yet.
+        if (inv.getDocumentSource() != InvoiceDocumentSource.GENERATED) {
+            inv.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+        }
         uploadSupplierPdfAndPersist(inv, file);
         return toDTO(repo.findById(inv.getId()).orElse(inv));
     }
@@ -461,7 +465,9 @@ public class InvoiceService {
             );
             String pdfUrl = fileStorageService.getPublicUrl(uploadResult.getBlobPath());
             invoice.setPdfUrl(pdfUrl);
-            invoice.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+            if (invoice.getDocumentSource() != InvoiceDocumentSource.GENERATED) {
+                invoice.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+            }
             repo.save(invoice);
         } catch (Exception e) {
             throw new RuntimeException("Supplier document upload failed", e);
@@ -652,9 +658,10 @@ public class InvoiceService {
     }
 
     /**
-     * Reduces a purchase order's system-generated invoice for rejected goods.
+     * Reduces a purchase order's purchase invoice for rejected goods.
      * Only the unpaid outstanding is reduced; any overage should be issued as a credit note
      * by the caller ({@link #creditAmount}).
+     * Applies to any PURCHASE invoice linked to the PO (generated or supplier-registered).
      */
     @Transactional
     public GoodsAdjustmentResult reduceForRejectedGoods(Long purchaseOrderId, BigDecimal rejectedAmount, String reason) {
@@ -662,18 +669,9 @@ public class InvoiceService {
             return GoodsAdjustmentResult.none();
         }
         Optional<Invoice> existing = repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
-        if (existing.isEmpty() || existing.get().getDocumentSource() != InvoiceDocumentSource.GENERATED) {
-            log.warn("No generated purchase invoice found for PO {} to reduce for rejected goods ({}); {}",
+        if (existing.isEmpty()) {
+            log.warn("No purchase invoice found for PO {} to reduce for rejected goods ({}); {}",
                     purchaseOrderId, rejectedAmount, reason);
-            // Still return full amount as credit so settled/manual invoices can issue a CN.
-            boolean settled = existing.map(this::hasNoOutstanding).orElse(false);
-            if (settled || existing.isPresent()) {
-                // Manual invoices: unpaid → leave for manual follow-up (no auto reduce);
-                // settled → caller should create CN for full rejected amount.
-                if (settled) {
-                    return new GoodsAdjustmentResult(BigDecimal.ZERO, rejectedAmount);
-                }
-            }
             return GoodsAdjustmentResult.none();
         }
 
@@ -1114,9 +1112,23 @@ public class InvoiceService {
         inv.setPartyClassification(req.getPartyClassification());
 
         if (req.getAmount() != null) {
-            inv.setAmount(req.getAmount());
-            inv.setOpenAmount(req.getAmount());
-            inv.setOutstanding(req.getAmount());
+            BigDecimal oldAmount = nullToZero(inv.getAmount());
+            BigDecimal oldOutstanding = inv.getOutstanding() != null
+                    ? inv.getOutstanding()
+                    : oldAmount;
+            BigDecimal previouslyPaid = oldAmount.subtract(nullToZero(oldOutstanding)).max(BigDecimal.ZERO);
+            BigDecimal newAmount = req.getAmount().max(BigDecimal.ZERO);
+            BigDecimal newOutstanding = newAmount.subtract(previouslyPaid).max(BigDecimal.ZERO);
+            inv.setAmount(newAmount);
+            inv.setOpenAmount(newOutstanding);
+            inv.setOutstanding(newOutstanding);
+            if (newOutstanding.compareTo(BigDecimal.ZERO) <= 0) {
+                if (previouslyPaid.compareTo(BigDecimal.ZERO) > 0) {
+                    inv.setStatus("PAID");
+                }
+            } else if (previouslyPaid.compareTo(BigDecimal.ZERO) > 0) {
+                inv.setStatus("PARTIALLY_PAID");
+            }
         }
         if (req.getSubtotalAmount() != null) {
             inv.setSubtotalAmount(req.getSubtotalAmount());
@@ -1132,7 +1144,15 @@ public class InvoiceService {
             inv.setSupplierInvoiceNumber(s.isEmpty() ? null : s);
         }
         if (req.getDocumentSource() != null) {
-            inv.setDocumentSource(req.getDocumentSource());
+            // Do not demote a system-generated purchase invoice to SUPPLIER_UPLOAD
+            // when registering a supplier PDF against an existing generated invoice.
+            if (inv.getDocumentSource() == InvoiceDocumentSource.GENERATED
+                    && req.getDocumentSource() == InvoiceDocumentSource.SUPPLIER_UPLOAD
+                    && inv.getType() == InvoiceType.PURCHASE) {
+                // keep GENERATED
+            } else {
+                inv.setDocumentSource(req.getDocumentSource());
+            }
         }
         if (req.getExternalDocumentUrl() != null) {
             String u = req.getExternalDocumentUrl().trim();
@@ -1140,7 +1160,11 @@ public class InvoiceService {
             applyExternalLinkPdfHint(inv);
         }
 
-        return toDTO(repo.save(inv));
+        Invoice saved = repo.save(inv);
+        if (req.getAmount() != null) {
+            syncPendingPaymentForInvoice(saved, saved.getType() == InvoiceType.PURCHASE);
+        }
+        return toDTO(saved);
     }
 
     public InvoiceResponse archiveInvoice(Long id) {
