@@ -132,41 +132,37 @@ public class SalesReturnService {
 
         for (PreparedLine pl : prepared) {
             SalesOrderItem line = pl.line();
-            int newReturned = (line.getReturnedQty() == null ? 0 : line.getReturnedQty()) + pl.qty();
+            int alreadyReturned = line.getReturnedQty() == null ? 0 : line.getReturnedQty();
+            int ordered = orderedQty(line);
+            int remainingBefore = ordered - alreadyReturned;
+            int newReturned = alreadyReturned + pl.qty();
             line.setReturnedQty(newReturned);
 
             // Reduce billed line totals / SO totals for the returned portion
             BigDecimal currentLineTotal = line.getLineTotal() != null ? line.getLineTotal() : BigDecimal.ZERO;
             line.setLineTotal(currentLineTotal.subtract(pl.lineValue()).max(BigDecimal.ZERO));
-            if (line.getLineSubtotal() != null && orderedQty(line) > 0) {
-                BigDecimal unitSub = line.getLineSubtotal()
-                        .divide(BigDecimal.valueOf(orderedQty(line)), 4, RoundingMode.HALF_UP);
-                line.setLineSubtotal(line.getLineSubtotal().subtract(unitSub.multiply(BigDecimal.valueOf(pl.qty())))
-                        .max(BigDecimal.ZERO));
+            if (remainingBefore > 0 && line.getLineSubtotal() != null) {
+                BigDecimal subShare = line.getLineSubtotal()
+                        .multiply(BigDecimal.valueOf(pl.qty()))
+                        .divide(BigDecimal.valueOf(remainingBefore), 4, RoundingMode.HALF_UP);
+                line.setLineSubtotal(line.getLineSubtotal().subtract(subShare).max(BigDecimal.ZERO));
             }
-            if (line.getTaxAmount() != null && orderedQty(line) > 0) {
-                BigDecimal unitTax = line.getTaxAmount()
-                        .divide(BigDecimal.valueOf(orderedQty(line)), 4, RoundingMode.HALF_UP);
-                line.setTaxAmount(line.getTaxAmount().subtract(unitTax.multiply(BigDecimal.valueOf(pl.qty())))
-                        .max(BigDecimal.ZERO));
+            if (remainingBefore > 0 && line.getTaxAmount() != null) {
+                BigDecimal taxShare = line.getTaxAmount()
+                        .multiply(BigDecimal.valueOf(pl.qty()))
+                        .divide(BigDecimal.valueOf(remainingBefore), 4, RoundingMode.HALF_UP);
+                line.setTaxAmount(line.getTaxAmount().subtract(taxShare).max(BigDecimal.ZERO));
             }
 
             Warehouse warehouse = line.getWarehouse() != null
                     ? line.getWarehouse()
                     : (line.getItem().getWarehouse());
 
-            if (restock && warehouse != null) {
-                stockBatchService.receiveIntoBatch(
-                        line.getItem().getId(),
-                        warehouse.getId(),
-                        pl.qty(),
-                        line.getFifoUnitCost() != null ? line.getFifoUnitCost() : line.getItem().getCostPrice(),
-                        null,
-                        null,
-                        StockBatchSourceType.ADJUSTMENT,
-                        null,
-                        companyId
-                );
+            if (restock && warehouse == null) {
+                throw new ConflictException(
+                        "Cannot restock \"" + line.getItem().getName()
+                                + "\": no warehouse on the sales line or item. "
+                                + "Uncheck restock or assign a warehouse first.");
             }
 
             SalesReturnItem sri = SalesReturnItem.builder()
@@ -184,10 +180,31 @@ public class SalesReturnService {
         recomputeSalesOrderTotals(so);
         salesOrderRepo.save(so);
 
-        applyFinancialAdjustment(so, totalReturn, dto.getReason(), salesReturn);
-
         SalesReturn saved = salesReturnRepo.save(salesReturn);
-        return toDTO(saved);
+
+        if (restock) {
+            for (SalesReturnItem sri : saved.getItems()) {
+                if (sri.getWarehouse() == null) {
+                    continue;
+                }
+                stockBatchService.receiveIntoBatch(
+                        sri.getItem().getId(),
+                        sri.getWarehouse().getId(),
+                        sri.getQuantity(),
+                        sri.getSalesOrderItem() != null && sri.getSalesOrderItem().getFifoUnitCost() != null
+                                ? sri.getSalesOrderItem().getFifoUnitCost()
+                                : sri.getItem().getCostPrice(),
+                        null,
+                        null,
+                        StockBatchSourceType.SALES_RETURN,
+                        saved.getId(),
+                        companyId
+                );
+            }
+        }
+
+        applyFinancialAdjustment(so, totalReturn, dto.getReason(), saved);
+        return toDTO(salesReturnRepo.save(saved));
     }
 
     private void applyFinancialAdjustment(
@@ -202,22 +219,21 @@ public class SalesReturnService {
             return;
         }
 
-        boolean settled = "PAID".equalsIgnoreCase(invoice.getStatus())
-                || (invoice.getOutstanding() != null && invoice.getOutstanding().compareTo(BigDecimal.ZERO) <= 0);
+        InvoiceService.GoodsAdjustmentResult result =
+                invoiceService.reduceForReturnedSalesGoods(so.getId(), returnValue, noteReason);
 
-        if (settled) {
+        BigDecimal creditAmount = result.creditAmount() != null ? result.creditAmount() : BigDecimal.ZERO;
+        if (creditAmount.compareTo(BigDecimal.ZERO) > 0) {
             CreditNoteResponseDTO cn = creditNoteService.createAutomaticCreditNoteForCustomerReturn(
                     so.getCompany().getId(),
                     invoice.getInvoiceId(),
-                    returnValue,
+                    creditAmount,
                     noteReason,
                     so.getCustomer() != null ? so.getCustomer().getId() : null
             );
             if (cn != null && cn.getId() != null) {
                 creditNoteRepo.findById(cn.getId()).ifPresent(salesReturn::setCreditNote);
             }
-        } else {
-            invoiceService.reduceForReturnedSalesGoods(so.getId(), returnValue, noteReason);
         }
     }
 

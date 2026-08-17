@@ -5,5 +5,6 @@ public enum StockBatchSourceType {
     GOODS_RECEIPT,
     MIGRATION,
     TRANSFER,
-    ADJUSTMENT
+    ADJUSTMENT,
+    SALES_RETURN
 }

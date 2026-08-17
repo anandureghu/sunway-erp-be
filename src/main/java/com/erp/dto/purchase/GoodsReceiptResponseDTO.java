@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -27,5 +28,8 @@ public class GoodsReceiptResponseDTO {
     private Long authorizedById;
     private String authorizedByName;
     private String documentPdfUrl;
+    private BigDecimal invoiceReducedAmount;
+    private BigDecimal creditNoteAmount;
+    private String creditNoteNumber;
     private List<GoodsReceiptItemDTO> items;
 }

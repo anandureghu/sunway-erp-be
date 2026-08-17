@@ -408,11 +408,16 @@ public class PaymentService {
             invoice.setOutstanding(newOutstanding);
             invoice.setOpenAmount(newOutstanding);
             if (newOutstanding.compareTo(BigDecimal.ZERO) == 0) {
-                invoice.setStatus("ADJUSTED");
-            } else if (!"PARTIALLY_PAID".equalsIgnoreCase(invoice.getStatus())) {
-                invoice.setStatus("PARTIALLY_ADJUSTED");
+                invoice.setStatus("PAID");
+                invoiceRepo.save(invoice);
+                // Complete linked sales order when credit fully settles the invoice
+            } else if (!"PARTIALLY_PAID".equalsIgnoreCase(invoice.getStatus())
+                    && !"PAID".equalsIgnoreCase(invoice.getStatus())) {
+                invoice.setStatus("PARTIALLY_PAID");
+                invoiceRepo.save(invoice);
+            } else {
+                invoiceRepo.save(invoice);
             }
-            invoiceRepo.save(invoice);
         }
         return applied;
     }
@@ -589,6 +594,7 @@ public class PaymentService {
         if (outstandingAfterCredit.compareTo(BigDecimal.ZERO) <= 0) {
             // Fully settled by credit alone — nothing left to collect in cash.
             payment.setAmount(BigDecimal.ZERO);
+            invoiceService.completeLinkedDocumentsIfPaid(invoice);
             return toDTO(paymentRepo.save(payment));
         }
 
@@ -660,6 +666,7 @@ public class PaymentService {
         if (outstandingAfterCredit.compareTo(BigDecimal.ZERO) <= 0) {
             // Fully settled by supplier credit alone — nothing left to pay in cash.
             payment.setAmount(BigDecimal.ZERO);
+            invoiceService.regenerateGeneratedPurchaseInvoicePdfAfterVendorPayment(po.getId());
             return toDTO(paymentRepo.save(payment));
         }
 

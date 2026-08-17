@@ -87,11 +87,21 @@ public class VendorPayableService {
         if (!isReleasedToSupplier(po.getStatus())) {
             return;
         }
+        var existing = paymentRepo.findFirstByPurchaseOrderIdAndPaymentDirectionAndPaymentMethod(
+                po.getId(), PaymentDirection.VENDOR, "PENDING_VENDOR_PAYMENT");
         if (outstanding == null || outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+            existing.ifPresent(pending -> {
+                pending.setArchived(true);
+                pending.setAmount(BigDecimal.ZERO);
+                paymentRepo.save(pending);
+            });
             return;
         }
-        if (paymentRepo.existsByPurchaseOrderIdAndPaymentDirectionAndPaymentMethod(
-                po.getId(), PaymentDirection.VENDOR, "PENDING_VENDOR_PAYMENT")) {
+        if (existing.isPresent()) {
+            Payment pending = existing.get();
+            pending.setArchived(false);
+            pending.setAmount(outstanding);
+            paymentRepo.save(pending);
             return;
         }
         Long userId = auth.getCurrentUserId();

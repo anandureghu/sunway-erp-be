@@ -3,7 +3,6 @@ package com.erp.service.purchase;
 import com.erp.domain.InvoiceType;
 import com.erp.domain.User;
 import com.erp.domain.finance.Invoice;
-import com.erp.domain.finance.InvoiceDocumentSource;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.Warehouse;
@@ -31,7 +30,6 @@ import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CreditNoteService;
 import com.erp.service.finance.InvoiceService;
-import com.erp.service.finance.VendorPayableService;
 import com.erp.service.inventory.ItemWarehouseStockService;
 import com.erp.service.inventory.StockBatchService;
 import com.erp.service.pdf.GoodsReceiptPdfService;
@@ -63,7 +61,6 @@ public class GoodsReceiptService {
     private final GoodsReceiptPdfService goodsReceiptPdfService;
     private final InvoiceService invoiceService;
     private final CreditNoteService creditNoteService;
-    private final VendorPayableService vendorPayableService;
 
     public GoodsReceiptService(
             GoodsReceiptRepository repo,
@@ -78,8 +75,7 @@ public class GoodsReceiptService {
             AuthContext auth,
             GoodsReceiptPdfService goodsReceiptPdfService,
             InvoiceService invoiceService,
-            CreditNoteService creditNoteService,
-            VendorPayableService vendorPayableService
+            CreditNoteService creditNoteService
     ) {
         this.repo = repo;
         this.poRepo = poRepo;
@@ -94,7 +90,6 @@ public class GoodsReceiptService {
         this.goodsReceiptPdfService = goodsReceiptPdfService;
         this.invoiceService = invoiceService;
         this.creditNoteService = creditNoteService;
-        this.vendorPayableService = vendorPayableService;
     }
 
     /**
@@ -244,8 +239,9 @@ public class GoodsReceiptService {
         recomputePurchaseOrderTotal(po);
         poRepo.save(po);
 
+        InspectionFinanceOutcome finance = InspectionFinanceOutcome.none();
         if (totalRejectedValue.compareTo(BigDecimal.ZERO) > 0) {
-            applyRejectionToInvoice(po, totalRejectedValue, gr.getId());
+            finance = applyRejectionToInvoice(po, totalRejectedValue, gr.getId());
         }
 
         Instant now = Instant.now();
@@ -258,25 +254,44 @@ public class GoodsReceiptService {
         GoodsReceipt saved = repo.save(gr);
         String pdfUrl = goodsReceiptPdfService.generateAndUploadGoodsReceiptPdf(saved);
         saved.setDocumentPdfUrl(pdfUrl);
-        return toDTO(repo.save(saved));
+        return toDTO(repo.save(saved), finance);
     }
 
-    private void applyRejectionToInvoice(PurchaseOrder po, BigDecimal rejectedValue, Long goodsReceiptId) {
+    private InspectionFinanceOutcome applyRejectionToInvoice(
+            PurchaseOrder po, BigDecimal rejectedValue, Long goodsReceiptId) {
         Invoice invoice = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE).orElse(null);
-        if (invoice == null || invoice.getDocumentSource() != InvoiceDocumentSource.GENERATED) {
-            // No generated purchase invoice to adjust (or a manually-entered supplier
-            // invoice, which may have its own independent tax/discount amounts) -
-            // leave it for manual follow-up.
-            return;
+        String reason = "Goods rejected at inspection for purchase order " + po.getOrderNumber();
+
+        if (invoice == null) {
+            return InspectionFinanceOutcome.none();
         }
 
-        boolean settled = vendorPayableService.isVendorPaymentSettledForPurchaseOrder(po.getId());
-        String reason = "Goods rejected at inspection for purchase order " + po.getOrderNumber();
-        if (settled) {
-            creditNoteService.createAutomaticCreditNoteForRejection(
-                    invoice.getCompany().getId(), invoice.getInvoiceId(), rejectedValue, reason, goodsReceiptId);
-        } else {
-            invoiceService.reduceForRejectedGoods(po.getId(), rejectedValue, reason);
+        InvoiceService.GoodsAdjustmentResult result =
+                invoiceService.reduceForRejectedGoods(po.getId(), rejectedValue, reason);
+
+        BigDecimal creditAmount = result.creditAmount() != null ? result.creditAmount() : BigDecimal.ZERO;
+        String creditNoteNumber = null;
+        if (creditAmount.compareTo(BigDecimal.ZERO) > 0) {
+            var cn = creditNoteService.createAutomaticCreditNoteForRejection(
+                    invoice.getCompany().getId(),
+                    invoice.getInvoiceId(),
+                    creditAmount,
+                    reason,
+                    goodsReceiptId);
+            creditNoteNumber = cn != null ? cn.getCreditNoteNumber() : null;
+        }
+        return new InspectionFinanceOutcome(
+                result.reducedAmount() != null ? result.reducedAmount() : BigDecimal.ZERO,
+                creditAmount,
+                creditNoteNumber);
+    }
+
+    private record InspectionFinanceOutcome(
+            BigDecimal invoiceReducedAmount,
+            BigDecimal creditNoteAmount,
+            String creditNoteNumber) {
+        static InspectionFinanceOutcome none() {
+            return new InspectionFinanceOutcome(BigDecimal.ZERO, BigDecimal.ZERO, null);
         }
     }
 
@@ -479,6 +494,10 @@ public class GoodsReceiptService {
     }
 
     private GoodsReceiptResponseDTO toDTO(GoodsReceipt gr) {
+        return toDTO(gr, null);
+    }
+
+    private GoodsReceiptResponseDTO toDTO(GoodsReceipt gr, InspectionFinanceOutcome finance) {
         return GoodsReceiptResponseDTO.builder()
                 .id(gr.getId())
                 .purchaseOrderId(gr.getPurchaseOrder().getId())
@@ -493,6 +512,9 @@ public class GoodsReceiptService {
                 .authorizedById(gr.getAuthorizedBy() != null ? gr.getAuthorizedBy().getId() : null)
                 .authorizedByName(gr.getAuthorizedBy() != null ? gr.getAuthorizedBy().getFullName() : null)
                 .documentPdfUrl(gr.getDocumentPdfUrl())
+                .invoiceReducedAmount(finance != null ? finance.invoiceReducedAmount() : null)
+                .creditNoteAmount(finance != null ? finance.creditNoteAmount() : null)
+                .creditNoteNumber(finance != null ? finance.creditNoteNumber() : null)
                 .items(
                         gr.getItems().stream().map(i -> {
                             var warehouse = i.getWarehouse() != null
