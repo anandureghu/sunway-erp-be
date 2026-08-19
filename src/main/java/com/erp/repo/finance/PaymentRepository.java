@@ -34,7 +34,13 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     boolean existsByCompany_IdAndInvoiceIdAndPaymentMethod(
             Long companyId, String invoiceId, String paymentMethod);
 
+    Optional<Payment> findFirstByCompany_IdAndInvoiceIdAndPaymentMethod(
+            Long companyId, String invoiceId, String paymentMethod);
+
     boolean existsByPurchaseOrderIdAndPaymentDirectionAndPaymentMethod(
+            Long purchaseOrderId, PaymentDirection paymentDirection, String paymentMethod);
+
+    Optional<Payment> findFirstByPurchaseOrderIdAndPaymentDirectionAndPaymentMethod(
             Long purchaseOrderId, PaymentDirection paymentDirection, String paymentMethod);
 
     @Query("""

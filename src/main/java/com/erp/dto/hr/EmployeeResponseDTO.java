@@ -58,6 +58,9 @@ public class EmployeeResponseDTO {
      */
     private String designation;
 
+    /** Job code string from the current job assignment (job_codes.code, e.g. "ENG"). */
+    private String jobCode;
+
     /**
      * Employment type/category derived from the current job assignment
      * (employee_current_job). `employmentCategory` is Permanent / Contract / Intern /

@@ -1,6 +1,7 @@
 package com.erp.service;
 
 import com.erp.domain.Employee;
+import com.erp.domain.EmployeeStatus;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.security.Role;
@@ -30,9 +31,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 @Service
 public class AuthService {
 
@@ -92,8 +95,7 @@ public class AuthService {
 
         List<Employee> memberships = activeCompanyMemberships(allMemberships);
         if (memberships.isEmpty())
-            throw new IllegalArgumentException(
-                    "Your company account has been deactivated. Contact your administrator.");
+            throw new IllegalArgumentException(signInBlockedReason(allMemberships));
 
         List<CompanySummary> companies = memberships.stream()
                 .map(this::toCompanySummary)
@@ -146,8 +148,7 @@ public class AuthService {
 
         List<Employee> memberships = activeCompanyMemberships(allMemberships);
         if (memberships.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Your company account has been deactivated. Contact your administrator.");
+            throw new IllegalArgumentException(signInBlockedReason(allMemberships));
         }
 
         List<CompanySummary> companies = memberships.stream()
@@ -247,6 +248,14 @@ public class AuthService {
                             "Invalid session. Please sign in again."));
         }
 
+        // A session cannot be refreshed once the employee has left or been deactivated —
+        // the credentials are still valid, but access ends with the current token.
+        if (!canSignIn(emp)) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "This account is no longer active. Please contact your HR administrator.");
+        }
+
         List<CompanySummary> companies = employeeRepository.findAllByUser_Id(u.getId()).stream()
                 .map(this::toCompanySummary)
                 .toList();
@@ -275,6 +284,10 @@ public class AuthService {
         if (emp.getCompany() != null && !emp.getCompany().isActive()) {
             throw new IllegalArgumentException(
                     "This company has been deactivated. Contact your administrator.");
+        }
+        if (emp.getStatus() != null && LOGIN_BLOCKED_STATUSES.contains(emp.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Your account in this company is no longer active. Contact your HR administrator.");
         }
 
         List<CompanySummary> companies = employeeRepository.findAllByUser_Id(userId).stream()
@@ -332,10 +345,45 @@ public class AuthService {
     }
 
     /** Excludes memberships in a company that's been deactivated by a Super Admin. */
+    /**
+     * Employee statuses that are barred from signing in. A departed (terminated /
+     * resigned / retired) or deactivated employee cannot authenticate, even if the
+     * user credentials are still valid.
+     */
+    private static final Set<EmployeeStatus> LOGIN_BLOCKED_STATUSES = EnumSet.of(
+            EmployeeStatus.TERMINATED,
+            EmployeeStatus.RESIGNED,
+            EmployeeStatus.RETIRED,
+            EmployeeStatus.INACTIVE);
+
+    private boolean canSignIn(Employee e) {
+        boolean companyActive = e.getCompany() == null || e.getCompany().isActive();
+        boolean statusAllowed = e.getStatus() == null
+                || !LOGIN_BLOCKED_STATUSES.contains(e.getStatus());
+        return companyActive && statusAllowed;
+    }
+
     private List<Employee> activeCompanyMemberships(List<Employee> memberships) {
         return memberships.stream()
-                .filter(e -> e.getCompany() == null || e.getCompany().isActive())
+                .filter(this::canSignIn)
                 .toList();
+    }
+
+    /**
+     * Message explaining why a user with valid credentials has no usable membership:
+     * either their own status blocks them, or every company they belong to is
+     * deactivated.
+     */
+    private String signInBlockedReason(List<Employee> allMemberships) {
+        boolean statusBlocked = allMemberships.stream()
+                .anyMatch(e -> (e.getCompany() == null || e.getCompany().isActive())
+                        && e.getStatus() != null
+                        && LOGIN_BLOCKED_STATUSES.contains(e.getStatus()));
+        if (statusBlocked) {
+            return "This account is no longer active. Terminated, resigned, retired or "
+                    + "inactive employees cannot sign in. Contact your HR administrator.";
+        }
+        return "Your company account has been deactivated. Contact your administrator.";
     }
 
     private Employee resolveActiveEmployee(List<Employee> memberships, Long preferredCompanyId) {

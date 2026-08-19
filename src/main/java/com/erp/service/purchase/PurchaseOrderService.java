@@ -586,6 +586,7 @@ public class PurchaseOrderService {
                 .items(
                         po.getItems().stream().map(i ->
                                 PurchaseOrderItemDTO.builder()
+                                        .id(i.getId())
                                         .itemId(i.getItem().getId())
                                         .itemName(i.getItem().getName())
                                         .itemDescription(i.getItem().getDescription())

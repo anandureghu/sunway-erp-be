@@ -3,13 +3,18 @@ package com.erp.service.finance;
 import com.erp.domain.InvoiceType;
 import com.erp.domain.finance.CreditNote;
 import com.erp.domain.finance.Invoice;
+import com.erp.domain.finance.Payment;
+import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.hr.Company;
 import com.erp.domain.purchase.GoodsReceipt;
 import com.erp.dto.finance.CreateCreditNoteDTO;
 import com.erp.dto.finance.CreditNoteResponseDTO;
 import com.erp.repo.finance.CreditNoteRepository;
 import com.erp.repo.finance.InvoiceRepository;
+import com.erp.repo.finance.PaymentRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.inventory.CustomerRepository;
+import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.purchase.GoodsReceiptRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.repo.sales.SalesOrderRepository;
@@ -20,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.erp.service.DocumentSequenceService;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -33,6 +39,9 @@ public class CreditNoteService {
     private final GoodsReceiptRepository goodsReceiptRepository;
     private final SalesOrderRepository salesOrderRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final PaymentRepository paymentRepository;
+    private final CustomerRepository customerRepository;
+    private final VendorRepository vendorRepository;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
 
@@ -285,7 +294,8 @@ public class CreditNoteService {
     }
 
     /**
-     * Cashes out remaining standing credit so the customer can redeem it as cash anytime.
+     * Cashes out remaining standing credit as a recorded refund/redemption payment.
+     * Customer notes → CUSTOMER direction outflow record; supplier notes → VENDOR receipt record.
      */
     @Transactional
     public CreditNoteResponseDTO cashOut(Long creditNoteId) {
@@ -296,7 +306,8 @@ public class CreditNoteService {
         if (note.getCompany() == null || !companyId.equals(note.getCompany().getId())) {
             throw new RuntimeException("Credit note not found or access denied");
         }
-        if (note.getRemainingAmount() == null || note.getRemainingAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal remaining = note.getRemainingAmount();
+        if (remaining == null || remaining.compareTo(BigDecimal.ZERO) <= 0) {
             throw new RuntimeException("Credit note has no remaining balance to cash out");
         }
         String status = note.getStatus() == null ? "" : note.getStatus().toUpperCase();
@@ -304,30 +315,105 @@ public class CreditNoteService {
             throw new RuntimeException("Only available credit notes can be cashed out");
         }
 
+        Invoice invoice = note.getInvoice();
+        boolean supplierCredit = note.getSupplierId() != null
+                || (invoice != null && invoice.getType() == InvoiceType.PURCHASE);
+
+        PaymentDirection direction = supplierCredit ? PaymentDirection.VENDOR : PaymentDirection.CUSTOMER;
+        String payee = supplierCredit
+                ? resolveSupplierName(note)
+                : resolveCustomerName(note);
+
+        Payment cashOutPayment = Payment.builder()
+                .paymentCode(documentSequenceService.generateNext("CNR"))
+                .company(note.getCompany())
+                .amount(remaining)
+                .paymentMethod("CREDIT_NOTE_CASHOUT")
+                .effectiveDate(LocalDate.now())
+                .notes("Cash-out of credit note " + note.getCreditNoteNumber()
+                        + (payee != null ? " (" + payee + ")" : "")
+                        + (note.getReason() != null ? ": " + note.getReason() : ""))
+                .invoiceId(invoice != null ? invoice.getInvoiceId() : null)
+                .paymentDirection(direction)
+                .purchaseOrderId(invoice != null && invoice.getType() == InvoiceType.PURCHASE
+                        ? invoice.getOrderId() : null)
+                .payee(payee)
+                .expenseCategory(supplierCredit ? null : "CREDIT_NOTE_REFUND")
+                .createdBy(auth.getCurrentUserId())
+                .build();
+        cashOutPayment.setPdfUrl("https://dummy.url/payments/" + cashOutPayment.getPaymentCode() + ".pdf");
+        paymentRepository.save(cashOutPayment);
+
         note.setRemainingAmount(BigDecimal.ZERO);
         note.setStatus("CASHED");
+        // Stash payment code in reason suffix only if we need it — expose via DTO from payment lookup
         creditNoteRepository.save(note);
-        return mapToResponse(note);
+
+        CreditNoteResponseDTO dto = mapToResponse(note);
+        dto.setCashOutPaymentCode(cashOutPayment.getPaymentCode());
+        return dto;
     }
 
     private CreditNoteResponseDTO mapToResponse(CreditNote creditNote) {
 
         Invoice invoice = creditNote.getInvoice();
-        boolean isPurchase = invoice != null && invoice.getType() == InvoiceType.PURCHASE;
+        boolean isPurchase = invoice != null && invoice.getType() == InvoiceType.PURCHASE
+                || creditNote.getSupplierId() != null;
+
+        String customerName = !isPurchase
+                ? firstNonBlank(
+                        invoice != null ? invoice.getToParty() : null,
+                        resolveCustomerName(creditNote))
+                : null;
+        String supplierName = isPurchase
+                ? firstNonBlank(
+                        invoice != null ? invoice.getToParty() : null,
+                        resolveSupplierName(creditNote))
+                : null;
 
         return CreditNoteResponseDTO.builder()
                 .id(creditNote.getId())
                 .creditNoteNumber(creditNote.getCreditNoteNumber())
                 .creditNoteDate(creditNote.getCreditDate())
-                .customerName(!isPurchase && invoice != null ? invoice.getToParty() : null)
-                .supplierName(isPurchase && invoice != null ? invoice.getToParty() : null)
+                .customerName(customerName)
+                .supplierName(supplierName)
                 .customerId(creditNote.getCustomerId())
                 .supplierId(creditNote.getSupplierId())
                 .status(creditNote.getStatus())
                 .project(creditNote.getProject())
                 .referenceNumber(invoice != null ? invoice.getInvoiceId() : null)
+                .source(creditNote.getSource())
+                .reason(creditNote.getReason())
                 .amount(creditNote.getAmount())
                 .remainingAmount(creditNote.getRemainingAmount())
                 .build();
+    }
+
+    private String resolveCustomerName(CreditNote note) {
+        if (note.getCustomerId() == null) {
+            return null;
+        }
+        return customerRepository.findById(note.getCustomerId())
+                .map(c -> c.getCustomerName())
+                .orElse(null);
+    }
+
+    private String resolveSupplierName(CreditNote note) {
+        if (note.getSupplierId() == null) {
+            return null;
+        }
+        return vendorRepository.findById(note.getSupplierId())
+                .map(v -> v.getVendorName())
+                .orElse(null);
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        if (b != null && !b.isBlank()) {
+            return b;
+        }
+        return null;
     }
 }

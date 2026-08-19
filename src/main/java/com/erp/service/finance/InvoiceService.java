@@ -445,7 +445,11 @@ public class InvoiceService {
         if (inv.getType() != InvoiceType.PURCHASE) {
             throw new RuntimeException("Supplier documents apply only to purchase invoices");
         }
-        inv.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+        // Keep GENERATED so rejection finance can still auto-adjust the invoice.
+        // Only mark SUPPLIER_UPLOAD when there was no system-generated source yet.
+        if (inv.getDocumentSource() != InvoiceDocumentSource.GENERATED) {
+            inv.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+        }
         uploadSupplierPdfAndPersist(inv, file);
         return toDTO(repo.findById(inv.getId()).orElse(inv));
     }
@@ -461,7 +465,9 @@ public class InvoiceService {
             );
             String pdfUrl = fileStorageService.getPublicUrl(uploadResult.getBlobPath());
             invoice.setPdfUrl(pdfUrl);
-            invoice.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+            if (invoice.getDocumentSource() != InvoiceDocumentSource.GENERATED) {
+                invoice.setDocumentSource(InvoiceDocumentSource.SUPPLIER_UPLOAD);
+            }
             repo.save(invoice);
         } catch (Exception e) {
             throw new RuntimeException("Supplier document upload failed", e);
@@ -486,15 +492,31 @@ public class InvoiceService {
             return;
         }
         Long companyId = invoice.getCompany() != null ? invoice.getCompany().getId() : null;
-        if (companyId == null
-                || paymentRepo.existsByCompany_IdAndInvoiceIdAndPaymentMethod(
-                        companyId, invoice.getInvoiceId(), "PENDING_REQUEST")) {
+        if (companyId == null) {
             return;
         }
         BigDecimal outstanding = invoice.getOutstanding() != null
                 ? invoice.getOutstanding()
                 : invoice.getAmount();
         if (outstanding == null || outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+            paymentRepo.findFirstByCompany_IdAndInvoiceIdAndPaymentMethod(
+                            companyId, invoice.getInvoiceId(), "PENDING_REQUEST")
+                    .ifPresent(pending -> {
+                        pending.setArchived(true);
+                        pending.setAmount(BigDecimal.ZERO);
+                        paymentRepo.save(pending);
+                    });
+            return;
+        }
+        var existingPending = paymentRepo.findFirstByCompany_IdAndInvoiceIdAndPaymentMethod(
+                companyId, invoice.getInvoiceId(), "PENDING_REQUEST");
+        if (existingPending.isPresent()) {
+            Payment pending = existingPending.get();
+            if (pending.isArchived()) {
+                pending.setArchived(false);
+            }
+            pending.setAmount(outstanding);
+            paymentRepo.save(pending);
             return;
         }
         Payment payment = Payment.builder()
@@ -617,70 +639,173 @@ public class InvoiceService {
     }
 
     /**
-     * Reduces a purchase order's system-generated (cross-check) invoice when goods are
-     * rejected at inspection and the invoice has not yet been fully settled. Only applies
-     * to {@link InvoiceDocumentSource#GENERATED} invoices, priced purely off {@code po.totalAmount};
-     * manually-entered supplier invoices (independent tax/discount amounts) are left untouched.
-     * No-op (with a warning log) when no generated purchase invoice exists for the PO.
+     * Result of adjusting an invoice for rejected/returned goods.
+     * {@code reducedAmount} was taken off the unpaid balance;
+     * {@code creditAmount} should become a standing credit note for the already-paid slice.
      */
-    @Transactional
-    public void reduceForRejectedGoods(Long purchaseOrderId, BigDecimal rejectedAmount, String reason) {
-        if (rejectedAmount == null || rejectedAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-        Optional<Invoice> existing = repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
-        if (existing.isEmpty() || existing.get().getDocumentSource() != InvoiceDocumentSource.GENERATED) {
-            log.warn("No generated purchase invoice found for PO {} to reduce for rejected goods ({}); {}",
-                    purchaseOrderId, rejectedAmount, reason);
-            return;
+    public record GoodsAdjustmentResult(BigDecimal reducedAmount, BigDecimal creditAmount) {
+        public static GoodsAdjustmentResult none() {
+            return new GoodsAdjustmentResult(BigDecimal.ZERO, BigDecimal.ZERO);
         }
 
-        Invoice invoice = existing.get();
-        BigDecimal amount = clampNonNegative(nullToZero(invoice.getAmount()).subtract(rejectedAmount));
-        BigDecimal subtotal = clampNonNegative(nullToZero(invoice.getSubtotalAmount()).subtract(rejectedAmount));
-        BigDecimal outstanding = clampNonNegative(nullToZero(invoice.getOutstanding()).subtract(rejectedAmount));
-        BigDecimal openAmount = clampNonNegative(nullToZero(invoice.getOpenAmount()).subtract(rejectedAmount));
-
-        invoice.setAmount(amount);
-        invoice.setSubtotalAmount(subtotal);
-        invoice.setOutstanding(outstanding);
-        invoice.setOpenAmount(openAmount);
-        if (outstanding.compareTo(BigDecimal.ZERO) == 0) {
-            invoice.setStatus("ADJUSTED");
+        public boolean hasCredit() {
+            return creditAmount != null && creditAmount.compareTo(BigDecimal.ZERO) > 0;
         }
-        repo.save(invoice);
+
+        public boolean hasReduction() {
+            return reducedAmount != null && reducedAmount.compareTo(BigDecimal.ZERO) > 0;
+        }
     }
 
     /**
-     * Reduces a sales invoice when the customer returns goods and the invoice is not yet fully paid.
-     * Mirrors {@link #reduceForRejectedGoods} for the AR side.
+     * Reduces a purchase order's purchase invoice for rejected goods.
+     * Only the unpaid outstanding is reduced; any overage should be issued as a credit note
+     * by the caller ({@link #creditAmount}).
+     * Applies to any PURCHASE invoice linked to the PO (generated or supplier-registered).
      */
     @Transactional
-    public void reduceForReturnedSalesGoods(Long salesOrderId, BigDecimal returnedAmount, String reason) {
+    public GoodsAdjustmentResult reduceForRejectedGoods(Long purchaseOrderId, BigDecimal rejectedAmount, String reason) {
+        if (rejectedAmount == null || rejectedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return GoodsAdjustmentResult.none();
+        }
+        Optional<Invoice> existing = repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
+        if (existing.isEmpty()) {
+            log.warn("No purchase invoice found for PO {} to reduce for rejected goods ({}); {}",
+                    purchaseOrderId, rejectedAmount, reason);
+            return GoodsAdjustmentResult.none();
+        }
+
+        Invoice invoice = existing.get();
+        return applyGoodsAdjustment(invoice, rejectedAmount, reason, true);
+    }
+
+    /**
+     * Reduces a sales invoice for returned goods. Unpaid outstanding is reduced;
+     * paid overage is returned as {@code creditAmount} for a standing credit note.
+     */
+    @Transactional
+    public GoodsAdjustmentResult reduceForReturnedSalesGoods(Long salesOrderId, BigDecimal returnedAmount, String reason) {
         if (returnedAmount == null || returnedAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
+            return GoodsAdjustmentResult.none();
         }
         Optional<Invoice> existing = repo.findByOrderIdAndType(salesOrderId, InvoiceType.SALES);
         if (existing.isEmpty()) {
             log.warn("No sales invoice found for SO {} to reduce for returned goods ({}); {}",
                     salesOrderId, returnedAmount, reason);
-            return;
+            return GoodsAdjustmentResult.none();
         }
 
         Invoice invoice = existing.get();
-        BigDecimal amount = clampNonNegative(nullToZero(invoice.getAmount()).subtract(returnedAmount));
-        BigDecimal subtotal = clampNonNegative(nullToZero(invoice.getSubtotalAmount()).subtract(returnedAmount));
-        BigDecimal outstanding = clampNonNegative(nullToZero(invoice.getOutstanding()).subtract(returnedAmount));
-        BigDecimal openAmount = clampNonNegative(nullToZero(invoice.getOpenAmount()).subtract(returnedAmount));
+        GoodsAdjustmentResult result = applyGoodsAdjustment(invoice, returnedAmount, reason, false);
 
-        invoice.setAmount(amount);
-        invoice.setSubtotalAmount(subtotal);
-        invoice.setOutstanding(outstanding);
-        invoice.setOpenAmount(openAmount);
-        if (outstanding.compareTo(BigDecimal.ZERO) == 0) {
-            invoice.setStatus("ADJUSTED");
+        // Keep invoice tax/subtotal aligned with the sales order after line reductions.
+        salesOrderRepo.findById(salesOrderId).ifPresent(so -> {
+            Invoice refreshed = repo.findById(invoice.getId()).orElse(invoice);
+            if (so.getSubtotalAmount() != null) {
+                refreshed.setSubtotalAmount(so.getSubtotalAmount());
+            }
+            if (so.getTaxAmount() != null) {
+                refreshed.setTaxAmount(so.getTaxAmount());
+            }
+            if (so.getDiscountAmount() != null) {
+                refreshed.setDiscountAmount(so.getDiscountAmount());
+            }
+            if (so.getTotalAmount() != null && result.hasReduction()) {
+                // Amount already reduced by applyGoodsAdjustment; prefer SO total when it matches.
+                refreshed.setAmount(so.getTotalAmount().max(BigDecimal.ZERO));
+            }
+            repo.save(refreshed);
+            rebuildInvoicePdfQuietly(refreshed);
+        });
+
+        return result;
+    }
+
+    private GoodsAdjustmentResult applyGoodsAdjustment(
+            Invoice invoice, BigDecimal adjustmentAmount, String reason, boolean purchase) {
+        BigDecimal oldAmount = nullToZero(invoice.getAmount());
+        BigDecimal outstanding = nullToZero(invoice.getOutstanding());
+        BigDecimal previouslyPaid = oldAmount.subtract(outstanding).max(BigDecimal.ZERO);
+
+        BigDecimal reduceBy = adjustmentAmount.min(outstanding).max(BigDecimal.ZERO);
+        BigDecimal creditBy = adjustmentAmount.subtract(reduceBy).max(BigDecimal.ZERO);
+
+        if (reduceBy.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal amount = clampNonNegative(oldAmount.subtract(reduceBy));
+            BigDecimal subtotal = clampNonNegative(nullToZero(invoice.getSubtotalAmount()).subtract(reduceBy));
+            BigDecimal newOutstanding = clampNonNegative(outstanding.subtract(reduceBy));
+            BigDecimal openAmount = clampNonNegative(nullToZero(invoice.getOpenAmount()).subtract(reduceBy));
+
+            invoice.setAmount(amount);
+            invoice.setSubtotalAmount(subtotal);
+            invoice.setOutstanding(newOutstanding);
+            invoice.setOpenAmount(openAmount);
+            if (newOutstanding.compareTo(BigDecimal.ZERO) == 0) {
+                invoice.setStatus(previouslyPaid.compareTo(BigDecimal.ZERO) > 0 ? "PAID" : "ADJUSTED");
+            }
+            repo.save(invoice);
+            syncPendingPaymentForInvoice(invoice, purchase);
+            rebuildInvoicePdfQuietly(invoice);
+            if ("PAID".equalsIgnoreCase(invoice.getStatus())) {
+                completeLinkedSalesOrderWhenPaid(invoice);
+            }
+            log.info("Reduced invoice {} by {} ({}); credit remainder {}",
+                    invoice.getInvoiceId(), reduceBy, reason, creditBy);
         }
-        repo.save(invoice);
+
+        if (reduceBy.compareTo(BigDecimal.ZERO) == 0 && adjustmentAmount.compareTo(BigDecimal.ZERO) > 0) {
+            return new GoodsAdjustmentResult(BigDecimal.ZERO, adjustmentAmount);
+        }
+        return new GoodsAdjustmentResult(reduceBy, creditBy);
+    }
+
+    private boolean hasNoOutstanding(Invoice invoice) {
+        if ("PAID".equalsIgnoreCase(invoice.getStatus() == null ? "" : invoice.getStatus())) {
+            return true;
+        }
+        return nullToZero(invoice.getOutstanding()).compareTo(BigDecimal.ZERO) <= 0;
+    }
+
+    private void syncPendingPaymentForInvoice(Invoice invoice, boolean purchase) {
+        if (invoice == null || invoice.getCompany() == null) {
+            return;
+        }
+        BigDecimal outstanding = nullToZero(invoice.getOutstanding());
+        if (purchase && invoice.getOrderId() != null) {
+            paymentRepo.findFirstByPurchaseOrderIdAndPaymentDirectionAndPaymentMethod(
+                            invoice.getOrderId(), PaymentDirection.VENDOR, "PENDING_VENDOR_PAYMENT")
+                    .ifPresent(pending -> updateOrClearPending(pending, outstanding));
+            return;
+        }
+        if (invoice.getInvoiceId() == null || invoice.getInvoiceId().isBlank()) {
+            return;
+        }
+        paymentRepo.findFirstByCompany_IdAndInvoiceIdAndPaymentMethod(
+                        invoice.getCompany().getId(), invoice.getInvoiceId(), "PENDING_REQUEST")
+                .ifPresent(pending -> updateOrClearPending(pending, outstanding));
+    }
+
+    private void updateOrClearPending(Payment pending, BigDecimal outstanding) {
+        if (outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+            pending.setArchived(true);
+            pending.setAmount(BigDecimal.ZERO);
+            pending.setNotes((pending.getNotes() == null ? "" : pending.getNotes() + " ")
+                    + "[Cleared after invoice adjustment]");
+        } else {
+            pending.setAmount(outstanding);
+        }
+        paymentRepo.save(pending);
+    }
+
+    private void rebuildInvoicePdfQuietly(Invoice invoice) {
+        if (invoice == null || invoice.getDocumentSource() != InvoiceDocumentSource.GENERATED) {
+            return;
+        }
+        try {
+            generateAndUploadInvoicePdf(invoice, false);
+        } catch (Exception e) {
+            log.warn("Failed to rebuild invoice PDF for {}: {}", invoice.getInvoiceId(), e.getMessage());
+        }
     }
 
     private static BigDecimal nullToZero(BigDecimal value) {
@@ -811,6 +936,20 @@ public class InvoiceService {
             order.setStatus("COMPLETED");
             salesOrderRepo.save(order);
         });
+    }
+
+    /** Completes linked sales order when invoice status is already PAID (e.g. credit-only settlement). */
+    @Transactional
+    public void completeLinkedDocumentsIfPaid(Invoice invoice) {
+        completeLinkedSalesOrderWhenPaid(invoice);
+        if (isFullyPaid(invoice) && invoice.getDocumentSource() == InvoiceDocumentSource.GENERATED) {
+            try {
+                generateAndUploadInvoicePdf(invoice, true);
+            } catch (Exception e) {
+                log.warn("Failed to generate receipt PDF for invoice {}: {}",
+                        invoice.getInvoiceId(), e.getMessage());
+            }
+        }
     }
 
     /**
@@ -973,9 +1112,23 @@ public class InvoiceService {
         inv.setPartyClassification(req.getPartyClassification());
 
         if (req.getAmount() != null) {
-            inv.setAmount(req.getAmount());
-            inv.setOpenAmount(req.getAmount());
-            inv.setOutstanding(req.getAmount());
+            BigDecimal oldAmount = nullToZero(inv.getAmount());
+            BigDecimal oldOutstanding = inv.getOutstanding() != null
+                    ? inv.getOutstanding()
+                    : oldAmount;
+            BigDecimal previouslyPaid = oldAmount.subtract(nullToZero(oldOutstanding)).max(BigDecimal.ZERO);
+            BigDecimal newAmount = req.getAmount().max(BigDecimal.ZERO);
+            BigDecimal newOutstanding = newAmount.subtract(previouslyPaid).max(BigDecimal.ZERO);
+            inv.setAmount(newAmount);
+            inv.setOpenAmount(newOutstanding);
+            inv.setOutstanding(newOutstanding);
+            if (newOutstanding.compareTo(BigDecimal.ZERO) <= 0) {
+                if (previouslyPaid.compareTo(BigDecimal.ZERO) > 0) {
+                    inv.setStatus("PAID");
+                }
+            } else if (previouslyPaid.compareTo(BigDecimal.ZERO) > 0) {
+                inv.setStatus("PARTIALLY_PAID");
+            }
         }
         if (req.getSubtotalAmount() != null) {
             inv.setSubtotalAmount(req.getSubtotalAmount());
@@ -991,7 +1144,15 @@ public class InvoiceService {
             inv.setSupplierInvoiceNumber(s.isEmpty() ? null : s);
         }
         if (req.getDocumentSource() != null) {
-            inv.setDocumentSource(req.getDocumentSource());
+            // Do not demote a system-generated purchase invoice to SUPPLIER_UPLOAD
+            // when registering a supplier PDF against an existing generated invoice.
+            if (inv.getDocumentSource() == InvoiceDocumentSource.GENERATED
+                    && req.getDocumentSource() == InvoiceDocumentSource.SUPPLIER_UPLOAD
+                    && inv.getType() == InvoiceType.PURCHASE) {
+                // keep GENERATED
+            } else {
+                inv.setDocumentSource(req.getDocumentSource());
+            }
         }
         if (req.getExternalDocumentUrl() != null) {
             String u = req.getExternalDocumentUrl().trim();
@@ -999,7 +1160,11 @@ public class InvoiceService {
             applyExternalLinkPdfHint(inv);
         }
 
-        return toDTO(repo.save(inv));
+        Invoice saved = repo.save(inv);
+        if (req.getAmount() != null) {
+            syncPendingPaymentForInvoice(saved, saved.getType() == InvoiceType.PURCHASE);
+        }
+        return toDTO(saved);
     }
 
     public InvoiceResponse archiveInvoice(Long id) {
