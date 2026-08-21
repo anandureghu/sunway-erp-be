@@ -565,6 +565,9 @@ public class EmployeeService {
         String designation = currentJob != null && currentJob.getJobCode() != null
                 ? currentJob.getJobCode().getTitle()
                 : null;
+        String jobCode = currentJob != null && currentJob.getJobCode() != null
+                ? currentJob.getJobCode().getCode()
+                : null;
         String employmentCategory = currentJob != null && currentJob.getEmploymentCategory() != null
                 ? currentJob.getEmploymentCategory().name()
                 : null;
@@ -604,6 +607,7 @@ public class EmployeeService {
                 .departmentName(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
                 .imageUrl(imageUrl)
                 .designation(designation)
+                .jobCode(jobCode)
                 .employmentCategory(employmentCategory)
                 .employmentType(employmentType)
                 .build();
