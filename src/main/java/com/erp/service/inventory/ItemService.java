@@ -8,6 +8,8 @@ import com.erp.domain.inventory.StockBatchSourceType;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
+import com.erp.dto.inventory.ItemBulkDiscountRequestDTO;
+import com.erp.dto.inventory.ItemBulkDiscountResultDTO;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemStockAdjustDTO;
@@ -24,9 +26,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -283,6 +290,64 @@ public class ItemService {
     public ItemResponseDTO getItem(Long id) {
         Item item = getItemEntity(id);
         return toDTO(item);
+    }
+
+    /**
+     * Apply a one-time percent discount to catalog selling prices for the given items.
+     * Reduces {@code sellingPrice} and keeps {@code unitSale} in sync.
+     */
+    public ItemBulkDiscountResultDTO applyBulkDiscount(ItemBulkDiscountRequestDTO req) {
+        if (req == null || req.getItemIds() == null || req.getItemIds().isEmpty()) {
+            throw new IllegalArgumentException("Select at least one item to discount.");
+        }
+        BigDecimal pct = req.getDiscountPercent();
+        if (pct == null || pct.compareTo(BigDecimal.ZERO) <= 0 || pct.compareTo(new BigDecimal("100")) >= 0) {
+            throw new IllegalArgumentException("Discount percent must be greater than 0 and less than 100.");
+        }
+
+        User user = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Long companyId = auth.getCurrentCompanyId();
+
+        Set<Long> uniqueIds = new LinkedHashSet<>(req.getItemIds());
+        BigDecimal factor = BigDecimal.ONE.subtract(
+                pct.divide(new BigDecimal("100"), 6, RoundingMode.HALF_UP));
+
+        int updated = 0;
+        List<Item> toSave = new ArrayList<>();
+        Instant now = Instant.now();
+        for (Long id : uniqueIds) {
+            if (id == null) continue;
+            Item item = itemRepo.findById(id)
+                    .filter(i -> i.getCompany() != null && companyId.equals(i.getCompany().getId()))
+                    .orElse(null);
+            if (item == null) continue;
+
+            BigDecimal current = item.getSellingPrice();
+            if (current == null || current.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal discounted = current.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+            if (discounted.compareTo(BigDecimal.ZERO) < 0) {
+                discounted = BigDecimal.ZERO;
+            }
+            item.setSellingPrice(discounted);
+            item.setUnitSale(discounted);
+            item.setUpdatedBy(user);
+            item.setUpdatedAt(now);
+            toSave.add(item);
+            updated++;
+        }
+
+        if (!toSave.isEmpty()) {
+            itemRepo.saveAll(toSave);
+        }
+
+        return ItemBulkDiscountResultDTO.builder()
+                .requestedCount(uniqueIds.size())
+                .updatedCount(updated)
+                .discountPercent(pct)
+                .build();
     }
 
     // --------------------------

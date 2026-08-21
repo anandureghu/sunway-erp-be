@@ -2,6 +2,8 @@ package com.erp.controller.inventory;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.inventory.ItemBulkDiscountRequestDTO;
+import com.erp.dto.inventory.ItemBulkDiscountResultDTO;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemCsvImportResultDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
@@ -89,6 +91,12 @@ public class ItemController {
             @RequestPart("image") MultipartFile image
     ) {
         return service.updateItemImage(id, image);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})
+    @PostMapping("/bulk-discount")
+    public ItemBulkDiscountResultDTO applyBulkDiscount(@RequestBody ItemBulkDiscountRequestDTO req) {
+        return service.applyBulkDiscount(req);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
