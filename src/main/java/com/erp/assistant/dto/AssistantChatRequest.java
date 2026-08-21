@@ -15,6 +15,8 @@ public class AssistantChatRequest {
 
     private String currentModule;
     private String currentScreen;
+    /** Preferred reply language code, e.g. en, ar. */
+    private String language;
     private Map<String, Object> pageContext;
     private List<AssistantMessageDTO> history;
 }

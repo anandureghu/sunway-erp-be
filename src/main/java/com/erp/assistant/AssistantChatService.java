@@ -331,16 +331,26 @@ public class AssistantChatService {
                 Format successful ERP results as compact Markdown using short paragraphs, numbered lists, bullets, and bold labels where helpful.
                 When tool results include links, make the matching invoice code, item SKU/name, or page name a Markdown link.
                 Keep answers concise, operational, and include the most important IDs/statuses/amounts when available.
+                Always reply in %s. Keep ERP codes, IDs, SKUs, statuses, currency amounts, and URLs in their original form.
 
                 Current ERP page context:
                 Module: %s
                 Screen: %s
                 Page context JSON: %s
                 """.formatted(
+                replyLanguageInstruction(request.getLanguage()),
                 safe(request.getCurrentModule()),
                 safe(request.getCurrentScreen()),
                 toJson(request.getPageContext() == null ? Map.of() : request.getPageContext())
         );
+    }
+
+    private String replyLanguageInstruction(String languageCode) {
+        String code = languageCode == null ? "" : languageCode.trim().toLowerCase();
+        return switch (code) {
+            case "ar", "arabic" -> "Arabic (العربية)";
+            default -> "English";
+        };
     }
 
     private String normalizeRole(String role) {
