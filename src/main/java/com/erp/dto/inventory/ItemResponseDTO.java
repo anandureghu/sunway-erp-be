@@ -30,6 +30,8 @@ public class ItemResponseDTO {
     private Integer quantity;
     private Integer available;
     private Integer reserved;
+    /** Remaining qty on open purchase orders (not yet received/rejected). */
+    private Integer quantityOnOrder;
     private Integer minimum;
     private Integer maximum;
     private Integer reorderLevel;

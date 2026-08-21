@@ -76,4 +76,25 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
             @Param("companyId") Long companyId,
             @Param("openStatuses") List<PurchaseOrderStatus> openStatuses
     );
+
+    @Query("""
+            SELECT poi.item.id,
+                   COALESCE(SUM(
+                    CASE
+                        WHEN (poi.quantity - COALESCE(poi.receivedQty, 0) - COALESCE(poi.rejectedQty, 0)) < 0
+                            THEN 0
+                        ELSE (poi.quantity - COALESCE(poi.receivedQty, 0) - COALESCE(poi.rejectedQty, 0))
+                    END
+                ), 0)
+            FROM PurchaseOrder po
+            JOIN po.items poi
+            WHERE po.company.id = :companyId
+              AND po.archived = false
+              AND po.status IN :openStatuses
+            GROUP BY poi.item.id
+            """)
+    List<Object[]> sumOnOrderQuantityGroupedByItem(
+            @Param("companyId") Long companyId,
+            @Param("openStatuses") List<PurchaseOrderStatus> openStatuses
+    );
 }

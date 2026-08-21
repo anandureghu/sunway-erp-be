@@ -15,10 +15,12 @@ import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemStockAdjustDTO;
 import com.erp.dto.inventory.ItemStockReceiveDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
+import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.WarehouseRepository;
+import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import org.springframework.security.access.AccessDeniedException;
@@ -31,8 +33,10 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -48,6 +52,7 @@ public class ItemService {
     private final FileStorageService fileStorageService;
     private final ItemWarehouseStockService itemWarehouseStockService;
     private final StockBatchService stockBatchService;
+    private final PurchaseOrderRepository purchaseOrderRepo;
 
     public ItemService(
             ItemRepository itemRepo,
@@ -57,7 +62,8 @@ public class ItemService {
             WarehouseRepository warehouseRepo,
             FileStorageService fileStorageService,
             ItemWarehouseStockService itemWarehouseStockService,
-            StockBatchService stockBatchService
+            StockBatchService stockBatchService,
+            PurchaseOrderRepository purchaseOrderRepo
     ) {
         this.itemRepo = itemRepo;
         this.userRepo = userRepo;
@@ -67,6 +73,7 @@ public class ItemService {
         this.fileStorageService = fileStorageService;
         this.itemWarehouseStockService = itemWarehouseStockService;
         this.stockBatchService = stockBatchService;
+        this.purchaseOrderRepo = purchaseOrderRepo;
     }
 
     // --------------------------
@@ -282,9 +289,37 @@ public class ItemService {
      */
     public List<ItemResponseDTO> listStockCatalogForCompany() {
         Long companyId = auth.getCurrentCompanyId();
+        Map<Long, Integer> onOrderByItem = loadOnOrderByItem(companyId);
         return itemWarehouseStockService.listStockCatalog(companyId).stream()
-                .map(row -> toDTOForWarehouse(row.item(), row.warehouse(), row.quantityOnHand(), row.reserved(), row.available()))
+                .map(row -> {
+                    ItemResponseDTO dto = toDTOForWarehouse(
+                            row.item(),
+                            row.warehouse(),
+                            row.quantityOnHand(),
+                            row.reserved(),
+                            row.available());
+                    dto.setQuantityOnOrder(onOrderByItem.getOrDefault(row.item().getId(), 0));
+                    return dto;
+                })
                 .toList();
+    }
+
+    private Map<Long, Integer> loadOnOrderByItem(Long companyId) {
+        List<PurchaseOrderStatus> openStatuses = List.of(
+                PurchaseOrderStatus.APPROVED,
+                PurchaseOrderStatus.CONFIRMED,
+                PurchaseOrderStatus.PARTIALLY_RECEIVED
+        );
+        Map<Long, Integer> map = new HashMap<>();
+        for (Object[] row : purchaseOrderRepo.sumOnOrderQuantityGroupedByItem(companyId, openStatuses)) {
+            if (row == null || row[0] == null) {
+                continue;
+            }
+            Long itemId = ((Number) row[0]).longValue();
+            int qty = row[1] == null ? 0 : ((Number) row[1]).intValue();
+            map.put(itemId, qty);
+        }
+        return map;
     }
 
     public ItemResponseDTO getItem(Long id) {
@@ -500,6 +535,7 @@ public class ItemService {
                 .quantity(item.getQuantity())
                 .available(item.getAvailable())
                 .reserved(item.getReserved())
+                .quantityOnOrder(0)
                 .minimum(item.getMinimum())
                 .maximum(item.getMaximum())
                 .reorderLevel(item.getReorderLevel())
@@ -549,6 +585,7 @@ public class ItemService {
                 .quantity(quantityOnHand)
                 .available(available)
                 .reserved(reserved)
+                .quantityOnOrder(0)
                 .minimum(item.getMinimum())
                 .maximum(item.getMaximum())
                 .reorderLevel(item.getReorderLevel())
