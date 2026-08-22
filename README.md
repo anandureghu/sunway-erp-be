@@ -51,7 +51,7 @@ If you use your own MySQL instance, set these variables to match your server.
 | Variable                          | Purpose                                                                           |
 | --------------------------------- | --------------------------------------------------------------------------------- |
 | `AZURE_STORAGE_CONNECTION_STRING` | Azure Blob storage (file uploads). Omit locally if you do not use those features. |
-| `APP_PUBLIC_BASE_URL`             | Public URL of the app (default `http://localhost:5173`).                          |
+| `APP_PUBLIC_BASE_URL`             | Public frontend URL for emails, PDFs, and assistant links (default `http://localhost:5173`). Set to e.g. `https://demo.sunwayerp.com` in demo. |
 
 Change `app.jwt.secret` in `src/main/resources/application.yml` before any production deployment.
 

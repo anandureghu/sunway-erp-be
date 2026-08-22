@@ -139,11 +139,8 @@ public class ShipmentService {
         s.setStatus("DISPATCHED");
         Instant now = Instant.now();
         s.setDispatchedAt(now);
-        s.getItems().forEach(i -> {
-            Item item = i.getItem();
-            item.setReserved(0);
-            item.setQuantity(item.getAvailable());
-        });
+        // Stock was already FIFO-consumed when the sales order was confirmed.
+        // Do not rewrite item reserved/quantity aggregates here.
 
         appendTrackingEvent(s, "DISPATCHED", "Origin Dispatch Center", "Shipment dispatched", now);
         return toDTO(s);
@@ -170,14 +167,19 @@ public class ShipmentService {
     public ShipmentResponseDTO markOutForDelivery(Long id) {
         Shipment s = getEntity(id);
 
-        if (!"IN_TRANSIT".equals(s.getStatus())) {
-            throw new RuntimeException("Shipment must be IN_TRANSIT first");
+        String previous = s.getStatus();
+        // IN_TRANSIT is the normal path; FAILED_DELIVERY allows a reattempt.
+        if (!List.of("IN_TRANSIT", "FAILED_DELIVERY").contains(previous)) {
+            throw new RuntimeException("Shipment must be IN_TRANSIT (or FAILED_DELIVERY to reattempt)");
         }
 
         s.setStatus("OUT_FOR_DELIVERY");
         Instant now = Instant.now();
         s.setOutForDeliveryAt(now);
-        appendTrackingEvent(s, "OUT_FOR_DELIVERY", resolveEventLocation(s), "Shipment is out for delivery", now);
+        String note = "FAILED_DELIVERY".equals(previous)
+                ? "Reattempting delivery after failed attempt"
+                : "Shipment is out for delivery";
+        appendTrackingEvent(s, "OUT_FOR_DELIVERY", resolveEventLocation(s), note, now);
         return toDTO(s);
     }
 
@@ -188,7 +190,7 @@ public class ShipmentService {
 
         Shipment s = getEntity(id);
 
-        if (!List.of("DISPATCHED", "IN_TRANSIT", "OUT_FOR_DELIVERY").contains(s.getStatus())) {
+        if (!List.of("DISPATCHED", "IN_TRANSIT", "OUT_FOR_DELIVERY", "FAILED_DELIVERY").contains(s.getStatus())) {
             throw new RuntimeException("Shipment cannot be delivered in current state");
         }
 

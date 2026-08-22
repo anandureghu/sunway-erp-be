@@ -3,24 +3,29 @@ package com.erp.service.sales;
 import com.erp.domain.InvoiceType;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
+import com.erp.domain.inventory.Warehouse;
 import com.erp.domain.sales.Picklist;
 import com.erp.domain.sales.PicklistItem;
 import com.erp.domain.sales.SalesOrder;
 import com.erp.domain.sales.SalesOrderItem;
+import com.erp.domain.sales.Shipment;
 import com.erp.repo.finance.InvoiceRepository;
 import com.erp.dto.sales.PicklistItemDTO;
 import com.erp.dto.sales.PicklistResponseDTO;
 import com.erp.exception.ConflictException;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.repo.sales.PicklistRepository;
 import com.erp.repo.sales.SalesOrderRepository;
+import com.erp.repo.sales.ShipmentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -29,6 +34,8 @@ public class PicklistService {
     private final PicklistRepository repo;
     private final SalesOrderRepository soRepo;
     private final InvoiceRepository invoiceRepo;
+    private final ShipmentRepository shipmentRepo;
+    private final WarehouseRepository warehouseRepo;
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
     private final AuthContext auth;
@@ -38,6 +45,8 @@ public class PicklistService {
             PicklistRepository repo,
             SalesOrderRepository soRepo,
             InvoiceRepository invoiceRepo,
+            ShipmentRepository shipmentRepo,
+            WarehouseRepository warehouseRepo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
             AuthContext auth,
@@ -46,6 +55,8 @@ public class PicklistService {
         this.repo = repo;
         this.soRepo = soRepo;
         this.invoiceRepo = invoiceRepo;
+        this.shipmentRepo = shipmentRepo;
+        this.warehouseRepo = warehouseRepo;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
         this.auth = auth;
@@ -56,6 +67,10 @@ public class PicklistService {
     // Generate Picklist
     // --------------------------
     public PicklistResponseDTO generate(Long salesOrderId) {
+        return generate(salesOrderId, null);
+    }
+
+    public PicklistResponseDTO generate(Long salesOrderId, Long warehouseId) {
         Long companyId = auth.getCurrentCompanyId();
 
         SalesOrder so = soRepo.findById(salesOrderId)
@@ -79,10 +94,29 @@ public class PicklistService {
             throw new RuntimeException("Cannot generate picklist: sales order has no items");
         }
 
+        Warehouse filterWarehouse = null;
+        if (warehouseId != null) {
+            filterWarehouse = warehouseRepo.findById(warehouseId)
+                    .filter(w -> w.getCompany().getId().equals(companyId))
+                    .orElseThrow(() -> new RuntimeException("Warehouse not found"));
+        }
+
+        final Long filterWhId = filterWarehouse != null ? filterWarehouse.getId() : null;
+        List<SalesOrderItem> sourceLines = so.getItems().stream()
+                .filter(line -> filterWhId == null || filterWhId.equals(resolveLineWarehouseId(line)))
+                .collect(Collectors.toList());
+        if (sourceLines.isEmpty()) {
+            throw new RuntimeException(
+                    filterWhId == null
+                            ? "Cannot generate picklist: sales order has no items"
+                            : "No sales order lines match the selected warehouse"
+            );
+        }
+
         Company company = companyRepo.findById(companyId).orElseThrow();
         User user = userRepo.findById(auth.getCurrentUserId()).orElseThrow();
 
-        List<PicklistItem> items = so.getItems().stream()
+        List<PicklistItem> items = sourceLines.stream()
                 .map(i -> PicklistItem.builder()
                         .item(i.getItem())
                         .quantity(i.getQuantity())
@@ -98,7 +132,7 @@ public class PicklistService {
                 .items(items)
                 .build();
 
-        return toDTO(repo.save(picklist));
+        return toDTO(repo.save(picklist), filterWarehouse);
     }
 
     // --------------------------
@@ -126,6 +160,12 @@ public class PicklistService {
         if ("CANCELLED".equals(p.getStatus())) {
             throw new RuntimeException("Picklist already cancelled");
         }
+        if (!"CREATED".equals(p.getStatus())) {
+            throw new RuntimeException("Only CREATED picklists can be cancelled");
+        }
+        if (shipmentRepo.findByPicklistId(p.getId()).isPresent()) {
+            throw new ConflictException("Cannot cancel picklist: a shipment already exists");
+        }
 
         p.setStatus("CANCELLED");
         return toDTO(repo.save(p));
@@ -142,6 +182,12 @@ public class PicklistService {
         if (!"PICKED".equals(p.getStatus()) && !"CANCELLED".equals(p.getStatus())) {
             throw new ConflictException("Only picked or cancelled picklists can be archived");
         }
+        shipmentRepo.findByPicklistId(p.getId()).ifPresent(sh -> {
+            if (!List.of("DELIVERED", "CANCELLED").contains(sh.getStatus())) {
+                throw new ConflictException(
+                        "Cannot archive picklist while shipment is still active (" + sh.getStatus() + ")");
+            }
+        });
         p.setArchived(true);
         return toDTO(repo.save(p));
     }
@@ -172,14 +218,22 @@ public class PicklistService {
     }
 
     private PicklistResponseDTO toDTO(Picklist p) {
-        Long warehouseId = null;
-        String warehouseName = null;
+        return toDTO(p, null);
+    }
+
+    private PicklistResponseDTO toDTO(Picklist p, Warehouse preferredWarehouse) {
+        Long warehouseId = preferredWarehouse != null ? preferredWarehouse.getId() : null;
+        String warehouseName = preferredWarehouse != null ? preferredWarehouse.getName() : null;
         SalesOrder salesOrder = p.getSalesOrder();
-        if (salesOrder != null && salesOrder.getItems() != null && !salesOrder.getItems().isEmpty()) {
+        if (warehouseId == null && salesOrder != null && salesOrder.getItems() != null && !salesOrder.getItems().isEmpty()) {
             SalesOrderItem line = salesOrder.getItems().get(0);
             warehouseId = resolveLineWarehouseId(line);
             warehouseName = resolveLineWarehouseName(line);
         }
+
+        Long shipmentId = shipmentRepo.findByPicklistId(p.getId())
+                .map(Shipment::getId)
+                .orElse(null);
 
         return PicklistResponseDTO.builder()
                 .id(p.getId())
@@ -190,6 +244,7 @@ public class PicklistService {
                 .createdAt(p.getCreatedAt())
                 .warehouseId(warehouseId)
                 .warehouseName(warehouseName)
+                .shipmentId(shipmentId)
                 .items(
                         p.getItems().stream()
                                 .map(i -> PicklistItemDTO.builder()

@@ -533,6 +533,17 @@ public class InvoiceService {
         paymentRepo.save(payment);
     }
 
+    /**
+     * Confirm quotation and create the sales invoice in one transaction so a failed
+     * invoice create rolls back stock reservation / order status.
+     */
+    @Transactional
+    public SalesOrderResponseDTO confirmSalesOrderWithInvoice(Long salesOrderId) {
+        SalesOrderResponseDTO confirmed = salesOrderService.confirm(salesOrderId);
+        createInvoiceForConfirmedSalesOrder(salesOrderId);
+        return confirmed;
+    }
+
     public InvoiceResponse createInvoiceForConfirmedSalesOrder(Long salesOrderId) {
         var order = salesOrderRepo.findById(salesOrderId)
                 .orElseThrow(() -> new RuntimeException("Sales order not found"));
@@ -556,8 +567,18 @@ public class InvoiceService {
         req.setInvoiceDate(LocalDate.now());
         req.setDueDate(order.getInvoiceDueDate());
         req.setAmount(order.getTotalAmount());
-        req.setDebitAccount(salesAccounts.debitAccountId());
-        req.setCreditAccount(salesAccounts.creditAccountId());
+        Long debitAccountId = order.getDebitAccount() != null
+                ? order.getDebitAccount().getId()
+                : salesAccounts.debitAccountId();
+        Long creditAccountId = order.getCreditAccount() != null
+                ? order.getCreditAccount().getId()
+                : salesAccounts.creditAccountId();
+        accountingDefaults.assertDistinctAccounts(
+                "Sales invoice posting",
+                debitAccountId,
+                creditAccountId);
+        req.setDebitAccount(debitAccountId);
+        req.setCreditAccount(creditAccountId);
         req.setBankAccountId(order.getBankAccount().getId());
         req.setItemDescription("Auto-generated from sales order " + order.getOrderNumber());
         req.setNotesRemarks("Invoice created on sales order confirmation.");
@@ -923,19 +944,16 @@ public class InvoiceService {
     }
 
     private void completeLinkedSalesOrderWhenPaid(Invoice invoice) {
+        // Intentionally no-op for order status: payment must not mark the sales order
+        // COMPLETED. Fulfillment (shipment delivery) owns COMPLETED so paid-but-unshipped
+        // orders stay CONFIRMED and remain operable for pick/ship/cancel rules.
         if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
             return;
         }
         if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
             return;
         }
-        salesOrderRepo.findById(invoice.getOrderId()).ifPresent(order -> {
-            if ("CANCELLED".equals(order.getStatus()) || "COMPLETED".equals(order.getStatus())) {
-                return;
-            }
-            order.setStatus("COMPLETED");
-            salesOrderRepo.save(order);
-        });
+        // Keep hook for future paid-side effects (notifications, etc.) without status change.
     }
 
     /** Completes linked sales order when invoice status is already PAID (e.g. credit-only settlement). */

@@ -23,4 +23,6 @@ public class PicklistResponseDTO {
     private List<PicklistItemDTO> items;
     private Long warehouseId;
     private String warehouseName;
+    /** Linked shipment id when a dispatch already exists for this picklist. */
+    private Long shipmentId;
 }

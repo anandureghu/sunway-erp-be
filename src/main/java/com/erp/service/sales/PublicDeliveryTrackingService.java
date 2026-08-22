@@ -92,12 +92,32 @@ public class PublicDeliveryTrackingService {
         boolean hasOrderNumber = normalizeText(request.getOrderNumber()) != null;
         boolean hasEmail = normalizeEmail(request.getEmail()) != null;
         boolean hasPhone = digitsOnly(request.getPhone()).length() >= 6;
-        if (!hasOrderNumber && !hasEmail && !hasPhone) {
+        if (!hasOrderNumber) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Enter an order number, email, or phone number"
+                    "Order number is required"
             );
         }
+        if (!hasEmail && !hasPhone) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Enter the email or phone number used on the order"
+            );
+        }
+    }
+
+    private boolean matchesLookup(
+            Shipment shipment,
+            String orderNumber,
+            String email,
+            String phoneDigits
+    ) {
+        if (!matchesOrderNumber(shipment, orderNumber)) {
+            return false;
+        }
+        boolean emailMatch = email != null && matchesEmail(shipment, email);
+        boolean phoneMatch = !phoneDigits.isEmpty() && matchesPhone(shipment, phoneDigits);
+        return emailMatch || phoneMatch;
     }
 
     private boolean isCustomerVisible(Shipment shipment) {
@@ -115,18 +135,6 @@ public class PublicDeliveryTrackingService {
             return false;
         }
         return deliveredAt.isAfter(Instant.now().minus(RECENT_DELIVERED_DAYS, ChronoUnit.DAYS));
-    }
-
-    private boolean matchesLookup(
-            Shipment shipment,
-            String orderNumber,
-            String email,
-            String phoneDigits
-    ) {
-        boolean orderMatch = orderNumber == null || matchesOrderNumber(shipment, orderNumber);
-        boolean emailMatch = email == null || matchesEmail(shipment, email);
-        boolean phoneMatch = phoneDigits.isEmpty() || matchesPhone(shipment, phoneDigits);
-        return orderMatch && emailMatch && phoneMatch;
     }
 
     private boolean matchesOrderNumber(Shipment shipment, String orderNumber) {

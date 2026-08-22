@@ -34,25 +34,7 @@ public class SalesOrderController {
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.APPROVE, AppAction.EDIT})
     @PostMapping("/{id}/confirm")
     public SalesOrderResponseDTO confirm(@PathVariable("id") Long id) {
-        SalesOrderResponseDTO confirmed = service.confirm(id);
-        try {
-            invoiceService.createInvoiceForConfirmedSalesOrder(id);
-            return confirmed;
-        } catch (RuntimeException ex) {
-            try {
-                service.cancel(id);
-                invoiceService.handleSalesOrderCancellation(id);
-            } catch (RuntimeException rollbackEx) {
-                throw new RuntimeException(
-                        "Sales order confirmation failed during invoice creation and rollback also failed",
-                        rollbackEx
-                );
-            }
-            throw new RuntimeException(
-                    "Sales order confirmation failed during invoice creation and has been rolled back",
-                    ex
-            );
-        }
+        return invoiceService.confirmSalesOrderWithInvoice(id);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
