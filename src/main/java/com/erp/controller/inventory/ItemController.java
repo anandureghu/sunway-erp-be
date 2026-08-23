@@ -137,13 +137,19 @@ public class ItemController {
     public com.erp.dto.inventory.StockBatchMovementReportDTO listBatchMovements(
             @PathVariable("id") Long id,
             @RequestParam(required = false) Long warehouseId,
-            @RequestParam(defaultValue = "100") int limit
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(defaultValue = "false") boolean archived
     ) {
+        int resolvedSize = limit != null ? limit : size;
         return stockBatchService.buildMovementReport(
                 auth.getCurrentCompanyId(),
                 warehouseId,
                 id,
-                limit
+                page,
+                resolvedSize,
+                archived
         );
     }
 

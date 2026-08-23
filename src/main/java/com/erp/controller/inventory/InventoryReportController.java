@@ -44,9 +44,14 @@ public class InventoryReportController {
     public com.erp.dto.inventory.StockBatchMovementReportDTO batchMovements(
             @RequestParam(required = false) Long warehouseId,
             @RequestParam(required = false) Long itemId,
-            @RequestParam(defaultValue = "150") int limit
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(defaultValue = "false") boolean archived
     ) {
-        return inventoryReportService.buildBatchMovementReport(warehouseId, itemId, limit);
+        int resolvedSize = limit != null ? limit : size;
+        return inventoryReportService.buildBatchMovementReport(
+                warehouseId, itemId, page, resolvedSize, archived);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})

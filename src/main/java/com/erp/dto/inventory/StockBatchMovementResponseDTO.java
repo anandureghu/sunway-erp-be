@@ -29,4 +29,5 @@ public class StockBatchMovementResponseDTO {
     private String referenceType;
     private Long referenceId;
     private Instant createdAt;
+    private boolean archived;
 }
