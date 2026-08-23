@@ -305,6 +305,11 @@ public class PaymentService {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
+                // Pending AR requests were historically stamped with due date; show invoice date.
+                if ("PENDING_REQUEST".equalsIgnoreCase(p.getPaymentMethod())
+                        && inv.getInvoiceDate() != null) {
+                    b.effectiveDate(inv.getInvoiceDate());
+                }
                 applyInvoiceProgress(b, inv);
                 if (inv.getType() == InvoiceType.SALES && inv.getOrderId() != null) {
                     salesOrderRepo.findById(inv.getOrderId())

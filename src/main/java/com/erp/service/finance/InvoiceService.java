@@ -516,6 +516,9 @@ public class InvoiceService {
                 pending.setArchived(false);
             }
             pending.setAmount(outstanding);
+            if (invoice.getInvoiceDate() != null) {
+                pending.setEffectiveDate(invoice.getInvoiceDate());
+            }
             paymentRepo.save(pending);
             return;
         }
@@ -524,7 +527,10 @@ public class InvoiceService {
                 .company(invoice.getCompany())
                 .paymentMethod("PENDING_REQUEST")
                 .amount(outstanding)
-                .effectiveDate(invoice.getDueDate())
+                .effectiveDate(
+                        invoice.getInvoiceDate() != null
+                                ? invoice.getInvoiceDate()
+                                : LocalDate.now())
                 .notes("Payment request for invoice " + invoice.getInvoiceId())
                 .invoiceId(invoice.getInvoiceId())
                 .paymentDirection(PaymentDirection.CUSTOMER)
@@ -536,12 +542,14 @@ public class InvoiceService {
     /**
      * Confirm quotation and create the sales invoice in one transaction so a failed
      * invoice create rolls back stock reservation / order status.
+     * Returns the order DTO after the invoice exists so clients get invoice id,
+     * payment status, and outstanding amount in the same response.
      */
     @Transactional
     public SalesOrderResponseDTO confirmSalesOrderWithInvoice(Long salesOrderId) {
-        SalesOrderResponseDTO confirmed = salesOrderService.confirm(salesOrderId);
+        salesOrderService.confirm(salesOrderId);
         createInvoiceForConfirmedSalesOrder(salesOrderId);
-        return confirmed;
+        return salesOrderService.get(salesOrderId);
     }
 
     public InvoiceResponse createInvoiceForConfirmedSalesOrder(Long salesOrderId) {

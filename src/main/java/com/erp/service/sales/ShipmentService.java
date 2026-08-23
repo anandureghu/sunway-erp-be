@@ -24,6 +24,7 @@ import com.erp.repo.sales.ShipmentRepository;
 import com.erp.repo.sales.ShipmentTrackingEventRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
+import com.erp.exception.ConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,7 +81,16 @@ public class ShipmentService {
         if (!"PICKED".equals(picklist.getStatus())) {
             throw new RuntimeException("Shipment can be created only from PICKED picklist");
         }
-        var invoice = invoiceRepo.findByOrderIdAndType(picklist.getSalesOrder().getId(), InvoiceType.SALES)
+        SalesOrder salesOrder = picklist.getSalesOrder();
+        if (salesOrder == null) {
+            throw new RuntimeException("Picklist is not linked to a sales order");
+        }
+        if ("COMPLETED".equals(salesOrder.getStatus()) || "CANCELLED".equals(salesOrder.getStatus())) {
+            throw new ConflictException(
+                    "Cannot create dispatch: sales order is already "
+                            + salesOrder.getStatus().toLowerCase());
+        }
+        var invoice = invoiceRepo.findByOrderIdAndType(salesOrder.getId(), InvoiceType.SALES)
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this sales order"));
         if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
             throw new RuntimeException("Shipment can be created only after full customer payment");
@@ -88,6 +98,10 @@ public class ShipmentService {
 
         if (repo.findByPicklistId(picklist.getId()).isPresent()) {
             throw new RuntimeException("Shipment already exists for this picklist");
+        }
+        if (repo.existsDeliveredForSalesOrder(salesOrder.getId())) {
+            throw new ConflictException(
+                    "Cannot create dispatch: this sales order was already delivered");
         }
 
         Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
