@@ -14,5 +14,9 @@ import java.math.BigDecimal;
 public class ItemBulkDiscountResultDTO {
     private int requestedCount;
     private int updatedCount;
+    /** Items skipped (missing, no usable list/selling price, wrong company). */
+    private int skippedCount;
+    /** Items whose discount was limited so selling price stays at/above cost. */
+    private int cappedAtCostCount;
     private BigDecimal discountPercent;
 }

@@ -32,6 +32,7 @@ import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.inventory.ItemWarehouseStockService;
 import com.erp.service.inventory.StockBatchService;
 import com.erp.service.DocumentSequenceService;
+import com.erp.util.DiscountFloor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -140,6 +141,7 @@ public class SalesOrderService {
             if (discountPercent.compareTo(BigDecimal.ZERO) < 0 || discountPercent.compareTo(BigDecimal.valueOf(100)) > 0) {
                 throw new RuntimeException("Discount percent must be between 0 and 100");
             }
+            assertDiscountNotBelowCost(item, unitPrice, discountPercent);
             BigDecimal discountAmount = gross.multiply(discountPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
             BigDecimal lineSubtotal = gross.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
             BigDecimal taxAmount = lineSubtotal.multiply(effectiveTaxRate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
@@ -285,6 +287,7 @@ public class SalesOrderService {
             if (discountPercent.compareTo(BigDecimal.ZERO) < 0 || discountPercent.compareTo(BigDecimal.valueOf(100)) > 0) {
                 throw new RuntimeException("Discount percent must be between 0 and 100");
             }
+            assertDiscountNotBelowCost(item, unitPrice, discountPercent);
             BigDecimal discountAmount = gross.multiply(discountPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
             BigDecimal lineSubtotal = gross.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
             BigDecimal taxAmount = lineSubtotal.multiply(effectiveTaxRate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
@@ -400,6 +403,23 @@ public class SalesOrderService {
     // --------------------------
     // Helpers
     // --------------------------
+    private void assertDiscountNotBelowCost(
+            Item item,
+            BigDecimal unitPrice,
+            BigDecimal discountPercent
+    ) {
+        BigDecimal cost = item.getCostPrice();
+        if (!DiscountFloor.wouldFallBelowCost(unitPrice, discountPercent, cost)) {
+            return;
+        }
+        BigDecimal maxPct = DiscountFloor.maxDiscountPercent(unitPrice, cost);
+        String label = item.getSku() != null ? item.getSku() : String.valueOf(item.getId());
+        throw new IllegalArgumentException(
+                "Discount on " + label + " would price below cost. Maximum allowed is "
+                        + maxPct.stripTrailingZeros().toPlainString() + "%."
+        );
+    }
+
     private Warehouse resolveLineWarehouse(Long warehouseId, Long companyId) {
         if (warehouseId == null) {
             throw new RuntimeException("warehouseId is required for each order line");

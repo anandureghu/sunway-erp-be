@@ -7,7 +7,8 @@ import java.util.List;
 
 /**
  * One-time catalog discount: reduce {@code sellingPrice} (and sync {@code unitSale})
- * for the given company-scoped item ids by {@code discountPercent}.
+ * from each item's {@code listPrice} baseline by {@code discountPercent}.
+ * If {@code listPrice} is missing, the current selling price becomes the baseline.
  */
 @Data
 public class ItemBulkDiscountRequestDTO {

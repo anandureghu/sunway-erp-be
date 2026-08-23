@@ -38,6 +38,8 @@ public class ItemResponseDTO {
 
     private BigDecimal costPrice;
     private BigDecimal sellingPrice;
+    /** Undiscounted retail price; sellingPrice may be lower when discounted. */
+    private BigDecimal listPrice;
     private BigDecimal unitSale;
     private String imageUrl;
 

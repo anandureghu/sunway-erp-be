@@ -23,6 +23,7 @@ import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
+import com.erp.util.DiscountFloor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -114,6 +115,7 @@ public class ItemService {
                 .expiryDate(parseOptionalDate(dto.getExpiryDate()))
                 .costPrice(dto.getCostPrice())
                 .sellingPrice(dto.getSellingPrice())
+                .listPrice(resolveInitialListPrice(dto.getListPrice(), dto.getSellingPrice()))
                 .unitSale(dto.getUnitSale())
                 .unitMeasure(dto.getUnitMeasure())
                 .reorderLevel(dto.getReorderLevel())
@@ -187,6 +189,7 @@ public class ItemService {
         item.setCostPrice(dto.getCostPrice());
         item.setSellingPrice(dto.getSellingPrice());
         item.setUnitSale(dto.getUnitSale());
+        applyListPriceOnUpdate(item, dto.getListPrice(), dto.getSellingPrice());
         item.setStatus(dto.getStatus());
         // Preserve existing image on normal updates unless an explicit value is provided.
         if (dto.getImageUrl() != null) {
@@ -328,8 +331,8 @@ public class ItemService {
     }
 
     /**
-     * Apply a one-time percent discount to catalog selling prices for the given items.
-     * Reduces {@code sellingPrice} and keeps {@code unitSale} in sync.
+     * Apply a catalog discount from each item's list price baseline.
+     * Reduces {@code sellingPrice} / {@code unitSale}; does not change {@code listPrice}.
      */
     public ItemBulkDiscountResultDTO applyBulkDiscount(ItemBulkDiscountRequestDTO req) {
         if (req == null || req.getItemIds() == null || req.getItemIds().isEmpty()) {
@@ -349,22 +352,49 @@ public class ItemService {
                 pct.divide(new BigDecimal("100"), 6, RoundingMode.HALF_UP));
 
         int updated = 0;
+        int skipped = 0;
+        int cappedAtCost = 0;
         List<Item> toSave = new ArrayList<>();
         Instant now = Instant.now();
         for (Long id : uniqueIds) {
-            if (id == null) continue;
+            if (id == null) {
+                skipped++;
+                continue;
+            }
             Item item = itemRepo.findById(id)
                     .filter(i -> i.getCompany() != null && companyId.equals(i.getCompany().getId()))
                     .orElse(null);
-            if (item == null) continue;
-
-            BigDecimal current = item.getSellingPrice();
-            if (current == null || current.compareTo(BigDecimal.ZERO) <= 0) {
+            if (item == null) {
+                skipped++;
                 continue;
             }
-            BigDecimal discounted = current.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+
+            BigDecimal list = item.getListPrice();
+            BigDecimal selling = item.getSellingPrice();
+            if (list == null || list.compareTo(BigDecimal.ZERO) <= 0) {
+                if (selling == null || selling.compareTo(BigDecimal.ZERO) <= 0) {
+                    skipped++;
+                    continue;
+                }
+                list = selling;
+                item.setListPrice(list);
+            }
+
+            BigDecimal cost = item.getCostPrice();
+            // Already at/below cost — cannot discount further without going under cost.
+            if (cost != null && cost.compareTo(BigDecimal.ZERO) > 0 && list.compareTo(cost) <= 0) {
+                skipped++;
+                continue;
+            }
+
+            BigDecimal discounted = list.multiply(factor).setScale(2, RoundingMode.HALF_UP);
             if (discounted.compareTo(BigDecimal.ZERO) < 0) {
                 discounted = BigDecimal.ZERO;
+            }
+            BigDecimal floored = DiscountFloor.floorAtCost(discounted, cost);
+            if (floored.compareTo(discounted) > 0) {
+                cappedAtCost++;
+                discounted = floored;
             }
             item.setSellingPrice(discounted);
             item.setUnitSale(discounted);
@@ -381,6 +411,8 @@ public class ItemService {
         return ItemBulkDiscountResultDTO.builder()
                 .requestedCount(uniqueIds.size())
                 .updatedCount(updated)
+                .skippedCount(skipped)
+                .cappedAtCostCount(cappedAtCost)
                 .discountPercent(pct)
                 .build();
     }
@@ -417,6 +449,11 @@ public class ItemService {
 
         if (dto.getUnitPrice() != null) {
             item.setSellingPrice(dto.getUnitPrice());
+            if (item.getListPrice() == null
+                    || item.getListPrice().compareTo(BigDecimal.ZERO) <= 0
+                    || dto.getUnitPrice().compareTo(item.getListPrice()) > 0) {
+                item.setListPrice(dto.getUnitPrice());
+            }
         }
 
         item.setDateReceived(resolveReceiveDate(dto.getReceivedDate()));
@@ -541,6 +578,7 @@ public class ItemService {
                 .reorderLevel(item.getReorderLevel())
                 .costPrice(item.getCostPrice())
                 .sellingPrice(item.getSellingPrice())
+                .listPrice(item.getListPrice())
                 .unitSale(item.getUnitSale())
                 .status(item.getStatus())
                 .imageUrl(imageUrl)
@@ -591,6 +629,7 @@ public class ItemService {
                 .reorderLevel(item.getReorderLevel())
                 .costPrice(item.getCostPrice())
                 .sellingPrice(item.getSellingPrice())
+                .listPrice(item.getListPrice())
                 .unitSale(item.getUnitSale())
                 .status(item.getStatus())
                 .imageUrl(imageUrl)
@@ -607,6 +646,30 @@ public class ItemService {
                                 warehouse.getCountry()
                         )
                 ).build();
+    }
+
+    private BigDecimal resolveInitialListPrice(BigDecimal listPrice, BigDecimal sellingPrice) {
+        if (listPrice != null && listPrice.compareTo(BigDecimal.ZERO) > 0) {
+            return listPrice;
+        }
+        return sellingPrice;
+    }
+
+    private void applyListPriceOnUpdate(Item item, BigDecimal listPrice, BigDecimal sellingPrice) {
+        if (listPrice != null && listPrice.compareTo(BigDecimal.ZERO) > 0) {
+            item.setListPrice(listPrice);
+            return;
+        }
+        if (item.getListPrice() == null || item.getListPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            if (sellingPrice != null && sellingPrice.compareTo(BigDecimal.ZERO) > 0) {
+                item.setListPrice(sellingPrice);
+            }
+            return;
+        }
+        // Manual raise of selling price above list → treat as new baseline.
+        if (sellingPrice != null && sellingPrice.compareTo(item.getListPrice()) > 0) {
+            item.setListPrice(sellingPrice);
+        }
     }
 
     private LocalDate resolveReceiveDate(String receivedDate) {

@@ -72,6 +72,13 @@ public class Item {
     @Column(name = "selling_price", precision = 18, scale = 2)
     private BigDecimal sellingPrice;
 
+    /**
+     * Undiscounted retail / list price. Bulk catalog discounts reduce
+     * {@link #sellingPrice} from this baseline so discounts do not compound.
+     */
+    @Column(name = "list_price", precision = 18, scale = 2)
+    private BigDecimal listPrice;
+
     @Column(name = "reorder_level")
     private Integer reorderLevel;
 
