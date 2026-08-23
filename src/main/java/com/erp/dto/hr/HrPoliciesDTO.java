@@ -37,6 +37,8 @@ public class HrPoliciesDTO {
     // ---- Attendance & working hours ----
     private BigDecimal standardWorkingHoursPerDay;
     private Boolean requireCheckIn;
+    /** IANA timezone for attendance / company clocks; default Asia/Qatar. */
+    private String timezone;
     /** Grace minutes after max shift before auto attendance check-out; null/0 = none. */
     private Integer maxShiftCheckoutGraceMinutes;
 

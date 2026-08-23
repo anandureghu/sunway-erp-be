@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AutoCheckoutJob {
 
+    private static final ZoneId DEFAULT_ATTENDANCE_ZONE = ZoneId.of("Asia/Qatar");
     private static final double DEFAULT_STD_HOURS = 6.0;
     private static final double DEFAULT_OT_MAX_HOURS = 2.0;
     private static final String AUTO_NOTE = "Auto-checkout — employee did not check out.";
@@ -42,6 +44,27 @@ public class AutoCheckoutJob {
     private final EmployeeTimesheetRepository timesheetRepo;
     private final EmployeeRepository employeeRepo;
 
+    private ZoneId resolveZone(Long employeeId, Map<Long, ZoneId> cache) {
+        ZoneId cached = cache.get(employeeId);
+        if (cached != null) {
+            return cached;
+        }
+        Employee employee = employeeRepo.findById(employeeId).orElse(null);
+        ZoneId zone = DEFAULT_ATTENDANCE_ZONE;
+        try {
+            if (employee != null && employee.getCompany() != null) {
+                String tz = employee.getCompany().getTimezone();
+                if (tz != null && !tz.isBlank()) {
+                    zone = ZoneId.of(tz.trim());
+                }
+            }
+        } catch (Exception ignored) {
+            // invalid timezone — keep default
+        }
+        cache.put(employeeId, zone);
+        return zone;
+    }
+
     /** Sweep once on startup so any already-stuck sessions get closed immediately. */
     @Transactional
     @EventListener(ApplicationReadyEvent.class)
@@ -50,21 +73,29 @@ public class AutoCheckoutJob {
     }
 
     @Transactional
-    @Scheduled(cron = "0 10 0 * * *") // every day at 00:10 (after the leave-status job)
+    @Scheduled(cron = "0 10 0 * * *", zone = "Asia/Qatar") // daily sweep; per-row zone still applied
     public void closeForgottenCheckouts() {
-        LocalDate cutoff = LocalDate.now().minusDays(1); // only days that have fully ended
+        // Load a wide window; each row is evaluated against its company timezone.
+        LocalDate globalCutoff = LocalDate.now(DEFAULT_ATTENDANCE_ZONE).plusDays(1);
         List<EmployeeTimesheet> open =
-                timesheetRepo.findByStatusAndAttendanceDateLessThanEqual(TimesheetStatus.CHECKED_IN, cutoff);
+                timesheetRepo.findByStatusAndAttendanceDateLessThanEqual(
+                        TimesheetStatus.CHECKED_IN, globalCutoff);
         if (open.isEmpty()) {
             return;
         }
 
         Map<Long, Double> stdHoursByCompany = new HashMap<>();
+        Map<Long, ZoneId> zoneByEmployee = new HashMap<>();
         int closed = 0;
 
         for (EmployeeTimesheet t : open) {
-            if (t.getCheckInTime() == null) {
-                continue; // defensive: CHECKED_IN without a check-in time
+            if (t.getCheckInTime() == null || t.getAttendanceDate() == null) {
+                continue;
+            }
+            ZoneId zone = resolveZone(t.getEmployeeId(), zoneByEmployee);
+            LocalDate companyYesterday = LocalDate.now(zone).minusDays(1);
+            if (t.getAttendanceDate().isAfter(companyYesterday)) {
+                continue; // still "today" in company zone
             }
             double stdHours = resolveStandardHours(t.getEmployeeId(), stdHoursByCompany);
             long stdMinutes = Math.round(stdHours * 60.0);
@@ -78,7 +109,7 @@ public class AutoCheckoutJob {
             closed++;
         }
 
-        log.info("Auto-checkout: closed {} forgotten session(s) up to {}", closed, cutoff);
+        log.info("Auto-checkout: closed {} forgotten session(s)", closed);
     }
 
     /**
@@ -90,8 +121,7 @@ public class AutoCheckoutJob {
     @Transactional
     @Scheduled(fixedRate = 60_000) // every minute so grace windows are timely
     public void enforceMaxShift() {
-        List<EmployeeTimesheet> open =
-                timesheetRepo.findByStatusAndAttendanceDate(TimesheetStatus.CHECKED_IN, LocalDate.now());
+        List<EmployeeTimesheet> open = timesheetRepo.findByStatus(TimesheetStatus.CHECKED_IN);
         if (open.isEmpty()) {
             return;
         }
@@ -99,13 +129,19 @@ public class AutoCheckoutJob {
         Map<Long, Double> stdCache = new HashMap<>();
         Map<Long, Double> otCache = new HashMap<>();
         Map<Long, Integer> graceCache = new HashMap<>();
-        LocalDateTime now = LocalDateTime.now();
+        Map<Long, ZoneId> zoneByEmployee = new HashMap<>();
         int closed = 0;
 
         for (EmployeeTimesheet t : open) {
             if (t.getCheckInTime() == null) {
                 continue;
             }
+            ZoneId zone = resolveZone(t.getEmployeeId(), zoneByEmployee);
+            LocalDate companyToday = LocalDate.now(zone);
+            if (t.getAttendanceDate() != null && !t.getAttendanceDate().equals(companyToday)) {
+                continue;
+            }
+            LocalDateTime now = LocalDateTime.now(zone);
             double capHours = resolveStandardHours(t.getEmployeeId(), stdCache)
                     + resolveOtMax(t.getEmployeeId(), otCache);
             long capMinutes = Math.round(capHours * 60.0);

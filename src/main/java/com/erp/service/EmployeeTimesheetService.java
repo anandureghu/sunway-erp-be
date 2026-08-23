@@ -20,11 +20,15 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 
 @Service
 public class EmployeeTimesheetService {
+
+    /** Default when company timezone is unset / invalid. */
+    private static final ZoneId DEFAULT_ATTENDANCE_ZONE = ZoneId.of("Asia/Qatar");
 
     // Fallbacks used only when a company has no explicit standard-hours setting.
     private static final double DEFAULT_STD_HOURS_PER_DAY = 6.0;
@@ -73,6 +77,32 @@ public class EmployeeTimesheetService {
         return true;
     }
 
+    private ZoneId attendanceZone(Employee employee) {
+        try {
+            if (employee.getCompany() != null) {
+                String tz = employee.getCompany().getTimezone();
+                if (tz != null && !tz.isBlank()) {
+                    return ZoneId.of(tz.trim());
+                }
+            }
+        } catch (Exception ignored) {
+            // invalid / lazy — fall through
+        }
+        return DEFAULT_ATTENDANCE_ZONE;
+    }
+
+    private String attendanceTimezoneId(Employee employee) {
+        return attendanceZone(employee).getId();
+    }
+
+    private LocalDate todayInAttendanceZone(Employee employee) {
+        return LocalDate.now(attendanceZone(employee));
+    }
+
+    private LocalDateTime nowInAttendanceZone(Employee employee) {
+        return LocalDateTime.now(attendanceZone(employee));
+    }
+
     private int checkoutGraceMinutes(Employee employee) {
         try {
             if (employee.getCompany() != null
@@ -91,6 +121,7 @@ public class EmployeeTimesheetService {
         response.setOtMaxHoursPerDay(otMaxHours(employee));
         response.setMaxShiftMinutes(maxShiftMinutes(employee));
         response.setMaxShiftCheckoutGraceMinutes(checkoutGraceMinutes(employee));
+        response.setTimezone(attendanceTimezoneId(employee));
     }
 
     private final EmployeeTimesheetRepository repository;
@@ -108,12 +139,11 @@ public class EmployeeTimesheetService {
 
     @Transactional
     public TimesheetTodayResponse checkIn(Long employeeId) {
-        LocalDate today = LocalDate.now();
-
         // Only active employees may record attendance — a non-active employee
         // (inactive / on leave / resigned …) cannot check in.
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        LocalDate today = todayInAttendanceZone(employee);
         // Self-service: an employee punches their own attendance; HR needs CREATE_ALL.
         accessGuard.assertSelfServiceWrite(employee, AppModule.HR_REPORTS, AppAction.CREATE);
         if (employee.getStatus() != EmployeeStatus.ACTIVE) {
@@ -140,7 +170,7 @@ public class EmployeeTimesheetService {
             throw new RuntimeException("Employee already checked in today.");
         }
 
-        timesheet.setCheckInTime(LocalDateTime.now());
+        timesheet.setCheckInTime(nowInAttendanceZone(employee));
         timesheet.setCheckOutTime(null);
         timesheet.setWorkedMinutes(null);
         timesheet.setStatus(TimesheetStatus.CHECKED_IN);
@@ -162,7 +192,7 @@ public class EmployeeTimesheetService {
                     "Check-out is disabled for your organization — attendance is auto-marked present.");
         }
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = todayInAttendanceZone(employee);
 
         EmployeeTimesheet timesheet = repository
                 .findByEmployeeIdAndAttendanceDate(employeeId, today)
@@ -176,7 +206,7 @@ public class EmployeeTimesheetService {
             throw new RuntimeException("Employee already checked out today.");
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowInAttendanceZone(employee);
         timesheet.setCheckOutTime(now);
         // Paid minutes are capped at the standard day + overtime cap, so a very long
         // session never records more overtime than the policy allows.
@@ -197,12 +227,12 @@ public class EmployeeTimesheetService {
         accessGuard.assertCanRead(employee, AppModule.HR_REPORTS);
 
         TimesheetTodayResponse response = repository
-                .findByEmployeeIdAndAttendanceDate(employeeId, LocalDate.now())
+                .findByEmployeeIdAndAttendanceDate(employeeId, todayInAttendanceZone(employee))
                 .map(this::mapToday)
                 .orElseGet(() -> {
                     TimesheetTodayResponse r = new TimesheetTodayResponse();
                     r.setEmployeeId(employeeId);
-                    r.setDate(LocalDate.now());
+                    r.setDate(todayInAttendanceZone(employee));
                     r.setCheckInTime(null);
                     r.setCheckOutTime(null);
                     r.setWorkedMinutes(0L);
@@ -227,7 +257,7 @@ public class EmployeeTimesheetService {
         // Companies that don't punch in/out: every working day up to today is present
         // for the standard day (no reliance on timesheet rows).
         if (!requireCheckIn(employee)) {
-            int workingDays = countWorkingDaysUpToToday(year, month);
+            int workingDays = countWorkingDaysUpToToday(year, month, employee);
             response.setDaysRecorded(workingDays);
             response.setDaysPresent(workingDays);
             response.setTotalHours(roundToSingleDecimal(workingDays * stdHours));
@@ -253,10 +283,10 @@ public class EmployeeTimesheetService {
     }
 
     /** Working days (Sun–Thu) from the 1st of the month through today (or month end if past). */
-    private int countWorkingDaysUpToToday(int year, int month) {
+    private int countWorkingDaysUpToToday(int year, int month, Employee employee) {
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
-        LocalDate today = LocalDate.now();
+        LocalDate today = todayInAttendanceZone(employee);
         LocalDate end = ym.atEndOfMonth().isAfter(today) ? today : ym.atEndOfMonth();
         if (end.isBefore(start)) return 0;
         int count = 0;

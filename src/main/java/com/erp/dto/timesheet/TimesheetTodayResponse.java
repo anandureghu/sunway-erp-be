@@ -15,6 +15,8 @@ public class TimesheetTodayResponse {
     /** Company policy: whether punch in/out is used at all (drives the UI). */
     private Boolean requireCheckIn;
     private Double standardWorkingHoursPerDay;
+    /** IANA timezone for company attendance clocks (default Asia/Qatar). */
+    private String timezone;
     /** Max overtime hours/day from company policy. */
     private Double otMaxHoursPerDay;
     /** Max paid shift length in minutes (standard + OT cap). */
@@ -92,6 +94,14 @@ public class TimesheetTodayResponse {
 
     public void setStandardWorkingHoursPerDay(Double standardWorkingHoursPerDay) {
         this.standardWorkingHoursPerDay = standardWorkingHoursPerDay;
+    }
+
+    public String getTimezone() {
+        return timezone;
+    }
+
+    public void setTimezone(String timezone) {
+        this.timezone = timezone;
     }
 
     public Double getOtMaxHoursPerDay() {
