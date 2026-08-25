@@ -17,7 +17,8 @@ import java.util.List;
 @Table(
         name = "picklists",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_picklists_company_picklist_number", columnNames = {"company_id", "picklist_number"})
+                @UniqueConstraint(name = "uk_picklists_company_picklist_number", columnNames = {"company_id", "picklist_number"}),
+                @UniqueConstraint(name = "uk_picklists_sales_order_id", columnNames = {"sales_order_id"})
         }
 )
 public class Picklist {

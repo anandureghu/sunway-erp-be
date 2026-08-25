@@ -26,6 +26,8 @@ public class ItemCreateDTO {
 
     private BigDecimal costPrice;
     private BigDecimal sellingPrice;
+    /** Optional; defaults to sellingPrice on create when omitted. */
+    private BigDecimal listPrice;
     private BigDecimal unitSale;
 
     private String unitMeasure;

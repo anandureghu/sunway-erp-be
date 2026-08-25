@@ -12,6 +12,14 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     Optional<Shipment> findByPicklistId(Long picklistId);
 
+    @Query("""
+            SELECT COUNT(s) > 0 FROM Shipment s
+            JOIN s.picklist p
+            WHERE p.salesOrder.id = :salesOrderId
+              AND s.status = 'DELIVERED'
+            """)
+    boolean existsDeliveredForSalesOrder(@Param("salesOrderId") Long salesOrderId);
+
     List<Shipment> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     long countByCompanyIdAndStatus(Long companyId, String status);

@@ -29,6 +29,8 @@ public class ItemUpdateDTO {
     private BigDecimal costPrice;
     private BigDecimal unitSale;
     private BigDecimal sellingPrice;
+    /** When set, updates the undiscounted list price. */
+    private BigDecimal listPrice;
 
     private String status;
     private String imageUrl;

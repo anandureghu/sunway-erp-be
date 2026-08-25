@@ -36,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 
@@ -454,6 +455,18 @@ public class CompanyService {
         if (dto.getRequireCheckIn() != null) {
             company.setRequireCheckIn(dto.getRequireCheckIn());
         }
+        if (dto.getTimezone() != null) {
+            String tz = dto.getTimezone().trim();
+            if (tz.isEmpty()) {
+                tz = "Asia/Qatar";
+            }
+            try {
+                ZoneId.of(tz);
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("Invalid timezone: " + tz);
+            }
+            company.setTimezone(tz);
+        }
         if (dto.getMaxShiftCheckoutGraceMinutes() != null) {
             int minutes = dto.getMaxShiftCheckoutGraceMinutes();
             // 0 clears the policy (check out at the max-shift cap with no grace).
@@ -562,6 +575,10 @@ public class CompanyService {
                                 ? company.getStandardWorkingHoursPerDay()
                                 : new BigDecimal("6.00"))
                 .requireCheckIn(company.isRequireCheckIn())
+                .timezone(
+                        company.getTimezone() != null && !company.getTimezone().isBlank()
+                                ? company.getTimezone()
+                                : "Asia/Qatar")
                 .maxShiftCheckoutGraceMinutes(company.getMaxShiftCheckoutGraceMinutes())
                 .sessionIdleTimeoutMinutes(company.getSessionIdleTimeoutMinutes())
                 .probationPeriodMonths(

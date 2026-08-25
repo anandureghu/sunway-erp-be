@@ -24,6 +24,7 @@ import com.erp.repo.sales.ShipmentRepository;
 import com.erp.repo.sales.ShipmentTrackingEventRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
+import com.erp.exception.ConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,7 +81,16 @@ public class ShipmentService {
         if (!"PICKED".equals(picklist.getStatus())) {
             throw new RuntimeException("Shipment can be created only from PICKED picklist");
         }
-        var invoice = invoiceRepo.findByOrderIdAndType(picklist.getSalesOrder().getId(), InvoiceType.SALES)
+        SalesOrder salesOrder = picklist.getSalesOrder();
+        if (salesOrder == null) {
+            throw new RuntimeException("Picklist is not linked to a sales order");
+        }
+        if ("COMPLETED".equals(salesOrder.getStatus()) || "CANCELLED".equals(salesOrder.getStatus())) {
+            throw new ConflictException(
+                    "Cannot create dispatch: sales order is already "
+                            + salesOrder.getStatus().toLowerCase());
+        }
+        var invoice = invoiceRepo.findByOrderIdAndType(salesOrder.getId(), InvoiceType.SALES)
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this sales order"));
         if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
             throw new RuntimeException("Shipment can be created only after full customer payment");
@@ -88,6 +98,10 @@ public class ShipmentService {
 
         if (repo.findByPicklistId(picklist.getId()).isPresent()) {
             throw new RuntimeException("Shipment already exists for this picklist");
+        }
+        if (repo.existsDeliveredForSalesOrder(salesOrder.getId())) {
+            throw new ConflictException(
+                    "Cannot create dispatch: this sales order was already delivered");
         }
 
         Company company = companyRepo.findById(auth.getCurrentCompanyId()).orElseThrow();
@@ -139,11 +153,8 @@ public class ShipmentService {
         s.setStatus("DISPATCHED");
         Instant now = Instant.now();
         s.setDispatchedAt(now);
-        s.getItems().forEach(i -> {
-            Item item = i.getItem();
-            item.setReserved(0);
-            item.setQuantity(item.getAvailable());
-        });
+        // Stock was already FIFO-consumed when the sales order was confirmed.
+        // Do not rewrite item reserved/quantity aggregates here.
 
         appendTrackingEvent(s, "DISPATCHED", "Origin Dispatch Center", "Shipment dispatched", now);
         return toDTO(s);
@@ -170,14 +181,19 @@ public class ShipmentService {
     public ShipmentResponseDTO markOutForDelivery(Long id) {
         Shipment s = getEntity(id);
 
-        if (!"IN_TRANSIT".equals(s.getStatus())) {
-            throw new RuntimeException("Shipment must be IN_TRANSIT first");
+        String previous = s.getStatus();
+        // IN_TRANSIT is the normal path; FAILED_DELIVERY allows a reattempt.
+        if (!List.of("IN_TRANSIT", "FAILED_DELIVERY").contains(previous)) {
+            throw new RuntimeException("Shipment must be IN_TRANSIT (or FAILED_DELIVERY to reattempt)");
         }
 
         s.setStatus("OUT_FOR_DELIVERY");
         Instant now = Instant.now();
         s.setOutForDeliveryAt(now);
-        appendTrackingEvent(s, "OUT_FOR_DELIVERY", resolveEventLocation(s), "Shipment is out for delivery", now);
+        String note = "FAILED_DELIVERY".equals(previous)
+                ? "Reattempting delivery after failed attempt"
+                : "Shipment is out for delivery";
+        appendTrackingEvent(s, "OUT_FOR_DELIVERY", resolveEventLocation(s), note, now);
         return toDTO(s);
     }
 
@@ -188,7 +204,7 @@ public class ShipmentService {
 
         Shipment s = getEntity(id);
 
-        if (!List.of("DISPATCHED", "IN_TRANSIT", "OUT_FOR_DELIVERY").contains(s.getStatus())) {
+        if (!List.of("DISPATCHED", "IN_TRANSIT", "OUT_FOR_DELIVERY", "FAILED_DELIVERY").contains(s.getStatus())) {
             throw new RuntimeException("Shipment cannot be delivered in current state");
         }
 

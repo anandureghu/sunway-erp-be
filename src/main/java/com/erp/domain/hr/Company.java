@@ -194,6 +194,14 @@ public class Company {
     private boolean requireCheckIn = true;
 
     /**
+     * IANA timezone used for attendance punches and company-local clocks
+     * (e.g. Asia/Qatar). Defaults to Qatar when unset.
+     */
+    @Builder.Default
+    @Column(name = "timezone", nullable = false, length = 64)
+    private String timezone = "Asia/Qatar";
+
+    /**
      * HR policy: minutes of grace after the max shift (standard + OT cap) before
      * the system automatically checks the employee out. {@code null}/{@code 0}
      * means check out at the cap with no extra grace. Typical values: 15, 20, 30.

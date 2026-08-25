@@ -2,6 +2,8 @@ package com.erp.controller.inventory;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.inventory.ItemBulkDiscountRequestDTO;
+import com.erp.dto.inventory.ItemBulkDiscountResultDTO;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemCsvImportResultDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
@@ -91,6 +93,12 @@ public class ItemController {
         return service.updateItemImage(id, image);
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})
+    @PostMapping("/bulk-discount")
+    public ItemBulkDiscountResultDTO applyBulkDiscount(@RequestBody ItemBulkDiscountRequestDTO req) {
+        return service.applyBulkDiscount(req);
+    }
+
     @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping
     public List<ItemResponseDTO> list() {
@@ -129,13 +137,19 @@ public class ItemController {
     public com.erp.dto.inventory.StockBatchMovementReportDTO listBatchMovements(
             @PathVariable("id") Long id,
             @RequestParam(required = false) Long warehouseId,
-            @RequestParam(defaultValue = "100") int limit
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(defaultValue = "false") boolean archived
     ) {
+        int resolvedSize = limit != null ? limit : size;
         return stockBatchService.buildMovementReport(
                 auth.getCurrentCompanyId(),
                 warehouseId,
                 id,
-                limit
+                page,
+                resolvedSize,
+                archived
         );
     }
 

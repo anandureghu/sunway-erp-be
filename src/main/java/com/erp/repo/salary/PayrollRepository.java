@@ -48,4 +48,24 @@ public interface PayrollRepository extends JpaRepository<Payroll, Long> {
             @Param("companyId") Long companyId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
+
+    /**
+     * Company-wide payroll history for the HR payroll-summary report, optionally
+     * bounded by pay date. Employee + department are fetch-joined to avoid an N+1
+     * when the rows are grouped by department.
+     */
+    @Query("""
+            SELECT p
+            FROM Payroll p
+            JOIN FETCH p.employee e
+            LEFT JOIN FETCH e.department d
+            WHERE e.company.id = :companyId
+              AND (:from IS NULL OR p.payDate >= :from)
+              AND (:to IS NULL OR p.payDate <= :to)
+            ORDER BY p.payDate DESC, p.id DESC
+            """)
+    List<Payroll> findCompanyPayrollHistory(
+            @Param("companyId") Long companyId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 }

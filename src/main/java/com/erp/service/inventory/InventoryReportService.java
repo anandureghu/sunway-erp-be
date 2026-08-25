@@ -208,13 +208,17 @@ public class InventoryReportService {
     public com.erp.dto.inventory.StockBatchMovementReportDTO buildBatchMovementReport(
             Long warehouseId,
             Long itemId,
-            int limit
+            int page,
+            int size,
+            boolean archived
     ) {
         return stockBatchService.buildMovementReport(
                 auth.getCurrentCompanyId(),
                 warehouseId,
                 itemId,
-                limit
+                page,
+                size,
+                archived
         );
     }
 

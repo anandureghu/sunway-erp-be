@@ -19,6 +19,9 @@ public interface EmployeeTimesheetRepository extends JpaRepository<EmployeeTimes
     /** Open sessions on a specific day — for the intraday max-shift auto-checkout sweep. */
     List<EmployeeTimesheet> findByStatusAndAttendanceDate(TimesheetStatus status, LocalDate date);
 
+    /** All open sessions — used when companies may span multiple timezones. */
+    List<EmployeeTimesheet> findByStatus(TimesheetStatus status);
+
     List<EmployeeTimesheet> findByEmployeeIdAndAttendanceDateBetween(
             Long employeeId,
             LocalDate startDate,

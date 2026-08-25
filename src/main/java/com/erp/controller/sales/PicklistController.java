@@ -2,6 +2,7 @@ package com.erp.controller.sales;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.sales.PicklistGenerateRequest;
 import com.erp.dto.sales.PicklistResponseDTO;
 import com.erp.service.sales.PicklistService;
 import com.erp.service.security.annotation.RequiresPermission;
@@ -21,8 +22,12 @@ public class PicklistController {
 
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.CREATE, AppAction.EDIT})
     @PostMapping("/from-sales-order/{salesOrderId}")
-    public PicklistResponseDTO generate(@PathVariable("salesOrderId") Long salesOrderId) {
-        return service.generate(salesOrderId);
+    public PicklistResponseDTO generate(
+            @PathVariable("salesOrderId") Long salesOrderId,
+            @RequestBody(required = false) PicklistGenerateRequest body
+    ) {
+        Long warehouseId = body != null ? body.getWarehouseId() : null;
+        return service.generate(salesOrderId, warehouseId);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.EDIT})

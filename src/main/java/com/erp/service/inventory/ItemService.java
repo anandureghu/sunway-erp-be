@@ -8,25 +8,37 @@ import com.erp.domain.inventory.StockBatchSourceType;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
+import com.erp.dto.inventory.ItemBulkDiscountRequestDTO;
+import com.erp.dto.inventory.ItemBulkDiscountResultDTO;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemStockAdjustDTO;
 import com.erp.dto.inventory.ItemStockReceiveDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
+import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.WarehouseRepository;
+import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
+import com.erp.util.DiscountFloor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -41,6 +53,7 @@ public class ItemService {
     private final FileStorageService fileStorageService;
     private final ItemWarehouseStockService itemWarehouseStockService;
     private final StockBatchService stockBatchService;
+    private final PurchaseOrderRepository purchaseOrderRepo;
 
     public ItemService(
             ItemRepository itemRepo,
@@ -50,7 +63,8 @@ public class ItemService {
             WarehouseRepository warehouseRepo,
             FileStorageService fileStorageService,
             ItemWarehouseStockService itemWarehouseStockService,
-            StockBatchService stockBatchService
+            StockBatchService stockBatchService,
+            PurchaseOrderRepository purchaseOrderRepo
     ) {
         this.itemRepo = itemRepo;
         this.userRepo = userRepo;
@@ -60,6 +74,7 @@ public class ItemService {
         this.fileStorageService = fileStorageService;
         this.itemWarehouseStockService = itemWarehouseStockService;
         this.stockBatchService = stockBatchService;
+        this.purchaseOrderRepo = purchaseOrderRepo;
     }
 
     // --------------------------
@@ -100,6 +115,7 @@ public class ItemService {
                 .expiryDate(parseOptionalDate(dto.getExpiryDate()))
                 .costPrice(dto.getCostPrice())
                 .sellingPrice(dto.getSellingPrice())
+                .listPrice(resolveInitialListPrice(dto.getListPrice(), dto.getSellingPrice()))
                 .unitSale(dto.getUnitSale())
                 .unitMeasure(dto.getUnitMeasure())
                 .reorderLevel(dto.getReorderLevel())
@@ -173,6 +189,7 @@ public class ItemService {
         item.setCostPrice(dto.getCostPrice());
         item.setSellingPrice(dto.getSellingPrice());
         item.setUnitSale(dto.getUnitSale());
+        applyListPriceOnUpdate(item, dto.getListPrice(), dto.getSellingPrice());
         item.setStatus(dto.getStatus());
         // Preserve existing image on normal updates unless an explicit value is provided.
         if (dto.getImageUrl() != null) {
@@ -275,14 +292,129 @@ public class ItemService {
      */
     public List<ItemResponseDTO> listStockCatalogForCompany() {
         Long companyId = auth.getCurrentCompanyId();
+        Map<Long, Integer> onOrderByItem = loadOnOrderByItem(companyId);
         return itemWarehouseStockService.listStockCatalog(companyId).stream()
-                .map(row -> toDTOForWarehouse(row.item(), row.warehouse(), row.quantityOnHand(), row.reserved(), row.available()))
+                .map(row -> {
+                    ItemResponseDTO dto = toDTOForWarehouse(
+                            row.item(),
+                            row.warehouse(),
+                            row.quantityOnHand(),
+                            row.reserved(),
+                            row.available());
+                    dto.setQuantityOnOrder(onOrderByItem.getOrDefault(row.item().getId(), 0));
+                    return dto;
+                })
                 .toList();
+    }
+
+    private Map<Long, Integer> loadOnOrderByItem(Long companyId) {
+        List<PurchaseOrderStatus> openStatuses = List.of(
+                PurchaseOrderStatus.APPROVED,
+                PurchaseOrderStatus.CONFIRMED,
+                PurchaseOrderStatus.PARTIALLY_RECEIVED
+        );
+        Map<Long, Integer> map = new HashMap<>();
+        for (Object[] row : purchaseOrderRepo.sumOnOrderQuantityGroupedByItem(companyId, openStatuses)) {
+            if (row == null || row[0] == null) {
+                continue;
+            }
+            Long itemId = ((Number) row[0]).longValue();
+            int qty = row[1] == null ? 0 : ((Number) row[1]).intValue();
+            map.put(itemId, qty);
+        }
+        return map;
     }
 
     public ItemResponseDTO getItem(Long id) {
         Item item = getItemEntity(id);
         return toDTO(item);
+    }
+
+    /**
+     * Apply a catalog discount from each item's list price baseline.
+     * Reduces {@code sellingPrice} / {@code unitSale}; does not change {@code listPrice}.
+     */
+    public ItemBulkDiscountResultDTO applyBulkDiscount(ItemBulkDiscountRequestDTO req) {
+        if (req == null || req.getItemIds() == null || req.getItemIds().isEmpty()) {
+            throw new IllegalArgumentException("Select at least one item to discount.");
+        }
+        BigDecimal pct = req.getDiscountPercent();
+        if (pct == null || pct.compareTo(BigDecimal.ZERO) <= 0 || pct.compareTo(new BigDecimal("100")) >= 0) {
+            throw new IllegalArgumentException("Discount percent must be greater than 0 and less than 100.");
+        }
+
+        User user = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Long companyId = auth.getCurrentCompanyId();
+
+        Set<Long> uniqueIds = new LinkedHashSet<>(req.getItemIds());
+        BigDecimal factor = BigDecimal.ONE.subtract(
+                pct.divide(new BigDecimal("100"), 6, RoundingMode.HALF_UP));
+
+        int updated = 0;
+        int skipped = 0;
+        int cappedAtCost = 0;
+        List<Item> toSave = new ArrayList<>();
+        Instant now = Instant.now();
+        for (Long id : uniqueIds) {
+            if (id == null) {
+                skipped++;
+                continue;
+            }
+            Item item = itemRepo.findById(id)
+                    .filter(i -> i.getCompany() != null && companyId.equals(i.getCompany().getId()))
+                    .orElse(null);
+            if (item == null) {
+                skipped++;
+                continue;
+            }
+
+            BigDecimal list = item.getListPrice();
+            BigDecimal selling = item.getSellingPrice();
+            if (list == null || list.compareTo(BigDecimal.ZERO) <= 0) {
+                if (selling == null || selling.compareTo(BigDecimal.ZERO) <= 0) {
+                    skipped++;
+                    continue;
+                }
+                list = selling;
+                item.setListPrice(list);
+            }
+
+            BigDecimal cost = item.getCostPrice();
+            // Already at/below cost — cannot discount further without going under cost.
+            if (cost != null && cost.compareTo(BigDecimal.ZERO) > 0 && list.compareTo(cost) <= 0) {
+                skipped++;
+                continue;
+            }
+
+            BigDecimal discounted = list.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+            if (discounted.compareTo(BigDecimal.ZERO) < 0) {
+                discounted = BigDecimal.ZERO;
+            }
+            BigDecimal floored = DiscountFloor.floorAtCost(discounted, cost);
+            if (floored.compareTo(discounted) > 0) {
+                cappedAtCost++;
+                discounted = floored;
+            }
+            item.setSellingPrice(discounted);
+            item.setUnitSale(discounted);
+            item.setUpdatedBy(user);
+            item.setUpdatedAt(now);
+            toSave.add(item);
+            updated++;
+        }
+
+        if (!toSave.isEmpty()) {
+            itemRepo.saveAll(toSave);
+        }
+
+        return ItemBulkDiscountResultDTO.builder()
+                .requestedCount(uniqueIds.size())
+                .updatedCount(updated)
+                .skippedCount(skipped)
+                .cappedAtCostCount(cappedAtCost)
+                .discountPercent(pct)
+                .build();
     }
 
     // --------------------------
@@ -317,6 +449,11 @@ public class ItemService {
 
         if (dto.getUnitPrice() != null) {
             item.setSellingPrice(dto.getUnitPrice());
+            if (item.getListPrice() == null
+                    || item.getListPrice().compareTo(BigDecimal.ZERO) <= 0
+                    || dto.getUnitPrice().compareTo(item.getListPrice()) > 0) {
+                item.setListPrice(dto.getUnitPrice());
+            }
         }
 
         item.setDateReceived(resolveReceiveDate(dto.getReceivedDate()));
@@ -435,11 +572,13 @@ public class ItemService {
                 .quantity(item.getQuantity())
                 .available(item.getAvailable())
                 .reserved(item.getReserved())
+                .quantityOnOrder(0)
                 .minimum(item.getMinimum())
                 .maximum(item.getMaximum())
                 .reorderLevel(item.getReorderLevel())
                 .costPrice(item.getCostPrice())
                 .sellingPrice(item.getSellingPrice())
+                .listPrice(item.getListPrice())
                 .unitSale(item.getUnitSale())
                 .status(item.getStatus())
                 .imageUrl(imageUrl)
@@ -484,11 +623,13 @@ public class ItemService {
                 .quantity(quantityOnHand)
                 .available(available)
                 .reserved(reserved)
+                .quantityOnOrder(0)
                 .minimum(item.getMinimum())
                 .maximum(item.getMaximum())
                 .reorderLevel(item.getReorderLevel())
                 .costPrice(item.getCostPrice())
                 .sellingPrice(item.getSellingPrice())
+                .listPrice(item.getListPrice())
                 .unitSale(item.getUnitSale())
                 .status(item.getStatus())
                 .imageUrl(imageUrl)
@@ -505,6 +646,30 @@ public class ItemService {
                                 warehouse.getCountry()
                         )
                 ).build();
+    }
+
+    private BigDecimal resolveInitialListPrice(BigDecimal listPrice, BigDecimal sellingPrice) {
+        if (listPrice != null && listPrice.compareTo(BigDecimal.ZERO) > 0) {
+            return listPrice;
+        }
+        return sellingPrice;
+    }
+
+    private void applyListPriceOnUpdate(Item item, BigDecimal listPrice, BigDecimal sellingPrice) {
+        if (listPrice != null && listPrice.compareTo(BigDecimal.ZERO) > 0) {
+            item.setListPrice(listPrice);
+            return;
+        }
+        if (item.getListPrice() == null || item.getListPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            if (sellingPrice != null && sellingPrice.compareTo(BigDecimal.ZERO) > 0) {
+                item.setListPrice(sellingPrice);
+            }
+            return;
+        }
+        // Manual raise of selling price above list → treat as new baseline.
+        if (sellingPrice != null && sellingPrice.compareTo(item.getListPrice()) > 0) {
+            item.setListPrice(sellingPrice);
+        }
     }
 
     private LocalDate resolveReceiveDate(String receivedDate) {

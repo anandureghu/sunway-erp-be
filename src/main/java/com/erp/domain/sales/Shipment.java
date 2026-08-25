@@ -18,7 +18,8 @@ import java.util.List;
 @Table(
         name = "shipments",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_shipments_company_shipment_number", columnNames = {"company_id", "shipment_number"})
+                @UniqueConstraint(name = "uk_shipments_company_shipment_number", columnNames = {"company_id", "shipment_number"}),
+                @UniqueConstraint(name = "uk_shipments_picklist_id", columnNames = {"picklist_id"})
         }
 )
 public class Shipment {
@@ -38,7 +39,7 @@ public class Shipment {
     @JoinColumn(name = "customer_id")
     private Customer customer;
 
-    private String status; // CREATED, DISPATCHED, IN_TRANSIT, DELIVERED, CANCELLED
+    private String status; // CREATED, DISPATCHED, IN_TRANSIT, OUT_FOR_DELIVERY, DELIVERED, FAILED_DELIVERY, CANCELLED
 
     private String carrierName;
     private String trackingNumber;

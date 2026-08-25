@@ -19,8 +19,10 @@ import com.erp.exception.NotFoundException;
 import com.erp.repo.UserRepository;
 import com.erp.repo.finance.CreditNoteRepository;
 import com.erp.repo.finance.InvoiceRepository;
+import com.erp.repo.sales.PicklistRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.repo.sales.SalesReturnRepository;
+import com.erp.repo.sales.ShipmentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
 import com.erp.service.finance.CreditNoteService;
@@ -44,6 +46,8 @@ public class SalesReturnService {
 
     private final SalesReturnRepository salesReturnRepo;
     private final SalesOrderRepository salesOrderRepo;
+    private final PicklistRepository picklistRepo;
+    private final ShipmentRepository shipmentRepo;
     private final InvoiceRepository invoiceRepo;
     private final CreditNoteRepository creditNoteRepo;
     private final UserRepository userRepo;
@@ -78,6 +82,25 @@ public class SalesReturnService {
         if ("QUOTATION".equals(status) || "CANCELLED".equals(status)) {
             throw new ConflictException("Cannot return items on a quotation or cancelled order");
         }
+
+        picklistRepo.findByCompanyIdAndSalesOrderId(companyId, so.getId()).ifPresent(picklist -> {
+            if ("CANCELLED".equals(picklist.getStatus())) {
+                return;
+            }
+            var shipmentOpt = shipmentRepo.findByPicklistId(picklist.getId());
+            if (shipmentOpt.isEmpty()) {
+                throw new ConflictException(
+                        "Cannot create a sales return while picklist "
+                                + picklist.getPicklistNumber()
+                                + " is still in progress");
+            }
+            String shipmentStatus = shipmentOpt.get().getStatus();
+            if (!List.of("DELIVERED", "CANCELLED").contains(shipmentStatus)) {
+                throw new ConflictException(
+                        "Cannot create a sales return while shipment is still open ("
+                                + shipmentStatus + ")");
+            }
+        });
 
         Map<Long, SalesOrderItem> linesById = new HashMap<>();
         Map<Long, List<SalesOrderItem>> linesByItemId = new HashMap<>();

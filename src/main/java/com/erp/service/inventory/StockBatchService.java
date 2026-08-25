@@ -27,6 +27,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -418,20 +419,78 @@ public class StockBatchService {
             Long itemId,
             int limit
     ) {
-        int capped = Math.min(Math.max(limit, 1), 500);
+        return buildMovementReport(companyId, warehouseId, itemId, 0, limit, false);
+    }
+
+    @Transactional(readOnly = true)
+    public StockBatchMovementReportDTO buildMovementReport(
+            Long companyId,
+            Long warehouseId,
+            Long itemId,
+            int page,
+            int size,
+            boolean archived
+    ) {
+        int pageIndex = Math.max(page, 0);
+        int pageSize = Math.min(Math.max(size, 1), 100);
         List<StockBatchMovement> raw = movementRepo.findHistory(
-                companyId, itemId, warehouseId, PageRequest.of(0, capped));
-        long total = movementRepo.countHistory(companyId, itemId, warehouseId);
+                companyId, itemId, warehouseId, archived, PageRequest.of(pageIndex, pageSize));
+        long total = movementRepo.countHistory(companyId, itemId, warehouseId, archived);
+        int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / pageSize);
 
         List<StockBatchMovementResponseDTO> movements = raw.stream()
                 .map(this::toMovementDto)
                 .toList();
 
+        // Trend chart uses a wider recent window, independent of the table page.
+        List<StockBatchMovementResponseDTO> trendSource = movementRepo.findHistory(
+                        companyId, itemId, warehouseId, archived, PageRequest.of(0, 500))
+                .stream()
+                .map(this::toMovementDto)
+                .toList();
+
         return StockBatchMovementReportDTO.builder()
                 .movements(movements)
-                .receiveTrend(buildReceiveTrend(movements))
+                .receiveTrend(buildReceiveTrend(trendSource))
                 .totalMovements(total)
+                .page(pageIndex)
+                .size(pageSize)
+                .totalPages(totalPages)
+                .archived(archived)
                 .build();
+    }
+
+    public StockBatchMovementResponseDTO archiveMovement(Long companyId, Long id) {
+        StockBatchMovement movement = movementRepo.findByIdAndCompanyId(id, companyId)
+                .orElseThrow(() -> new RuntimeException("Movement not found"));
+        if (!movement.isArchived()) {
+            movement.setArchived(true);
+            movementRepo.save(movement);
+        }
+        return toMovementDto(movement);
+    }
+
+    public int archiveMovements(Long companyId, List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        int archived = 0;
+        for (Long id : ids) {
+            if (id == null) {
+                continue;
+            }
+            Optional<StockBatchMovement> found = movementRepo.findByIdAndCompanyId(id, companyId);
+            if (found.isEmpty()) {
+                continue;
+            }
+            StockBatchMovement movement = found.get();
+            if (!movement.isArchived()) {
+                movement.setArchived(true);
+                movementRepo.save(movement);
+                archived++;
+            }
+        }
+        return archived;
     }
 
     @Transactional(readOnly = true)
@@ -564,6 +623,7 @@ public class StockBatchService {
                 .referenceType(m.getReferenceType())
                 .referenceId(m.getReferenceId())
                 .createdAt(m.getCreatedAt())
+                .archived(m.isArchived())
                 .build();
     }
 
@@ -606,6 +666,7 @@ public class StockBatchService {
                 .referenceType(referenceType)
                 .referenceId(referenceId)
                 .createdAt(Instant.now())
+                .archived(false)
                 .build());
     }
 

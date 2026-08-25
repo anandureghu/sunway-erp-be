@@ -148,6 +148,11 @@ public class DepartmentService {
             throw new ConflictException("Manager must belong to the same company");
         }
 
+        if (manager.getStatus() != null && manager.getStatus().isDepartedOrInactive()) {
+            throw new ConflictException(
+                    "A terminated, resigned, retired or inactive employee cannot be a department manager.");
+        }
+
         return manager;
     }
 

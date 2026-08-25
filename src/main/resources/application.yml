@@ -26,6 +26,8 @@ spring:
     import: optional:file:.env[.properties]
 
 app:
+  # Public frontend URL used for emails, PDFs, and assistant deep links.
+  # Override per environment, e.g. APP_PUBLIC_BASE_URL=https://demo.sunwayerp.com
   public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:5173}
   auth:
     pre-auth-token-minutes: ${AUTH_PRE_AUTH_TOKEN_MINUTES:5}

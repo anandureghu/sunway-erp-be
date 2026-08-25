@@ -15,6 +15,7 @@ import com.erp.dto.sales.SalesOrderCreateDTO;
 import com.erp.dto.sales.SalesOrderItemResponseDTO;
 import com.erp.dto.sales.SalesOrderResponseDTO;
 import com.erp.dto.sales.SalesOrderUpdateDTO;
+import com.erp.exception.ConflictException;
 import com.erp.repo.UserRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.finance.InvoiceRepository;
@@ -23,12 +24,15 @@ import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.CustomerRepository;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.WarehouseRepository;
+import com.erp.repo.sales.PicklistRepository;
 import com.erp.repo.sales.SalesOrderRepository;
+import com.erp.repo.sales.ShipmentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.finance.CoaBalanceRules;
 import com.erp.service.inventory.ItemWarehouseStockService;
 import com.erp.service.inventory.StockBatchService;
 import com.erp.service.DocumentSequenceService;
+import com.erp.util.DiscountFloor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +55,8 @@ public class SalesOrderService {
     private final BankAccountRepository bankAccountRepo;
     private final ChartOfAccountsRepository coaRepo;
     private final InvoiceRepository invoiceRepo;
+    private final PicklistRepository picklistRepo;
+    private final ShipmentRepository shipmentRepo;
     private final UserRepository userRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
@@ -66,6 +72,8 @@ public class SalesOrderService {
             BankAccountRepository bankAccountRepo,
             ChartOfAccountsRepository coaRepo,
             InvoiceRepository invoiceRepo,
+            PicklistRepository picklistRepo,
+            ShipmentRepository shipmentRepo,
             UserRepository userRepo,
             AuthContext auth,
             DocumentSequenceService documentSequenceService
@@ -80,6 +88,8 @@ public class SalesOrderService {
         this.bankAccountRepo = bankAccountRepo;
         this.coaRepo = coaRepo;
         this.invoiceRepo = invoiceRepo;
+        this.picklistRepo = picklistRepo;
+        this.shipmentRepo = shipmentRepo;
         this.userRepo = userRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
@@ -131,6 +141,7 @@ public class SalesOrderService {
             if (discountPercent.compareTo(BigDecimal.ZERO) < 0 || discountPercent.compareTo(BigDecimal.valueOf(100)) > 0) {
                 throw new RuntimeException("Discount percent must be between 0 and 100");
             }
+            assertDiscountNotBelowCost(item, unitPrice, discountPercent);
             BigDecimal discountAmount = gross.multiply(discountPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
             BigDecimal lineSubtotal = gross.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
             BigDecimal taxAmount = lineSubtotal.multiply(effectiveTaxRate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
@@ -276,6 +287,7 @@ public class SalesOrderService {
             if (discountPercent.compareTo(BigDecimal.ZERO) < 0 || discountPercent.compareTo(BigDecimal.valueOf(100)) > 0) {
                 throw new RuntimeException("Discount percent must be between 0 and 100");
             }
+            assertDiscountNotBelowCost(item, unitPrice, discountPercent);
             BigDecimal discountAmount = gross.multiply(discountPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
             BigDecimal lineSubtotal = gross.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
             BigDecimal taxAmount = lineSubtotal.multiply(effectiveTaxRate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
@@ -335,12 +347,35 @@ public class SalesOrderService {
             throw new RuntimeException("Only QUOTATION or CONFIRMED orders can be cancelled");
         }
 
+        Long companyId = auth.getCurrentCompanyId();
+        invoiceRepo.findByOrderIdAndType(order.getId(), InvoiceType.SALES).ifPresent(invoice -> {
+            if ("PAID".equalsIgnoreCase(invoice.getStatus())) {
+                throw new ConflictException("Cannot cancel a sales order after the invoice has been paid");
+            }
+        });
+
+        picklistRepo.findByCompanyIdAndSalesOrderId(companyId, order.getId()).ifPresent(picklist -> {
+            if (!"CANCELLED".equals(picklist.getStatus())) {
+                throw new ConflictException(
+                        "Cannot cancel sales order while picklist " + picklist.getPicklistNumber()
+                                + " is still open (" + picklist.getStatus() + ")");
+            }
+            shipmentRepo.findByPicklistId(picklist.getId()).ifPresent(shipment -> {
+                if (!"CANCELLED".equals(shipment.getStatus())) {
+                    throw new ConflictException(
+                            "Cannot cancel sales order while shipment "
+                                    + shipment.getShipmentNumber()
+                                    + " is still open (" + shipment.getStatus() + ")");
+                }
+            });
+        });
+
         if ("CONFIRMED".equals(order.getStatus())) {
             order.getItems().forEach(i ->
                     stockBatchService.restoreByReference(
                             StockBatchService.REF_SALES_ORDER_ITEM,
                             i.getId(),
-                            auth.getCurrentCompanyId()
+                            companyId
                     )
             );
         }
@@ -368,6 +403,23 @@ public class SalesOrderService {
     // --------------------------
     // Helpers
     // --------------------------
+    private void assertDiscountNotBelowCost(
+            Item item,
+            BigDecimal unitPrice,
+            BigDecimal discountPercent
+    ) {
+        BigDecimal cost = item.getCostPrice();
+        if (!DiscountFloor.wouldFallBelowCost(unitPrice, discountPercent, cost)) {
+            return;
+        }
+        BigDecimal maxPct = DiscountFloor.maxDiscountPercent(unitPrice, cost);
+        String label = item.getSku() != null ? item.getSku() : String.valueOf(item.getId());
+        throw new IllegalArgumentException(
+                "Discount on " + label + " would price below cost. Maximum allowed is "
+                        + maxPct.stripTrailingZeros().toPlainString() + "%."
+        );
+    }
+
     private Warehouse resolveLineWarehouse(Long warehouseId, Long companyId) {
         if (warehouseId == null) {
             throw new RuntimeException("warehouseId is required for each order line");
