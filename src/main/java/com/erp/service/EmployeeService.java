@@ -482,10 +482,13 @@ public class EmployeeService {
     // Returns ALL employees of the company — any employee can be a manager
     // ======================================================
 
+    // Departed/inactive employees cannot manage a department — exclude them from the
+    // manager candidate list (see EmployeeStatus#isDepartedOrInactive).
     public List<EmployeeResponseDTO> getManagersByCompany(Long companyId) {
         assertTenantCompanyScope(companyId);
         return employeeRepository.findByCompany_IdOrderByCreatedAtDesc(companyId)
                 .stream()
+                .filter(e -> e.getStatus() == null || !e.getStatus().isDepartedOrInactive())
                 .map(this::toDTO)
                 .toList();
     }

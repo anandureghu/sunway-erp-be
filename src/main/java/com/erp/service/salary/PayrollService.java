@@ -16,6 +16,7 @@ import com.erp.dto.salary.PayrollBatchResponseDTO;
 import com.erp.dto.salary.PayrollGenerateRequestDTO;
 import com.erp.dto.salary.PayrollHistoryDTO;
 import com.erp.dto.salary.PayrollPreviewDTO;
+import com.erp.dto.salary.PayrollSummaryRowDTO;
 import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.EmployeeLeaveRepository;
 import com.erp.repo.EmployeeLoanRepository;
@@ -112,6 +113,61 @@ public class PayrollService {
     public PayrollAccountStatusDTO getPayrollAccountStatus(Long companyId) {
         assertCallerCompany(companyId);
         return resolvePayrollAccountStatus(companyId, 0.0);
+    }
+
+    /**
+     * Company-wide payroll history for the HR payroll-summary report, optionally
+     * bounded by pay date. Rows carry the employee + department so the report can
+     * be grouped by department.
+     */
+    @Transactional(readOnly = true)
+    public List<PayrollSummaryRowDTO> getCompanyPayrollSummary(
+            Long companyId, LocalDate from, LocalDate to) {
+        assertCallerCompany(companyId);
+        return payrollRepo.findCompanyPayrollHistory(companyId, from, to).stream()
+                .map(this::toSummaryRow)
+                .toList();
+    }
+
+    private PayrollSummaryRowDTO toSummaryRow(Payroll p) {
+        Employee e = p.getEmployee();
+        String dept = e != null && e.getDepartment() != null
+                ? e.getDepartment().getDepartmentName()
+                : null;
+        String name = e == null ? null
+                : ((safeStr(e.getFirstName()) + " " + safeStr(e.getLastName())).trim());
+        // Derive from the invariant fields (net, loss-of-pay, loan) exactly like the
+        // Employee Payroll history does, so this report always reconciles and matches
+        // that view: total deductions = loss of pay + loan; gross = net + deductions.
+        // (Older rows stored gross already reduced by loss of pay with deductions=0, so
+        // trusting the raw columns would show a different gross than the payslip.)
+        double net = safe(p.getNetPayable());
+        double loans = safe(p.getLoanDeduction());
+        double lop = safe(p.getLopAmount());
+        double totalDeductions = round2(lop + loans);
+        double gross = round2(net + totalDeductions);
+        return PayrollSummaryRowDTO.builder()
+                .employeeId(e != null ? e.getId() : null)
+                .employeeNo(e != null ? e.getEmployeeNo() : null)
+                .employeeName(name != null && !name.isBlank() ? name : (e != null ? e.getEmployeeNo() : null))
+                .department(dept != null && !dept.isBlank() ? dept : "Unassigned")
+                .payrollCode(p.getPayrollCode())
+                .payPeriodStart(p.getPayPeriodStart())
+                .payPeriodEnd(p.getPayPeriodEnd())
+                .payDate(p.getPayDate())
+                .grossPay(round2(gross))
+                .totalDeductions(round2(totalDeductions))
+                .loanDeduction(round2(loans))
+                .lopAmount(round2(lop))
+                .overtimePay(round2(safe(p.getOvertimePay())))
+                .endOfServiceCompensation(round2(safe(p.getEndOfServiceCompensation())))
+                .netPayable(round2(net))
+                .finalSettlement(p.isFinalSettlement())
+                .build();
+    }
+
+    private String safeStr(String s) {
+        return s == null ? "" : s;
     }
 
     @Transactional
