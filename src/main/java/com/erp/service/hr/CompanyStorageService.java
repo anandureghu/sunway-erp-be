@@ -5,6 +5,7 @@ import com.erp.dto.hr.StorageUsageDTO;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.CompanyStorageStatsRepository;
 import com.erp.repo.hr.StoredFileRepository;
+import com.erp.service.subscription.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,6 +32,7 @@ public class CompanyStorageService {
     private final StoredFileRepository storedFileRepository;
     private final CompanyStorageStatsRepository storageStatsRepository;
     private final CompanyRepository companyRepository;
+    private final SubscriptionService subscriptionService;
     private final JdbcTemplate jdbcTemplate;
 
     public long getCloudStorageBytes(Long companyId) {
@@ -43,6 +45,7 @@ public class CompanyStorageService {
                 .cloudStorageBytes(getCloudStorageBytes(companyId))
                 .databaseStorageBytes(stats != null ? stats.getDatabaseStorageBytes() : 0L)
                 .databaseStorageCalculatedAt(stats != null ? stats.getCalculatedAt() : null)
+                .maxStorageBytes(subscriptionService.getMaxStorageBytes(companyId))
                 .build();
     }
 

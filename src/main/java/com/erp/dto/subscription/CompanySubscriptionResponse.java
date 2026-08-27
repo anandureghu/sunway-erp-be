@@ -31,6 +31,7 @@ public class CompanySubscriptionResponse {
     private boolean hrEntitled;
     private boolean financeEntitled;
     private boolean inventoryEntitled;
+    private long maxStorageBytes;
     private String notes;
     private Integer daysRemaining;
     private boolean locked;

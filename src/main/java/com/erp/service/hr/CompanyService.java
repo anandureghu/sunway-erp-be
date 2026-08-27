@@ -362,6 +362,7 @@ public class CompanyService {
         company.setCloudStorageBytes(usage.getCloudStorageBytes());
         company.setDatabaseStorageBytes(usage.getDatabaseStorageBytes());
         company.setStorageCalculatedAt(usage.getDatabaseStorageCalculatedAt());
+        company.setMaxStorageBytes(usage.getMaxStorageBytes());
         return company;
     }
 

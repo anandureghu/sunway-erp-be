@@ -64,6 +64,11 @@ public class CompanySubscription {
     @Column(name = "inventory_entitled", nullable = false)
     private boolean inventoryEntitled = true;
 
+    /** Max total storage for this company — cloud + estimated database (bytes). Default 5 GiB. */
+    @Builder.Default
+    @Column(name = "max_storage_bytes", nullable = false)
+    private long maxStorageBytes = 5L * 1024 * 1024 * 1024;
+
     @Column(length = 1000)
     private String notes;
 

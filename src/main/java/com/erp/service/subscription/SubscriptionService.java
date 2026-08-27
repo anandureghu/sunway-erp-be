@@ -8,6 +8,7 @@ import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.subscription.CompanySubscriptionRepository;
 import com.erp.repo.subscription.SubscriptionInvoiceRepository;
 import com.erp.repo.subscription.SubscriptionPaymentRepository;
+import com.erp.repo.subscription.SubscriptionPlanRepository;
 import com.erp.repo.subscription.SubscriptionReminderLogRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.security.CustomUserPrincipal;
@@ -38,8 +39,12 @@ public class SubscriptionService {
     private final SubscriptionReminderLogRepository reminderLogRepository;
     private final SubscriptionInvoiceRepository invoiceRepository;
     private final SubscriptionInvoiceService invoiceService;
+    private final SubscriptionPlanRepository planRepository;
     private final CompanyRepository companyRepository;
     private final AuthContext authContext;
+
+    /** Platform fallback when a plan row has no default (5 GiB). */
+    public static final long DEFAULT_MAX_STORAGE_BYTES = 5L * 1024 * 1024 * 1024;
 
     @Transactional(readOnly = true)
     public Page<CompanySubscriptionResponse> list(
@@ -151,6 +156,7 @@ public class SubscriptionService {
         cs.setHrEntitled(req.getHrEntitled() == null || req.getHrEntitled());
         cs.setFinanceEntitled(req.getFinanceEntitled() == null || req.getFinanceEntitled());
         cs.setInventoryEntitled(req.getInventoryEntitled() == null || req.getInventoryEntitled());
+        cs.setMaxStorageBytes(resolveMaxStorageBytes(req, cs, req.getPlanType()));
         cs.setNotes(req.getNotes());
         cs.setUpdatedAt(now);
         cs.setUpdatedBy(actor);
@@ -190,11 +196,47 @@ public class SubscriptionService {
                 .hrEntitled(company.isHrEnabled())
                 .financeEntitled(company.isFinanceEnabled())
                 .inventoryEntitled(company.isInventoryEnabled())
+                .maxStorageBytes(defaultMaxStorageForPlan(SubscriptionPlanType.FREE))
                 .createdAt(now)
                 .updatedAt(now)
                 .createdBy(currentActor())
                 .build();
         subscriptionRepository.save(cs);
+    }
+
+    @Transactional(readOnly = true)
+    public long getMaxStorageBytes(Long companyId) {
+        if (companyId == null) {
+            return DEFAULT_MAX_STORAGE_BYTES;
+        }
+        return subscriptionRepository.findByCompanyId(companyId)
+                .map(CompanySubscription::getMaxStorageBytes)
+                .orElse(DEFAULT_MAX_STORAGE_BYTES);
+    }
+
+    private long resolveMaxStorageBytes(
+            AssignSubscriptionRequest req,
+            CompanySubscription existing,
+            SubscriptionPlanType planType
+    ) {
+        if (req.getMaxStorageBytes() != null) {
+            return req.getMaxStorageBytes();
+        }
+        // Keep existing quota on edit when the field is omitted.
+        if (existing.getId() != null && existing.getMaxStorageBytes() > 0) {
+            return existing.getMaxStorageBytes();
+        }
+        return defaultMaxStorageForPlan(planType);
+    }
+
+    private long defaultMaxStorageForPlan(SubscriptionPlanType planType) {
+        if (planType == null) {
+            return DEFAULT_MAX_STORAGE_BYTES;
+        }
+        return planRepository.findByCode(planType.name())
+                .map(SubscriptionPlan::getDefaultMaxStorageBytes)
+                .filter(v -> v > 0)
+                .orElse(DEFAULT_MAX_STORAGE_BYTES);
     }
 
     @Transactional
@@ -524,6 +566,7 @@ public class SubscriptionService {
                 .hrEntitled(cs.isHrEntitled())
                 .financeEntitled(cs.isFinanceEntitled())
                 .inventoryEntitled(cs.isInventoryEntitled())
+                .maxStorageBytes(cs.getMaxStorageBytes())
                 .notes(cs.getNotes())
                 .daysRemaining(daysRemaining(cs))
                 .locked(computeLocked(cs))
