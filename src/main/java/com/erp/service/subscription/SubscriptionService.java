@@ -6,6 +6,7 @@ import com.erp.domain.subscription.*;
 import com.erp.dto.subscription.*;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.subscription.CompanySubscriptionRepository;
+import com.erp.repo.subscription.SubscriptionInvoiceRepository;
 import com.erp.repo.subscription.SubscriptionPaymentRepository;
 import com.erp.repo.subscription.SubscriptionReminderLogRepository;
 import com.erp.security.context.AuthContext;
@@ -35,6 +36,8 @@ public class SubscriptionService {
     private final CompanySubscriptionRepository subscriptionRepository;
     private final SubscriptionPaymentRepository paymentRepository;
     private final SubscriptionReminderLogRepository reminderLogRepository;
+    private final SubscriptionInvoiceRepository invoiceRepository;
+    private final SubscriptionInvoiceService invoiceService;
     private final CompanyRepository companyRepository;
     private final AuthContext authContext;
 
@@ -44,19 +47,45 @@ public class SubscriptionService {
             SubscriptionPlanType planType,
             Long companyId,
             Integer expiringWithinDays,
+            SubscriptionPaymentStatus paymentStatus,
             Pageable pageable
     ) {
         LocalDate expiringBefore = expiringWithinDays != null
                 ? LocalDate.now().plusDays(expiringWithinDays)
                 : null;
-        return subscriptionRepository.search(status, planType, companyId, expiringBefore, pageable)
-                .map(cs -> toListItem(cs, false));
+
+        if (paymentStatus == null) {
+            return subscriptionRepository.search(status, planType, companyId, expiringBefore, pageable)
+                    .map(cs -> toListItem(cs, false));
+        }
+
+        List<CompanySubscriptionResponse> filtered = subscriptionRepository
+                .search(status, planType, companyId, expiringBefore, Pageable.unpaged())
+                .stream()
+                .map(cs -> toListItem(cs, false))
+                .filter(r -> r.getPaymentStatus() == paymentStatus)
+                .collect(Collectors.toList());
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filtered.size());
+        List<CompanySubscriptionResponse> slice =
+                start >= filtered.size() ? List.of() : filtered.subList(start, end);
+        return new org.springframework.data.domain.PageImpl<>(slice, pageable, filtered.size());
     }
 
     @Transactional(readOnly = true)
     public CompanySubscriptionResponse getByCompanyId(Long companyId) {
         CompanySubscription cs = requireSubscription(companyId);
         return toDetail(cs);
+    }
+
+    @Transactional(readOnly = true)
+    public CompanySubscriptionResponse getMySubscription() {
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new IllegalArgumentException("No active company on session");
+        }
+        return getByCompanyId(companyId);
     }
 
     @Transactional(readOnly = true)
@@ -476,7 +505,9 @@ public class SubscriptionService {
 
     private CompanySubscriptionResponse toListItem(CompanySubscription cs, boolean withHistory) {
         Company company = companyRepository.findById(cs.getCompanyId()).orElse(null);
-        var lastPay = paymentRepository.findFirstByCompanyIdOrderByPaidOnDescCreatedAtDesc(cs.getCompanyId());
+        List<SubscriptionPayment> payments = paymentRepository
+                .findByCompanySubscriptionIdOrderByPaidOnDescCreatedAtDesc(cs.getId());
+        var lastPay = payments.stream().findFirst();
 
         CompanySubscriptionResponse.CompanySubscriptionResponseBuilder b = CompanySubscriptionResponse.builder()
                 .id(cs.getId())
@@ -496,6 +527,7 @@ public class SubscriptionService {
                 .notes(cs.getNotes())
                 .daysRemaining(daysRemaining(cs))
                 .locked(computeLocked(cs))
+                .paymentStatus(SubscriptionInvoiceService.resolvePaymentStatus(cs, payments))
                 .createdAt(cs.getCreatedAt())
                 .updatedAt(cs.getUpdatedAt());
 
@@ -505,10 +537,11 @@ public class SubscriptionService {
         });
 
         if (withHistory) {
-            b.payments(paymentRepository.findByCompanySubscriptionIdOrderByPaidOnDescCreatedAtDesc(cs.getId())
-                    .stream().map(this::toPaymentDto).collect(Collectors.toList()));
+            b.payments(payments.stream().map(this::toPaymentDto).collect(Collectors.toList()));
             b.reminders(reminderLogRepository.findByCompanySubscriptionIdOrderBySentAtDesc(cs.getId())
                     .stream().map(this::toReminderDto).collect(Collectors.toList()));
+            b.invoices(invoiceRepository.findByCompanySubscriptionIdOrderByCreatedAtDesc(cs.getId())
+                    .stream().map(invoiceService::toDto).collect(Collectors.toList()));
         }
         return b.build();
     }

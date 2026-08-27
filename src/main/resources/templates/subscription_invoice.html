@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${invoiceNo}">Subscription Invoice</title>
+    <style type="text/css">
+        @page { size: A4 portrait; margin: 14mm 12mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            color: #1e293b;
+            background: #fff;
+        }
+        .page { width: 100%; padding: 4mm 2mm; }
+        .header {
+            width: 100%;
+            border-bottom: 3px solid #1e3a5f;
+            padding-bottom: 14px;
+            margin-bottom: 20px;
+        }
+        .header-table { width: 100%; border-collapse: collapse; }
+        .header-table td { vertical-align: top; }
+        .header-right { text-align: right; }
+        .brand-name { font-size: 20px; font-weight: 800; color: #1e3a5f; }
+        .brand-sub {
+            font-size: 10px; color: #64748b; text-transform: uppercase;
+            letter-spacing: 0.08em; margin-top: 2px;
+        }
+        .doc-title {
+            font-size: 16px; font-weight: 800; color: #0f172a;
+            text-transform: uppercase; letter-spacing: 0.06em;
+        }
+        .doc-code { font-size: 12px; color: #64748b; margin-top: 4px; font-family: monospace; }
+        .section { margin-bottom: 18px; }
+        .section-title {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.12em; color: #1e3a5f;
+            border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;
+        }
+        .info-table { width: 100%; border-collapse: collapse; }
+        .info-table td { padding: 5px 8px 5px 0; width: 33.33%; vertical-align: top; }
+        .info-label {
+            font-size: 9px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 2px;
+        }
+        .info-value { font-size: 12px; font-weight: 600; color: #0f172a; }
+        .amount-box {
+            background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+            padding: 14px 16px; margin-top: 4px;
+        }
+        .amount-label {
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: #1e40af;
+        }
+        .amount-value { font-size: 22px; font-weight: 800; color: #1e3a5f; margin-top: 4px; }
+        .footer-table {
+            width: 100%; border-collapse: collapse; border-top: 1px solid #e2e8f0; margin-top: 22px;
+        }
+        .footer-table td { font-size: 9px; color: #94a3b8; padding-top: 8px; }
+        .footer-table td.right { text-align: right; }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="header">
+        <table class="header-table">
+            <tr>
+                <td>
+                    <div class="brand-name">Sunway ERP</div>
+                    <div class="brand-sub">Platform subscription billing</div>
+                </td>
+                <td class="header-right">
+                    <div class="doc-title">Subscription Invoice</div>
+                    <div class="doc-code" th:text="${invoiceNo}">INV-001</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Bill to</div>
+        <table class="info-table">
+            <tr>
+                <td>
+                    <div class="info-label">Company</div>
+                    <div class="info-value" th:text="${companyName}">Company</div>
+                </td>
+                <td>
+                    <div class="info-label">Plan</div>
+                    <div class="info-value" th:text="${planType}">YEARLY</div>
+                </td>
+                <td>
+                    <div class="info-label">Invoice date</div>
+                    <div class="info-value" th:text="${invoiceDate}">01 Jan 2026</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Billing period</div>
+        <table class="info-table">
+            <tr>
+                <td>
+                    <div class="info-label">Period start</div>
+                    <div class="info-value" th:text="${periodStart}">01 Jan 2026</div>
+                </td>
+                <td>
+                    <div class="info-label">Period end</div>
+                    <div class="info-value" th:text="${periodEnd}">open</div>
+                </td>
+                <td>
+                    <div class="info-label">Currency</div>
+                    <div class="info-value" th:text="${currencyCode}">QAR</div>
+                </td>
+            </tr>
+        </table>
+        <div class="amount-box">
+            <div class="amount-label">Amount due</div>
+            <div class="amount-value"
+                 th:text="${currencyCode} + ' ' + ${amountFormatted}">QAR 0.00</div>
+        </div>
+    </div>
+
+    <table class="footer-table">
+        <tr>
+            <td>Thank you for your business.</td>
+            <td class="right" th:text="'Generated ' + ${generatedAt}">Generated</td>
+        </tr>
+    </table>
+</div>
+</body>
+</html>

@@ -39,4 +39,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
     boolean existsByUsername(String username);
     boolean existsByCompanyRoleRef_Id(Long companyRoleId);
+
+    /** Platform ADMIN users for a company (legacy users.company_id or employee membership). */
+    @Query("""
+            SELECT DISTINCT u FROM User u
+            LEFT JOIN Employee e ON e.user = u
+            WHERE u.role = com.erp.domain.security.Role.ADMIN
+              AND (
+                    u.company.id = :companyId
+                    OR e.company.id = :companyId
+                  )
+            """)
+    List<User> findAdminsForCompany(@Param("companyId") Long companyId);
 }

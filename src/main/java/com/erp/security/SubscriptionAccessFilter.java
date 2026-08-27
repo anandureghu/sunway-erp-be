@@ -43,6 +43,7 @@ public class SubscriptionAccessFilter extends OncePerRequestFilter {
         if (!path.startsWith("/api/")) return true;
         if (path.startsWith("/api/auth/")) return true;
         if (path.equals("/api/admin/subscriptions/me/status")) return true;
+        if (path.startsWith("/api/subscriptions/me")) return true;
         if (path.startsWith("/api/public/")) return true;
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) return true;
         return false;

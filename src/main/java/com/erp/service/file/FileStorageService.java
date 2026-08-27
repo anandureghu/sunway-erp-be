@@ -155,7 +155,7 @@ public class FileStorageService {
                 }
             }
 
-            case INVOICE_PDF, GOODS_RECEIPT_PDF -> {
+            case INVOICE_PDF, GOODS_RECEIPT_PDF, PAYMENT_RECEIPT_PDF, SUBSCRIPTION_INVOICE_PDF -> {
                 if (!Objects.equals(
                         file.getContentType(), "application/pdf")) {
                     throw new IllegalArgumentException("Only PDF allowed");
@@ -229,6 +229,9 @@ public class FileStorageService {
                     + UUID.randomUUID() + ".pdf";
 
             case GOODS_RECEIPT_PDF -> "goods-receipts/" + entityId + "/"
+                    + UUID.randomUUID() + ".pdf";
+
+            case SUBSCRIPTION_INVOICE_PDF -> "subscription-invoices/" + entityId + "/"
                     + UUID.randomUUID() + ".pdf";
 
             case LEAVE_SUPPORTING_DOCUMENT -> "leaves/" + entityId + "/supporting-document." + extension;
