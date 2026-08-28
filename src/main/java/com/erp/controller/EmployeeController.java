@@ -192,6 +192,29 @@ public class EmployeeController {
     }
 
     // ======================================================
+    // ARCHIVE: archive / restore inactive employees + list
+    // ======================================================
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_ALL})
+    @GetMapping("/archived")
+    public ResponseEntity<List<EmployeeResponseDTO>> listArchived() {
+        return ResponseEntity.ok(employeeService.listArchived());
+    }
+
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.EDIT})
+    @PutMapping("/{id}/archive")
+    public ResponseEntity<Void> archiveEmployee(@PathVariable("id") Long id) {
+        employeeService.archiveEmployee(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.EDIT})
+    @PutMapping("/{id}/unarchive")
+    public ResponseEntity<Void> unarchiveEmployee(@PathVariable("id") Long id) {
+        employeeService.unarchiveEmployee(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ======================================================
     // HELPER
     // ======================================================
     private User getAuthUser() {

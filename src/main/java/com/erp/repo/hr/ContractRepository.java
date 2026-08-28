@@ -35,4 +35,9 @@ public interface ContractRepository extends JpaRepository<Contract, Long> {
     @EntityGraph(attributePaths = "employee")
     List<Contract> findByCompany_IdAndDeletedFalseAndStatusInOrderByExpirationDateAsc(
             Long companyId, Collection<ContractStatus> statuses);
+
+    /** Lapsed contracts for the daily contract-end sweep, across all tenants. */
+    @EntityGraph(attributePaths = "employee")
+    List<Contract> findByDeletedFalseAndStatusAndExpirationDateBefore(
+            ContractStatus status, LocalDate cutoff);
 }

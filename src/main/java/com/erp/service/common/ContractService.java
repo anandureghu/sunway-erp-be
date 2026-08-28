@@ -1,6 +1,7 @@
 package com.erp.service.common;
 
 import com.erp.domain.Employee;
+import com.erp.domain.EmployeeStatus;
 import com.erp.domain.enums.ContractStatus;
 import com.erp.domain.hr.AllowanceType;
 import com.erp.domain.hr.Contract;
@@ -74,6 +75,9 @@ public class ContractService {
                 .allowances(new ArrayList<>())
                 .build();
 
+        // Status is action-driven, never taken from the request.
+        contract.setStatus(deriveStatus(contract));
+
         mapAllowances(contract, dto.getAllowances());
 
         Contract saved = contractRepository.save(contract);
@@ -100,7 +104,6 @@ public class ContractService {
         }
 
         contract.setContractType(dto.getContractType());
-        contract.setStatus(dto.getStatus());
         contract.setEffectiveDate(dto.getEffectiveDate());
         contract.setExpirationDate(dto.getExpirationDate());
         contract.setContractPeriodMonths(dto.getContractPeriodMonths());
@@ -115,6 +118,9 @@ public class ContractService {
 
         contract.getAllowances().clear();
         mapAllowances(contract, dto.getAllowances());
+
+        // Status is action-driven, never taken from the request.
+        contract.setStatus(deriveStatus(contract));
 
         Contract saved = contractRepository.save(contract);
         uploadAttachmentIfPresent(saved, attachment);
@@ -204,14 +210,44 @@ public class ContractService {
         return mapToResponse(contract);
     }
 
-    /** Let a contract expire — mark it EXPIRED without renewing. */
+    /** Termination reason recorded on an employee whose contract runs out. */
+    public static final String NON_RENEWAL_CODE = "Non-renewal of contract";
+
+    /** Let a contract expire — mark it EXPIRED without renewing, and stand the employee down. */
     public ContractResponseDTO expireContract(Long contractId) {
         Contract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Contract not found"));
         assertSameTenant(contract);
-        contract.setStatus(ContractStatus.EXPIRED);
+        endContract(contract);
         return mapToResponse(contract);
+    }
+
+    /**
+     * Mark a contract EXPIRED and stand its employee down: status INACTIVE with the
+     * "Non-renewal of contract" termination code. Shared by the manual "let expire"
+     * action and the scheduled contract-end sweep.
+     */
+    private void endContract(Contract contract) {
+        contract.setStatus(ContractStatus.EXPIRED);
+        Employee employee = contract.getEmployee();
+        if (employee != null
+                && (employee.getStatus() == null || !employee.getStatus().isDepartedOrInactive())) {
+            employee.setStatus(EmployeeStatus.INACTIVE);
+            employee.setTerminationCode(NON_RENEWAL_CODE);
+            employeeRepository.save(employee);
+        }
+    }
+
+    /**
+     * Scheduled sweep across all tenants: any still-ACTIVE contract whose expiration
+     * date has passed is ended (EXPIRED + employee set inactive). Returns the count.
+     */
+    public int sweepLapsedContracts(LocalDate asOf) {
+        List<Contract> lapsed = contractRepository
+                .findByDeletedFalseAndStatusAndExpirationDateBefore(ContractStatus.ACTIVE, asOf);
+        lapsed.forEach(this::endContract);
+        return lapsed.size();
     }
 
     // ================= DELETE =================
@@ -297,7 +333,29 @@ public class ContractService {
                 authContext.getCurrentCompanyId()
         );
         contract.setAttachmentPath(upload.getBlobPath());
+        // Uploading a signed copy activates the contract (unless it already ended).
+        contract.setStatus(deriveStatus(contract));
         contractRepository.save(contract);
+    }
+
+    /**
+     * Contract status is derived from actions, never set by hand:
+     *  <ul>
+     *    <li>TERMINATED / EXPIRED are terminal — set by the employee-exit and
+     *        contract-end actions — and are always kept.</li>
+     *    <li>A contract that has been signed electronically (signature recorded) or
+     *        has a signed copy uploaded (attachment present) is ACTIVE.</li>
+     *    <li>Anything else is still a DRAFT.</li>
+     *  </ul>
+     */
+    private ContractStatus deriveStatus(Contract c) {
+        if (c.getStatus() == ContractStatus.TERMINATED || c.getStatus() == ContractStatus.EXPIRED) {
+            return c.getStatus();
+        }
+        boolean signed = c.getSignatureDate() != null
+                || (c.getSignedBy() != null && !c.getSignedBy().isBlank());
+        boolean hasSignedCopy = c.getAttachmentPath() != null && !c.getAttachmentPath().isBlank();
+        return (signed || hasSignedCopy) ? ContractStatus.ACTIVE : ContractStatus.DRAFT;
     }
 
     // ================= RESPONSE MAPPING =================

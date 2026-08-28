@@ -63,6 +63,25 @@ public class Employee {
     @Column(length = 20, nullable = false)
     private EmployeeStatus status;
 
+    /**
+     * Reason code recorded when the employee is TERMINATED (or when a contract ends
+     * and the employee is auto-set inactive). One of the labels in the HR UI:
+     * "Termination with notice", "Termination for cause", "Non-renewal of contract".
+     */
+    @Column(name = "termination_code", length = 40)
+    private String terminationCode;
+
+    /**
+     * Archived employees (former staff whose final settlement is done) are kept for
+     * records but excluded from every active listing, so the working set stays lean.
+     */
+    @Builder.Default
+    @Column(name = "archived", nullable = false)
+    private boolean archived = false;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
     private LocalDate dateOfBirth;
 
     @Column(length = 30)

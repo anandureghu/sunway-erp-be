@@ -21,6 +21,8 @@ import com.erp.repo.UserRepository;
 import com.erp.repo.contact.EmployeeContactInfoRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
+import com.erp.domain.enums.ContractStatus;
+import com.erp.repo.hr.ContractRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.security.guard.EmployeeAccessGuard;
@@ -64,6 +66,7 @@ public class EmployeeService {
     private final PermissionCheckService permissionCheckService;
     private final DocumentSequenceService documentSequenceService;
     private final EmployeeAccessGuard employeeAccessGuard;
+    private final ContractRepository contractRepository;
 
     public EmployeeService(
             EmployeeRepository employeeRepository,
@@ -81,7 +84,8 @@ public class EmployeeService {
             FileStorageService fileStorageService,
             PermissionCheckService permissionCheckService,
             DocumentSequenceService documentSequenceService,
-            EmployeeAccessGuard employeeAccessGuard
+            EmployeeAccessGuard employeeAccessGuard,
+            ContractRepository contractRepository
     ) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
@@ -99,6 +103,7 @@ public class EmployeeService {
         this.permissionCheckService = permissionCheckService;
         this.documentSequenceService = documentSequenceService;
         this.employeeAccessGuard = employeeAccessGuard;
+        this.contractRepository = contractRepository;
     }
     // ======================================================
     // CREATE EMPLOYEE
@@ -175,6 +180,7 @@ public class EmployeeService {
                 .gender(dto.getGender())
                 .prefix(dto.getPrefix())
                 .status(status)
+                .terminationCode(status == EmployeeStatus.TERMINATED ? dto.getTerminationCode() : null)
                 .probationEndDate(probationEndDate)
                 .maritalStatus(dto.getMaritalStatus())
                 .dateOfBirth(dto.getDateOfBirth())
@@ -235,7 +241,30 @@ public class EmployeeService {
         if (dto.getMiddleName()     != null) employee.setMiddleName(dto.getMiddleName());
         if (dto.getLastName()       != null) employee.setLastName(dto.getLastName());
         if (dto.getGender()         != null) employee.setGender(dto.getGender());
-        if (dto.getStatus()         != null) employee.setStatus(dto.getStatus());
+        if (dto.getStatus()         != null) {
+            EmployeeStatus newStatus = dto.getStatus();
+            employee.setStatus(newStatus);
+            // Termination code only lives on a TERMINATED employee — clear it otherwise.
+            if (newStatus == EmployeeStatus.TERMINATED) {
+                if (dto.getTerminationCode() != null) {
+                    employee.setTerminationCode(dto.getTerminationCode());
+                }
+            } else {
+                employee.setTerminationCode(null);
+            }
+            // A departure ends the current contract: mark it TERMINATED.
+            if (newStatus == EmployeeStatus.TERMINATED || newStatus == EmployeeStatus.RESIGNED) {
+                terminateActiveContract(employee.getId());
+            }
+        }
+        // Expected end date is the same field as on the current job — cascade it so
+        // the profile and the current-job tab stay in sync.
+        if (dto.getExpectedEndDate() != null) {
+            currentJobRepo.findByEmployee_Id(id).ifPresent(job -> {
+                job.setExpectedEndDate(dto.getExpectedEndDate());
+                currentJobRepo.save(job);
+            });
+        }
         if (dto.getDateOfBirth()    != null) employee.setDateOfBirth(dto.getDateOfBirth());
         if (dto.getJoinDate()       != null) employee.setJoinDate(dto.getJoinDate());
         if (dto.getMaritalStatus()  != null) employee.setMaritalStatus(dto.getMaritalStatus());
@@ -369,7 +398,7 @@ public class EmployeeService {
         if (canViewAll) {
             log.info("✅ User has VIEW_ALL permission - loading all employees");
             return employeeRepository
-                    .findByCompany_IdOrderByCreatedAtDesc(companyId)
+                    .findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
                     .stream()
                     .map(this::toDTO)
                     .toList();
@@ -393,7 +422,7 @@ public class EmployeeService {
 
     public List<EmployeeResponseDTO> getEmployeesByCompany(Long companyId) {
         assertTenantCompanyScope(companyId);
-        return employeeRepository.findByCompany_IdOrderByCreatedAtDesc(companyId)
+        return employeeRepository.findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -486,7 +515,7 @@ public class EmployeeService {
     // manager candidate list (see EmployeeStatus#isDepartedOrInactive).
     public List<EmployeeResponseDTO> getManagersByCompany(Long companyId) {
         assertTenantCompanyScope(companyId);
-        return employeeRepository.findByCompany_IdOrderByCreatedAtDesc(companyId)
+        return employeeRepository.findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
                 .stream()
                 .filter(e -> e.getStatus() == null || !e.getStatus().isDepartedOrInactive())
                 .map(this::toDTO)
@@ -512,6 +541,48 @@ public class EmployeeService {
         employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
 
         employeeRepository.delete(employee);
+    }
+
+    // ======================================================
+    // ARCHIVE LIFECYCLE — keep the active working set lean
+    // ======================================================
+
+    /** Archive an inactive (former) employee out of the active listings. */
+    @Transactional
+    public void archiveEmployee(Long id) {
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
+        if (employee.getStatus() != EmployeeStatus.INACTIVE) {
+            throw new IllegalStateException(
+                    "Only inactive employees can be archived. Process the employee's final "
+                            + "settlement first — that marks them inactive.");
+        }
+        employee.setArchived(true);
+        employee.setArchivedAt(Instant.now());
+        employeeRepository.save(employee);
+    }
+
+    /** Restore an archived employee back into the active listings. */
+    @Transactional
+    public void unarchiveEmployee(Long id) {
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
+        employee.setArchived(false);
+        employee.setArchivedAt(null);
+        employeeRepository.save(employee);
+    }
+
+    /** Archived (former) employees for the caller's company — records only. */
+    @Transactional(readOnly = true)
+    public List<EmployeeResponseDTO> listArchived() {
+        Long companyId = resolveCurrentCompanyId();
+        return employeeRepository
+                .findByCompany_IdAndArchivedTrueOrderByArchivedAtDesc(companyId)
+                .stream()
+                .map(this::toDTO)
+                .toList();
     }
 
     // ======================================================
@@ -571,6 +642,12 @@ public class EmployeeService {
         String jobCode = currentJob != null && currentJob.getJobCode() != null
                 ? currentJob.getJobCode().getCode()
                 : null;
+        Long divisionId = currentJob != null && currentJob.getDivision() != null
+                ? currentJob.getDivision().getId()
+                : null;
+        String divisionName = currentJob != null && currentJob.getDivision() != null
+                ? currentJob.getDivision().getName()
+                : null;
         String employmentCategory = currentJob != null && currentJob.getEmploymentCategory() != null
                 ? currentJob.getEmploymentCategory().name()
                 : null;
@@ -587,7 +664,9 @@ public class EmployeeService {
                 .gender(e.getGender())
                 .prefix(e.getPrefix())
                 .status(e.getStatus() != null ? e.getStatus().name() : null)
+                .terminationCode(e.getTerminationCode())
                 .probationEndDate(e.getProbationEndDate())
+                .expectedEndDate(currentJob != null ? currentJob.getExpectedEndDate() : null)
                 .maritalStatus(e.getMaritalStatus())
                 .dateOfBirth(e.getDateOfBirth())
                 .joinDate(e.getJoinDate())
@@ -608,12 +687,31 @@ public class EmployeeService {
                 .companyName(c != null ? c.getCompanyName() : null)
                 .departmentId(e.getDepartment()   != null ? e.getDepartment().getId()             : null)
                 .departmentName(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
+                .divisionId(divisionId)
+                .divisionName(divisionName)
+                .archived(e.isArchived())
                 .imageUrl(imageUrl)
                 .designation(designation)
                 .jobCode(jobCode)
                 .employmentCategory(employmentCategory)
                 .employmentType(employmentType)
                 .build();
+    }
+
+    /**
+     * When an employee resigns or is terminated their current contract ends too.
+     * Contract status is action-driven, so we set it here rather than in the UI.
+     * A contract that already lapsed (EXPIRED/TERMINATED) is left untouched.
+     */
+    private void terminateActiveContract(Long employeeId) {
+        contractRepository
+                .findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(employeeId)
+                .filter(c -> c.getStatus() != ContractStatus.EXPIRED
+                        && c.getStatus() != ContractStatus.TERMINATED)
+                .ifPresent(c -> {
+                    c.setStatus(ContractStatus.TERMINATED);
+                    contractRepository.save(c);
+                });
     }
 
     // ======================================================

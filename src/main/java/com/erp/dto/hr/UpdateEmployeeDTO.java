@@ -23,6 +23,8 @@ public class UpdateEmployeeDTO {
     private String         prefix;
     private String         gender;
     private EmployeeStatus status;
+    /** Set when status is TERMINATED: one of the HR termination reason labels. */
+    private String         terminationCode;
 
     // ── Dates ─────────────────────────────────────────────────────────────────
     @JsonFormat(pattern = "yyyy-MM-dd")
@@ -30,6 +32,9 @@ public class UpdateEmployeeDTO {
     private String    maritalStatus;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate joinDate;
+    /** Last day of work — persisted onto the current job (mandatory for exits). */
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate expectedEndDate;
 
     // ── Personal ──────────────────────────────────────────────────────────────
     private String birthplace;

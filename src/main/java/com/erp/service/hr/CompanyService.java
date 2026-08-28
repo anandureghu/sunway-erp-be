@@ -130,6 +130,35 @@ public class CompanyService {
         return isSuperAdmin ? hydrateStorageUsage(company) : company;
     }
 
+    /**
+     * Assign (or clear) the company head — the CEO / Chairperson that department
+     * managers report to. Pass a null employee id to clear it.
+     */
+    @Transactional
+    public Company assignCeo(Long companyId, Long ceoEmployeeId, String ceoTitle) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+        if (!isSuperAdmin()) {
+            Long current = authContext.getCurrentCompanyId();
+            if (current == null || !current.equals(companyId)) {
+                throw new AccessDeniedException("Access denied for this company");
+            }
+        }
+        if (ceoEmployeeId != null) {
+            var emp = employeeRepository.findById(ceoEmployeeId)
+                    .orElseThrow(() -> new RuntimeException("Employee not found"));
+            if (emp.getCompany() == null || !companyId.equals(emp.getCompany().getId())) {
+                throw new IllegalArgumentException("The company head must belong to this company");
+            }
+            company.setCeoEmployeeId(ceoEmployeeId);
+            company.setCeoTitle(ceoTitle != null && !ceoTitle.isBlank() ? ceoTitle.trim() : "CEO");
+        } else {
+            company.setCeoEmployeeId(null);
+            company.setCeoTitle(null);
+        }
+        return companyRepository.save(company);
+    }
+
     private boolean isSuperAdmin() {
         String role = authContext.getCurrentUserRole();
         return role != null && "SUPER_ADMIN".equalsIgnoreCase(role);
@@ -527,6 +556,10 @@ public class CompanyService {
             company.setDefaultFoodAllowance(nonNegative(dto.getDefaultFoodAllowance()));
             statutoryChanged = true;
         }
+        if (dto.getDefaultTransportationAllowance() != null) {
+            company.setDefaultTransportationAllowance(nonNegative(dto.getDefaultTransportationAllowance()));
+            statutoryChanged = true;
+        }
 
         companyRepository.save(company);
         if (statutoryChanged) {
@@ -618,6 +651,10 @@ public class CompanyService {
                         company.getDefaultFoodAllowance() != null
                                 ? company.getDefaultFoodAllowance()
                                 : QatarLaborLawDefaultsService.DEFAULT_FOOD_ALLOWANCE)
+                .defaultTransportationAllowance(
+                        company.getDefaultTransportationAllowance() != null
+                                ? company.getDefaultTransportationAllowance()
+                                : java.math.BigDecimal.ZERO)
                 .build();
     }
 

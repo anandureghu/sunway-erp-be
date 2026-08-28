@@ -2,6 +2,7 @@ package com.erp.service.hr;
 
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeStatus;
+import com.erp.domain.hr.Company;
 import com.erp.domain.hr.EmployeeExitInterview;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.hr.ExitInterviewDTO;
@@ -19,10 +20,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Exit interviews for departing employees. Reading/writing an interview follows the
@@ -43,6 +48,7 @@ public class ExitInterviewService {
     private final EmployeeAccessGuard accessGuard;
     private final AuthContext authContext;
     private final ObjectMapper objectMapper;
+    private final RetirementCompensationService retirementCompensationService;
 
     /** Company-wide list of exit / termination interviews for the HR Reports tab. */
     @Transactional(readOnly = true)
@@ -93,6 +99,9 @@ public class ExitInterviewService {
             dto.setSubmittedAt(i.getSubmittedAt());
             dto.setUpdatedAt(i.getUpdatedAt());
         });
+        // Length of service runs to the recorded last working day (or today if not set).
+        dto.setLengthOfService(
+                computeLengthOfService(employee.getJoinDate(), dto.getLastWorkingDay()));
         return dto;
     }
 
@@ -145,6 +154,73 @@ public class ExitInterviewService {
         dto.setNationality(employee.getNationality());
         dto.setEmployeeStatus(employee.getStatus() != null ? employee.getStatus().name() : null);
         dto.setDesignation(resolveDesignation(employee));
+
+        // Reporting manager = the employee's department head.
+        if (employee.getDepartment() != null && employee.getDepartment().getManager() != null) {
+            dto.setReportingManager(fullName(employee.getDepartment().getManager()));
+        }
+        // Work location = the company's location.
+        Company company = employee.getCompany();
+        if (company != null) {
+            String loc = Stream.of(company.getCity(), company.getState(), company.getCountry())
+                    .filter(s -> s != null && !s.isBlank())
+                    .collect(Collectors.joining(", "));
+            dto.setWorkLocation(loc.isBlank() ? null : loc);
+        }
+        // Accrued end-of-service benefit (gratuity).
+        try {
+            var eos = retirementCompensationService.computeAccruedAmount(employee);
+            dto.setEosbAmount(eos != null ? eos.doubleValue() : null);
+        } catch (Exception ignored) {
+            // retirement compensation not configured — leave blank
+        }
+        dto.setHrRepresentatives(resolveHrRepresentatives(company));
+    }
+
+    /** HR-department employees (active) for the HR-representative signature picker. */
+    private List<ExitInterviewDTO.HrRep> resolveHrRepresentatives(Company company) {
+        if (company == null) {
+            return List.of();
+        }
+        return employeeRepo
+                .findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(company.getId())
+                .stream()
+                .filter(e -> e.getStatus() == null || !e.getStatus().isDepartedOrInactive())
+                .filter(e -> {
+                    var d = e.getDepartment();
+                    if (d == null || d.getDepartmentName() == null) {
+                        return false;
+                    }
+                    String n = d.getDepartmentName().toLowerCase();
+                    return n.contains("hr") || n.contains("human resource");
+                })
+                .map(e -> new ExitInterviewDTO.HrRep(e.getId(), fullName(e)))
+                .toList();
+    }
+
+    /** "X years Y months" (or days) between the join date and the given end date / today. */
+    private String computeLengthOfService(LocalDate from, LocalDate to) {
+        if (from == null) {
+            return null;
+        }
+        LocalDate end = to != null ? to : LocalDate.now();
+        if (end.isBefore(from)) {
+            return null;
+        }
+        Period p = Period.between(from, end);
+        if (p.getYears() == 0 && p.getMonths() == 0) {
+            int days = p.getDays();
+            return days + (days == 1 ? " day" : " days");
+        }
+        StringBuilder sb = new StringBuilder();
+        if (p.getYears() > 0) {
+            sb.append(p.getYears()).append(p.getYears() == 1 ? " year" : " years");
+        }
+        if (p.getMonths() > 0) {
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(p.getMonths()).append(p.getMonths() == 1 ? " month" : " months");
+        }
+        return sb.toString();
     }
 
     private String resolveDesignation(Employee employee) {

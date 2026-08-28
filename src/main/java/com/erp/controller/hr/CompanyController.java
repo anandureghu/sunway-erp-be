@@ -70,6 +70,14 @@ public class CompanyController {
         return companyService.updateCompany(id, updated, null);
     }
 
+    /** Assign (or clear) the company head — CEO / Chairperson. */
+    @PutMapping("/{id}/ceo")
+    public Company assignCeo(@PathVariable("id") Long id, @RequestBody AssignCeoRequest body) {
+        return companyService.assignCeo(id, body.ceoEmployeeId(), body.ceoTitle());
+    }
+
+    public record AssignCeoRequest(Long ceoEmployeeId, String ceoTitle) {}
+
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Company updateCompanyMultipart(
             @PathVariable("id") Long id,
