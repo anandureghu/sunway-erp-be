@@ -20,9 +20,15 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
             JOIN FETCH iws.item i
             JOIN FETCH iws.warehouse w
             WHERE i.company.id = :companyId
+              AND i.archived = :archived
             ORDER BY i.name ASC, w.name ASC
             """)
-    List<ItemWarehouseStock> findAllByCompanyId(@Param("companyId") Long companyId);
+    List<ItemWarehouseStock> findAllByCompanyIdAndArchived(
+            @Param("companyId") Long companyId,
+            @Param("archived") boolean archived
+    );
+
+    void deleteByItemId(Long itemId);
 
     @Query("""
             SELECT COUNT(DISTINCT i.id)

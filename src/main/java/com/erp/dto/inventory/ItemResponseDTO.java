@@ -45,6 +45,8 @@ public class ItemResponseDTO {
 
     private String status;
 
+    private Boolean archived;
+
     /** JSON object of unmapped import columns (header → value). */
     private String metadata;
 

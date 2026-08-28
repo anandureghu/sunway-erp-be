@@ -70,4 +70,6 @@ public interface StockBatchMovementRepository extends JpaRepository<StockBatchMo
             @Param("id") Long id,
             @Param("companyId") Long companyId
     );
+
+    void deleteByStockBatchId(Long stockBatchId);
 }

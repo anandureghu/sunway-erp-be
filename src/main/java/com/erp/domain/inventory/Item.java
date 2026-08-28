@@ -84,6 +84,17 @@ public class Item {
 
     private String status;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean archived = false;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "archived_by")
+    private User archivedBy;
+
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 

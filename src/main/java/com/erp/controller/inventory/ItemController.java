@@ -4,6 +4,8 @@ import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.inventory.ItemBulkDiscountRequestDTO;
 import com.erp.dto.inventory.ItemBulkDiscountResultDTO;
+import com.erp.dto.inventory.ItemBulkIdsRequestDTO;
+import com.erp.dto.inventory.ItemBulkStatusRequestDTO;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemCsvImportResultDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
@@ -12,6 +14,7 @@ import com.erp.dto.inventory.ItemStockReceiveDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
 import com.erp.dto.inventory.ItemWarehouseStockRowDTO;
 import com.erp.dto.inventory.StockBatchResponseDTO;
+import com.erp.dto.history.BulkActionResultDTO;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.inventory.ItemCsvImportService;
@@ -107,8 +110,34 @@ public class ItemController {
 
     @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/stock-catalog")
-    public List<ItemResponseDTO> stockCatalog() {
-        return service.listStockCatalogForCompany();
+    public List<ItemResponseDTO> stockCatalog(
+            @RequestParam(defaultValue = "false") boolean archived
+    ) {
+        return service.listStockCatalogForCompany(archived);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})
+    @PostMapping("/bulk-archive")
+    public BulkActionResultDTO bulkArchive(@RequestBody ItemBulkIdsRequestDTO req) {
+        return service.bulkArchive(req);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})
+    @PostMapping("/bulk-restore")
+    public BulkActionResultDTO bulkRestore(@RequestBody ItemBulkIdsRequestDTO req) {
+        return service.bulkRestore(req);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.DELETE})
+    @PostMapping("/bulk-delete")
+    public BulkActionResultDTO bulkDelete(@RequestBody ItemBulkIdsRequestDTO req) {
+        return service.bulkDelete(req);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})
+    @PostMapping("/bulk-status")
+    public BulkActionResultDTO bulkStatus(@RequestBody ItemBulkStatusRequestDTO req) {
+        return service.bulkUpdateStatus(req);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})

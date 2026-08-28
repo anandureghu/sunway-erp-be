@@ -4,21 +4,29 @@ import com.erp.domain.User;
 import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.ItemWarehouseStock;
+import com.erp.domain.inventory.StockBatch;
 import com.erp.domain.inventory.StockBatchSourceType;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
+import com.erp.dto.inventory.ItemBulkIdsRequestDTO;
 import com.erp.dto.inventory.ItemBulkDiscountRequestDTO;
 import com.erp.dto.inventory.ItemBulkDiscountResultDTO;
+import com.erp.dto.inventory.ItemBulkStatusRequestDTO;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemStockAdjustDTO;
 import com.erp.dto.inventory.ItemStockReceiveDTO;
 import com.erp.dto.inventory.ItemUpdateDTO;
+import com.erp.dto.history.BulkActionFailureDTO;
+import com.erp.dto.history.BulkActionResultDTO;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.ItemRepository;
+import com.erp.repo.inventory.ItemWarehouseStockRepository;
+import com.erp.repo.inventory.StockBatchMovementRepository;
+import com.erp.repo.inventory.StockBatchRepository;
 import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
@@ -54,6 +62,9 @@ public class ItemService {
     private final ItemWarehouseStockService itemWarehouseStockService;
     private final StockBatchService stockBatchService;
     private final PurchaseOrderRepository purchaseOrderRepo;
+    private final ItemWarehouseStockRepository warehouseStockRepo;
+    private final StockBatchRepository stockBatchRepo;
+    private final StockBatchMovementRepository stockBatchMovementRepo;
 
     public ItemService(
             ItemRepository itemRepo,
@@ -64,7 +75,10 @@ public class ItemService {
             FileStorageService fileStorageService,
             ItemWarehouseStockService itemWarehouseStockService,
             StockBatchService stockBatchService,
-            PurchaseOrderRepository purchaseOrderRepo
+            PurchaseOrderRepository purchaseOrderRepo,
+            ItemWarehouseStockRepository warehouseStockRepo,
+            StockBatchRepository stockBatchRepo,
+            StockBatchMovementRepository stockBatchMovementRepo
     ) {
         this.itemRepo = itemRepo;
         this.userRepo = userRepo;
@@ -75,6 +89,9 @@ public class ItemService {
         this.itemWarehouseStockService = itemWarehouseStockService;
         this.stockBatchService = stockBatchService;
         this.purchaseOrderRepo = purchaseOrderRepo;
+        this.warehouseStockRepo = warehouseStockRepo;
+        this.stockBatchRepo = stockBatchRepo;
+        this.stockBatchMovementRepo = stockBatchMovementRepo;
     }
 
     // --------------------------
@@ -157,6 +174,7 @@ public class ItemService {
     public ItemResponseDTO update(Long id, ItemUpdateDTO dto, MultipartFile image) {
 
         Item item = getItemEntity(id); // 🔒 company check here
+        assertNotArchived(item);
 
         User user = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -281,7 +299,8 @@ public class ItemService {
     // List
     // --------------------------
     public List<ItemResponseDTO> listForCompany() {
-        return itemRepo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
+        return itemRepo.findByCompanyIdAndArchivedOrderByCreatedAtDesc(
+                        auth.getCurrentCompanyId(), false)
                 .stream()
                 .map(this::toDTO)
                 .toList();
@@ -290,10 +309,10 @@ public class ItemService {
     /**
      * One catalog row per item×warehouse stock line (quantities match sales availability checks).
      */
-    public List<ItemResponseDTO> listStockCatalogForCompany() {
+    public List<ItemResponseDTO> listStockCatalogForCompany(boolean archived) {
         Long companyId = auth.getCurrentCompanyId();
         Map<Long, Integer> onOrderByItem = loadOnOrderByItem(companyId);
-        return itemWarehouseStockService.listStockCatalog(companyId).stream()
+        return itemWarehouseStockService.listStockCatalog(companyId, archived).stream()
                 .map(row -> {
                     ItemResponseDTO dto = toDTOForWarehouse(
                             row.item(),
@@ -423,6 +442,7 @@ public class ItemService {
 
     public ItemResponseDTO receiveStock(Long id, ItemStockReceiveDTO dto) {
         Item item = getItemEntity(id);
+        assertNotArchived(item);
         User user = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -472,6 +492,7 @@ public class ItemService {
 
     public ItemResponseDTO adjustStock(Long id, ItemStockAdjustDTO dto) {
         Item item = getItemEntity(id);
+        assertNotArchived(item);
         User user = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -551,6 +572,13 @@ public class ItemService {
                 ));
     }
 
+    private void assertNotArchived(Item item) {
+        if (item != null && item.isArchived()) {
+            throw new IllegalArgumentException(
+                    "This product is archived. Restore it before making changes.");
+        }
+    }
+
     private ItemResponseDTO toDTO(Item item) {
         String imageUrl = fileStorageService.getPublicUrl(item.getImageUrl());
 
@@ -581,6 +609,7 @@ public class ItemService {
                 .listPrice(item.getListPrice())
                 .unitSale(item.getUnitSale())
                 .status(item.getStatus())
+                .archived(item.isArchived())
                 .imageUrl(imageUrl)
                 .metadata(item.getMetadata())
                 .createdAt(item.getCreatedAt())
@@ -632,6 +661,7 @@ public class ItemService {
                 .listPrice(item.getListPrice())
                 .unitSale(item.getUnitSale())
                 .status(item.getStatus())
+                .archived(item.isArchived())
                 .imageUrl(imageUrl)
                 .metadata(item.getMetadata())
                 .createdAt(item.getCreatedAt())
@@ -689,6 +719,185 @@ public class ItemService {
             return null;
         }
         return LocalDate.parse(value);
+    }
+
+    // --------------------------
+    // Archive / restore / delete
+    // --------------------------
+
+    public BulkActionResultDTO bulkArchive(ItemBulkIdsRequestDTO req) {
+        return runBulk(req, this::archiveOne);
+    }
+
+    public BulkActionResultDTO bulkRestore(ItemBulkIdsRequestDTO req) {
+        return runBulk(req, this::restoreOne);
+    }
+
+    public BulkActionResultDTO bulkDelete(ItemBulkIdsRequestDTO req) {
+        return runBulk(req, this::deleteOne);
+    }
+
+    public BulkActionResultDTO bulkUpdateStatus(ItemBulkStatusRequestDTO req) {
+        if (req == null || req.getItemIds() == null || req.getItemIds().isEmpty()) {
+            throw new IllegalArgumentException("Select at least one item.");
+        }
+        if (req.getStatus() == null || req.getStatus().isBlank()) {
+            throw new IllegalArgumentException("Status is required.");
+        }
+        String status = req.getStatus().trim().toLowerCase();
+        if (!Set.of("active", "discontinued", "out_of_stock").contains(status)) {
+            throw new IllegalArgumentException("Invalid status: " + req.getStatus());
+        }
+        BulkActionResultDTO result = BulkActionResultDTO.builder().build();
+        User user = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Instant now = Instant.now();
+        for (Long id : new LinkedHashSet<>(req.getItemIds())) {
+            if (id == null) {
+                continue;
+            }
+            try {
+                Item item = getItemEntity(id);
+                if (item.isArchived()) {
+                    throw new IllegalArgumentException("Cannot change status on archived items. Restore first.");
+                }
+                item.setStatus(status);
+                item.setUpdatedBy(user);
+                item.setUpdatedAt(now);
+                itemRepo.save(item);
+                result.getSucceeded().add(id);
+            } catch (Exception ex) {
+                result.getFailed().add(BulkActionFailureDTO.builder()
+                        .id(id)
+                        .reason(ex.getMessage() != null ? ex.getMessage() : "Update failed")
+                        .build());
+            }
+        }
+        return result;
+    }
+
+    private BulkActionResultDTO runBulk(ItemBulkIdsRequestDTO req, ItemBulkAction action) {
+        if (req == null || req.getItemIds() == null || req.getItemIds().isEmpty()) {
+            throw new IllegalArgumentException("Select at least one item.");
+        }
+        BulkActionResultDTO result = BulkActionResultDTO.builder().build();
+        for (Long id : new LinkedHashSet<>(req.getItemIds())) {
+            if (id == null) {
+                continue;
+            }
+            try {
+                action.apply(id);
+                result.getSucceeded().add(id);
+            } catch (Exception ex) {
+                result.getFailed().add(BulkActionFailureDTO.builder()
+                        .id(id)
+                        .reason(ex.getMessage() != null ? ex.getMessage() : "Operation failed")
+                        .build());
+            }
+        }
+        return result;
+    }
+
+    @FunctionalInterface
+    private interface ItemBulkAction {
+        void apply(Long itemId);
+    }
+
+    private void archiveOne(Long itemId) {
+        Item item = getItemEntity(itemId);
+        if (item.isArchived()) {
+            throw new IllegalArgumentException("Item is already archived.");
+        }
+        validateNoStockForArchive(item);
+        User user = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        item.setArchived(true);
+        item.setArchivedAt(Instant.now());
+        item.setArchivedBy(user);
+        item.setStatus("discontinued");
+        item.setUpdatedBy(user);
+        item.setUpdatedAt(Instant.now());
+        itemRepo.save(item);
+    }
+
+    private void restoreOne(Long itemId) {
+        Item item = getItemEntity(itemId);
+        if (!item.isArchived()) {
+            throw new IllegalArgumentException("Item is not archived.");
+        }
+        User user = userRepo.findById(auth.getCurrentUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        item.setArchived(false);
+        item.setArchivedAt(null);
+        item.setArchivedBy(null);
+        if ("discontinued".equalsIgnoreCase(item.getStatus())) {
+            item.setStatus("active");
+        }
+        item.setUpdatedBy(user);
+        item.setUpdatedAt(Instant.now());
+        itemRepo.save(item);
+    }
+
+    private void deleteOne(Long itemId) {
+        Item item = getItemEntity(itemId);
+        if (!item.isArchived()) {
+            throw new IllegalArgumentException("Only archived items can be permanently deleted.");
+        }
+        validateDeletable(item);
+        Long companyId = auth.getCurrentCompanyId();
+        List<StockBatch> batches = stockBatchRepo.findByItemForCompany(companyId, itemId, null);
+        for (StockBatch batch : batches) {
+            stockBatchMovementRepo.deleteByStockBatchId(batch.getId());
+        }
+        stockBatchRepo.deleteAll(batches);
+        warehouseStockRepo.deleteByItemId(itemId);
+        itemRepo.delete(item);
+    }
+
+    private void validateNoStockForArchive(Item item) {
+        Long companyId = auth.getCurrentCompanyId();
+        int onHand = warehouseStockRepo.findByItemId(item.getId()).stream()
+                .mapToInt(row -> row.getQuantityOnHand() == null ? 0 : row.getQuantityOnHand())
+                .sum();
+        int reserved = warehouseStockRepo.findByItemId(item.getId()).stream()
+                .mapToInt(row -> row.getReserved() == null ? 0 : row.getReserved())
+                .sum();
+        if (onHand > 0) {
+            throw new IllegalArgumentException(
+                    "Cannot archive while quantity on hand is " + onHand + ". Adjust stock to zero first.");
+        }
+        if (reserved > 0) {
+            throw new IllegalArgumentException(
+                    "Cannot archive while " + reserved + " unit(s) are reserved on sales orders.");
+        }
+        int onOrder = loadOnOrderByItem(companyId).getOrDefault(item.getId(), 0);
+        if (onOrder > 0) {
+            throw new IllegalArgumentException(
+                    "Cannot archive while " + onOrder + " unit(s) are on open purchase orders.");
+        }
+    }
+
+    private void validateDeletable(Item item) {
+        Long itemId = item.getId();
+        if (itemRepo.countPurchaseOrderLineRefs(itemId) > 0
+                || itemRepo.countPurchaseRequisitionLineRefs(itemId) > 0
+                || itemRepo.countSalesOrderLineRefs(itemId) > 0
+                || itemRepo.countGoodsReceiptLineRefs(itemId) > 0
+                || itemRepo.countPicklistLineRefs(itemId) > 0
+                || itemRepo.countShipmentLineRefs(itemId) > 0
+                || itemRepo.countStockVarianceRefs(itemId) > 0) {
+            throw new IllegalArgumentException(
+                    "Item has transaction history and cannot be permanently deleted.");
+        }
+        int onHand = warehouseStockRepo.findByItemId(itemId).stream()
+                .mapToInt(row -> row.getQuantityOnHand() == null ? 0 : row.getQuantityOnHand())
+                .sum();
+        int reserved = warehouseStockRepo.findByItemId(itemId).stream()
+                .mapToInt(row -> row.getReserved() == null ? 0 : row.getReserved())
+                .sum();
+        if (onHand > 0 || reserved > 0) {
+            throw new IllegalArgumentException("Item still has stock or reservations.");
+        }
     }
 
 }
