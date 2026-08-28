@@ -283,8 +283,8 @@ public class ItemWarehouseStockService {
     ) {}
 
     @Transactional(readOnly = true)
-    public List<StockCatalogRow> listStockCatalog(Long companyId) {
-        return stockRepo.findAllByCompanyId(companyId).stream()
+    public List<StockCatalogRow> listStockCatalog(Long companyId, boolean archived) {
+        return stockRepo.findAllByCompanyIdAndArchived(companyId, archived).stream()
                 .map(row -> new StockCatalogRow(
                         row.getItem(),
                         row.getWarehouse(),

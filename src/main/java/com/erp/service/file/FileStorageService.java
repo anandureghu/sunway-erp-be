@@ -7,10 +7,15 @@ import com.azure.storage.blob.BlobServiceClientBuilder;
 import com.azure.storage.blob.models.BlobHttpHeaders;
 import com.azure.storage.blob.sas.BlobSasPermission;
 import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
+import com.erp.domain.hr.CompanyStorageStats;
 import com.erp.domain.hr.StoredFile;
+import com.erp.domain.subscription.CompanySubscription;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
+import com.erp.repo.hr.CompanyStorageStatsRepository;
 import com.erp.repo.hr.StoredFileRepository;
+import com.erp.repo.subscription.CompanySubscriptionRepository;
+import com.erp.service.subscription.SubscriptionService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -27,6 +32,8 @@ public class FileStorageService {
 
     private final BlobServiceClient blobServiceClient;
     private final StoredFileRepository storedFileRepository;
+    private final CompanyStorageStatsRepository storageStatsRepository;
+    private final CompanySubscriptionRepository subscriptionRepository;
 
     @Value("${azure.storage.public-container}")
     private String publicContainer;
@@ -36,12 +43,16 @@ public class FileStorageService {
 
     public FileStorageService(
             @Value("${azure.storage.connection-string}") String connectionString,
-            StoredFileRepository storedFileRepository
+            StoredFileRepository storedFileRepository,
+            CompanyStorageStatsRepository storageStatsRepository,
+            CompanySubscriptionRepository subscriptionRepository
     ) {
         this.blobServiceClient = new BlobServiceClientBuilder()
                 .connectionString(connectionString)
                 .buildClient();
         this.storedFileRepository = storedFileRepository;
+        this.storageStatsRepository = storageStatsRepository;
+        this.subscriptionRepository = subscriptionRepository;
     }
 
     // ======================================================
@@ -66,6 +77,8 @@ public class FileStorageService {
         );
 
         String blobPath = buildPath(category, entityId, extension);
+        assertWithinStorageQuota(companyId, blobPath, file.getSize());
+
         BlobClient blobClient = container.getBlobClient(blobPath);
 
         try (InputStream inputStream = file.getInputStream()) {
@@ -82,6 +95,34 @@ public class FileStorageService {
 
         } catch (IOException e) {
             throw new RuntimeException("File upload failed", e);
+        }
+    }
+
+    /**
+     * Blocks uploads that would push total storage (cloud + estimated database)
+     * past the subscription quota. Replacing an existing blob only counts the size delta.
+     */
+    private void assertWithinStorageQuota(Long companyId, String blobPath, long newSizeBytes) {
+        if (companyId == null || newSizeBytes <= 0) {
+            return;
+        }
+        long maxBytes = subscriptionRepository.findByCompanyId(companyId)
+                .map(CompanySubscription::getMaxStorageBytes)
+                .filter(v -> v > 0)
+                .orElse(SubscriptionService.DEFAULT_MAX_STORAGE_BYTES);
+
+        long cloudBytes = storedFileRepository.sumSizeBytesByCompanyId(companyId);
+        long existingSize = storedFileRepository.findByBlobPath(blobPath)
+                .map(StoredFile::getSizeBytes)
+                .orElse(0L);
+        long projectedCloud = cloudBytes - existingSize + newSizeBytes;
+        long databaseBytes = storageStatsRepository.findById(companyId)
+                .map(CompanyStorageStats::getDatabaseStorageBytes)
+                .orElse(0L);
+        if (projectedCloud + databaseBytes > maxBytes) {
+            throw new IllegalArgumentException(
+                    "Storage quota exceeded (cloud + database). Upgrade the company subscription storage limit or free space before uploading."
+            );
         }
     }
 
@@ -155,7 +196,7 @@ public class FileStorageService {
                 }
             }
 
-            case INVOICE_PDF, GOODS_RECEIPT_PDF -> {
+            case INVOICE_PDF, GOODS_RECEIPT_PDF, PAYMENT_RECEIPT_PDF, SUBSCRIPTION_INVOICE_PDF -> {
                 if (!Objects.equals(
                         file.getContentType(), "application/pdf")) {
                     throw new IllegalArgumentException("Only PDF allowed");
@@ -229,6 +270,9 @@ public class FileStorageService {
                     + UUID.randomUUID() + ".pdf";
 
             case GOODS_RECEIPT_PDF -> "goods-receipts/" + entityId + "/"
+                    + UUID.randomUUID() + ".pdf";
+
+            case SUBSCRIPTION_INVOICE_PDF -> "subscription-invoices/" + entityId + "/"
                     + UUID.randomUUID() + ".pdf";
 
             case LEAVE_SUPPORTING_DOCUMENT -> "leaves/" + entityId + "/supporting-document." + extension;

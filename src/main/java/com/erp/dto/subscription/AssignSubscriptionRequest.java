@@ -39,6 +39,10 @@ public class AssignSubscriptionRequest {
     private Boolean financeEntitled;
     private Boolean inventoryEntitled;
 
+    /** Max total storage (cloud + database) in bytes. When null, uses plan default (or keeps existing on edit). */
+    @Min(0)
+    private Long maxStorageBytes;
+
     private String notes;
 
     /** When true, sync company module flags from entitled modules. Default true. */

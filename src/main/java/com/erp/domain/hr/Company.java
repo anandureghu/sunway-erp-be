@@ -308,4 +308,8 @@ public class Company {
     @Transient
     private Instant storageCalculatedAt;
 
+    /** Subscription total storage quota (cloud + database) — hydrated for SUPER_ADMIN with storage usage. */
+    @Transient
+    private Long maxStorageBytes;
+
 }

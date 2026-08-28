@@ -15,4 +15,6 @@ public class StorageUsageDTO {
     private long cloudStorageBytes;
     private long databaseStorageBytes;
     private Instant databaseStorageCalculatedAt;
+    /** Subscription total storage quota (cloud + database) in bytes; null when no subscription row. */
+    private Long maxStorageBytes;
 }

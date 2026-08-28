@@ -1,5 +1,6 @@
 package com.erp.dto.subscription;
 
+import com.erp.domain.subscription.SubscriptionPaymentStatus;
 import com.erp.domain.subscription.SubscriptionPlanType;
 import com.erp.domain.subscription.SubscriptionStatus;
 import lombok.*;
@@ -30,13 +31,16 @@ public class CompanySubscriptionResponse {
     private boolean hrEntitled;
     private boolean financeEntitled;
     private boolean inventoryEntitled;
+    private long maxStorageBytes;
     private String notes;
     private Integer daysRemaining;
     private boolean locked;
     private LocalDate lastPaymentOn;
     private BigDecimal lastPaymentAmount;
+    private SubscriptionPaymentStatus paymentStatus;
     private Instant createdAt;
     private Instant updatedAt;
     private List<SubscriptionPaymentResponse> payments;
     private List<SubscriptionReminderLogResponse> reminders;
+    private List<SubscriptionInvoiceResponse> invoices;
 }
