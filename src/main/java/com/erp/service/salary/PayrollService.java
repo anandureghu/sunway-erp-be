@@ -18,6 +18,7 @@ import com.erp.dto.salary.PayrollHistoryDTO;
 import com.erp.dto.salary.PayrollPreviewDTO;
 import com.erp.dto.salary.PayrollSummaryRowDTO;
 import com.erp.repo.CompanyLeavePolicyRepository;
+import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeLeaveRepository;
 import com.erp.repo.EmployeeLoanRepository;
 import com.erp.repo.EmployeeOvertimeOverrideRepository;
@@ -75,6 +76,7 @@ public class PayrollService {
     private final EmployeeTimesheetRepository timesheetRepo;
     private final EmployeeOvertimeOverrideRepository overtimeOverrideRepo;
     private final EmployeeLeaveRepository leaveRepo;
+    private final EmployeeCurrentJobRepo currentJobRepo;
     private final CompanyLeavePolicyRepository leavePolicyRepo;
     private final PayrollRepository payrollRepo;
     private final DocumentSequenceService documentSequenceService;
@@ -89,6 +91,7 @@ public class PayrollService {
         validateRequest(dto);
 
         Employee employee = getEmployee(employeeId);
+        validateExitCutoff(employee, dto, false);
         EmployeeCompensation compensation = getActiveCompensation(employee);
 
         PayrollComputation computation = computePayroll(
@@ -175,6 +178,7 @@ public class PayrollService {
         validateRequest(dto);
 
         Employee employee = getEmployee(employeeId);
+        validateExitCutoff(employee, dto, true);
         EmployeeCompensation compensation = getActiveCompensation(employee);
         EmployeeBankDetails bankDetails = getBankDetails(employee);
 
@@ -193,6 +197,13 @@ public class PayrollService {
 
         applyLoanRecovery(employee, computation.finalSettlement());
         postPayrollToAccounting(saved, employee);
+
+        // A final settlement is the employee's last run — once it's processed, mark
+        // them INACTIVE so they drop out of payroll/org listings and can be archived.
+        if (computation.finalSettlement()) {
+            employee.setStatus(EmployeeStatus.INACTIVE);
+            employeeRepo.save(employee);
+        }
 
         return saved;
     }
@@ -674,6 +685,34 @@ public class PayrollService {
         if (dto.getPayPeriodStart().isAfter(LocalDate.now())) {
             throw new IllegalArgumentException(
                     "Payroll cannot be processed for a future period that has not started yet.");
+        }
+    }
+
+    /**
+     * A final settlement cannot run beyond the employee's expected end date — the last
+     * working day recorded on the current job. The date is mandatory for an exiting
+     * employee; on preview it is only enforced once it has been set ({@code requireDate}
+     * = false), so the breakdown can still be viewed while HR fills it in.
+     */
+    private void validateExitCutoff(
+            Employee employee, PayrollGenerateRequestDTO dto, boolean requireDate) {
+        if (!FINAL_SETTLEMENT_STATUSES.contains(employee.getStatus())) {
+            return;
+        }
+        LocalDate expectedEnd = currentJobRepo.findByEmployee_Id(employee.getId())
+                .map(job -> job.getExpectedEndDate())
+                .orElse(null);
+        if (expectedEnd == null) {
+            if (requireDate) {
+                throw new IllegalArgumentException(
+                        "Set the employee's expected end date (last working day) before "
+                                + "processing the final settlement.");
+            }
+            return;
+        }
+        if (dto.getPayPeriodEnd().isAfter(expectedEnd)) {
+            throw new IllegalArgumentException(
+                    "Payroll cannot be processed beyond the expected end date (" + expectedEnd + ").");
         }
     }
 

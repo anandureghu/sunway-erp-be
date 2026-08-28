@@ -20,10 +20,13 @@ public class EmployeeResponseDTO {
     private String gender;
     private String prefix;
     private String status;
+    private String terminationCode;
     private String maritalStatus;
     private LocalDate dateOfBirth;
     private LocalDate joinDate;
     private LocalDate probationEndDate;
+    /** Last day of work — mirrors the current job's expected end date. */
+    private LocalDate expectedEndDate;
 
     private String birthplace;
     private String hometown;
@@ -60,6 +63,13 @@ public class EmployeeResponseDTO {
 
     /** Job code string from the current job assignment (job_codes.code, e.g. "ENG"). */
     private String jobCode;
+
+    /** Division from the current job assignment (for the org structure). */
+    private Long divisionId;
+    private String divisionName;
+
+    /** True when the employee has been archived out of the active working set. */
+    private boolean archived;
 
     /**
      * Employment type/category derived from the current job assignment

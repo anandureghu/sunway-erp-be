@@ -30,6 +30,8 @@ public class CreateEmployeeDTO {
     private LocalDate joinDate;
 
     private EmployeeStatus status;
+    /** Set when status is TERMINATED: one of the HR termination reason labels. */
+    private String terminationCode;
 
     private String notes;
 

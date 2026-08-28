@@ -96,6 +96,17 @@ public class Company {
     @Column(name = "is_inventory_enabled", nullable = false)
     private boolean inventoryEnabled;
 
+    /**
+     * The company head (CEO / Chairperson) — an employee of this company that all
+     * department managers report to. Stored as the employee id; the name is resolved
+     * client-side. {@code ceoTitle} labels the role (e.g. "CEO", "Chairperson").
+     */
+    @Column(name = "ceo_employee_id")
+    private Long ceoEmployeeId;
+
+    @Column(name = "ceo_title", length = 60)
+    private String ceoTitle;
+
     /** Chart of accounts id; must belong to this company. Used for sales orders and sales invoices. */
     @Column(name = "default_sales_debit_account_id")
     private Long defaultSalesDebitAccountId;
@@ -263,6 +274,10 @@ public class Company {
     @Builder.Default
     @Column(name = "default_food_allowance", nullable = false, precision = 12, scale = 2)
     private BigDecimal defaultFoodAllowance = new BigDecimal("300.00");
+
+    @Builder.Default
+    @Column(name = "default_transportation_allowance", nullable = false, precision = 12, scale = 2)
+    private BigDecimal defaultTransportationAllowance = new BigDecimal("0.00");
 
     @Transient
     private String invoiceHeaderSubtitle;

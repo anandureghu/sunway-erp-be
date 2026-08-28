@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,9 +23,17 @@ public class ExitInterviewDTO {
     private String department;
     private String designation;
     private LocalDate dateOfJoining;
-    private String reportingManager;
+    private String reportingManager;   // department head
+    private String workLocation;       // company location
+    private String lengthOfService;    // join date → last working day
+    private Double eosbAmount;         // accrued end-of-service benefit (gratuity)
     private String nationality;
     private String employeeStatus;
+
+    /** Employees of the HR department, for the HR-representative signature picker. */
+    private List<HrRep> hrRepresentatives;
+
+    public record HrRep(Long id, String name) {}
 
     // ── promoted, editable fields ──
     private String separationType;

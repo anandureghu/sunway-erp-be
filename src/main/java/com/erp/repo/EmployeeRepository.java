@@ -29,6 +29,12 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     List<Employee> findByCompany_IdOrderByCreatedAtDesc(Long companyId);
 
+    /** Active (non-archived) employees — the working set shown across the app. */
+    List<Employee> findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(Long companyId);
+
+    /** Archived (former) employees — the records-only list. */
+    List<Employee> findByCompany_IdAndArchivedTrueOrderByArchivedAtDesc(Long companyId);
+
     Page<Employee> findByCompany_Id(Long companyId, Pageable pageable);
 
     List<Employee> findByCompanyOrderByCreatedAtDesc(Company company);

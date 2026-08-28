@@ -62,4 +62,5 @@ public class HrPoliciesDTO {
     private BigDecimal minimumMonthlyWage;
     private BigDecimal defaultHousingAllowance;
     private BigDecimal defaultFoodAllowance;
+    private BigDecimal defaultTransportationAllowance;
 }
