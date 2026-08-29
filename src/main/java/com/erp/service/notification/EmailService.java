@@ -106,7 +106,12 @@ public class EmailService {
                     subject
             );
         } catch (Exception e) {
-            throw new RuntimeException("Failed to send email with attachment: " + e.getMessage(), e);
+            String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            if (detail.toLowerCase().contains("authentication failed")) {
+                detail += ". Verify MAIL_USERNAME, MAIL_PASSWORD, and MAIL_FROM on the server "
+                        + "(use an app password for Gmail/Microsoft SMTP).";
+            }
+            throw new RuntimeException("Failed to send email with attachment: " + detail, e);
         }
     }
 

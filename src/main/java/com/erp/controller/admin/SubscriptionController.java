@@ -108,6 +108,18 @@ public class SubscriptionController {
                 companyId, request != null ? request : new CancelSubscriptionRequest());
     }
 
+    @PostMapping("/{companyId}/invoices/generate")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public SubscriptionInvoiceResponse generateInvoice(@PathVariable Long companyId) {
+        return invoiceService.generateForCompany(companyId);
+    }
+
+    @PostMapping("/{companyId}/invoices/regenerate")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public SubscriptionInvoiceResponse regenerateInvoice(@PathVariable Long companyId) {
+        return invoiceService.regenerateForCompany(companyId);
+    }
+
     @PostMapping("/{companyId}/invoices/send")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public SubscriptionInvoiceResponse sendInvoice(

@@ -6,6 +6,7 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @Setter
@@ -24,6 +25,13 @@ public class SubscriptionInvoiceResponse {
     private String currencyCode;
     private SubscriptionPlanType planType;
     private String pdfUrl;
+    private Instant generatedAt;
+    private String generatedBy;
+    /** True when a PDF has been generated and is ready to review/send. */
+    private boolean generated;
+    /** True when subscription details differ from the invoice snapshot (regenerate required). */
+    private boolean stale;
+    private List<String> recipientPreview;
     private String toEmail;
     private Instant sentAt;
     private String sentBy;

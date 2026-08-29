@@ -173,6 +173,7 @@ public class SubscriptionService {
 
         log.info("Subscription assigned companyId={} plan={} status={} by={}",
                 companyId, saved.getPlanType(), saved.getStatus(), actor);
+        invoiceService.syncUnsentCurrentPeriodInvoice(saved);
         return toDetail(saved);
     }
 
@@ -302,6 +303,7 @@ public class SubscriptionService {
         cs.setUpdatedBy(currentActor());
         subscriptionRepository.save(cs);
         log.info("Subscription extended companyId={} endsAt={} by={}", companyId, req.getNewEndsAt(), currentActor());
+        invoiceService.syncUnsentCurrentPeriodInvoice(cs);
         return toDetail(cs);
     }
 
