@@ -19,6 +19,7 @@ import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.thymeleaf.TemplateEngine;
@@ -51,7 +52,7 @@ public class SubscriptionPaymentReceiptService {
     private final EmailService emailService;
     private final AuthContext authContext;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SubscriptionPayment generateReceipt(SubscriptionPayment payment) {
         if (payment.getReceiptGeneratedAt() != null && payment.getReceiptNo() != null) {
             return payment;
@@ -64,7 +65,7 @@ public class SubscriptionPaymentReceiptService {
         return paymentRepository.save(payment);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SubscriptionPaymentResponse sendReceipt(Long companyId, Long paymentId, boolean resend) {
         SubscriptionPayment payment = paymentRepository.findByIdAndCompanyId(paymentId, companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
@@ -75,7 +76,8 @@ public class SubscriptionPaymentReceiptService {
             return toDto(payment);
         }
         if (!emailService.isConfigured()) {
-            throw new IllegalStateException(
+            return persistReceiptSendFailure(
+                    payment,
                     "Email is not configured on this server (MAIL_ENABLED, MAIL_USERNAME, "
                             + "MAIL_PASSWORD, MAIL_FROM). Cannot send payment receipts.");
         }
@@ -84,7 +86,8 @@ public class SubscriptionPaymentReceiptService {
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
         List<String> recipients = resolveReceiptRecipients(companyId, company);
         if (recipients.isEmpty()) {
-            throw new IllegalArgumentException(
+            return persistReceiptSendFailure(
+                    payment,
                     "No recipients found: set company/billing email or ensure a company ADMIN has an email.");
         }
         String toJoined = String.join(", ", recipients);
@@ -111,15 +114,21 @@ public class SubscriptionPaymentReceiptService {
             payment.setReceiptSendSuccess(true);
             payment.setReceiptSendError(null);
         } catch (Exception e) {
-            payment.setReceiptToEmail(truncate(toJoined, 500));
-            payment.setReceiptSentAt(Instant.now());
-            payment.setReceiptSentBy(currentActor());
-            payment.setReceiptSendSuccess(false);
-            payment.setReceiptSendError(truncate(e.getMessage(), 1000));
-            paymentRepository.save(payment);
-            throw new IllegalStateException("Failed to send payment receipt: " + e.getMessage(), e);
+            log.warn("Payment receipt email failed for paymentId={}: {}", paymentId, e.getMessage());
+            return persistReceiptSendFailure(payment, truncate(e.getMessage(), 1000));
         }
 
+        return toDto(paymentRepository.save(payment));
+    }
+
+    private SubscriptionPaymentResponse persistReceiptSendFailure(
+            SubscriptionPayment payment,
+            String error
+    ) {
+        payment.setReceiptSentAt(Instant.now());
+        payment.setReceiptSentBy(currentActor());
+        payment.setReceiptSendSuccess(false);
+        payment.setReceiptSendError(error);
         return toDto(paymentRepository.save(payment));
     }
 

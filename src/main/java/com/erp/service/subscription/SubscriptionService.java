@@ -295,14 +295,19 @@ public class SubscriptionService {
             subscriptionRepository.save(cs);
         }
 
-        payment = receiptService.generateReceipt(payment);
+        try {
+            payment = receiptService.generateReceipt(payment);
+        } catch (Exception e) {
+            log.warn("Payment recorded but receipt PDF generation failed for companyId={}: {}",
+                    companyId, e.getMessage());
+        }
         boolean sendReceipt = req.getSendReceipt() == null || req.getSendReceipt();
-        if (sendReceipt) {
-            try {
-                receiptService.sendReceipt(companyId, payment.getId(), false);
-            } catch (Exception e) {
+        if (sendReceipt && payment.getId() != null) {
+            SubscriptionPaymentResponse receiptResult =
+                    receiptService.sendReceipt(companyId, payment.getId(), false);
+            if (!receiptResult.isReceiptSent() && receiptResult.getReceiptSendError() != null) {
                 log.warn("Payment recorded but receipt email failed for companyId={}: {}",
-                        companyId, e.getMessage());
+                        companyId, receiptResult.getReceiptSendError());
             }
         }
 
