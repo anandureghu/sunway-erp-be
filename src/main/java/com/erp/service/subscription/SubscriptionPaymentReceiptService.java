@@ -18,6 +18,7 @@ import com.erp.util.InMemoryMultipartFile;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -54,15 +56,76 @@ public class SubscriptionPaymentReceiptService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SubscriptionPayment generateReceipt(SubscriptionPayment payment) {
-        if (payment.getReceiptGeneratedAt() != null && payment.getReceiptNo() != null) {
+        if (payment == null || payment.getId() == null) {
+            throw new IllegalArgumentException("Payment must be persisted before generating a receipt");
+        }
+        return generateReceipt(payment.getId());
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public SubscriptionPayment generateReceipt(Long paymentId) {
+        SubscriptionPayment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
+
+        if (payment.getReceiptGeneratedAt() != null) {
             return payment;
         }
+
         Company company = companyRepository.findById(payment.getCompanyId())
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
-        payment.setReceiptNo(String.format("SUBR-%d-%05d", payment.getCompanyId(), payment.getId()));
-        generateAndStoreReceiptPdf(payment, company);
-        payment.setReceiptGeneratedAt(Instant.now());
-        return paymentRepository.save(payment);
+
+        if (payment.getReceiptNo() == null || payment.getReceiptNo().isBlank()) {
+            payment.setReceiptNo(resolveReceiptNo(payment));
+        }
+
+        try {
+            generateAndStoreReceiptPdf(payment, company);
+            payment.setReceiptGeneratedAt(Instant.now());
+            return paymentRepository.save(payment);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Receipt number conflict for paymentId={}, reloading existing receipt: {}",
+                    paymentId,
+                    Optional.ofNullable(e.getMostSpecificCause()).map(Throwable::getMessage).orElse(e.getMessage()));
+            return reloadReceiptAfterConflict(paymentId);
+        }
+    }
+
+    private SubscriptionPayment reloadReceiptAfterConflict(Long paymentId) {
+        SubscriptionPayment reloaded = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
+        if (reloaded.getReceiptGeneratedAt() != null) {
+            return reloaded;
+        }
+        if (reloaded.getReceiptNo() != null && !reloaded.getReceiptNo().isBlank()) {
+            Company company = companyRepository.findById(reloaded.getCompanyId())
+                    .orElseThrow(() -> new IllegalArgumentException("Company not found"));
+            generateAndStoreReceiptPdf(reloaded, company);
+            reloaded.setReceiptGeneratedAt(Instant.now());
+            return paymentRepository.save(reloaded);
+        }
+        throw new IllegalStateException(
+                "Receipt generation conflict for payment " + paymentId + ". Please retry.");
+    }
+
+    private String resolveReceiptNo(SubscriptionPayment payment) {
+        String preferred = formatReceiptNo(payment.getCompanyId(), payment.getId());
+        Optional<SubscriptionPayment> existing = paymentRepository.findByReceiptNo(preferred);
+        if (existing.isEmpty() || existing.get().getId().equals(payment.getId())) {
+            return preferred;
+        }
+        String fallback = preferred + "-R" + (Instant.now().getEpochSecond() % 1_000_000);
+        log.warn(
+                "Receipt number {} already assigned to payment {}; using {} for payment {}",
+                preferred,
+                existing.get().getId(),
+                fallback,
+                payment.getId()
+        );
+        return truncate(fallback, 40);
+    }
+
+    private static String formatReceiptNo(Long companyId, Long paymentId) {
+        return String.format("SUBR-%d-%05d", companyId, paymentId);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -70,7 +133,7 @@ public class SubscriptionPaymentReceiptService {
         SubscriptionPayment payment = paymentRepository.findByIdAndCompanyId(paymentId, companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
         if (payment.getReceiptGeneratedAt() == null) {
-            payment = generateReceipt(payment);
+            payment = generateReceipt(payment.getId());
         }
         if (payment.isReceiptSendSuccess() && payment.getReceiptSentAt() != null && !resend) {
             return toDto(payment);
@@ -129,7 +192,16 @@ public class SubscriptionPaymentReceiptService {
         payment.setReceiptSentBy(currentActor());
         payment.setReceiptSendSuccess(false);
         payment.setReceiptSendError(error);
-        return toDto(paymentRepository.save(payment));
+        try {
+            return toDto(paymentRepository.save(payment));
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Could not persist receipt send failure for paymentId={}: {}",
+                    payment.getId(),
+                    Optional.ofNullable(e.getMostSpecificCause()).map(Throwable::getMessage).orElse(e.getMessage()));
+            SubscriptionPayment reloaded = paymentRepository.findById(payment.getId())
+                    .orElse(payment);
+            return toDto(reloaded);
+        }
     }
 
     @Transactional(readOnly = true)

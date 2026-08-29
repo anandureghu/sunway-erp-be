@@ -281,7 +281,7 @@ public class SubscriptionService {
                 .idempotencyKey(blankToNull(req.getIdempotencyKey()))
                 .createdAt(Instant.now())
                 .build();
-        paymentRepository.save(payment);
+        paymentRepository.saveAndFlush(payment);
 
         if (extend && periodEnd != null) {
             rollBillingPeriodStartForExtension(cs, periodEnd);
@@ -296,7 +296,7 @@ public class SubscriptionService {
         }
 
         try {
-            payment = receiptService.generateReceipt(payment);
+            payment = receiptService.generateReceipt(payment.getId());
         } catch (Exception e) {
             log.warn("Payment recorded but receipt PDF generation failed for companyId={}: {}",
                     companyId, e.getMessage());

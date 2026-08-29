@@ -22,6 +22,8 @@ public interface SubscriptionPaymentRepository extends JpaRepository<Subscriptio
 
     Optional<SubscriptionPayment> findByIdAndCompanyId(Long id, Long companyId);
 
+    Optional<SubscriptionPayment> findByReceiptNo(String receiptNo);
+
     Optional<SubscriptionPayment> findFirstByCompanyIdOrderByPaidOnDescCreatedAtDesc(Long companyId);
 
     @Query("""
