@@ -39,6 +39,7 @@ public class SubscriptionService {
     private final SubscriptionReminderLogRepository reminderLogRepository;
     private final SubscriptionInvoiceRepository invoiceRepository;
     private final SubscriptionInvoiceService invoiceService;
+    private final SubscriptionPaymentReceiptService receiptService;
     private final SubscriptionPlanRepository planRepository;
     private final CompanyRepository companyRepository;
     private final AuthContext authContext;
@@ -251,21 +252,31 @@ public class SubscriptionService {
             }
         }
 
+        SubscriptionInvoice linkedInvoice = resolvePaymentInvoice(
+                companyId, cs, req.getInvoiceId(), req.getLinkInvoice());
+
         boolean extend = req.getExtendSubscription() == null || req.getExtendSubscription();
-        LocalDate periodStart = req.getPeriodStart() != null ? req.getPeriodStart() : LocalDate.now();
         LocalDate periodEnd = req.getPeriodEnd();
         if (extend && periodEnd == null) {
             periodEnd = autoExtendEnd(cs, LocalDate.now());
         }
 
+        LocalDate periodStart = linkedInvoice != null
+                ? linkedInvoice.getPeriodStart()
+                : (req.getPeriodStart() != null ? req.getPeriodStart() : cs.getStartsAt());
+        LocalDate paymentPeriodEnd = linkedInvoice != null
+                ? linkedInvoice.getPeriodEnd()
+                : periodEnd;
+
         SubscriptionPayment payment = SubscriptionPayment.builder()
                 .companySubscriptionId(cs.getId())
                 .companyId(companyId)
+                .subscriptionInvoiceId(linkedInvoice != null ? linkedInvoice.getId() : null)
                 .amount(req.getAmount())
                 .paidOn(req.getPaidOn())
                 .methodNote(req.getMethodNote())
                 .periodStart(periodStart)
-                .periodEnd(periodEnd)
+                .periodEnd(paymentPeriodEnd)
                 .recordedBy(authContext.getCurrentUserId())
                 .idempotencyKey(blankToNull(req.getIdempotencyKey()))
                 .createdAt(Instant.now())
@@ -273,6 +284,7 @@ public class SubscriptionService {
         paymentRepository.save(payment);
 
         if (extend && periodEnd != null) {
+            rollBillingPeriodStartForExtension(cs, periodEnd);
             cs.setEndsAt(periodEnd);
             if (cs.getPlanType() == SubscriptionPlanType.FREE) {
                 // keep FREE unless admin already changed plan
@@ -283,9 +295,57 @@ public class SubscriptionService {
             subscriptionRepository.save(cs);
         }
 
-        log.info("Subscription payment recorded companyId={} amount={} by={}",
-                companyId, req.getAmount(), currentActor());
+        payment = receiptService.generateReceipt(payment);
+        boolean sendReceipt = req.getSendReceipt() == null || req.getSendReceipt();
+        if (sendReceipt) {
+            try {
+                receiptService.sendReceipt(companyId, payment.getId(), false);
+            } catch (Exception e) {
+                log.warn("Payment recorded but receipt email failed for companyId={}: {}",
+                        companyId, e.getMessage());
+            }
+        }
+
+        log.info("Subscription payment recorded companyId={} amount={} invoiceId={} by={}",
+                companyId, req.getAmount(),
+                linkedInvoice != null ? linkedInvoice.getId() : null,
+                currentActor());
         return toDetail(cs);
+    }
+
+    private SubscriptionInvoice resolvePaymentInvoice(
+            Long companyId,
+            CompanySubscription cs,
+            Long invoiceId,
+            Boolean linkInvoice
+    ) {
+        if (invoiceId != null) {
+            SubscriptionInvoice invoice = invoiceRepository.findByIdAndCompanyId(invoiceId, companyId)
+                    .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
+            if (!Objects.equals(invoice.getCompanySubscriptionId(), cs.getId())) {
+                throw new IllegalArgumentException("Invoice does not belong to this subscription");
+            }
+            if (paymentRepository.findBySubscriptionInvoiceId(invoice.getId()).isPresent()) {
+                throw new IllegalArgumentException(
+                        "Invoice " + invoice.getInvoiceNo() + " already has a payment recorded.");
+            }
+            return invoice;
+        }
+        if (Boolean.FALSE.equals(linkInvoice)) {
+            return null;
+        }
+        String periodKey = SubscriptionInvoiceService.periodKey(cs.getStartsAt(), cs.getEndsAt());
+        Optional<SubscriptionInvoice> current = invoiceRepository
+                .findByCompanySubscriptionIdAndPeriodKey(cs.getId(), periodKey);
+        if (current.isEmpty()) {
+            return null;
+        }
+        if (paymentRepository.findBySubscriptionInvoiceId(current.get().getId()).isPresent()) {
+            throw new IllegalArgumentException(
+                    "Current period invoice " + current.get().getInvoiceNo()
+                            + " is already paid. Select another invoice or extend the subscription first.");
+        }
+        return current.get();
     }
 
     @Transactional
@@ -294,6 +354,7 @@ public class SubscriptionService {
         if (req.getNewEndsAt().isBefore(LocalDate.now()) && cs.getPlanType() != SubscriptionPlanType.FREE) {
             throw new IllegalArgumentException("New end date must be today or in the future");
         }
+        rollBillingPeriodStartForExtension(cs, req.getNewEndsAt());
         cs.setEndsAt(req.getNewEndsAt());
         if (req.getNotes() != null && !req.getNotes().isBlank()) {
             cs.setNotes(req.getNotes());
@@ -302,9 +363,24 @@ public class SubscriptionService {
         cs.setUpdatedAt(Instant.now());
         cs.setUpdatedBy(currentActor());
         subscriptionRepository.save(cs);
-        log.info("Subscription extended companyId={} endsAt={} by={}", companyId, req.getNewEndsAt(), currentActor());
+        log.info("Subscription extended companyId={} startsAt={} endsAt={} by={}",
+                companyId, cs.getStartsAt(), req.getNewEndsAt(), currentActor());
         invoiceService.syncUnsentCurrentPeriodInvoice(cs);
         return toDetail(cs);
+    }
+
+    /**
+     * When advancing the subscription end date, start the new billing window at the
+     * previous period end so each invoice covers one renewal slice (not cumulative).
+     */
+    private void rollBillingPeriodStartForExtension(CompanySubscription cs, LocalDate newEndsAt) {
+        if (newEndsAt == null || cs.getEndsAt() == null) {
+            return;
+        }
+        if (!newEndsAt.isAfter(cs.getEndsAt())) {
+            return;
+        }
+        cs.setStartsAt(cs.getEndsAt());
     }
 
     @Transactional
@@ -596,18 +672,7 @@ public class SubscriptionService {
     }
 
     private SubscriptionPaymentResponse toPaymentDto(SubscriptionPayment p) {
-        return SubscriptionPaymentResponse.builder()
-                .id(p.getId())
-                .companySubscriptionId(p.getCompanySubscriptionId())
-                .companyId(p.getCompanyId())
-                .amount(p.getAmount())
-                .paidOn(p.getPaidOn())
-                .methodNote(p.getMethodNote())
-                .periodStart(p.getPeriodStart())
-                .periodEnd(p.getPeriodEnd())
-                .recordedBy(p.getRecordedBy())
-                .createdAt(p.getCreatedAt())
-                .build();
+        return receiptService.toDto(p);
     }
 
     private SubscriptionReminderLogResponse toReminderDto(SubscriptionReminderLog r) {

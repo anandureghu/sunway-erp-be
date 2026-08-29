@@ -26,8 +26,17 @@ public class RecordSubscriptionPaymentRequest {
     /** New subscription end date after this payment. If null, server extends by plan period. */
     private LocalDate periodEnd;
 
+    /** Invoice this payment settles. When omitted, links to current period invoice if available. */
+    private Long invoiceId;
+
+    /** When false, do not auto-link to the current period invoice. */
+    private Boolean linkInvoice;
+
     private String idempotencyKey;
 
     /** When true (default), reactivate subscription and set endsAt from periodEnd / auto-extend. */
     private Boolean extendSubscription;
+
+    /** Generate and optionally email a PDF receipt after recording payment. */
+    private Boolean sendReceipt;
 }

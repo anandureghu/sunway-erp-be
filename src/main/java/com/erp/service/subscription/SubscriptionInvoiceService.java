@@ -10,6 +10,7 @@ import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.subscription.CompanySubscriptionRepository;
 import com.erp.repo.subscription.SubscriptionInvoiceRepository;
+import com.erp.repo.subscription.SubscriptionPaymentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.notification.EmailService;
@@ -44,6 +45,7 @@ public class SubscriptionInvoiceService {
             DateTimeFormatter.ofPattern("dd MMM yyyy");
 
     private final SubscriptionInvoiceRepository invoiceRepository;
+    private final SubscriptionPaymentRepository paymentRepository;
     private final CompanySubscriptionRepository subscriptionRepository;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -309,6 +311,7 @@ public class SubscriptionInvoiceService {
         List<String> recipients = company != null
                 ? resolveInvoiceRecipients(inv.getCompanyId(), company)
                 : List.of();
+        var paidPayment = paymentRepository.findBySubscriptionInvoiceId(inv.getId()).orElse(null);
         return SubscriptionInvoiceResponse.builder()
                 .id(inv.getId())
                 .companySubscriptionId(inv.getCompanySubscriptionId())
@@ -332,6 +335,10 @@ public class SubscriptionInvoiceService {
                 .sendError(inv.getSendError())
                 .sent(sent)
                 .createdAt(inv.getCreatedAt())
+                .paid(paidPayment != null)
+                .paymentId(paidPayment != null ? paidPayment.getId() : null)
+                .paidOn(paidPayment != null ? paidPayment.getPaidOn() : null)
+                .receiptNo(paidPayment != null ? paidPayment.getReceiptNo() : null)
                 .build();
     }
 

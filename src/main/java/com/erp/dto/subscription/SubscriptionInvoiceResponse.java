@@ -39,4 +39,9 @@ public class SubscriptionInvoiceResponse {
     private String sendError;
     private boolean sent;
     private Instant createdAt;
+    /** True when a subscription payment is linked to this invoice. */
+    private boolean paid;
+    private Long paymentId;
+    private LocalDate paidOn;
+    private String receiptNo;
 }

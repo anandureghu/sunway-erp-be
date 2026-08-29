@@ -2,6 +2,7 @@ package com.erp.controller.subscription;
 
 import com.erp.dto.subscription.CompanySubscriptionResponse;
 import com.erp.service.subscription.SubscriptionInvoiceService;
+import com.erp.service.subscription.SubscriptionPaymentReceiptService;
 import com.erp.service.subscription.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -20,6 +21,7 @@ public class MySubscriptionController {
 
     private final SubscriptionService subscriptionService;
     private final SubscriptionInvoiceService invoiceService;
+    private final SubscriptionPaymentReceiptService receiptService;
 
     @GetMapping("/me")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
@@ -36,6 +38,18 @@ public class MySubscriptionController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"subscription-invoice-" + invoiceId + ".pdf\"")
+                .body(pdf);
+    }
+
+    @GetMapping("/me/payments/{paymentId}/receipt/pdf")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    public ResponseEntity<byte[]> downloadMyPaymentReceiptPdf(@PathVariable Long paymentId) {
+        Long companyId = subscriptionService.getMySubscription().getCompanyId();
+        byte[] pdf = receiptService.downloadReceiptPdf(companyId, paymentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"subscription-receipt-" + paymentId + ".pdf\"")
                 .body(pdf);
     }
 }

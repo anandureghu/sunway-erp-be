@@ -18,6 +18,10 @@ public interface SubscriptionPaymentRepository extends JpaRepository<Subscriptio
 
     Optional<SubscriptionPayment> findByIdempotencyKey(String idempotencyKey);
 
+    Optional<SubscriptionPayment> findBySubscriptionInvoiceId(Long subscriptionInvoiceId);
+
+    Optional<SubscriptionPayment> findByIdAndCompanyId(Long id, Long companyId);
+
     Optional<SubscriptionPayment> findFirstByCompanyIdOrderByPaidOnDescCreatedAtDesc(Long companyId);
 
     @Query("""
