@@ -13,6 +13,10 @@ public class ItemCreateDTO {
     private String category;
     private String subCategory;
     private String brand;
+    private String manufacturerPartNumber;
+    private String model;
+  /** When false, sales cannot exceed warehouse available stock. */
+    private Boolean negativeStockPermitted;
     private String location;
 
     private Integer quantity;

@@ -146,6 +146,9 @@ public class ItemWarehouseStockService {
             return;
         }
         Item item = loadItemForCompany(itemId, companyId);
+        if (item.isNegativeStockPermitted()) {
+            return;
+        }
         Warehouse wh = loadWarehouseForCompany(warehouseId, companyId);
         ItemWarehouseStock row = stockRepo.findByItemIdAndWarehouseId(itemId, warehouseId)
                 .orElseThrow(() -> new RuntimeException(
@@ -171,7 +174,7 @@ public class ItemWarehouseStockService {
         ItemWarehouseStock row = stockRepo.findByItemIdAndWarehouseId(itemId, warehouseId)
                 .orElseThrow(() -> new RuntimeException("No stock for item at warehouse"));
         int av = row.available();
-        if (av < quantity) {
+        if (!item.isNegativeStockPermitted() && av < quantity) {
             throw new RuntimeException(
                     "Insufficient stock at warehouse " + wh.getName() + " available " + av + " for sale " + quantity);
         }

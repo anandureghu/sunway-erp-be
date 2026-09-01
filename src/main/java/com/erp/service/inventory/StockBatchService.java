@@ -141,7 +141,7 @@ public class StockBatchService {
             return new ConsumptionResult(List.of(), BigDecimal.ZERO, BigDecimal.ZERO);
         }
 
-        loadItem(itemId, companyId);
+        Item item = loadItem(itemId, companyId);
         loadWarehouse(warehouseId, companyId);
 
         List<StockBatch> batches = batchRepo.findAvailableFifo(companyId, itemId, warehouseId);
@@ -179,9 +179,11 @@ public class StockBatchService {
         }
 
         if (remaining > 0) {
-            throw new RuntimeException(
-                    "Insufficient batch stock for item " + itemId + " at warehouse " + warehouseId
-                            + ". Short by " + remaining + " units.");
+            if (!item.isNegativeStockPermitted()) {
+                throw new RuntimeException(
+                        "Insufficient batch stock for item " + itemId + " at warehouse " + warehouseId
+                                + ". Short by " + remaining + " units.");
+            }
         }
 
         stockService.decreaseForConfirmedSale(itemId, warehouseId, quantity, companyId);
@@ -197,6 +199,10 @@ public class StockBatchService {
      * batches). Then asserts both IWS available and batch on-hand can fulfill {@code quantity}.
      */
     public void assertAvailableForSale(Long itemId, Long warehouseId, int quantity, Long companyId) {
+        Item item = loadItem(itemId, companyId);
+        if (item.isNegativeStockPermitted()) {
+            return;
+        }
         stockService.assertAvailableForSale(itemId, warehouseId, quantity, companyId);
         if (quantity <= 0) {
             return;

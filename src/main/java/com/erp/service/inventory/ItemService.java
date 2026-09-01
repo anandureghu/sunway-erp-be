@@ -120,6 +120,9 @@ public class ItemService {
                 .category(dto.getCategory())
                 .subCategory(dto.getSubCategory())
                 .brand(dto.getBrand())
+                .manufacturerPartNumber(trimToNull(dto.getManufacturerPartNumber()))
+                .model(trimToNull(dto.getModel()))
+                .negativeStockPermitted(Boolean.TRUE.equals(dto.getNegativeStockPermitted()))
                 .location(dto.getLocation())
                 .quantity(dto.getQuantity())
                 .available(dto.getQuantity())
@@ -190,6 +193,11 @@ public class ItemService {
         item.setCategory(dto.getCategory());
         item.setSubCategory(dto.getSubCategory());
         item.setBrand(dto.getBrand());
+        item.setManufacturerPartNumber(trimToNull(dto.getManufacturerPartNumber()));
+        item.setModel(trimToNull(dto.getModel()));
+        if (dto.getNegativeStockPermitted() != null) {
+            item.setNegativeStockPermitted(dto.getNegativeStockPermitted());
+        }
         item.setLocation(dto.getLocation());
         item.setQuantity(dto.getQuantity());
         item.setMinimum(dto.getMinimum());
@@ -590,6 +598,9 @@ public class ItemService {
                 .category(item.getCategory())
                 .subCategory(item.getSubCategory())
                 .brand(item.getBrand())
+                .manufacturerPartNumber(item.getManufacturerPartNumber())
+                .model(item.getModel())
+                .negativeStockPermitted(item.isNegativeStockPermitted())
                 .description(item.getDescription())
                 .unitMeasure(item.getUnitMeasure())
                 .barcode(item.getBarcode())
@@ -642,6 +653,9 @@ public class ItemService {
                 .category(item.getCategory())
                 .subCategory(item.getSubCategory())
                 .brand(item.getBrand())
+                .manufacturerPartNumber(item.getManufacturerPartNumber())
+                .model(item.getModel())
+                .negativeStockPermitted(item.isNegativeStockPermitted())
                 .description(item.getDescription())
                 .unitMeasure(item.getUnitMeasure())
                 .barcode(item.getBarcode())
@@ -719,6 +733,14 @@ public class ItemService {
             return null;
         }
         return LocalDate.parse(value);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     // --------------------------

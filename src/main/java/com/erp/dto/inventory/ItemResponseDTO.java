@@ -17,6 +17,9 @@ public class ItemResponseDTO {
     private String category;
     private String subCategory;
     private String brand;
+    private String manufacturerPartNumber;
+    private String model;
+    private Boolean negativeStockPermitted;
 
     private String type;
     private String description;
