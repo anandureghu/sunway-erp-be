@@ -385,8 +385,12 @@ public class GoodsReceiptService {
                     companyId
             );
 
-            item.getItem().setDateReceived(java.time.LocalDate.now());
-            itemRepo.save(item.getItem());
+            Item catalogItem = item.getItem();
+            catalogItem.setDateReceived(java.time.LocalDate.now());
+            if (line.getExpiryDate() != null) {
+                catalogItem.setExpiryDate(line.getExpiryDate());
+            }
+            itemRepo.save(catalogItem);
 
             item.setWarehouse(wh);
             item.setBatchNo(line.getBatchNo());

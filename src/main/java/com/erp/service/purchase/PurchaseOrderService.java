@@ -43,6 +43,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -240,6 +241,7 @@ public class PurchaseOrderService {
         po.setStatus(PurchaseOrderStatus.CONFIRMED);
         PurchaseOrder saved = repo.save(po);
         repo.flush();
+        syncItemMasterCostsFromOrder(saved);
         onReleasedToSupplier(saved);
         return toDTO(saved);
     }
@@ -247,6 +249,30 @@ public class PurchaseOrderService {
     private void onReleasedToSupplier(PurchaseOrder po) {
         vendorPayableService.createVendorPayableForPurchaseOrder(po);
         purchaseInvoiceGenerationScheduler.schedulePurchaseInvoiceAfterCommit(po.getId());
+    }
+
+    /**
+     * When a PO is released to the supplier, copy each line's applied unit cost onto
+     * the item master so receiving and stock screens show the negotiated rate.
+     */
+    private void syncItemMasterCostsFromOrder(PurchaseOrder po) {
+        if (po.getItems() == null || po.getItems().isEmpty()) {
+            return;
+        }
+        User actor = userRepo.findById(auth.getCurrentUserId()).orElse(null);
+        Instant now = Instant.now();
+        for (PurchaseOrderItem line : po.getItems()) {
+            if (line.getUnitCost() == null || line.getItem() == null) {
+                continue;
+            }
+            Item item = line.getItem();
+            item.setCostPrice(line.getUnitCost());
+            if (actor != null) {
+                item.setUpdatedBy(actor);
+            }
+            item.setUpdatedAt(now);
+            itemRepo.save(item);
+        }
     }
 
     public PurchaseOrderResponseDTO get(Long id) {
