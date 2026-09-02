@@ -460,6 +460,9 @@ public class ItemService {
 
         Long whId = dto.getWarehouseId() != null ? dto.getWarehouseId() : item.getWarehouse().getId();
         Long companyId = auth.getCurrentCompanyId();
+        LocalDate saleByDate = dto.getExpiryDate() != null
+                ? parseOptionalDate(dto.getExpiryDate())
+                : item.getExpiryDate();
 
         stockBatchService.receiveIntoBatch(
                 item.getId(),
@@ -467,7 +470,7 @@ public class ItemService {
                 dto.getQuantityReceived(),
                 dto.getCostPrice() != null ? dto.getCostPrice() : item.getCostPrice(),
                 dto.getBatchNo(),
-                dto.getExpiryDate() != null ? parseOptionalDate(dto.getExpiryDate()) : null,
+                saleByDate,
                 StockBatchSourceType.DIRECT_RECEIVE,
                 null,
                 companyId
@@ -485,8 +488,8 @@ public class ItemService {
         }
 
         item.setDateReceived(resolveReceiveDate(dto.getReceivedDate()));
-        if (dto.getExpiryDate() != null) {
-            item.setExpiryDate(parseOptionalDate(dto.getExpiryDate()));
+        if (saleByDate != null) {
+            item.setExpiryDate(saleByDate);
         }
         if (dto.getSerialNo() != null && !dto.getSerialNo().isBlank()) {
             item.setSerialNo(dto.getSerialNo());

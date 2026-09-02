@@ -372,6 +372,9 @@ public class GoodsReceiptService {
                     .orElseThrow(() -> new NotFoundException("Warehouse not found"));
 
             BigDecimal unitCost = resolveUnitCost(line.getUnitCost(), item);
+            java.time.LocalDate saleByDate = line.getExpiryDate() != null
+                    ? line.getExpiryDate()
+                    : item.getItem().getExpiryDate();
 
             stockBatchService.receiveIntoBatch(
                     item.getItem().getId(),
@@ -379,7 +382,7 @@ public class GoodsReceiptService {
                     accepted,
                     unitCost,
                     line.getBatchNo(),
-                    line.getExpiryDate(),
+                    saleByDate,
                     StockBatchSourceType.GOODS_RECEIPT,
                     gr.getId(),
                     companyId
@@ -387,8 +390,8 @@ public class GoodsReceiptService {
 
             Item catalogItem = item.getItem();
             catalogItem.setDateReceived(java.time.LocalDate.now());
-            if (line.getExpiryDate() != null) {
-                catalogItem.setExpiryDate(line.getExpiryDate());
+            if (saleByDate != null) {
+                catalogItem.setExpiryDate(saleByDate);
             }
             itemRepo.save(catalogItem);
 

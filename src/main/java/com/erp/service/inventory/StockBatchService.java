@@ -84,6 +84,8 @@ public class StockBatchService {
 
         Item item = loadItem(itemId, companyId);
         Warehouse warehouse = loadWarehouse(warehouseId, companyId);
+        // Fall back to the item master sale-by date when the receive payload omits it.
+        LocalDate resolvedExpiry = expiryDate != null ? expiryDate : item.getExpiryDate();
 
         StockBatch batch = batchRepo
                 .findByCompanyIdAndItemIdAndWarehouseIdAndBatchNoAndUnitCost(
@@ -96,15 +98,15 @@ public class StockBatchService {
                         .quantityOnHand(0)
                         .unitCost(cost)
                         .receivedAt(LocalDate.now())
-                        .expiryDate(expiryDate)
+                        .expiryDate(resolvedExpiry)
                         .sourceType(sourceType)
                         .sourceId(sourceId)
                         .createdAt(Instant.now())
                         .build());
 
         batch.setQuantityOnHand(nz(batch.getQuantityOnHand()) + quantity);
-        if (expiryDate != null) {
-            batch.setExpiryDate(expiryDate);
+        if (resolvedExpiry != null) {
+            batch.setExpiryDate(resolvedExpiry);
         }
         StockBatch saved = batchRepo.save(batch);
 
