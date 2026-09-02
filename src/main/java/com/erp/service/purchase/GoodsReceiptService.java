@@ -502,9 +502,12 @@ public class GoodsReceiptService {
     }
 
     private GoodsReceiptResponseDTO toDTO(GoodsReceipt gr, InspectionFinanceOutcome finance) {
+        var po = gr.getPurchaseOrder();
         return GoodsReceiptResponseDTO.builder()
                 .id(gr.getId())
-                .purchaseOrderId(gr.getPurchaseOrder().getId())
+                .purchaseOrderId(po.getId())
+                .purchaseOrderNumber(po.getOrderNumber())
+                .supplierName(po.getSupplier() != null ? po.getSupplier().getVendorName() : null)
                 .status(gr.getStatus() != null ? gr.getStatus().name() : null)
                 .archived(gr.isArchived())
                 .receivedAt(gr.getReceivedAt())
