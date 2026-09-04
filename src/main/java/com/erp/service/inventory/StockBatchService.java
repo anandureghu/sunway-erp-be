@@ -127,7 +127,23 @@ public class StockBatchService {
     ) {
         return consumeFifo(
                 itemId, warehouseId, quantity, referenceType, referenceId, companyId,
-                StockBatchMovementType.SALE);
+                StockBatchMovementType.SALE, false);
+    }
+
+    /**
+     * FIFO consume that also clears a prior sales reservation (dispatch fulfillment).
+     */
+    public ConsumptionResult consumeFifoReleasingReservation(
+            Long itemId,
+            Long warehouseId,
+            int quantity,
+            String referenceType,
+            Long referenceId,
+            Long companyId
+    ) {
+        return consumeFifo(
+                itemId, warehouseId, quantity, referenceType, referenceId, companyId,
+                StockBatchMovementType.SALE, true);
     }
 
     public ConsumptionResult consumeFifo(
@@ -138,6 +154,21 @@ public class StockBatchService {
             Long referenceId,
             Long companyId,
             StockBatchMovementType movementType
+    ) {
+        return consumeFifo(
+                itemId, warehouseId, quantity, referenceType, referenceId, companyId,
+                movementType, false);
+    }
+
+    public ConsumptionResult consumeFifo(
+            Long itemId,
+            Long warehouseId,
+            int quantity,
+            String referenceType,
+            Long referenceId,
+            Long companyId,
+            StockBatchMovementType movementType,
+            boolean releaseReservation
     ) {
         if (quantity <= 0) {
             return new ConsumptionResult(List.of(), BigDecimal.ZERO, BigDecimal.ZERO);
@@ -188,7 +219,11 @@ public class StockBatchService {
             }
         }
 
-        stockService.decreaseForConfirmedSale(itemId, warehouseId, quantity, companyId);
+        if (releaseReservation) {
+            stockService.decreaseForDispatchedSale(itemId, warehouseId, quantity, companyId);
+        } else {
+            stockService.decreaseForConfirmedSale(itemId, warehouseId, quantity, companyId);
+        }
         recomputeItemWeightedAverage(itemId);
 
         BigDecimal weighted = totalCost.divide(

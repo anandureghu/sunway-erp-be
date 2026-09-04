@@ -215,16 +215,10 @@ public class SalesOrderService {
             Warehouse wh = i.getWarehouse() != null ? i.getWarehouse() : i.getItem().getWarehouse();
             stockBatchService.syncBatchesToMatchIws(
                     i.getItem().getId(), wh.getId(), companyId);
-            StockBatchService.ConsumptionResult consumption = stockBatchService.consumeFifo(
-                    i.getItem().getId(),
-                    wh.getId(),
-                    i.getQuantity(),
-                    StockBatchService.REF_SALES_ORDER_ITEM,
-                    i.getId(),
-                    companyId
-            );
-            i.setCogsAmount(consumption.totalCost());
-            i.setFifoUnitCost(consumption.weightedUnitCost());
+            stockBatchService.assertAvailableForSale(
+                    i.getItem().getId(), wh.getId(), i.getQuantity(), companyId);
+            itemWarehouseStockService.reserveForSale(
+                    i.getItem().getId(), wh.getId(), i.getQuantity(), companyId);
         });
 
         return toDTO(repo.save(saved));
@@ -371,13 +365,24 @@ public class SalesOrderService {
         });
 
         if ("CONFIRMED".equals(order.getStatus())) {
-            order.getItems().forEach(i ->
-                    stockBatchService.restoreByReference(
-                            StockBatchService.REF_SALES_ORDER_ITEM,
-                            i.getId(),
-                            companyId
-                    )
-            );
+            boolean alreadyConsumed = order.getItems().stream()
+                    .anyMatch(i -> i.getCogsAmount() != null);
+            if (alreadyConsumed) {
+                // Legacy confirms consumed FIFO at confirm time — restore batches.
+                order.getItems().forEach(i ->
+                        stockBatchService.restoreByReference(
+                                StockBatchService.REF_SALES_ORDER_ITEM,
+                                i.getId(),
+                                companyId
+                        )
+                );
+            } else {
+                order.getItems().forEach(i -> {
+                    Warehouse wh = i.getWarehouse() != null ? i.getWarehouse() : i.getItem().getWarehouse();
+                    itemWarehouseStockService.releaseReservation(
+                            i.getItem().getId(), wh.getId(), i.getQuantity(), companyId);
+                });
+            }
         }
 
         order.setStatus("CANCELLED");
@@ -492,6 +497,7 @@ public class SalesOrderService {
                                 SalesOrderItemResponseDTO.builder()
                                         .id(i.getId())
                                         .itemId(i.getItem().getId())
+                                        .itemSku(i.getItem().getSku())
                                         .itemName(i.getItem().getName())
                                         .quantity(i.getQuantity())
                                         .returnedQty(i.getReturnedQty() == null ? 0 : i.getReturnedQty())

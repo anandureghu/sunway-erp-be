@@ -6,9 +6,11 @@ import com.erp.domain.hr.Company;
 import com.erp.domain.inventory.Item;
 import com.erp.domain.sales.Picklist;
 import com.erp.domain.sales.SalesOrder;
+import com.erp.domain.sales.SalesOrderItem;
 import com.erp.domain.sales.Shipment;
 import com.erp.domain.sales.ShipmentItem;
 import com.erp.domain.sales.ShipmentTrackingEvent;
+import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.sales.ShipmentCreateDTO;
 import com.erp.dto.sales.ShipmentDeliverDTO;
 import com.erp.dto.sales.ShipmentItemDTO;
@@ -24,6 +26,7 @@ import com.erp.repo.sales.ShipmentRepository;
 import com.erp.repo.sales.ShipmentTrackingEventRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
+import com.erp.service.inventory.StockBatchService;
 import com.erp.exception.ConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +49,7 @@ public class ShipmentService {
     private final ShipmentTrackingEventRepository trackingEventRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
+    private final StockBatchService stockBatchService;
 
     public ShipmentService(
             ShipmentRepository repo,
@@ -56,7 +60,8 @@ public class ShipmentService {
             UserRepository userRepo,
             ShipmentTrackingEventRepository trackingEventRepo,
             AuthContext auth,
-            DocumentSequenceService documentSequenceService
+            DocumentSequenceService documentSequenceService,
+            StockBatchService stockBatchService
     ) {
         this.repo = repo;
         this.picklistRepo = picklistRepo;
@@ -67,6 +72,7 @@ public class ShipmentService {
         this.trackingEventRepo = trackingEventRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
+        this.stockBatchService = stockBatchService;
     }
 
     // --------------------------
@@ -150,11 +156,44 @@ public class ShipmentService {
             throw new RuntimeException("Only CREATED shipments can be dispatched");
         }
 
+        Long companyId = auth.getCurrentCompanyId();
+        SalesOrder salesOrder = s.getPicklist() != null ? s.getPicklist().getSalesOrder() : null;
+        if (salesOrder == null) {
+            throw new RuntimeException("Shipment picklist is not linked to a sales order");
+        }
+
+        // Consume on-hand and clear reservations held at SO confirm.
+        for (SalesOrderItem line : salesOrder.getItems()) {
+            if (line.getQuantity() == null || line.getQuantity() <= 0) {
+                continue;
+            }
+            Warehouse wh = line.getWarehouse() != null
+                    ? line.getWarehouse()
+                    : line.getItem().getWarehouse();
+            if (wh == null) {
+                throw new RuntimeException(
+                        "Sales order line for item " + line.getItem().getSku()
+                                + " has no warehouse for dispatch");
+            }
+            stockBatchService.syncBatchesToMatchIws(
+                    line.getItem().getId(), wh.getId(), companyId);
+            StockBatchService.ConsumptionResult consumption =
+                    stockBatchService.consumeFifoReleasingReservation(
+                            line.getItem().getId(),
+                            wh.getId(),
+                            line.getQuantity(),
+                            StockBatchService.REF_SALES_ORDER_ITEM,
+                            line.getId(),
+                            companyId
+                    );
+            line.setCogsAmount(consumption.totalCost());
+            line.setFifoUnitCost(consumption.weightedUnitCost());
+        }
+        salesOrderRepo.save(salesOrder);
+
         s.setStatus("DISPATCHED");
         Instant now = Instant.now();
         s.setDispatchedAt(now);
-        // Stock was already FIFO-consumed when the sales order was confirmed.
-        // Do not rewrite item reserved/quantity aggregates here.
 
         appendTrackingEvent(s, "DISPATCHED", "Origin Dispatch Center", "Shipment dispatched", now);
         return toDTO(s);

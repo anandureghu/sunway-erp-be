@@ -179,15 +179,21 @@ public class PicklistService {
         if (p.isArchived()) {
             return toDTO(p);
         }
-        if (!"PICKED".equals(p.getStatus()) && !"CANCELLED".equals(p.getStatus())) {
+        if ("CANCELLED".equals(p.getStatus())) {
+            p.setArchived(true);
+            return toDTO(repo.save(p));
+        }
+        if (!"PICKED".equals(p.getStatus())) {
             throw new ConflictException("Only picked or cancelled picklists can be archived");
         }
-        shipmentRepo.findByPicklistId(p.getId()).ifPresent(sh -> {
-            if (!List.of("DELIVERED", "CANCELLED").contains(sh.getStatus())) {
-                throw new ConflictException(
-                        "Cannot archive picklist while shipment is still active (" + sh.getStatus() + ")");
-            }
-        });
+        Shipment shipment = shipmentRepo.findByPicklistId(p.getId())
+                .orElseThrow(() -> new ConflictException(
+                        "Cannot archive picklist until it has been delivered"));
+        if (!"DELIVERED".equals(shipment.getStatus())) {
+            throw new ConflictException(
+                    "Cannot archive picklist until shipment is delivered (current: "
+                            + shipment.getStatus() + ")");
+        }
         p.setArchived(true);
         return toDTO(repo.save(p));
     }
@@ -231,9 +237,9 @@ public class PicklistService {
             warehouseName = resolveLineWarehouseName(line);
         }
 
-        Long shipmentId = shipmentRepo.findByPicklistId(p.getId())
-                .map(Shipment::getId)
-                .orElse(null);
+        var shipmentOpt = shipmentRepo.findByPicklistId(p.getId());
+        Long shipmentId = shipmentOpt.map(Shipment::getId).orElse(null);
+        String shipmentStatus = shipmentOpt.map(Shipment::getStatus).orElse(null);
 
         return PicklistResponseDTO.builder()
                 .id(p.getId())
@@ -245,6 +251,7 @@ public class PicklistService {
                 .warehouseId(warehouseId)
                 .warehouseName(warehouseName)
                 .shipmentId(shipmentId)
+                .shipmentStatus(shipmentStatus)
                 .items(
                         p.getItems().stream()
                                 .map(i -> PicklistItemDTO.builder()

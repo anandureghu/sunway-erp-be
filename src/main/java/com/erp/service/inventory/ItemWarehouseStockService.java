@@ -183,6 +183,74 @@ public class ItemWarehouseStockService {
         syncItemAggregates(item);
     }
 
+    /**
+     * Hold stock for a confirmed sales order: increases reserved without reducing on-hand.
+     */
+    public void reserveForSale(Long itemId, Long warehouseId, int quantity, Long companyId) {
+        if (quantity <= 0) {
+            return;
+        }
+        assertAvailableForSale(itemId, warehouseId, quantity, companyId);
+        Item item = loadItemForCompany(itemId, companyId);
+        Warehouse wh = loadWarehouseForCompany(warehouseId, companyId);
+        ItemWarehouseStock row = getOrCreateStockRow(item, wh);
+        row.setReserved(nz(row.getReserved()) + quantity);
+        stockRepo.save(row);
+        syncItemAggregates(item);
+    }
+
+    /**
+     * Release a prior sales reservation (e.g. cancel confirmed SO before dispatch).
+     */
+    public void releaseReservation(Long itemId, Long warehouseId, int quantity, Long companyId) {
+        if (quantity <= 0) {
+            return;
+        }
+        Item item = loadItemForCompany(itemId, companyId);
+        Warehouse wh = loadWarehouseForCompany(warehouseId, companyId);
+        ItemWarehouseStock row = stockRepo.findByItemIdAndWarehouseId(itemId, warehouseId)
+                .orElseThrow(() -> new RuntimeException(
+                        "No stock for item at warehouse " + wh.getName()));
+        int reserved = nz(row.getReserved());
+        if (reserved < quantity) {
+            throw new RuntimeException(
+                    "Cannot release reservation at warehouse " + wh.getName()
+                            + ": reserved " + reserved + ", requested " + quantity);
+        }
+        row.setReserved(reserved - quantity);
+        stockRepo.save(row);
+        syncItemAggregates(item);
+    }
+
+    /**
+     * Dispatch fulfillment: reduce on-hand and clear the matching reservation atomically.
+     */
+    public void decreaseForDispatchedSale(Long itemId, Long warehouseId, int quantity, Long companyId) {
+        if (quantity <= 0) {
+            return;
+        }
+        Item item = loadItemForCompany(itemId, companyId);
+        Warehouse wh = loadWarehouseForCompany(warehouseId, companyId);
+        ItemWarehouseStock row = stockRepo.findByItemIdAndWarehouseId(itemId, warehouseId)
+                .orElseThrow(() -> new RuntimeException("No stock for item at warehouse"));
+        int onHand = nz(row.getQuantityOnHand());
+        int reserved = nz(row.getReserved());
+        if (!item.isNegativeStockPermitted() && onHand < quantity) {
+            throw new RuntimeException(
+                    "Insufficient on-hand at warehouse " + wh.getName()
+                            + " on-hand " + onHand + " for dispatch " + quantity);
+        }
+        if (reserved < quantity) {
+            throw new RuntimeException(
+                    "Insufficient reserved stock at warehouse " + wh.getName()
+                            + " reserved " + reserved + " for dispatch " + quantity);
+        }
+        row.setQuantityOnHand(onHand - quantity);
+        row.setReserved(reserved - quantity);
+        stockRepo.save(row);
+        syncItemAggregates(item);
+    }
+
     public void restoreForCancelledSale(Long itemId, Long warehouseId, int quantity, Long companyId) {
         if (quantity <= 0) {
             return;

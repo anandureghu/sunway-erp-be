@@ -336,7 +336,6 @@ public class ItemService {
 
     private Map<Long, Integer> loadOnOrderByItem(Long companyId) {
         List<PurchaseOrderStatus> openStatuses = List.of(
-                PurchaseOrderStatus.APPROVED,
                 PurchaseOrderStatus.CONFIRMED,
                 PurchaseOrderStatus.PARTIALLY_RECEIVED
         );

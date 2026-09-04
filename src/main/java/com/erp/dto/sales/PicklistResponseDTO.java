@@ -25,4 +25,6 @@ public class PicklistResponseDTO {
     private String warehouseName;
     /** Linked shipment id when a dispatch already exists for this picklist. */
     private Long shipmentId;
+    /** Shipment status when linked (e.g. CREATED, DISPATCHED, DELIVERED). */
+    private String shipmentStatus;
 }

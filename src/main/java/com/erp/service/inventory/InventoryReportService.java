@@ -57,7 +57,6 @@ public class InventoryReportService {
         BigDecimal valueSelling = toBigDecimal(valueAt(totalsRow, 4));
 
         List<PurchaseOrderStatus> openOrderStatuses = List.of(
-                PurchaseOrderStatus.APPROVED,
                 PurchaseOrderStatus.CONFIRMED,
                 PurchaseOrderStatus.PARTIALLY_RECEIVED
         );
