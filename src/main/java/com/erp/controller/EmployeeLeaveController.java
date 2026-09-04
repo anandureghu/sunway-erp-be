@@ -257,6 +257,21 @@ public class EmployeeLeaveController {
         }
     }
 
+    // Permanently delete an archived (completed) leave record.
+    @DeleteMapping("/leaves/{leaveId}")
+    public ResponseEntity<?> deleteLeaveRecord(@PathVariable Long leaveId) {
+        try {
+            leaveService.deleteLeaveRecord(leaveId);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            return badRequest(e);
+        } catch (AccessDeniedException e) {
+            return forbidden(e);
+        } catch (RuntimeException e) {
+            return badRequest(e);
+        }
+    }
+
     @PostMapping("/leaves/{leaveId}/approve")
     public ResponseEntity<?> approveLeave(@PathVariable Long leaveId) {
         try {

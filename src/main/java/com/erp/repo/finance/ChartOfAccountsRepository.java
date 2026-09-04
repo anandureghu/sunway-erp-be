@@ -15,6 +15,11 @@ public interface ChartOfAccountsRepository extends JpaRepository<ChartOfAccounts
 
     List<ChartOfAccounts> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
+    /** First account whose name contains the given text (case-insensitive) — used to
+        auto-default the End-of-Service GL account. */
+    Optional<ChartOfAccounts> findFirstByCompanyIdAndAccountNameContainingIgnoreCaseOrderByIdAsc(
+            Long companyId, String namePart);
+
     /** Sum of current balances across active accounts of a given type (e.g. CASH), for dashboard KPIs. */
     @Query("""
             SELECT COALESCE(SUM(a.balance), 0)

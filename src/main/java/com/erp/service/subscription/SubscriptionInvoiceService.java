@@ -10,6 +10,7 @@ import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.subscription.CompanySubscriptionRepository;
 import com.erp.repo.subscription.SubscriptionInvoiceRepository;
+import com.erp.repo.subscription.SubscriptionPaymentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.notification.EmailService;
@@ -32,6 +33,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -43,6 +45,7 @@ public class SubscriptionInvoiceService {
             DateTimeFormatter.ofPattern("dd MMM yyyy");
 
     private final SubscriptionInvoiceRepository invoiceRepository;
+    private final SubscriptionPaymentRepository paymentRepository;
     private final CompanySubscriptionRepository subscriptionRepository;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
@@ -53,13 +56,42 @@ public class SubscriptionInvoiceService {
 
     @Transactional(readOnly = true)
     public List<SubscriptionInvoiceResponse> listForSubscription(Long companySubscriptionId) {
+        CompanySubscription cs = subscriptionRepository.findById(companySubscriptionId).orElse(null);
         return invoiceRepository
                 .findByCompanySubscriptionIdOrderByCreatedAtDesc(companySubscriptionId)
                 .stream()
-                .map(this::toDto)
+                .map(inv -> toDto(inv, cs))
                 .collect(Collectors.toList());
     }
 
+    /** Create or refresh the current-period invoice snapshot and store its PDF (no email). */
+    @Transactional
+    public SubscriptionInvoiceResponse generateForCompany(Long companyId) {
+        CompanySubscription cs = requireSubscription(companyId);
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Company not found"));
+
+        SubscriptionInvoice invoice = ensureInvoice(cs);
+        if (invoice.isSendSuccess() && invoice.getSentAt() != null) {
+            throw new IllegalStateException(
+                    "Invoice " + invoice.getInvoiceNo()
+                            + " was already sent. Use resend to email it again.");
+        }
+
+        syncInvoiceFromSubscription(invoice, cs);
+        generateAndStorePdf(invoice, company);
+        invoice.setGeneratedAt(Instant.now());
+        invoice.setGeneratedBy(currentActor());
+        return toDto(invoiceRepository.save(invoice), cs, company);
+    }
+
+    /** Re-sync invoice fields from subscription and regenerate PDF (unsent invoices only). */
+    @Transactional
+    public SubscriptionInvoiceResponse regenerateForCompany(Long companyId) {
+        return generateForCompany(companyId);
+    }
+
+    /** Email a previously generated invoice PDF to billing recipients. */
     @Transactional
     public SubscriptionInvoiceResponse sendForCompany(Long companyId, boolean resend) {
         CompanySubscription cs = requireSubscription(companyId);
@@ -68,7 +100,21 @@ public class SubscriptionInvoiceService {
 
         SubscriptionInvoice invoice = ensureInvoice(cs);
         if (invoice.isSendSuccess() && invoice.getSentAt() != null && !resend) {
-            return toDto(invoice);
+            return toDto(invoice, cs, company);
+        }
+        if (invoice.getGeneratedAt() == null && !(resend && invoice.isSendSuccess())) {
+            throw new IllegalStateException(
+                    "Generate the invoice first, verify the PDF, then send.");
+        }
+        if (!resend && isStale(invoice, cs)) {
+            throw new IllegalStateException(
+                    "Subscription details changed since the invoice was generated. "
+                            + "Regenerate the invoice, verify it, then send.");
+        }
+        if (!emailService.isConfigured()) {
+            throw new IllegalStateException(
+                    "Email is not configured on this server (MAIL_ENABLED, MAIL_USERNAME, "
+                            + "MAIL_PASSWORD, MAIL_FROM). Cannot send subscription invoices.");
         }
 
         List<String> recipients = resolveInvoiceRecipients(companyId, company);
@@ -79,24 +125,6 @@ public class SubscriptionInvoiceService {
         String toJoined = String.join(", ", recipients);
 
         byte[] pdf = generatePdf(invoice, company);
-        try {
-            MultipartFile pdfFile = new InMemoryMultipartFile(
-                    pdf,
-                    invoice.getInvoiceNo() + ".pdf",
-                    "application/pdf"
-            );
-            FileUploadResult upload = fileStorageService.upload(
-                    pdfFile,
-                    FileCategory.SUBSCRIPTION_INVOICE_PDF,
-                    String.valueOf(invoice.getId()),
-                    true,
-                    companyId
-            );
-            invoice.setPdfPath(upload.getBlobPath());
-            invoice.setPdfUrl(fileStorageService.getPublicUrl(upload.getBlobPath()));
-        } catch (Exception e) {
-            log.warn("Subscription invoice PDF upload failed for {}: {}", invoice.getInvoiceNo(), e.getMessage());
-        }
 
         String subject = "Subscription invoice " + invoice.getInvoiceNo()
                 + " — " + (company.getCompanyName() != null ? company.getCompanyName() : "your company");
@@ -131,7 +159,27 @@ public class SubscriptionInvoiceService {
             throw new IllegalStateException("Failed to send subscription invoice: " + e.getMessage(), e);
         }
 
-        return toDto(invoiceRepository.save(invoice));
+        return toDto(invoiceRepository.save(invoice), cs, company);
+    }
+
+    /** After subscription edits, keep unsent invoice rows aligned with subscription (marks stale until regenerate). */
+    @Transactional
+    public void syncUnsentCurrentPeriodInvoice(CompanySubscription cs) {
+        if (cs == null || cs.getId() == null) {
+            return;
+        }
+        String periodKey = periodKey(cs.getStartsAt(), cs.getEndsAt());
+        invoiceRepository
+                .findByCompanySubscriptionIdAndPeriodKey(cs.getId(), periodKey)
+                .ifPresent(inv -> {
+                    if (inv.isSendSuccess() && inv.getSentAt() != null) {
+                        return;
+                    }
+                    syncInvoiceFromSubscription(inv, cs);
+                    inv.setGeneratedAt(null);
+                    inv.setGeneratedBy(null);
+                    invoiceRepository.save(inv);
+                });
     }
 
     @Transactional(readOnly = true)
@@ -168,6 +216,37 @@ public class SubscriptionInvoiceService {
                 .createdBy(currentActor())
                 .build();
         return invoiceRepository.save(invoice);
+    }
+
+    private void syncInvoiceFromSubscription(SubscriptionInvoice invoice, CompanySubscription cs) {
+        invoice.setPeriodKey(periodKey(cs.getStartsAt(), cs.getEndsAt()));
+        invoice.setPeriodStart(cs.getStartsAt());
+        invoice.setPeriodEnd(cs.getEndsAt());
+        invoice.setAmount(cs.getAmount() != null ? cs.getAmount() : BigDecimal.ZERO);
+        invoice.setCurrencyCode(cs.getCurrencyCode());
+        invoice.setPlanType(cs.getPlanType());
+    }
+
+    private void generateAndStorePdf(SubscriptionInvoice invoice, Company company) {
+        byte[] pdf = generatePdf(invoice, company);
+        try {
+            MultipartFile pdfFile = new InMemoryMultipartFile(
+                    pdf,
+                    invoice.getInvoiceNo() + ".pdf",
+                    "application/pdf"
+            );
+            FileUploadResult upload = fileStorageService.upload(
+                    pdfFile,
+                    FileCategory.SUBSCRIPTION_INVOICE_PDF,
+                    String.valueOf(invoice.getId()),
+                    true,
+                    company.getId()
+            );
+            invoice.setPdfPath(upload.getBlobPath());
+            invoice.setPdfUrl(fileStorageService.getPublicUrl(upload.getBlobPath()));
+        } catch (Exception e) {
+            log.warn("Subscription invoice PDF upload failed for {}: {}", invoice.getInvoiceNo(), e.getMessage());
+        }
     }
 
     private byte[] generatePdf(SubscriptionInvoice invoice, Company company) {
@@ -214,7 +293,25 @@ public class SubscriptionInvoiceService {
     }
 
     public SubscriptionInvoiceResponse toDto(SubscriptionInvoice inv) {
+        CompanySubscription cs = subscriptionRepository
+                .findById(inv.getCompanySubscriptionId())
+                .orElse(null);
+        Company company = companyRepository.findById(inv.getCompanyId()).orElse(null);
+        return toDto(inv, cs, company);
+    }
+
+    private SubscriptionInvoiceResponse toDto(
+            SubscriptionInvoice inv,
+            CompanySubscription cs,
+            Company company
+    ) {
         boolean sent = inv.isSendSuccess() && inv.getSentAt() != null;
+        boolean generated = inv.getGeneratedAt() != null;
+        boolean stale = cs != null && isStale(inv, cs);
+        List<String> recipients = company != null
+                ? resolveInvoiceRecipients(inv.getCompanyId(), company)
+                : List.of();
+        var paidPayment = paymentRepository.findBySubscriptionInvoiceId(inv.getId()).orElse(null);
         return SubscriptionInvoiceResponse.builder()
                 .id(inv.getId())
                 .companySubscriptionId(inv.getCompanySubscriptionId())
@@ -226,6 +323,11 @@ public class SubscriptionInvoiceService {
                 .currencyCode(inv.getCurrencyCode())
                 .planType(inv.getPlanType())
                 .pdfUrl(inv.getPdfUrl())
+                .generatedAt(inv.getGeneratedAt())
+                .generatedBy(inv.getGeneratedBy())
+                .generated(generated)
+                .stale(stale)
+                .recipientPreview(recipients)
                 .toEmail(inv.getToEmail())
                 .sentAt(inv.getSentAt())
                 .sentBy(inv.getSentBy())
@@ -233,7 +335,40 @@ public class SubscriptionInvoiceService {
                 .sendError(inv.getSendError())
                 .sent(sent)
                 .createdAt(inv.getCreatedAt())
+                .paid(paidPayment != null)
+                .paymentId(paidPayment != null ? paidPayment.getId() : null)
+                .paidOn(paidPayment != null ? paidPayment.getPaidOn() : null)
+                .receiptNo(paidPayment != null ? paidPayment.getReceiptNo() : null)
                 .build();
+    }
+
+    private SubscriptionInvoiceResponse toDto(SubscriptionInvoice inv, CompanySubscription cs) {
+        Company company = companyRepository.findById(inv.getCompanyId()).orElse(null);
+        return toDto(inv, cs, company);
+    }
+
+    static boolean isStale(SubscriptionInvoice invoice, CompanySubscription cs) {
+        if (invoice == null || cs == null) {
+            return false;
+        }
+        if (!Objects.equals(periodKey(cs.getStartsAt(), cs.getEndsAt()), invoice.getPeriodKey())) {
+            return true;
+        }
+        if (!Objects.equals(invoice.getPeriodStart(), cs.getStartsAt())) {
+            return true;
+        }
+        if (!Objects.equals(invoice.getPeriodEnd(), cs.getEndsAt())) {
+            return true;
+        }
+        if (!Objects.equals(invoice.getPlanType(), cs.getPlanType())) {
+            return true;
+        }
+        if (!Objects.equals(invoice.getCurrencyCode(), cs.getCurrencyCode())) {
+            return true;
+        }
+        BigDecimal invAmount = invoice.getAmount() != null ? invoice.getAmount() : BigDecimal.ZERO;
+        BigDecimal subAmount = cs.getAmount() != null ? cs.getAmount() : BigDecimal.ZERO;
+        return invAmount.compareTo(subAmount) != 0;
     }
 
     public static String periodKey(LocalDate startsAt, LocalDate endsAt) {
@@ -302,7 +437,6 @@ public class SubscriptionInvoiceService {
         if (raw == null) return;
         String email = raw.trim();
         if (email.isEmpty()) return;
-        // Deduplicate case-insensitively while keeping first casing.
         for (String existing : emails) {
             if (existing.equalsIgnoreCase(email)) {
                 return;

@@ -49,6 +49,16 @@ public class EmployeeLoanController {
     }
 
     // ======================================================
+    // LOAN ELIGIBILITY PRE-CHECK (before the request form)
+    // ======================================================
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
+    @GetMapping("/eligibility")
+    public ResponseEntity<com.erp.dto.loan.LoanEligibilityDTO> checkEligibility(
+            @PathVariable("employeeId") Long employeeId) {
+        return ResponseEntity.ok(loanService.checkEligibility(employeeId));
+    }
+
+    // ======================================================
     // GET LOAN BY ID
     // VIEW_OWN — user views their own loan detail
     // VIEW_ALL — admin/HR views anyone's loan detail

@@ -84,6 +84,8 @@ public class StockBatchService {
 
         Item item = loadItem(itemId, companyId);
         Warehouse warehouse = loadWarehouse(warehouseId, companyId);
+        // Fall back to the item master sale-by date when the receive payload omits it.
+        LocalDate resolvedExpiry = expiryDate != null ? expiryDate : item.getExpiryDate();
 
         StockBatch batch = batchRepo
                 .findByCompanyIdAndItemIdAndWarehouseIdAndBatchNoAndUnitCost(
@@ -96,15 +98,15 @@ public class StockBatchService {
                         .quantityOnHand(0)
                         .unitCost(cost)
                         .receivedAt(LocalDate.now())
-                        .expiryDate(expiryDate)
+                        .expiryDate(resolvedExpiry)
                         .sourceType(sourceType)
                         .sourceId(sourceId)
                         .createdAt(Instant.now())
                         .build());
 
         batch.setQuantityOnHand(nz(batch.getQuantityOnHand()) + quantity);
-        if (expiryDate != null) {
-            batch.setExpiryDate(expiryDate);
+        if (resolvedExpiry != null) {
+            batch.setExpiryDate(resolvedExpiry);
         }
         StockBatch saved = batchRepo.save(batch);
 
@@ -141,7 +143,7 @@ public class StockBatchService {
             return new ConsumptionResult(List.of(), BigDecimal.ZERO, BigDecimal.ZERO);
         }
 
-        loadItem(itemId, companyId);
+        Item item = loadItem(itemId, companyId);
         loadWarehouse(warehouseId, companyId);
 
         List<StockBatch> batches = batchRepo.findAvailableFifo(companyId, itemId, warehouseId);
@@ -179,9 +181,11 @@ public class StockBatchService {
         }
 
         if (remaining > 0) {
-            throw new RuntimeException(
-                    "Insufficient batch stock for item " + itemId + " at warehouse " + warehouseId
-                            + ". Short by " + remaining + " units.");
+            if (!item.isNegativeStockPermitted()) {
+                throw new RuntimeException(
+                        "Insufficient batch stock for item " + itemId + " at warehouse " + warehouseId
+                                + ". Short by " + remaining + " units.");
+            }
         }
 
         stockService.decreaseForConfirmedSale(itemId, warehouseId, quantity, companyId);
@@ -197,6 +201,10 @@ public class StockBatchService {
      * batches). Then asserts both IWS available and batch on-hand can fulfill {@code quantity}.
      */
     public void assertAvailableForSale(Long itemId, Long warehouseId, int quantity, Long companyId) {
+        Item item = loadItem(itemId, companyId);
+        if (item.isNegativeStockPermitted()) {
+            return;
+        }
         stockService.assertAvailableForSale(itemId, warehouseId, quantity, companyId);
         if (quantity <= 0) {
             return;

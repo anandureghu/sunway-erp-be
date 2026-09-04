@@ -7,6 +7,7 @@ import com.erp.service.EmployeeLoanService;
 import com.erp.service.security.annotation.RequiresPermission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,5 +50,13 @@ public class LoanApprovalController {
             @PathVariable("loanId") Long loanId,
             @RequestParam(name = "archived", defaultValue = "true") boolean archived) {
         return ResponseEntity.ok(loanService.setLoanArchived(loanId, archived));
+    }
+
+    // Permanently delete an archived (completed) loan record.
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.DELETE})
+    @DeleteMapping("/{loanId}")
+    public ResponseEntity<Void> deleteLoanRecord(@PathVariable("loanId") Long loanId) {
+        loanService.deleteLoanRecord(loanId);
+        return ResponseEntity.noContent().build();
     }
 }

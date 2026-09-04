@@ -15,6 +15,8 @@ public class SubscriptionPaymentResponse {
     private Long id;
     private Long companySubscriptionId;
     private Long companyId;
+    private Long invoiceId;
+    private String invoiceNo;
     private BigDecimal amount;
     private LocalDate paidOn;
     private String methodNote;
@@ -22,4 +24,11 @@ public class SubscriptionPaymentResponse {
     private LocalDate periodEnd;
     private Long recordedBy;
     private Instant createdAt;
+    private String receiptNo;
+    private Instant receiptGeneratedAt;
+    private Instant receiptSentAt;
+    private boolean receiptGenerated;
+    private boolean receiptSent;
+    private String receiptToEmail;
+    private String receiptSendError;
 }

@@ -29,6 +29,7 @@ public class DepartmentService {
     private final EmployeeRepository   employeeRepository;
     private final AuthContext          authContext;
     private final EmployeeCurrentJobRepo employeeCurrentJobRepository;
+    private final com.erp.repo.hr.DivisionRepository divisionRepository;
 
     public DepartmentResponseDTO createDepartment(Long companyId, CreateDepartmentDTO dto) {
 
@@ -110,6 +111,15 @@ public class DepartmentService {
         if (employeeCurrentJobRepository.existsByDepartment_Id(id)) {
             throw new ConflictException(
                     "Cannot delete department because employees are assigned to it."
+            );
+        }
+
+        // A department with divisions can't be removed cleanly — surface a clear
+        // message instead of a raw foreign-key error.
+        if (divisionRepository.existsByDepartment_Id(id)) {
+            throw new ConflictException(
+                    "Cannot delete department because it still has divisions. "
+                            + "Delete its divisions first."
             );
         }
 

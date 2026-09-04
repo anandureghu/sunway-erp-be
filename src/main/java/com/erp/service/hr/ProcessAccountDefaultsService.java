@@ -32,8 +32,10 @@ public class ProcessAccountDefaultsService {
             AccountingProcessCode.PAYROLL,
             AccountingProcessCode.OTHER_PAYMENT);
 
-    private static final EnumSet<AccountingProcessCode> DEBIT_ONLY_PROCESSES = EnumSet.noneOf(
-            AccountingProcessCode.class);
+    // End-of-Service benefits post to a single GL account (the EOS expense/liability),
+    // so only a debit account is selected — the payment side rides the payroll posting.
+    private static final EnumSet<AccountingProcessCode> DEBIT_ONLY_PROCESSES = EnumSet.of(
+            AccountingProcessCode.END_OF_SERVICE);
 
     private final CompanyProcessAccountDefaultRepository repository;
     private final CompanyRepository companyRepository;
@@ -53,9 +55,44 @@ public class ProcessAccountDefaultsService {
 
     public List<ProcessAccountDefaultDTO> getProcessAccountDefaults(Long companyId) {
         assertCompanyAccess(companyId);
-        return repository.findByCompanyIdOrderByProcessCodeAsc(companyId).stream()
-                .map(this::toDto)
-                .toList();
+        List<ProcessAccountDefaultDTO> rows = new java.util.ArrayList<>(
+                repository.findByCompanyIdOrderByProcessCodeAsc(companyId).stream()
+                        .map(this::toDto)
+                        .toList());
+
+        // End-of-Service benefits default to the company's "End of Service" GL account
+        // when nothing has been configured yet, so the selection is pre-filled.
+        boolean hasEos = rows.stream()
+                .anyMatch(r -> r.getProcessCode() == AccountingProcessCode.END_OF_SERVICE
+                        && r.getDebitAccountId() != null);
+        if (!hasEos) {
+            Long eosAccountId = resolveEndOfServiceAccountId(companyId);
+            if (eosAccountId != null) {
+                rows.removeIf(r -> r.getProcessCode() == AccountingProcessCode.END_OF_SERVICE);
+                rows.add(ProcessAccountDefaultDTO.builder()
+                        .processCode(AccountingProcessCode.END_OF_SERVICE)
+                        .debitAccountId(eosAccountId)
+                        .build());
+            }
+        }
+        return rows;
+    }
+
+    /**
+     * The GL account End-of-Service benefits post to: the saved END_OF_SERVICE debit
+     * account, else the company's account whose name contains "end of service".
+     */
+    public Long resolveEndOfServiceAccountId(Long companyId) {
+        Long saved = resolveProcessDebitAccount(companyId, AccountingProcessCode.END_OF_SERVICE)
+                .orElse(null);
+        if (saved != null) {
+            return saved;
+        }
+        return chartOfAccountsRepository
+                .findFirstByCompanyIdAndAccountNameContainingIgnoreCaseOrderByIdAsc(
+                        companyId, "end of service")
+                .map(com.erp.domain.finance.ChartOfAccounts::getId)
+                .orElse(null);
     }
 
     @Transactional

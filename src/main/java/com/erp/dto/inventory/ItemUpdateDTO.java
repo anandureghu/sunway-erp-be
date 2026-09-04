@@ -13,6 +13,9 @@ public class ItemUpdateDTO {
     private String category;
     private String subCategory;
     private String brand;
+    private String manufacturerPartNumber;
+    private String model;
+    private Boolean negativeStockPermitted;
     private String location;
 
     private Integer quantity;

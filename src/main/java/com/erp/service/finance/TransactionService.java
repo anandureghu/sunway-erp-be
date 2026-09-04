@@ -60,6 +60,7 @@ public class TransactionService {
     public static final String TYPE_SALES_ORDER_CANCEL_REVERSAL = "SALES_ORDER_CANCEL_REVERSAL";
     public static final String TYPE_STOCK_VARIANCE = "STOCK_VARIANCE";
     public static final String TYPE_PAYROLL = "PAYROLL";
+    public static final String TYPE_END_OF_SERVICE = "END_OF_SERVICE";
     /** Ad-hoc expense payment confirmed in AP (rent, reimbursements, etc.) — not tied to a PO/invoice. */
     public static final String TYPE_OTHER_PAYMENT = "OTHER_PAYMENT";
 
@@ -354,6 +355,54 @@ public class TransactionService {
                 .transactionType(TYPE_PAYROLL)
                 .company(company)
                 .amount(grossPay)
+                .transactionDate(LocalDate.now())
+                .debitAccount(debitAccount)
+                .creditAccount(creditAccount)
+                .source("PAYROLL")
+                .sourceLocked(true)
+                .transactionDescription(description)
+                .relatedId(payrollId)
+                .createdAt(Instant.now())
+                .build();
+
+        Transaction saved = repo.save(tx);
+        applyPostingToCoa(saved);
+    }
+
+    /**
+     * End-of-service ledger posting for a final settlement: debit the company's
+     * End-of-Service account and credit the payroll credit (net payable / bank), kept
+     * as its own transaction (type END_OF_SERVICE) so it sits apart from the regular
+     * payroll expense. Idempotent per payroll.
+     */
+    public void recordEndOfServicePosting(
+            Long companyId,
+            Long payrollId,
+            BigDecimal amount,
+            Long debitAccountId,
+            Long creditAccountId,
+            String description) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        if (repo.existsByCompanyIdAndRelatedIdAndTransactionType(
+                companyId, payrollId, TYPE_END_OF_SERVICE)) {
+            return;
+        }
+        ChartOfAccounts debitAccount = coaRepo.findById(debitAccountId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "End-of-service account not found"));
+        ChartOfAccounts creditAccount = coaRepo.findById(creditAccountId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "End-of-service credit account not found"));
+        Company company = companyRepo.findById(companyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
+
+        Transaction tx = Transaction.builder()
+                .transactionCode(documentSequenceService.generateNext("TX-EOS"))
+                .transactionType(TYPE_END_OF_SERVICE)
+                .company(company)
+                .amount(amount)
                 .transactionDate(LocalDate.now())
                 .debitAccount(debitAccount)
                 .creditAccount(creditAccount)

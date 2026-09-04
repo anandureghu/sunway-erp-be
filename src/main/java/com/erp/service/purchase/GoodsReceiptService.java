@@ -372,6 +372,9 @@ public class GoodsReceiptService {
                     .orElseThrow(() -> new NotFoundException("Warehouse not found"));
 
             BigDecimal unitCost = resolveUnitCost(line.getUnitCost(), item);
+            java.time.LocalDate saleByDate = line.getExpiryDate() != null
+                    ? line.getExpiryDate()
+                    : item.getItem().getExpiryDate();
 
             stockBatchService.receiveIntoBatch(
                     item.getItem().getId(),
@@ -379,14 +382,18 @@ public class GoodsReceiptService {
                     accepted,
                     unitCost,
                     line.getBatchNo(),
-                    line.getExpiryDate(),
+                    saleByDate,
                     StockBatchSourceType.GOODS_RECEIPT,
                     gr.getId(),
                     companyId
             );
 
-            item.getItem().setDateReceived(java.time.LocalDate.now());
-            itemRepo.save(item.getItem());
+            Item catalogItem = item.getItem();
+            catalogItem.setDateReceived(java.time.LocalDate.now());
+            if (saleByDate != null) {
+                catalogItem.setExpiryDate(saleByDate);
+            }
+            itemRepo.save(catalogItem);
 
             item.setWarehouse(wh);
             item.setBatchNo(line.getBatchNo());
@@ -498,9 +505,12 @@ public class GoodsReceiptService {
     }
 
     private GoodsReceiptResponseDTO toDTO(GoodsReceipt gr, InspectionFinanceOutcome finance) {
+        var po = gr.getPurchaseOrder();
         return GoodsReceiptResponseDTO.builder()
                 .id(gr.getId())
-                .purchaseOrderId(gr.getPurchaseOrder().getId())
+                .purchaseOrderId(po.getId())
+                .purchaseOrderNumber(po.getOrderNumber())
+                .supplierName(po.getSupplier() != null ? po.getSupplier().getVendorName() : null)
                 .status(gr.getStatus() != null ? gr.getStatus().name() : null)
                 .archived(gr.isArchived())
                 .receivedAt(gr.getReceivedAt())

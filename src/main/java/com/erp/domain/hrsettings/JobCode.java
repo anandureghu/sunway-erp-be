@@ -47,6 +47,40 @@ public class JobCode {
     @Builder.Default
     private Boolean active = true;
 
+    /** Approval state — a code must be APPROVED before it can be assigned. */
+    @Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    @Builder.Default
+    private com.erp.domain.enums.JobCodeStatus status =
+            com.erp.domain.enums.JobCodeStatus.PENDING_APPROVAL;
+
+    // ── Defaults copied onto the current job when this code is assigned ──
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private com.erp.domain.hr.Department department;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "division_id")
+    private com.erp.domain.hr.Division division;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "employment_category", length = 30)
+    private com.erp.domain.enums.EmploymentCategory employmentCategory;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "employment_type", length = 30)
+    private com.erp.domain.enums.EmploymentType employmentType;
+
+    @Column(name = "work_location", length = 30)
+    private String workLocation; // OFFICE | HYBRID | REMOTE
+
+    @Column(name = "work_city", length = 100)
+    private String workCity;
+
+    @Column(name = "work_country", length = 100)
+    private String workCountry;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;

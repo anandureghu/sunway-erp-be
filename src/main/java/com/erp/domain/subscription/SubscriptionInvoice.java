@@ -55,6 +55,12 @@ public class SubscriptionInvoice {
     @Column(name = "pdf_url", length = 1000)
     private String pdfUrl;
 
+    @Column(name = "generated_at")
+    private Instant generatedAt;
+
+    @Column(name = "generated_by", length = 50)
+    private String generatedBy;
+
     @Column(name = "to_email", length = 500)
     private String toEmail;
 

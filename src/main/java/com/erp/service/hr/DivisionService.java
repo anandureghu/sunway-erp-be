@@ -28,6 +28,7 @@ public class DivisionService {
     private final CompanyRepository companyRepository;
     private final DepartmentRepository departmentRepository;
     private final EmployeeRepository employeeRepository;
+    private final com.erp.repo.EmployeeCurrentJobRepo employeeCurrentJobRepository;
     private final AuthContext authContext;
 
     private DivisionResponseDTO toDTO(Division d) {
@@ -131,6 +132,13 @@ public class DivisionService {
         Division division = divisionRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Division not found"));
         assertCompanyAccess(division.getCompany().getId());
+
+        if (employeeCurrentJobRepository.existsByDivision_Id(id)) {
+            throw new ConflictException(
+                    "Cannot delete division because employees are assigned to it."
+            );
+        }
+
         divisionRepository.delete(division);
     }
 

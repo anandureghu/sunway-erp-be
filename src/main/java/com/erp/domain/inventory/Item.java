@@ -40,6 +40,17 @@ public class Item {
     private String subCategory;
 
     private String brand;
+
+    @Column(name = "manufacturer_part_number", length = 150)
+    private String manufacturerPartNumber;
+
+    @Column(length = 150)
+    private String model;
+
+    @Builder.Default
+    @Column(name = "negative_stock_permitted", nullable = false)
+    private boolean negativeStockPermitted = false;
+
     private String location;
 
     private Integer quantity;

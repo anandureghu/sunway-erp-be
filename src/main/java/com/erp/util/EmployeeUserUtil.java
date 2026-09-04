@@ -7,13 +7,25 @@ public class EmployeeUserUtil {
     private EmployeeUserUtil() {}
 
     /**
-     * Email-safe login/local part built from the employee's name — lowercase with
-     * every space and special character stripped, exactly how the company domain is
-     * built.
+     * Email-safe login/local part in the form {@code [first initial].[last name]}
+     * (e.g. "j.doe"), lowercase with spaces and punctuation stripped from each part.
+     * Falls back gracefully when a name part is missing.
      */
     public static String generateUsername(String firstName, String lastName) {
-        String local = normalize(firstName) + normalize(lastName);
-        return local.isEmpty() ? "user" : local;
+        String first = normalize(firstName);
+        String last = normalize(lastName);
+        String initial = first.isEmpty() ? "" : first.substring(0, 1);
+
+        if (initial.isEmpty() && last.isEmpty()) {
+            return "user";
+        }
+        if (initial.isEmpty()) {
+            return last;
+        }
+        if (last.isEmpty()) {
+            return initial;
+        }
+        return initial + "." + last;
     }
 
     public static String generateEmail(String username, Company company) {

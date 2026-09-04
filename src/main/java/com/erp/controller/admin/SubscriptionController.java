@@ -6,6 +6,7 @@ import com.erp.domain.subscription.SubscriptionStatus;
 import com.erp.dto.common.PagedResponse;
 import com.erp.dto.subscription.*;
 import com.erp.service.subscription.SubscriptionInvoiceService;
+import com.erp.service.subscription.SubscriptionPaymentReceiptService;
 import com.erp.service.subscription.SubscriptionService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
@@ -26,13 +27,16 @@ public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
     private final SubscriptionInvoiceService invoiceService;
+    private final SubscriptionPaymentReceiptService receiptService;
 
     public SubscriptionController(
             SubscriptionService subscriptionService,
-            SubscriptionInvoiceService invoiceService
+            SubscriptionInvoiceService invoiceService,
+            SubscriptionPaymentReceiptService receiptService
     ) {
         this.subscriptionService = subscriptionService;
         this.invoiceService = invoiceService;
+        this.receiptService = receiptService;
     }
 
     @GetMapping("/me/status")
@@ -108,6 +112,18 @@ public class SubscriptionController {
                 companyId, request != null ? request : new CancelSubscriptionRequest());
     }
 
+    @PostMapping("/{companyId}/invoices/generate")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public SubscriptionInvoiceResponse generateInvoice(@PathVariable Long companyId) {
+        return invoiceService.generateForCompany(companyId);
+    }
+
+    @PostMapping("/{companyId}/invoices/regenerate")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public SubscriptionInvoiceResponse regenerateInvoice(@PathVariable Long companyId) {
+        return invoiceService.regenerateForCompany(companyId);
+    }
+
     @PostMapping("/{companyId}/invoices/send")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public SubscriptionInvoiceResponse sendInvoice(
@@ -129,5 +145,29 @@ public class SubscriptionController {
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"subscription-invoice-" + invoiceId + ".pdf\"")
                 .body(pdf);
+    }
+
+    @GetMapping("/{companyId}/payments/{paymentId}/receipt/pdf")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<byte[]> downloadPaymentReceiptPdf(
+            @PathVariable Long companyId,
+            @PathVariable Long paymentId
+    ) {
+        byte[] pdf = receiptService.downloadReceiptPdf(companyId, paymentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"subscription-receipt-" + paymentId + ".pdf\"")
+                .body(pdf);
+    }
+
+    @PostMapping("/{companyId}/payments/{paymentId}/receipt/send")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public SubscriptionPaymentResponse sendPaymentReceipt(
+            @PathVariable Long companyId,
+            @PathVariable Long paymentId,
+            @RequestParam(defaultValue = "false") boolean resend
+    ) {
+        return receiptService.sendReceipt(companyId, paymentId, resend);
     }
 }

@@ -5,6 +5,7 @@ import com.erp.domain.EmployeeCurrentJob;
 import com.erp.domain.EmployeeStatus;
 import com.erp.domain.hr.Department;
 import com.erp.domain.hr.Division;
+import com.erp.domain.enums.ContractType;
 import com.erp.domain.hrsettings.JobCode;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.currentjob.EmployeeCurrentJobRequestDTO;
@@ -13,6 +14,7 @@ import com.erp.exception.NotFoundException;
 import com.erp.mapper.EmployeeCurrentJobMapper;
 import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeRepository;
+import com.erp.repo.hr.ContractRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.repo.hr.DivisionRepository;
 import com.erp.repo.hrsettings.JobCodeRepository;
@@ -43,6 +45,7 @@ public class CurrentJobService {
     private final DepartmentRepository departmentRepo;
     private final DivisionRepository divisionRepo;
     private final EmployeeAccessGuard employeeAccessGuard;
+    private final ContractRepository contractRepository;
 
     @Transactional(readOnly = true)
     public EmployeeCurrentJobResponseDTO get(Long employeeId) {
@@ -95,6 +98,7 @@ public class CurrentJobService {
         applyReportingManager(job, employee, dto.getReportingManagerId());
 
         EmployeeCurrentJob saved = currentJobRepo.saveAndFlush(job);
+        syncContractFromCurrentJob(saved);
 
         return EmployeeCurrentJobMapper.toDTO(saved);
     }
@@ -125,8 +129,42 @@ public class CurrentJobService {
         applyReportingManager(job, job.getEmployee(), dto.getReportingManagerId());
 
         EmployeeCurrentJob saved = currentJobRepo.saveAndFlush(job);
+        syncContractFromCurrentJob(saved);
 
         return EmployeeCurrentJobMapper.toDTO(saved);
+    }
+
+    /**
+     * The current job is the source of truth for the employment category and the
+     * expected end date, so the employee's active contract follows it: contract type
+     * mirrors the employment category, and the contract expiry mirrors the expected
+     * end date. Only an existing (non-deleted) contract is updated; there's nothing to
+     * sync before a contract has been created.
+     */
+    private void syncContractFromCurrentJob(EmployeeCurrentJob job) {
+        Employee employee = job.getEmployee();
+        if (employee == null || employee.getId() == null) {
+            return;
+        }
+        contractRepository
+                .findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(employee.getId())
+                .ifPresent(contract -> {
+                    boolean changed = false;
+                    ContractType mappedType =
+                            ContractType.fromEmploymentCategory(job.getEmploymentCategory());
+                    if (mappedType != null && mappedType != contract.getContractType()) {
+                        contract.setContractType(mappedType);
+                        changed = true;
+                    }
+                    if (job.getExpectedEndDate() != null
+                            && !job.getExpectedEndDate().equals(contract.getExpirationDate())) {
+                        contract.setExpirationDate(job.getExpectedEndDate());
+                        changed = true;
+                    }
+                    if (changed) {
+                        contractRepository.save(contract);
+                    }
+                });
     }
 
     private void applyReportingManager(EmployeeCurrentJob job, Employee employee, Long managerId) {

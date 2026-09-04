@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${receiptNo}">Payment Receipt</title>
+    <style type="text/css">
+        @page { size: A4 portrait; margin: 14mm 12mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            color: #1e293b;
+            background: #fff;
+        }
+        .page { width: 100%; padding: 4mm 2mm; }
+        .header {
+            width: 100%;
+            border-bottom: 3px solid #047857;
+            padding-bottom: 14px;
+            margin-bottom: 20px;
+        }
+        .header-table { width: 100%; border-collapse: collapse; }
+        .header-table td { vertical-align: top; }
+        .header-right { text-align: right; }
+        .brand-name { font-size: 20px; font-weight: 800; color: #047857; }
+        .brand-sub {
+            font-size: 10px; color: #64748b; text-transform: uppercase;
+            letter-spacing: 0.08em; margin-top: 2px;
+        }
+        .doc-title {
+            font-size: 16px; font-weight: 800; color: #0f172a;
+            text-transform: uppercase; letter-spacing: 0.06em;
+        }
+        .doc-code { font-size: 12px; color: #64748b; margin-top: 4px; font-family: monospace; }
+        .section { margin-bottom: 18px; }
+        .section-title {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.12em; color: #047857;
+            border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 10px;
+        }
+        .info-table { width: 100%; border-collapse: collapse; }
+        .info-table td { padding: 5px 8px 5px 0; width: 33.33%; vertical-align: top; }
+        .info-label {
+            font-size: 9px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: #94a3b8; margin-bottom: 2px;
+        }
+        .info-value { font-size: 12px; font-weight: 600; color: #0f172a; }
+        .amount-box {
+            background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px;
+            padding: 14px 16px; margin-top: 4px;
+        }
+        .amount-label {
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: #047857;
+        }
+        .amount-value { font-size: 22px; font-weight: 800; color: #065f46; margin-top: 4px; }
+        .footer-table {
+            width: 100%; border-collapse: collapse; border-top: 1px solid #e2e8f0; margin-top: 22px;
+        }
+        .footer-table td { font-size: 9px; color: #94a3b8; padding-top: 8px; }
+        .footer-table td.right { text-align: right; }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="header">
+        <table class="header-table">
+            <tr>
+                <td>
+                    <div class="brand-name">Sunway ERP</div>
+                    <div class="brand-sub">Platform subscription billing</div>
+                </td>
+                <td class="header-right">
+                    <div class="doc-title">Payment Receipt</div>
+                    <div class="doc-code" th:text="${receiptNo}">SUBR-001</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Received from</div>
+        <table class="info-table">
+            <tr>
+                <td>
+                    <div class="info-label">Company</div>
+                    <div class="info-value" th:text="${companyName}">Company</div>
+                </td>
+                <td>
+                    <div class="info-label">Plan</div>
+                    <div class="info-value" th:text="${planType}">YEARLY</div>
+                </td>
+                <td>
+                    <div class="info-label">Payment date</div>
+                    <div class="info-value" th:text="${paidOn}">01 Jan 2026</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Payment details</div>
+        <table class="info-table">
+            <tr>
+                <td>
+                    <div class="info-label">Invoice</div>
+                    <div class="info-value" th:text="${invoiceNo}">SUB-1-0001</div>
+                </td>
+                <td>
+                    <div class="info-label">Billing period</div>
+                    <div class="info-value"
+                         th:text="${periodStart} + ' → ' + ${periodEnd}">01 Jan → 01 Feb</div>
+                </td>
+                <td>
+                    <div class="info-label">Method / reference</div>
+                    <div class="info-value" th:text="${methodNote}">Bank transfer</div>
+                </td>
+            </tr>
+        </table>
+        <div class="amount-box">
+            <div class="amount-label">Amount received</div>
+            <div class="amount-value"
+                 th:text="${currencyCode} + ' ' + ${amountFormatted}">QAR 0.00</div>
+        </div>
+    </div>
+
+    <table class="footer-table">
+        <tr>
+            <td>Thank you — this receipt confirms payment received in full.</td>
+            <td class="right" th:text="'Generated ' + ${generatedAt}">Generated</td>
+        </tr>
+    </table>
+</div>
+</body>
+</html>

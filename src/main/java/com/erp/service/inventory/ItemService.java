@@ -120,6 +120,9 @@ public class ItemService {
                 .category(dto.getCategory())
                 .subCategory(dto.getSubCategory())
                 .brand(dto.getBrand())
+                .manufacturerPartNumber(trimToNull(dto.getManufacturerPartNumber()))
+                .model(trimToNull(dto.getModel()))
+                .negativeStockPermitted(Boolean.TRUE.equals(dto.getNegativeStockPermitted()))
                 .location(dto.getLocation())
                 .quantity(dto.getQuantity())
                 .available(dto.getQuantity())
@@ -190,6 +193,11 @@ public class ItemService {
         item.setCategory(dto.getCategory());
         item.setSubCategory(dto.getSubCategory());
         item.setBrand(dto.getBrand());
+        item.setManufacturerPartNumber(trimToNull(dto.getManufacturerPartNumber()));
+        item.setModel(trimToNull(dto.getModel()));
+        if (dto.getNegativeStockPermitted() != null) {
+            item.setNegativeStockPermitted(dto.getNegativeStockPermitted());
+        }
         item.setLocation(dto.getLocation());
         item.setQuantity(dto.getQuantity());
         item.setMinimum(dto.getMinimum());
@@ -452,6 +460,9 @@ public class ItemService {
 
         Long whId = dto.getWarehouseId() != null ? dto.getWarehouseId() : item.getWarehouse().getId();
         Long companyId = auth.getCurrentCompanyId();
+        LocalDate saleByDate = dto.getExpiryDate() != null
+                ? parseOptionalDate(dto.getExpiryDate())
+                : item.getExpiryDate();
 
         stockBatchService.receiveIntoBatch(
                 item.getId(),
@@ -459,7 +470,7 @@ public class ItemService {
                 dto.getQuantityReceived(),
                 dto.getCostPrice() != null ? dto.getCostPrice() : item.getCostPrice(),
                 dto.getBatchNo(),
-                dto.getExpiryDate() != null ? parseOptionalDate(dto.getExpiryDate()) : null,
+                saleByDate,
                 StockBatchSourceType.DIRECT_RECEIVE,
                 null,
                 companyId
@@ -477,8 +488,8 @@ public class ItemService {
         }
 
         item.setDateReceived(resolveReceiveDate(dto.getReceivedDate()));
-        if (dto.getExpiryDate() != null) {
-            item.setExpiryDate(parseOptionalDate(dto.getExpiryDate()));
+        if (saleByDate != null) {
+            item.setExpiryDate(saleByDate);
         }
         if (dto.getSerialNo() != null && !dto.getSerialNo().isBlank()) {
             item.setSerialNo(dto.getSerialNo());
@@ -590,6 +601,9 @@ public class ItemService {
                 .category(item.getCategory())
                 .subCategory(item.getSubCategory())
                 .brand(item.getBrand())
+                .manufacturerPartNumber(item.getManufacturerPartNumber())
+                .model(item.getModel())
+                .negativeStockPermitted(item.isNegativeStockPermitted())
                 .description(item.getDescription())
                 .unitMeasure(item.getUnitMeasure())
                 .barcode(item.getBarcode())
@@ -642,6 +656,9 @@ public class ItemService {
                 .category(item.getCategory())
                 .subCategory(item.getSubCategory())
                 .brand(item.getBrand())
+                .manufacturerPartNumber(item.getManufacturerPartNumber())
+                .model(item.getModel())
+                .negativeStockPermitted(item.isNegativeStockPermitted())
                 .description(item.getDescription())
                 .unitMeasure(item.getUnitMeasure())
                 .barcode(item.getBarcode())
@@ -719,6 +736,14 @@ public class ItemService {
             return null;
         }
         return LocalDate.parse(value);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     // --------------------------

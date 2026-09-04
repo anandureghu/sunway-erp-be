@@ -1,6 +1,7 @@
 package com.erp.service.salary;
 
 import com.erp.domain.CompanyLeavePolicy;
+import com.erp.exception.PayrollGenerationException;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeLeave;
 import com.erp.domain.EmployeeLoan;
@@ -35,6 +36,7 @@ import com.erp.service.finance.TransactionService;
 import com.erp.service.hr.ProcessAccountDefaultsService;
 import com.erp.service.hr.RetirementCompensationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +53,7 @@ import java.util.Optional;
 import java.util.Set;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class PayrollService {
 
@@ -58,6 +61,9 @@ public class PayrollService {
     private static final String STATUS_CLOSED = "CLOSED";
     // Fallback used only when a company has no explicit standard-hours setting.
     private static final double STANDARD_HOURS_PER_DAY = 6.0;
+    // Standard paid working days in a month — the divisor for the daily rate when an
+    // organisation has no check-in/out data (Gross / 22 × days worked).
+    private static final double STANDARD_WORKING_DAYS_PER_MONTH = 22.0;
 
     /**
      * Employment-ending statuses. A payroll run for an employee in any of these
@@ -85,6 +91,8 @@ public class PayrollService {
     private final TransactionService transactionService;
     private final ChartOfAccountsRepository chartOfAccountsRepository;
     private final AuthContext authContext;
+    private final PayslipDocumentService payslipDocumentService;
+    private final com.erp.service.notification.EmailService emailService;
 
     @Transactional(readOnly = true)
     public PayrollPreviewDTO previewPayroll(Long employeeId, PayrollGenerateRequestDTO dto) {
@@ -195,8 +203,10 @@ public class PayrollService {
         Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
         Payroll saved = payrollRepo.save(payroll);
 
-        applyLoanRecovery(employee, computation.finalSettlement());
+        applyLoanRecovery(employee, computation.finalSettlement(),
+                computation.loanDeduction());
         postPayrollToAccounting(saved, employee);
+        emailPayslip(employee, saved);
 
         // A final settlement is the employee's last run — once it's processed, mark
         // them INACTIVE so they drop out of payroll/org listings and can be archived.
@@ -234,8 +244,10 @@ public class PayrollService {
             Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
             Payroll saved = payrollRepo.save(payroll);
 
-            applyLoanRecovery(employee, computation.finalSettlement());
+            applyLoanRecovery(employee, computation.finalSettlement(),
+                    computation.loanDeduction());
             postPayrollToAccounting(saved, employee);
+            emailPayslip(employee, saved);
             generatedCount++;
         }
 
@@ -351,19 +363,34 @@ public class PayrollService {
         // recovered separately in applyLoanRecovery.) This is unchanged by moving LOP
         // into the deductions bucket: gross now holds the full package, so subtract LOP.
         double lop = payroll.getLopAmount() != null ? payroll.getLopAmount() : 0.0;
-        BigDecimal amount = BigDecimal.valueOf(round2(payroll.getGrossPay() - lop));
+        double eos = payroll.getEndOfServiceCompensation() != null
+                ? payroll.getEndOfServiceCompensation() : 0.0;
         String employeeLabel = employee.getEmployeeNo() != null && !employee.getEmployeeNo().isBlank()
                 ? employee.getEmployeeNo()
                 : String.valueOf(employee.getId());
         String desc = "Payroll " + payroll.getPayrollCode() + " — " + employeeLabel;
 
-        transactionService.recordPayrollPosting(
-                companyId,
-                payroll.getId(),
-                amount,
-                debitAccountId,
-                creditAccountId,
-                desc);
+        // On a final settlement, the End-of-Service gratuity posts to the company's
+        // configured End-of-Service account as its own ledger entry; the rest of the
+        // package posts to the payroll account. If no EOS account is configured, the
+        // whole amount posts to payroll as before.
+        Long eosAccountId = eos > 0
+                ? processAccountDefaultsService.resolveEndOfServiceAccountId(companyId)
+                : null;
+
+        if (eosAccountId != null) {
+            BigDecimal regular = BigDecimal.valueOf(round2(payroll.getGrossPay() - eos - lop));
+            transactionService.recordPayrollPosting(
+                    companyId, payroll.getId(), regular, debitAccountId, creditAccountId, desc);
+            transactionService.recordEndOfServicePosting(
+                    companyId, payroll.getId(), BigDecimal.valueOf(round2(eos)),
+                    eosAccountId, creditAccountId,
+                    "End of service " + payroll.getPayrollCode() + " — " + employeeLabel);
+        } else {
+            BigDecimal amount = BigDecimal.valueOf(round2(payroll.getGrossPay() - lop));
+            transactionService.recordPayrollPosting(
+                    companyId, payroll.getId(), amount, debitAccountId, creditAccountId, desc);
+        }
     }
 
     /**
@@ -398,15 +425,48 @@ public class PayrollService {
         double monthlyGross = safe(compensation.getTotalCompensation());
 
         if (monthlyGross <= 0) {
-            throw new RuntimeException("Employee total compensation must be greater than zero");
+            throw new PayrollGenerationException(
+                    "The total salary for " + employeeLabel(employee)
+                            + " is zero. Set a salary greater than zero before generating payroll.");
         }
 
         int workingDays = countWorkingDays(periodStart, periodEnd);
         if (workingDays <= 0) {
-            throw new RuntimeException("No working days found in selected payroll period");
+            throw new PayrollGenerationException(
+                    "The selected pay period has no working days. Choose a period that "
+                            + "includes at least one working day (Sun–Thu).");
         }
 
-        double perDaySalary = monthlyGross / workingDays;
+        // Daily rate: an organisation with no check-in/out data prorates against a fixed
+        // 22-day standard month (Gross / 22 × days worked); a punch-in organisation uses
+        // the actual working days in the period.
+        boolean requireCheckIn = companyRequireCheckIn(employee);
+        double referenceDays = requireCheckIn
+                ? workingDays
+                : STANDARD_WORKING_DAYS_PER_MONTH;
+        double perDaySalary = monthlyGross / referenceDays;
+
+        // Approved leaves within the period, split into paid vs unpaid. Computed up
+        // front because a no-punch organisation derives its worked days from these.
+        List<EmployeeLeave> approvedLeaves = leaveRepo.findApprovedLeavesForPayrollPeriod(
+                employee.getId(),
+                periodStart,
+                periodEnd
+        );
+
+        double paidLeaveDays = 0.0;
+        double unpaidLeaveDays = 0.0;
+        for (EmployeeLeave leave : approvedLeaves) {
+            double leaveDays = calculateLeaveDaysWithinPeriod(leave, periodStart, periodEnd);
+            if (leaveDays <= 0) {
+                continue;
+            }
+            if (isPaidLeave(employee, leave.getLeaveType())) {
+                paidLeaveDays += leaveDays;
+            } else {
+                unpaidLeaveDays += leaveDays;
+            }
+        }
 
         List<EmployeeTimesheet> timesheets = timesheetRepo.findByEmployeeIdAndAttendanceDateBetween(
                 employee.getId(),
@@ -418,11 +478,12 @@ public class PayrollService {
         long stdMinutes = Math.round(stdHoursPerDay * 60.0);
         double workedHours;
         double workedDays;
-        if (!companyRequireCheckIn(employee)) {
-            // Organisation doesn't punch in/out — every working day counts as fully
-            // worked; unpaid leave (handled below) is the only thing that reduces pay.
-            workedDays = workingDays;
-            workedHours = workingDays * stdHoursPerDay;
+        if (!requireCheckIn) {
+            // Organisation doesn't punch in/out — every working day is paid EXCEPT
+            // approved unpaid leave. Worked days = working days minus all leave; paid
+            // leave is added back in payableDays below so only unpaid leave reduces pay.
+            workedDays = Math.max(workingDays - paidLeaveDays - unpaidLeaveDays, 0.0);
+            workedHours = workedDays * stdHoursPerDay;
         } else {
             // Align exactly with the Attendance History report: worked hours = sum of
             // logged time; worked days = days that reached a full standard day (the
@@ -440,7 +501,7 @@ public class PayrollService {
         // no-punch organisation there are no punches to derive it from, so it comes
         // from the manual monthly override HR keyed in the Time Sheets tab (0 if none).
         double overtimeHours;
-        if (!companyRequireCheckIn(employee)) {
+        if (!requireCheckIn) {
             overtimeHours = overtimeOverrideRepo
                     .findByEmployee_IdAndYearAndMonth(
                             employee.getId(), periodStart.getYear(), periodStart.getMonthValue())
@@ -456,30 +517,12 @@ public class PayrollService {
         double hourlyRate = stdHoursPerDay > 0 ? perDaySalary / stdHoursPerDay : 0.0;
         double overtimePay = overtimeHours * hourlyRate * companyOtMultiplier(employee);
 
-        List<EmployeeLeave> approvedLeaves = leaveRepo.findApprovedLeavesForPayrollPeriod(
-                employee.getId(),
-                periodStart,
-                periodEnd
-        );
-
-        double paidLeaveDays = 0.0;
-        double unpaidLeaveDays = 0.0;
-
-        for (EmployeeLeave leave : approvedLeaves) {
-            double leaveDays = calculateLeaveDaysWithinPeriod(leave, periodStart, periodEnd);
-            if (leaveDays <= 0) {
-                continue;
-            }
-
-            if (isPaidLeave(employee, leave.getLeaveType())) {
-                paidLeaveDays += leaveDays;
-            } else {
-                unpaidLeaveDays += leaveDays;
-            }
-        }
-
-        double payableDays = Math.min(workedDays + paidLeaveDays, workingDays);
-        double lopDays = Math.max(workingDays - payableDays, 0.0);
+        // Paid leave counts toward payable days; the worked-days figure already excludes
+        // it (and unpaid leave). Payable days are capped at the reference month (22 with
+        // no check-in data, else the period's working days) so a full month pays in full
+        // and a partial month prorates as Gross / referenceDays × days worked.
+        double payableDays = Math.min(workedDays + paidLeaveDays, referenceDays);
+        double lopDays = Math.max(referenceDays - payableDays, 0.0);
         double lopAmount = lopDays * perDaySalary;
         // Gross earnings are the FULL monthly package; unpaid absence (LOP) is shown
         // as a deduction below rather than silently shrinking the gross, so the payslip
@@ -495,13 +538,25 @@ public class PayrollService {
 
         List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, STATUS_ACTIVE);
 
-        // Normal runs recover the monthly installment; a final settlement clears the
-        // full outstanding balance, deducted from the end-of-service payment.
-        double loanDeduction = activeLoans.stream()
-                .mapToDouble(loan -> finalSettlement
-                        ? Math.max(safe(loan.getBalance()), 0.0)
-                        : Math.min(safe(loan.getMonthlyDeduction()), Math.max(safe(loan.getBalance()), 0.0)))
-                .sum();
+        // Amount the run can pay before loan recovery: full package + EOS + OT, less LOP.
+        double availableBeforeLoan = grossEarnings + endOfServiceCompensation + overtimePay - lopAmount;
+
+        double loanDeduction;
+        if (finalSettlement) {
+            // A final settlement clears the outstanding balance — but only up to what the
+            // settlement can actually pay. Any shortfall stays owed on the loan rather than
+            // being silently written off, and the net never goes negative.
+            double outstanding = activeLoans.stream()
+                    .mapToDouble(loan -> Math.max(safe(loan.getBalance()), 0.0))
+                    .sum();
+            loanDeduction = Math.min(outstanding, Math.max(availableBeforeLoan, 0.0));
+        } else {
+            // Normal runs recover one monthly installment per active loan.
+            loanDeduction = activeLoans.stream()
+                    .mapToDouble(loan -> Math.min(
+                            safe(loan.getMonthlyDeduction()), Math.max(safe(loan.getBalance()), 0.0)))
+                    .sum();
+        }
 
         double totalDeductions = lopAmount + loanDeduction;
         double netPayable = (grossEarnings + endOfServiceCompensation + overtimePay) - totalDeductions;
@@ -591,7 +646,9 @@ public class PayrollService {
         );
 
         if (hasPendingLeaves) {
-            throw new RuntimeException("Cannot generate payroll while leave approvals are pending for this period");
+            throw new PayrollGenerationException(
+                    "This employee has leave requests still pending approval for this period. "
+                            + "Approve or reject them before generating payroll.");
         }
     }
 
@@ -603,22 +660,49 @@ public class PayrollService {
         );
 
         if (exists) {
-            throw new RuntimeException("Payroll already generated for employee: " + employee.getEmployeeNo());
+            throw new PayrollGenerationException(
+                    "Payroll has already been generated for " + employeeLabel(employee)
+                            + " for this pay period.");
         }
     }
 
-    private void applyLoanRecovery(Employee employee, boolean finalSettlement) {
+    /** "employee name (EMP-001)" for use in user-facing payroll messages. */
+    private String employeeLabel(Employee employee) {
+        String name = ((employee.getFirstName() == null ? "" : employee.getFirstName())
+                + " " + (employee.getLastName() == null ? "" : employee.getLastName())).trim();
+        String no = employee.getEmployeeNo();
+        if (name.isBlank()) {
+            return no != null ? no : "this employee";
+        }
+        return no != null ? name + " (" + no + ")" : name;
+    }
+
+    private void applyLoanRecovery(
+            Employee employee, boolean finalSettlement, double finalSettlementRecovery) {
         List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, STATUS_ACTIVE);
+
+        // For a final settlement, recover exactly the amount deducted on the payslip
+        // ({@code loanDeduction}), drawn down loan by loan so balances reconcile to the
+        // cent. Any residual beyond what the settlement could cover stays owed.
+        double remaining = Math.max(finalSettlementRecovery, 0.0);
 
         for (EmployeeLoan loan : activeLoans) {
             double monthlyDeduction = safe(loan.getMonthlyDeduction());
             double balance = safe(loan.getBalance());
 
-            // A final settlement clears the whole balance; otherwise recover one installment.
-            double actualRecovery = finalSettlement ? balance : Math.min(monthlyDeduction, balance);
-            loan.setBalance(round2(Math.max(balance - actualRecovery, 0.0)));
+            double actualRecovery;
+            if (finalSettlement) {
+                actualRecovery = Math.min(balance, remaining);
+                remaining -= actualRecovery;
+            } else {
+                actualRecovery = Math.min(monthlyDeduction, balance);
+            }
+            double newBalance = round2(Math.max(balance - actualRecovery, 0.0));
+            loan.setBalance(newBalance);
 
-            if (loan.getBalance() <= 0.0) {
+            // Only close a loan that is genuinely cleared — a final settlement that could
+            // not cover the balance leaves the residual owed and the loan still active.
+            if (newBalance <= 0.0) {
                 loan.setStatus(STATUS_CLOSED);
             }
 
@@ -654,12 +738,45 @@ public class PayrollService {
 
     private EmployeeCompensation getActiveCompensation(Employee employee) {
         return compensationRepo.findActiveByEmployee(employee)
-                .orElseThrow(() -> new RuntimeException("Active compensation not found for employee"));
+                .orElseThrow(() -> new PayrollGenerationException(
+                        "No active salary is set for " + employeeLabel(employee)
+                                + ". Add a salary in the Salary tab before generating payroll."));
     }
 
     private EmployeeBankDetails getBankDetails(Employee employee) {
         return bankRepo.findByEmployee(employee)
-                .orElseThrow(() -> new RuntimeException("Employee bank details not found"));
+                .orElseThrow(() -> new PayrollGenerationException(
+                        "No bank details are set for " + employeeLabel(employee)
+                                + ". Add them in the Bank tab before generating payroll."));
+    }
+
+    /**
+     * Best-effort: email the generated payslip PDF to the employee. Never breaks payroll
+     * generation — a missing email or unconfigured mail server is logged and skipped.
+     */
+    private void emailPayslip(Employee employee, Payroll payroll) {
+        try {
+            if (!emailService.isConfigured()) {
+                return;
+            }
+            String email = employee.getUser() != null ? employee.getUser().getEmail() : null;
+            if (email == null || email.isBlank()) {
+                return;
+            }
+            byte[] pdf = payslipDocumentService.generatePayslipPdf(
+                    employee.getId(), payroll.getPayrollCode());
+            String subject = "Your payslip — " + payroll.getPayrollCode();
+            String body = "Dear " + safeStr(employee.getFirstName())
+                    + ",\n\nPlease find attached your payslip for the period "
+                    + payroll.getPayPeriodStart() + " to " + payroll.getPayPeriodEnd()
+                    + ".\n\nRegards,\nHR";
+            emailService.sendWithPdfAttachment(
+                    email, subject, body, pdf,
+                    "payslip-" + payroll.getPayrollCode() + ".pdf");
+        } catch (Exception e) {
+            log.warn("Could not email payslip {}: {}",
+                    payroll.getPayrollCode(), e.getMessage());
+        }
     }
 
     private void validateRequest(PayrollGenerateRequestDTO dto) {
@@ -704,14 +821,14 @@ public class PayrollService {
                 .orElse(null);
         if (expectedEnd == null) {
             if (requireDate) {
-                throw new IllegalArgumentException(
-                        "Set the employee's expected end date (last working day) before "
-                                + "processing the final settlement.");
+                throw new PayrollGenerationException(
+                        "Set the employee's expected end date (last working day) on the "
+                                + "profile or Current Job tab before processing the final settlement.");
             }
             return;
         }
         if (dto.getPayPeriodEnd().isAfter(expectedEnd)) {
-            throw new IllegalArgumentException(
+            throw new PayrollGenerationException(
                     "Payroll cannot be processed beyond the expected end date (" + expectedEnd + ").");
         }
     }
