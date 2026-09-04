@@ -52,6 +52,7 @@ public class EmployeeDependentService {
                 .state(dto.getState())
                 .postalCode(dto.getPostalCode())
                 .country(dto.getCountry())
+                .emergencyContact(dto.isEmergencyContact())
 
                 .build();
 
@@ -87,6 +88,7 @@ public class EmployeeDependentService {
         dependent.setState(dto.getState());
         dependent.setPostalCode(dto.getPostalCode());
         dependent.setCountry(dto.getCountry());
+        dependent.setEmergencyContact(dto.isEmergencyContact());
 
         dependentRepository.save(dependent);
         return toDTO(dependent);
@@ -156,6 +158,7 @@ public class EmployeeDependentService {
                 .state(dep.getState())
                 .postalCode(dep.getPostalCode())
                 .country(dep.getCountry())
+                .emergencyContact(dep.isEmergencyContact())
 
                 .build();
     }

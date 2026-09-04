@@ -341,13 +341,33 @@ public class LeaveService {
             throw new AccessDeniedException("Leave request not found");
         }
 
-        if (leave.getLeaveStatus() == LeaveStatus.PENDING) {
-            throw new IllegalArgumentException("Pending leave requests cannot be archived");
+        // Only completed leaves can be archived (restoring is always allowed).
+        if (archived && leave.getLeaveStatus() != LeaveStatus.COMPLETED) {
+            throw new IllegalArgumentException("Only completed leave requests can be archived");
         }
 
         leave.setArchived(archived);
         leave = leaveRepo.save(leave);
         return mapToHistoryDTO(leave);
+    }
+
+    /** Permanently delete an archived leave record (post-archive cleanup). */
+    public void deleteLeaveRecord(Long leaveId) {
+        Employee approver = getCurrentEmployee();
+        if (!canActAsApprover(approver)) {
+            throw new AccessDeniedException("Access denied: no permission to delete leave records");
+        }
+        EmployeeLeave leave = leaveRepo.findById(leaveId)
+                .orElseThrow(() -> new RuntimeException("Leave request not found"));
+        if (leave.getEmployee() == null || leave.getEmployee().getCompany() == null
+                || approver.getCompany() == null
+                || !leave.getEmployee().getCompany().getId().equals(approver.getCompany().getId())) {
+            throw new AccessDeniedException("Leave request not found");
+        }
+        if (!leave.isArchived()) {
+            throw new IllegalArgumentException("Only archived leave records can be deleted");
+        }
+        leaveRepo.delete(leave);
     }
 
     @Transactional

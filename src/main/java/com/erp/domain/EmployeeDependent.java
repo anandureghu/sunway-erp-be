@@ -69,4 +69,9 @@ public class EmployeeDependent {
 
     @Column(length = 100)
     private String country;
+
+    /** Whether this dependent is the employee's emergency contact. */
+    @Builder.Default
+    @Column(name = "emergency_contact", nullable = false)
+    private boolean emergencyContact = false;
 }

@@ -109,6 +109,13 @@ public class BenefitsAdjustmentService {
                         .filter(e -> grade.equalsIgnoreCase(gradeOf(e)))
                         .toList();
             }
+            case ALL_EMPLOYEES -> {
+                // Every active (non-archived, non-departed) employee in the company.
+                return employeeRepo.findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
+                        .stream()
+                        .filter(this::isActive)
+                        .toList();
+            }
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported scope.");
         }
     }

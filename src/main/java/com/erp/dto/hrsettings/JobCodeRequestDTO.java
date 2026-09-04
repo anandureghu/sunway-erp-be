@@ -32,4 +32,13 @@ public class JobCodeRequestDTO {
 
     @NotNull(message = "Status is required")
     private Boolean active;
+
+    // ── Defaults copied onto the current job when this code is assigned ──
+    private Long departmentId;
+    private Long divisionId;
+    private String employmentCategory; // PERMANENT | CONTRACT | INTERN | CONSULTANT | TEMPORARY
+    private String employmentType;     // FULL_TIME | PART_TIME
+    private String workLocation;       // OFFICE | HYBRID | REMOTE
+    private String workCity;
+    private String workCountry;
 }

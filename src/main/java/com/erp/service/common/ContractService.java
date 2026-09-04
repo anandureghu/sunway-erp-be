@@ -3,6 +3,7 @@ package com.erp.service.common;
 import com.erp.domain.Employee;
 import com.erp.domain.EmployeeStatus;
 import com.erp.domain.enums.ContractStatus;
+import com.erp.domain.enums.ContractType;
 import com.erp.domain.hr.AllowanceType;
 import com.erp.domain.hr.Contract;
 import com.erp.domain.hr.SalaryAllowance;
@@ -36,6 +37,7 @@ public class ContractService {
 
     private final ContractRepository contractRepository;
     private final EmployeeRepository employeeRepository;
+    private final com.erp.repo.EmployeeCurrentJobRepo currentJobRepository;
     private final AllowanceTypeRepository allowanceTypeRepository;
     private final CodeGeneratorService codeGeneratorService;
     private final FileStorageService fileStorageService;
@@ -57,12 +59,21 @@ public class ContractService {
                 .findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(employeeId)
                 .ifPresent(existing -> existing.setDeleted(true));
 
+        // The current job drives the contract type (employment category) and expiry
+        // (expected end date); fall back to the request only when the job has none.
+        var currentJob = currentJobRepository.findByEmployee_Id(employeeId).orElse(null);
+        ContractType derivedType = currentJob != null
+                ? ContractType.fromEmploymentCategory(currentJob.getEmploymentCategory())
+                : null;
+        java.time.LocalDate derivedExpiry =
+                currentJob != null ? currentJob.getExpectedEndDate() : null;
+
         Contract contract = Contract.builder()
                 .contractCode(codeGeneratorService.generateContractCode())
-                .contractType(dto.getContractType())
+                .contractType(derivedType != null ? derivedType : dto.getContractType())
                 .status(dto.getStatus())
                 .effectiveDate(dto.getEffectiveDate())
-                .expirationDate(dto.getExpirationDate())
+                .expirationDate(derivedExpiry != null ? derivedExpiry : dto.getExpirationDate())
                 .contractPeriodMonths(dto.getContractPeriodMonths())
                 .noticePeriodDays(dto.getNoticePeriodDays())
                 .salaryRateType(dto.getSalaryRateType())
@@ -103,7 +114,15 @@ public class ContractService {
                     HttpStatus.BAD_REQUEST, "Cannot update deleted contract");
         }
 
-        contract.setContractType(dto.getContractType());
+        // Contract type is derived from the current job's employment category (the
+        // source of truth), so a contract edit never overrides it. Falls back to the
+        // request only when the employee has no employment category set.
+        ContractType derivedType = contract.getEmployee() != null
+                ? currentJobRepository.findByEmployee_Id(contract.getEmployee().getId())
+                        .map(job -> ContractType.fromEmploymentCategory(job.getEmploymentCategory()))
+                        .orElse(null)
+                : null;
+        contract.setContractType(derivedType != null ? derivedType : dto.getContractType());
         contract.setEffectiveDate(dto.getEffectiveDate());
         contract.setExpirationDate(dto.getExpirationDate());
         contract.setContractPeriodMonths(dto.getContractPeriodMonths());

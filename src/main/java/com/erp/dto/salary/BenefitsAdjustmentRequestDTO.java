@@ -7,12 +7,13 @@ import java.util.Set;
 
 /**
  * Bulk benefits adjustment: raise selected pay components by a percentage for a set
- * of employees chosen by grade code, department, or a single employee.
+ * of employees chosen by grade code, department, a single employee, or every
+ * employee in the company.
  */
 @Data
 public class BenefitsAdjustmentRequestDTO {
 
-    public enum Scope { GRADE_CODE, DEPARTMENT, EMPLOYEE }
+    public enum Scope { GRADE_CODE, DEPARTMENT, EMPLOYEE, ALL_EMPLOYEES }
 
     /** How the target employees are selected. */
     private Scope scope;

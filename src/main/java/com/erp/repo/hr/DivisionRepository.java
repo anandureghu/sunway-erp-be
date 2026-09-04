@@ -11,4 +11,6 @@ public interface DivisionRepository extends JpaRepository<Division, Long> {
     List<Division> findAllByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     List<Division> findAllByDepartment_IdOrderByCreatedAtDesc(Long departmentId);
+
+    boolean existsByDepartment_Id(Long departmentId);
 }

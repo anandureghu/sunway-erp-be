@@ -30,6 +30,8 @@ public class JobCodeService {
     private final JobCodeRepository repository;
     private final CompanyRepository companyRepository;
     private final EmployeeCurrentJobRepo employeeCurrentJobRepo;
+    private final com.erp.repo.hr.DepartmentRepository departmentRepository;
+    private final com.erp.repo.hr.DivisionRepository divisionRepository;
     private final AuthContext authContext;
 
     // CREATE
@@ -65,7 +67,49 @@ public class JobCodeService {
                 .company(company)
                 .build();
 
+        applyDefaults(jobCode, dto, company.getId());
+
         return mapToDTO(repository.save(jobCode));
+    }
+
+    /** Resolve and set the current-job defaults (department, division, classification,
+        work location) from the request. */
+    private void applyDefaults(JobCode jobCode, JobCodeRequestDTO dto, Long companyId) {
+        if (dto.getDepartmentId() != null) {
+            jobCode.setDepartment(departmentRepository.findById(dto.getDepartmentId())
+                    .filter(d -> d.getCompany() != null && companyId.equals(d.getCompany().getId()))
+                    .orElseThrow(() -> new NotFoundException("Department not found")));
+        } else {
+            jobCode.setDepartment(null);
+        }
+        if (dto.getDivisionId() != null) {
+            jobCode.setDivision(divisionRepository.findById(dto.getDivisionId())
+                    .orElseThrow(() -> new NotFoundException("Division not found")));
+        } else {
+            jobCode.setDivision(null);
+        }
+        jobCode.setEmploymentCategory(parseEnum(
+                com.erp.domain.enums.EmploymentCategory.class, dto.getEmploymentCategory()));
+        jobCode.setEmploymentType(parseEnum(
+                com.erp.domain.enums.EmploymentType.class, dto.getEmploymentType()));
+        jobCode.setWorkLocation(blankToNull(dto.getWorkLocation()));
+        jobCode.setWorkCity(blankToNull(dto.getWorkCity()));
+        jobCode.setWorkCountry(blankToNull(dto.getWorkCountry()));
+    }
+
+    private static <E extends Enum<E>> E parseEnum(Class<E> type, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(type, value.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     // GET ALL
@@ -109,6 +153,8 @@ public class JobCodeService {
         }
 
         return repository.findByCompany_IdAndActiveTrue(companyId).stream()
+                // Only approved codes can be assigned to an employee.
+                .filter(j -> j.getStatus() == com.erp.domain.enums.JobCodeStatus.APPROVED)
                 .map(j -> {
                     JobCodeResponseDTO dto = mapToDTO(j);
                     String holder = holders.get(j.getId());
@@ -165,6 +211,7 @@ public class JobCodeService {
         existing.setMinSalary(minSalary);
         existing.setMaxSalary(maxSalary);
         existing.setActive(dto.getActive());
+        applyDefaults(existing, dto, companyId);
 
         return mapToDTO(repository.save(existing));
     }
@@ -278,7 +325,31 @@ public class JobCodeService {
                 .minSalary(jobCode.getMinSalary())
                 .maxSalary(jobCode.getMaxSalary())
                 .active(jobCode.getActive())
+                .status(jobCode.getStatus() != null ? jobCode.getStatus().name() : null)
                 .companyId(jobCode.getCompany() != null ? jobCode.getCompany().getId() : null)
+                .departmentId(jobCode.getDepartment() != null ? jobCode.getDepartment().getId() : null)
+                .departmentName(jobCode.getDepartment() != null
+                        ? jobCode.getDepartment().getDepartmentName() : null)
+                .divisionId(jobCode.getDivision() != null ? jobCode.getDivision().getId() : null)
+                .divisionName(jobCode.getDivision() != null ? jobCode.getDivision().getName() : null)
+                .employmentCategory(jobCode.getEmploymentCategory() != null
+                        ? jobCode.getEmploymentCategory().name() : null)
+                .employmentType(jobCode.getEmploymentType() != null
+                        ? jobCode.getEmploymentType().name() : null)
+                .workLocation(jobCode.getWorkLocation())
+                .workCity(jobCode.getWorkCity())
+                .workCountry(jobCode.getWorkCountry())
                 .build();
+    }
+
+    // APPROVE / REJECT (HR manager)
+    public JobCodeResponseDTO decide(Long id, boolean approve) {
+        Long companyId = requireCurrentCompany().getId();
+        JobCode jobCode = repository.findByIdAndCompany_Id(id, companyId)
+                .orElseThrow(() -> new NotFoundException("Job code not found"));
+        jobCode.setStatus(approve
+                ? com.erp.domain.enums.JobCodeStatus.APPROVED
+                : com.erp.domain.enums.JobCodeStatus.REJECTED);
+        return mapToDTO(repository.save(jobCode));
     }
 }

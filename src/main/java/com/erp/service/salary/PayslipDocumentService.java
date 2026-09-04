@@ -42,6 +42,7 @@ public class PayslipDocumentService {
     private final EmployeeCompensationRepository compensationRepo;
     private final EmployeeLoanRepository loanRepo;
     private final EmployeeBankDetailsRepository bankRepo;
+    private final com.erp.repo.EmployeeCurrentJobRepo currentJobRepo;
     private final TemplateEngine templateEngine;
     private final AuthContext authContext;
 
@@ -258,6 +259,9 @@ public class PayslipDocumentService {
 
         ctx.setVariable("payrollCode", esc(dto.getPayrollCode()));
         ctx.setVariable("payPeriod", esc(formatPayPeriod(dto.getPayPeriodStart())));
+        // Exact start-to-end dates for the "Pay Period" field (instead of just the month).
+        ctx.setVariable("payPeriodRange", esc(
+                formatDate(dto.getPayPeriodStart()) + " to " + formatDate(dto.getPayPeriodEnd())));
         ctx.setVariable("payDate", esc(formatDate(dto.getPayDate())));
 
         ctx.setVariable("earnings", escapeLineItems(dto.getEarnings()));
@@ -348,8 +352,22 @@ public class PayslipDocumentService {
         return sb.toString().trim();
     }
 
+    /**
+     * Designation on the payslip is the employee's Job Title (the current job's job-code
+     * title), NOT the system/security role. Falls back to the company role only when no
+     * job title is on record.
+     */
     private String resolveDesignation(Employee employee) {
         if (employee == null) return "—";
+
+        if (employee.getId() != null) {
+            String jobTitle = currentJobRepo.findByEmployee_Id(employee.getId())
+                    .map(job -> job.getJobCode() != null ? job.getJobCode().getTitle() : null)
+                    .orElse(null);
+            if (jobTitle != null && !jobTitle.isBlank()) {
+                return jobTitle.trim();
+            }
+        }
 
         String companyRole = employee.getCompanyRole();
         if (companyRole != null && !companyRole.isBlank()) {

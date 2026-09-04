@@ -696,6 +696,8 @@ public class CompanyService {
     private void seedDefaultCompanyRoles(Company company) {
         createRoleIfAbsent(company, "Admin", "Company administrator");
         createRoleIfAbsent(company, "Employee", "Standard employee");
+        createRoleIfAbsent(company, "Employee (self service)",
+                "Default self-service role assigned to new employees");
         createRoleIfAbsent(company, "HR", "Human resources");
     }
 

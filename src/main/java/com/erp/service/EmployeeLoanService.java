@@ -315,13 +315,41 @@ public class EmployeeLoanService {
             throw new AccessDeniedException("Loan not found");
         }
 
-        if ("PENDING_APPROVAL".equals(loan.getStatus())) {
-            throw new RuntimeException("Loans pending approval cannot be archived");
+        // Only completed (fully repaid) loans can be archived; restoring is always allowed.
+        if (archived && !"CLOSED".equals(loan.getStatus())) {
+            throw new RuntimeException("Only completed (closed) loans can be archived");
         }
 
         loan.setArchived(archived);
         loan = loanRepo.save(loan);
         return toDTO(loan);
+    }
+
+    /** Permanently delete an archived loan record (post-archive cleanup). */
+    public void deleteLoanRecord(Long loanId) {
+        Long userId = authContext.getCurrentUserId();
+        if (userId == null) {
+            throw new AccessDeniedException("Unauthorized");
+        }
+        Employee approver = authContext.getCurrentEmployee();
+        if (approver == null) {
+            approver = employeeRepo.findByUser_Id(userId)
+                    .orElseThrow(() -> new AccessDeniedException(
+                            "User is not linked to an employee record"));
+        }
+        Long companyId = approver.getCompany() != null ? approver.getCompany().getId() : null;
+
+        EmployeeLoan loan = loanRepo.findById(loanId)
+                .orElseThrow(() -> new RuntimeException("Loan not found"));
+        Long loanCompanyId = loan.getEmployee() != null && loan.getEmployee().getCompany() != null
+                ? loan.getEmployee().getCompany().getId() : null;
+        if (companyId == null || loanCompanyId == null || !companyId.equals(loanCompanyId)) {
+            throw new AccessDeniedException("Loan not found");
+        }
+        if (!loan.isArchived()) {
+            throw new RuntimeException("Only archived loan records can be deleted");
+        }
+        loanRepo.delete(loan);
     }
 
     /* ================= MAKE PAYMENT ================= */
@@ -372,6 +400,55 @@ public class EmployeeLoanService {
     }
 
     /* ================= VALIDATION METHOD ================= */
+
+    /**
+     * Pre-check for the "Request Loan" flow: reports whether the employee may request
+     * a loan right now, and why not if they can't. Mirrors the rules enforced on submit
+     * (one open loan at a time + the company's minimum-service policy).
+     */
+    public com.erp.dto.loan.LoanEligibilityDTO checkEligibility(Long employeeId) {
+        Employee employee = employeeRepo.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        Company company = employee.getCompany();
+
+        Integer minServiceDays = company != null ? company.getLoanMinServiceDays() : null;
+        Integer maxMonths = company != null ? company.getLoanMaxRepaymentMonths() : null;
+
+        LocalDate joinDate = resolveJoinDate(employee);
+        Long daysOfService = joinDate != null
+                ? ChronoUnit.DAYS.between(joinDate, LocalDate.now())
+                : null;
+
+        // An employee may hold only one open loan at a time.
+        if (loanRepo.existsByEmployeeIdAndStatusIn(
+                employeeId, List.of("PENDING_APPROVAL", "ACTIVE"))) {
+            return new com.erp.dto.loan.LoanEligibilityDTO(false,
+                    "This employee already has a pending or active loan. Only one loan is "
+                            + "allowed at a time.",
+                    minServiceDays, daysOfService, maxMonths);
+        }
+
+        // Minimum-service policy (only when enabled).
+        if (company != null && company.isLoanPolicyEnabled()
+                && minServiceDays != null && minServiceDays > 0) {
+            if (joinDate == null) {
+                return new com.erp.dto.loan.LoanEligibilityDTO(false,
+                        "Cannot verify loan eligibility — the employee's join date is not set.",
+                        minServiceDays, null, maxMonths);
+            }
+            if (daysOfService < minServiceDays) {
+                long remaining = Math.max(minServiceDays - daysOfService, 0);
+                return new com.erp.dto.loan.LoanEligibilityDTO(false,
+                        "Not yet eligible: company policy requires " + minServiceDays
+                                + " days of service before requesting a loan (" + remaining
+                                + " more day(s) to go).",
+                        minServiceDays, daysOfService, maxMonths);
+            }
+        }
+
+        return new com.erp.dto.loan.LoanEligibilityDTO(true, null,
+                minServiceDays, daysOfService, maxMonths);
+    }
 
     /**
      * Enforces the company's loan eligibility & repayment policy (when enabled):

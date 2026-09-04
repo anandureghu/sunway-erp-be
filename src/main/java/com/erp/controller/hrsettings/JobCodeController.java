@@ -106,6 +106,24 @@ public class JobCodeController {
     }
 
     /**
+     * APPROVE a pending job code (HR manager).
+     */
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).EDIT)")
+    @PutMapping("/{id}/approve")
+    public JobCodeResponseDTO approve(@PathVariable("id") Long id) {
+        return service.decide(id, true);
+    }
+
+    /**
+     * REJECT a pending job code (HR manager).
+     */
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).EDIT)")
+    @PutMapping("/{id}/reject")
+    public JobCodeResponseDTO reject(@PathVariable("id") Long id) {
+        return service.decide(id, false);
+    }
+
+    /**
      * DELETE Job Code
      */
     @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).DELETE)")
