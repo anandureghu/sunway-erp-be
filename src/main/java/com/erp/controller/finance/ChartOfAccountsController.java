@@ -34,6 +34,12 @@ public class ChartOfAccountsController {
         return service.listAll();
     }
 
+    @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN, AppAction.CREATE})
+    @GetMapping("/next-account-no")
+    public java.util.Map<String, String> nextAccountNo(@RequestParam("type") String type) {
+        return java.util.Map.of("accountNo", service.nextAccountNo(type));
+    }
+
     @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}")
     public ChartOfAccountResponseDTO getById(@PathVariable("id") Long id) {

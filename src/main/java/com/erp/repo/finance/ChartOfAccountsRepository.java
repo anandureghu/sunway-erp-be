@@ -15,6 +15,16 @@ public interface ChartOfAccountsRepository extends JpaRepository<ChartOfAccounts
 
     List<ChartOfAccounts> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
+    boolean existsByCompany_IdAndAccountNo(Long companyId, String accountNo);
+
+    @Query("""
+            SELECT a.accountNo FROM ChartOfAccounts a
+            WHERE a.company.id = :companyId
+              AND a.isActive = true
+              AND a.accountNo IS NOT NULL
+            """)
+    List<String> findActiveAccountNosByCompanyId(@Param("companyId") Long companyId);
+
     /** First account whose name contains the given text (case-insensitive) — used to
         auto-default the End-of-Service GL account. */
     Optional<ChartOfAccounts> findFirstByCompanyIdAndAccountNameContainingIgnoreCaseOrderByIdAsc(

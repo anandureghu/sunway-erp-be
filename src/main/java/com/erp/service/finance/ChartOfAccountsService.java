@@ -84,19 +84,28 @@ public class ChartOfAccountsService {
             }
         }
 
-//        TODO: check with ali, that multiple account can exist with the same type, or a single type parent account?
+        COAType type = COAType.valueOf(dto.getType());
+        String accountNo = dto.getAccountNo() != null ? dto.getAccountNo().trim() : "";
+        if (accountNo.isEmpty()) {
+            accountNo = nextAccountNo(companyId, type);
+        } else if (repo.existsByCompany_IdAndAccountNo(companyId, accountNo)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Account number " + accountNo + " already exists for this company. Use the next available number.");
+        }
+
         ChartOfAccounts acc = ChartOfAccounts.builder()
                 .company(company)
                 .accountCode(dto.getAccountCode())
                 .accountName(dto.getAccountName())
                 .description(dto.getDescription())
-                .type(COAType.valueOf(dto.getType()))
+                .type(type)
                 .isActive(true)
                 .parent(parent)
                 .balance(null)
                 .initialBalanceSet(false)
                 .interCompanyNumber(dto.getInterCompanyNumber())
-                .accountNo(dto.getAccountNo())
+                .accountNo(accountNo)
                 .asOfDate(Instant.now())
                 .projectCode(dto.getProjectCode())
                 .department(department)
@@ -180,6 +189,71 @@ public class ChartOfAccountsService {
         return repo.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Next unique account number for the company and account type.
+     * Numeric types use a 100000-based series (ASSET 1xxxxx, LIABILITY 2xxxxx, …);
+     * BUDGET uses BUD{year} then BUD{year}-2, etc. if taken.
+     */
+    public String nextAccountNo(String typeRaw) {
+        Long companyId = auth.getCurrentCompanyId();
+        COAType type;
+        try {
+            type = COAType.valueOf(typeRaw);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid account type");
+        }
+        return nextAccountNo(companyId, type);
+    }
+
+    private String nextAccountNo(Long companyId, COAType type) {
+        if (type == COAType.BUDGET) {
+            String base = "BUD" + java.time.Year.now().getValue();
+            if (!repo.existsByCompany_IdAndAccountNo(companyId, base)) {
+                return base;
+            }
+            for (int i = 2; i < 1000; i++) {
+                String candidate = base + "-" + i;
+                if (!repo.existsByCompany_IdAndAccountNo(companyId, candidate)) {
+                    return candidate;
+                }
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No available budget account number");
+        }
+
+        int series = accountNoSeries(type);
+        int maxInSeries = series - 1;
+        for (String no : repo.findActiveAccountNosByCompanyId(companyId)) {
+            if (no == null || !no.matches("\\d{6}")) continue;
+            int n = Integer.parseInt(no);
+            if (n / 100000 == series / 100000) {
+                maxInSeries = Math.max(maxInSeries, n);
+            }
+        }
+        int next = maxInSeries + 1;
+        if (next / 100000 != series / 100000 || next > series + 99999) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "No available account numbers left in the " + type + " series");
+        }
+        return String.format("%06d", next);
+    }
+
+    /** Matches frontend COA type → base account number mapping. */
+    private static int accountNoSeries(COAType type) {
+        return switch (type) {
+            case ASSET -> 100000;
+            case LIABILITY -> 200000;
+            case EQUITY -> 300000;
+            case REVENUE -> 400000;
+            case COST -> 500000;
+            case EXPENSE -> 600000;
+            case TAX -> 700000;
+            case CASH -> 800000;
+            case INCOME -> 900000;
+            case BUDGET -> 0;
+        };
     }
 
     // =============================================================
