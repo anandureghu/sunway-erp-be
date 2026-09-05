@@ -536,6 +536,39 @@ public class StockBatchService {
         return archived;
     }
 
+    public void deleteMovement(Long companyId, Long id) {
+        StockBatchMovement movement = movementRepo.findByIdAndCompanyId(id, companyId)
+                .orElseThrow(() -> new RuntimeException("Movement not found"));
+        if (!movement.isArchived()) {
+            throw new IllegalArgumentException("Only archived movements can be permanently deleted.");
+        }
+        movementRepo.delete(movement);
+    }
+
+    public int deleteMovements(Long companyId, List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        int deleted = 0;
+        for (Long id : ids) {
+            if (id == null) {
+                continue;
+            }
+            Optional<StockBatchMovement> found = movementRepo.findByIdAndCompanyId(id, companyId);
+            if (found.isEmpty()) {
+                continue;
+            }
+            StockBatchMovement movement = found.get();
+            if (!movement.isArchived()) {
+                throw new IllegalArgumentException(
+                        "Only archived movements can be permanently deleted.");
+            }
+            movementRepo.delete(movement);
+            deleted++;
+        }
+        return deleted;
+    }
+
     @Transactional(readOnly = true)
     public StockBatchInsightsDTO buildInsights(
             Long companyId,

@@ -38,4 +38,21 @@ public class StockBatchMovementController {
         );
         return Map.of("archived", count);
     }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.DELETE})
+    @DeleteMapping("/{id}")
+    public Map<String, Boolean> delete(@PathVariable("id") Long id) {
+        stockBatchService.deleteMovement(auth.getCurrentCompanyId(), id);
+        return Map.of("deleted", true);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.DELETE})
+    @PostMapping("/delete")
+    public Map<String, Integer> deleteMany(@RequestBody StockBatchMovementArchiveRequestDTO body) {
+        int count = stockBatchService.deleteMovements(
+                auth.getCurrentCompanyId(),
+                body != null ? body.getIds() : null
+        );
+        return Map.of("deleted", count);
+    }
 }
