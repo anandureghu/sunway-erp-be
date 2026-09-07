@@ -1,5 +1,5 @@
--- Idempotent enrichment after V20260906 (warehouse type/capacity + vendor profile).
--- Safe to re-run. Does not alter schema.
+-- Idempotent data backfill for warehouse type/capacity + vendor profile after V20260906.
+-- Safe on fresh and already-enriched databases.
 
 -- Warehouse type/capacity from existing codes/names
 UPDATE warehouses
@@ -72,7 +72,7 @@ UPDATE vendor
 SET iban = CONCAT('QA58QNBA000000000000000000', LPAD(id, 3, '0'))
 WHERE iban IS NULL OR iban = '';
 
--- Ensure vendor_code exists (migration should have done this; keep safe)
+-- Ensure vendor_code exists (V20260906 should have set this; keep safe)
 UPDATE vendor
 SET vendor_code = CONCAT('SUP-', id)
 WHERE vendor_code IS NULL OR vendor_code = '';
