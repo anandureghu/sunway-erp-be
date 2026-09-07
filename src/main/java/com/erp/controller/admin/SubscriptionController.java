@@ -140,10 +140,11 @@ public class SubscriptionController {
             @PathVariable Long invoiceId
     ) {
         byte[] pdf = invoiceService.downloadPdf(companyId, invoiceId);
+        String filename = invoiceService.downloadPdfFilename(companyId, invoiceId);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"subscription-invoice-" + invoiceId + ".pdf\"")
+                        "attachment; filename=\"" + filename + "\"")
                 .body(pdf);
     }
 

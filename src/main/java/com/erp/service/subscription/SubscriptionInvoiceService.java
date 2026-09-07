@@ -53,6 +53,7 @@ public class SubscriptionInvoiceService {
     private final FileStorageService fileStorageService;
     private final EmailService emailService;
     private final AuthContext authContext;
+    private final SubscriptionPaymentReceiptService receiptService;
 
     @Transactional(readOnly = true)
     public List<SubscriptionInvoiceResponse> listForSubscription(Long companySubscriptionId) {
@@ -182,13 +183,36 @@ public class SubscriptionInvoiceService {
                 });
     }
 
+    /**
+     * Like sales invoices: once payment is recorded, serve the payment receipt PDF
+     * instead of the unpaid subscription invoice.
+     */
     @Transactional(readOnly = true)
     public byte[] downloadPdf(Long companyId, Long invoiceId) {
         SubscriptionInvoice invoice = invoiceRepository.findByIdAndCompanyId(invoiceId, companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
+        var paidPayment = paymentRepository.findBySubscriptionInvoiceId(invoice.getId()).orElse(null);
+        if (paidPayment != null) {
+            return receiptService.downloadReceiptPdf(companyId, paidPayment.getId());
+        }
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
         return generatePdf(invoice, company);
+    }
+
+    @Transactional(readOnly = true)
+    public String downloadPdfFilename(Long companyId, Long invoiceId) {
+        SubscriptionInvoice invoice = invoiceRepository.findByIdAndCompanyId(invoiceId, companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
+        var paidPayment = paymentRepository.findBySubscriptionInvoiceId(invoice.getId()).orElse(null);
+        if (paidPayment != null) {
+            String receiptNo = paidPayment.getReceiptNo();
+            if (receiptNo != null && !receiptNo.isBlank()) {
+                return receiptNo + ".pdf";
+            }
+            return "subscription-receipt-" + paidPayment.getId() + ".pdf";
+        }
+        return invoice.getInvoiceNo() + ".pdf";
     }
 
     @Transactional
