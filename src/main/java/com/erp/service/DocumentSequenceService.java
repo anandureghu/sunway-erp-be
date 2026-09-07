@@ -72,6 +72,12 @@ public class DocumentSequenceService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public String generateNext(String prefix) {
         Long companyId = authContext.getCurrentCompanyId();
+        return generateNext(companyId, prefix);
+    }
+
+    /** Company-scoped sequence — safe for scheduled jobs without a request AuthContext. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public String generateNext(Long companyId, String prefix) {
         String sequenceKey = (companyId != null ? companyId + "_" : "") + prefix;
 
         DocumentSequence seq = repo.findById(sequenceKey).orElse(new DocumentSequence(sequenceKey, 1000L));

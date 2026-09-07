@@ -41,6 +41,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     boolean existsByCompanyIdAndRelatedIdAndTransactionType(
             Long companyId, Long relatedId, String transactionType);
 
+    boolean existsByCompanyIdAndRelatedIdAndRelatedSubIdAndTransactionType(
+            Long companyId, Long relatedId, Long relatedSubId, String transactionType);
+
     List<Transaction> findByRelatedIdAndInvoiceIdIsNull(Long relatedId);
 
     boolean existsByRelatedSubIdAndTransactionType(Long relatedSubId, String transactionType);

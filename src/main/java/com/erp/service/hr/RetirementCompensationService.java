@@ -146,6 +146,31 @@ public class RetirementCompensationService {
         return basicSalary.multiply(accruedMonths).setScale(2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * One month of EOSB accrual for an active employee:
+     * {@code basicSalary × monthsPerYear / 12}. Returns zero when policy/data missing.
+     */
+    public BigDecimal computeMonthlyAccrualAmount(Employee employee) {
+        if (employee == null) {
+            return BigDecimal.ZERO;
+        }
+        Company company = employee.getCompany();
+        if (company == null || !company.isRetirementCompensationEnabled()) {
+            return BigDecimal.ZERO;
+        }
+        EmployeeCompensation comp = compensationRepo.findActiveByEmployee(employee).orElse(null);
+        if (comp == null || comp.getBasicSalary() == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal basicSalary = BigDecimal.valueOf(comp.getBasicSalary());
+        BigDecimal monthsPerYear = company.getRetirementCompensationMonthsPerYear() != null
+                ? company.getRetirementCompensationMonthsPerYear()
+                : BigDecimal.ONE;
+        return basicSalary
+                .multiply(monthsPerYear)
+                .divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
+    }
+
     private String safe(String value) {
         return value == null ? "" : value;
     }

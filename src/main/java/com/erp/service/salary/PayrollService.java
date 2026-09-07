@@ -371,20 +371,27 @@ public class PayrollService {
         String desc = "Payroll " + payroll.getPayrollCode() + " — " + employeeLabel;
 
         // On a final settlement, the End-of-Service gratuity posts to the company's
-        // configured End-of-Service account as its own ledger entry; the rest of the
-        // package posts to the payroll account. If no EOS account is configured, the
+        // configured End-of-Service accounts as its own ledger entry; the rest of the
+        // package posts to the payroll account. If no EOS debit is configured, the
         // whole amount posts to payroll as before.
-        Long eosAccountId = eos > 0
+        // When an EOSB credit (liability) account is set, settlement debits that
+        // provision and credits payroll payable; otherwise debit the EOS expense
+        // account (legacy) against payroll credit.
+        Long eosDebitAccountId = eos > 0
                 ? processAccountDefaultsService.resolveEndOfServiceAccountId(companyId)
                 : null;
+        Long eosCreditAccountId = eos > 0
+                ? processAccountDefaultsService.resolveEndOfServiceCreditAccountId(companyId)
+                : null;
 
-        if (eosAccountId != null) {
+        if (eosDebitAccountId != null || eosCreditAccountId != null) {
             BigDecimal regular = BigDecimal.valueOf(round2(payroll.getGrossPay() - eos - lop));
             transactionService.recordPayrollPosting(
                     companyId, payroll.getId(), regular, debitAccountId, creditAccountId, desc);
+            Long settlementDebit = eosCreditAccountId != null ? eosCreditAccountId : eosDebitAccountId;
             transactionService.recordEndOfServicePosting(
                     companyId, payroll.getId(), BigDecimal.valueOf(round2(eos)),
-                    eosAccountId, creditAccountId,
+                    settlementDebit, creditAccountId,
                     "End of service " + payroll.getPayrollCode() + " — " + employeeLabel);
         } else {
             BigDecimal amount = BigDecimal.valueOf(round2(payroll.getGrossPay() - lop));

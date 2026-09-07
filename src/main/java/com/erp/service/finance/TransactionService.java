@@ -61,6 +61,7 @@ public class TransactionService {
     public static final String TYPE_STOCK_VARIANCE = "STOCK_VARIANCE";
     public static final String TYPE_PAYROLL = "PAYROLL";
     public static final String TYPE_END_OF_SERVICE = "END_OF_SERVICE";
+    public static final String TYPE_END_OF_SERVICE_ACCRUAL = "END_OF_SERVICE_ACCRUAL";
     /** Ad-hoc expense payment confirmed in AP (rent, reimbursements, etc.) — not tied to a PO/invoice. */
     public static final String TYPE_OTHER_PAYMENT = "OTHER_PAYMENT";
 
@@ -370,10 +371,10 @@ public class TransactionService {
     }
 
     /**
-     * End-of-service ledger posting for a final settlement: debit the company's
-     * End-of-Service account and credit the payroll credit (net payable / bank), kept
-     * as its own transaction (type END_OF_SERVICE) so it sits apart from the regular
-     * payroll expense. Idempotent per payroll.
+     * End-of-service ledger posting for a final settlement: debit the EOSB liability
+     * (or expense when no liability is configured) and credit the payroll credit
+     * (net payable / bank), kept as its own transaction (type END_OF_SERVICE).
+     * Idempotent per payroll.
      */
     public void recordEndOfServicePosting(
             Long companyId,
@@ -410,6 +411,55 @@ public class TransactionService {
                 .sourceLocked(true)
                 .transactionDescription(description)
                 .relatedId(payrollId)
+                .createdAt(Instant.now())
+                .build();
+
+        Transaction saved = repo.save(tx);
+        applyPostingToCoa(saved);
+    }
+
+    /**
+     * Monthly EOSB accrual: debit expense, credit liability provision.
+     * Idempotent per employee + calendar month ({@code relatedSubId} = yyyyMM).
+     */
+    public void recordEndOfServiceAccrual(
+            Long companyId,
+            Long employeeId,
+            int yearMonth,
+            BigDecimal amount,
+            Long debitAccountId,
+            Long creditAccountId,
+            String description,
+            LocalDate postingDate) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        if (repo.existsByCompanyIdAndRelatedIdAndRelatedSubIdAndTransactionType(
+                companyId, employeeId, (long) yearMonth, TYPE_END_OF_SERVICE_ACCRUAL)) {
+            return;
+        }
+        ChartOfAccounts debitAccount = coaRepo.findById(debitAccountId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "EOSB expense account not found"));
+        ChartOfAccounts creditAccount = coaRepo.findById(creditAccountId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "EOSB liability account not found"));
+        Company company = companyRepo.findById(companyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
+
+        Transaction tx = Transaction.builder()
+                .transactionCode(documentSequenceService.generateNext(companyId, "TX-EOS-ACC"))
+                .transactionType(TYPE_END_OF_SERVICE_ACCRUAL)
+                .company(company)
+                .amount(amount)
+                .transactionDate(postingDate != null ? postingDate : LocalDate.now())
+                .debitAccount(debitAccount)
+                .creditAccount(creditAccount)
+                .source("EOSB_ACCRUAL")
+                .sourceLocked(true)
+                .transactionDescription(description)
+                .relatedId(employeeId)
+                .relatedSubId((long) yearMonth)
                 .createdAt(Instant.now())
                 .build();
 

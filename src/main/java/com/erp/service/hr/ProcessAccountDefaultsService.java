@@ -32,10 +32,9 @@ public class ProcessAccountDefaultsService {
             AccountingProcessCode.PAYROLL,
             AccountingProcessCode.OTHER_PAYMENT);
 
-    // End-of-Service benefits post to a single GL account (the EOS expense/liability),
-    // so only a debit account is selected — the payment side rides the payroll posting.
-    private static final EnumSet<AccountingProcessCode> DEBIT_ONLY_PROCESSES = EnumSet.of(
-            AccountingProcessCode.END_OF_SERVICE);
+    /** No debit-only processes — EOSB needs expense (debit) + liability provision (credit). */
+    private static final EnumSet<AccountingProcessCode> DEBIT_ONLY_PROCESSES =
+            EnumSet.noneOf(AccountingProcessCode.class);
 
     private final CompanyProcessAccountDefaultRepository repository;
     private final CompanyRepository companyRepository;
@@ -79,7 +78,7 @@ public class ProcessAccountDefaultsService {
     }
 
     /**
-     * The GL account End-of-Service benefits post to: the saved END_OF_SERVICE debit
+     * The GL account End-of-Service expense posts to: the saved END_OF_SERVICE debit
      * account, else the company's account whose name contains "end of service".
      */
     public Long resolveEndOfServiceAccountId(Long companyId) {
@@ -93,6 +92,26 @@ public class ProcessAccountDefaultsService {
                         companyId, "end of service")
                 .map(com.erp.domain.finance.ChartOfAccounts::getId)
                 .orElse(null);
+    }
+
+    /**
+     * EOSB liability / provision account that monthly accruals credit.
+     */
+    public Long resolveEndOfServiceCreditAccountId(Long companyId) {
+        return resolveProcessCreditAccount(companyId, AccountingProcessCode.END_OF_SERVICE)
+                .orElse(null);
+    }
+
+    /**
+     * Debit (expense) + credit (liability) for EOSB when both are configured.
+     */
+    public Optional<ProcessAccountPair> resolveEndOfServiceAccounts(Long companyId) {
+        Long debit = resolveEndOfServiceAccountId(companyId);
+        Long credit = resolveEndOfServiceCreditAccountId(companyId);
+        if (debit == null || credit == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new ProcessAccountPair(debit, credit));
     }
 
     @Transactional
@@ -185,6 +204,16 @@ public class ProcessAccountDefaultsService {
             if (creditId != null) {
                 throw new RuntimeException(
                         "Credit account is not used for " + processCode);
+            }
+            return;
+        }
+
+        // EOSB: debit (expense) can stand alone for legacy; credit (liability) is
+        // required for monthly accrual. Credit without debit is invalid.
+        if (processCode == AccountingProcessCode.END_OF_SERVICE) {
+            if (creditId != null && debitId == null) {
+                throw new RuntimeException(
+                        "Debit account is required when setting the EOSB credit account");
             }
             return;
         }
