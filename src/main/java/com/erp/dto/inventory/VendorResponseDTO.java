@@ -1,5 +1,6 @@
 package com.erp.dto.inventory;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -24,11 +25,14 @@ public class VendorResponseDTO {
     private String currencyCode;
     private BigDecimal creditLimit;
 
+    @JsonProperty("is1099Vendor")
     private boolean is1099Vendor;
+
+    @JsonProperty("isActive")
     private boolean isActive;
     private boolean approved;
     private boolean rejected;
-    
+
     private String remarks;
 
     private String street;

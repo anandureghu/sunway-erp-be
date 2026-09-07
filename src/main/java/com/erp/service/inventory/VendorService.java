@@ -142,7 +142,7 @@ public class VendorService {
         Vendor vendor = Vendor.builder()
                 .vendorCode(vendorCode)
                 .vendorName(dto.getVendorName())
-                .taxId(blankToNull(dto.getTaxId()))
+                .taxId(dto.is1099Vendor() ? blankToNull(dto.getTaxId()) : null)
                 .category(resolveCategory(dto.getCategoryId(), companyId))
                 .vendorCrNo(blankToNull(dto.getVendorCrNo()))
                 .bankName(blankToNull(dto.getBankName()))
@@ -175,7 +175,6 @@ public class VendorService {
         Long companyId = v.getCompany().getId();
 
         if (dto.getVendorName() != null) v.setVendorName(dto.getVendorName());
-        v.setTaxId(blankToNull(dto.getTaxId()));
         v.setCategory(resolveCategory(dto.getCategoryId(), companyId));
         v.setVendorCrNo(blankToNull(dto.getVendorCrNo()));
         v.setBankName(blankToNull(dto.getBankName()));
@@ -186,6 +185,9 @@ public class VendorService {
 
         if (dto.getIs1099Vendor() != null) v.set1099Vendor(dto.getIs1099Vendor());
         if (dto.getIsActive() != null) v.setActive(dto.getIsActive());
+
+        boolean is1099 = dto.getIs1099Vendor() != null ? dto.getIs1099Vendor() : v.is1099Vendor();
+        v.setTaxId(is1099 ? blankToNull(dto.getTaxId()) : null);
 
         if (dto.getStreet() != null) v.setStreet(dto.getStreet());
         if (dto.getCity() != null) v.setCity(dto.getCity());
