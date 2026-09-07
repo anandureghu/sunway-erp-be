@@ -6,6 +6,8 @@ import lombok.Data;
 public class WarehouseCreateDTO {
     private String code;
     private String name;
+    private String warehouseType;
+    private Double capacity;
     private String status;
     private String street;
     private String city;

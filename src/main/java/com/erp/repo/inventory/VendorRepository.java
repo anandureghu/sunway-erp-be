@@ -10,4 +10,6 @@ import java.util.List;
 @Repository
 public interface VendorRepository extends JpaRepository<Vendor, Long>, JpaSpecificationExecutor<Vendor> {
     List<Vendor> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
+
+    boolean existsByVendorCodeAndCompanyId(String vendorCode, Long companyId);
 }

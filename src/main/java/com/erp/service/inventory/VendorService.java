@@ -1,6 +1,7 @@
 package com.erp.service.inventory;
 
 import com.erp.domain.hr.Company;
+import com.erp.domain.inventory.Category;
 import com.erp.domain.inventory.Vendor;
 import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderStatus;
@@ -11,9 +12,11 @@ import com.erp.dto.inventory.VendorUpdateDTO;
 import com.erp.exception.ConflictException;
 import com.erp.exception.NotFoundException;
 import com.erp.repo.finance.PaymentRepository;
+import com.erp.repo.inventory.CategoryRepository;
 import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.DocumentSequenceService;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,20 +40,26 @@ public class VendorService {
     );
 
     private final VendorRepository vendorRepo;
+    private final CategoryRepository categoryRepo;
     private final PurchaseOrderRepository purchaseOrderRepo;
     private final PaymentRepository paymentRepo;
     private final AuthContext authContext;
+    private final DocumentSequenceService documentSequenceService;
 
     public VendorService(
             VendorRepository vendorRepo,
+            CategoryRepository categoryRepo,
             PurchaseOrderRepository purchaseOrderRepo,
             PaymentRepository paymentRepo,
-            AuthContext authContext
+            AuthContext authContext,
+            DocumentSequenceService documentSequenceService
     ) {
         this.vendorRepo = vendorRepo;
+        this.categoryRepo = categoryRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
         this.paymentRepo = paymentRepo;
         this.authContext = authContext;
+        this.documentSequenceService = documentSequenceService;
     }
 
     // ---------------- LIST ----------------
@@ -122,9 +131,22 @@ public class VendorService {
     public VendorResponseDTO createVendor(VendorCreateDTO dto) {
         Long companyId = authContext.getCurrentCompanyId();
 
+        String vendorCode = dto.getVendorCode() != null ? dto.getVendorCode().trim() : "";
+        if (vendorCode.isBlank()) {
+            vendorCode = documentSequenceService.generateNext("SUP");
+        }
+        if (vendorRepo.existsByVendorCodeAndCompanyId(vendorCode, companyId)) {
+            throw new ConflictException("Supplier code already exists");
+        }
+
         Vendor vendor = Vendor.builder()
+                .vendorCode(vendorCode)
                 .vendorName(dto.getVendorName())
-                .taxId(dto.getTaxId())
+                .taxId(blankToNull(dto.getTaxId()))
+                .category(resolveCategory(dto.getCategoryId(), companyId))
+                .vendorCrNo(blankToNull(dto.getVendorCrNo()))
+                .bankName(blankToNull(dto.getBankName()))
+                .iban(blankToNull(dto.getIban()))
                 .paymentTerms(dto.getPaymentTerms())
                 .currencyCode(dto.getCurrencyCode())
                 .creditLimit(dto.getCreditLimit())
@@ -150,9 +172,14 @@ public class VendorService {
     public VendorResponseDTO updateVendor(Long id, VendorUpdateDTO dto) {
         Vendor v = getVendorById(id);
         validateCompany(v.getCompany().getId());
+        Long companyId = v.getCompany().getId();
 
         if (dto.getVendorName() != null) v.setVendorName(dto.getVendorName());
-        if (dto.getTaxId() != null) v.setTaxId(dto.getTaxId());
+        v.setTaxId(blankToNull(dto.getTaxId()));
+        v.setCategory(resolveCategory(dto.getCategoryId(), companyId));
+        v.setVendorCrNo(blankToNull(dto.getVendorCrNo()));
+        v.setBankName(blankToNull(dto.getBankName()));
+        v.setIban(blankToNull(dto.getIban()));
         if (dto.getPaymentTerms() != null) v.setPaymentTerms(dto.getPaymentTerms());
         if (dto.getCurrencyCode() != null) v.setCurrencyCode(dto.getCurrencyCode());
         if (dto.getCreditLimit() != null) v.setCreditLimit(dto.getCreditLimit());
@@ -234,10 +261,17 @@ public class VendorService {
 
     // ---------------- MAPPER ----------------
     private VendorResponseDTO toDTO(Vendor v) {
+        Category category = v.getCategory();
         return VendorResponseDTO.builder()
                 .id(v.getId())
+                .vendorCode(v.getVendorCode())
                 .vendorName(v.getVendorName())
                 .taxId(v.getTaxId())
+                .categoryId(category != null ? category.getId() : null)
+                .categoryName(category != null ? category.getName() : null)
+                .vendorCrNo(v.getVendorCrNo())
+                .bankName(v.getBankName())
+                .iban(v.getIban())
                 .paymentTerms(v.getPaymentTerms())
                 .currencyCode(v.getCurrencyCode())
                 .creditLimit(v.getCreditLimit())
@@ -256,6 +290,26 @@ public class VendorService {
                 .websiteUrl(v.getWebsiteUrl())
                 .companyId(v.getCompany().getId())
                 .build();
+    }
+
+    private Category resolveCategory(Long categoryId, Long companyId) {
+        if (categoryId == null) {
+            return null;
+        }
+        Category category = categoryRepo.findById(categoryId)
+                .orElseThrow(() -> new NotFoundException("Category not found"));
+        if (category.getCompany() == null || !companyId.equals(category.getCompany().getId())) {
+            throw new NotFoundException("Category not found");
+        }
+        return category;
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     public Specification<Vendor> buildSpecification(VendorFilterDTO filter) {

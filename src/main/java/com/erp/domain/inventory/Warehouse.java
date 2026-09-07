@@ -26,6 +26,11 @@ public class Warehouse {
     @Column(nullable = false)
     private String name;
 
+    @Column(name = "warehouse_type", length = 50)
+    private String warehouseType;
+
+    private Double capacity;
+
     private String city;
     private String street;
     private String country;

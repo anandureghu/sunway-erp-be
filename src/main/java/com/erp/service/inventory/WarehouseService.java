@@ -12,6 +12,7 @@ import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.DocumentSequenceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,19 +27,22 @@ public class WarehouseService {
     private final UserRepository userRepo;
     private final EmployeeRepository employeeRepo;
     private final AuthContext auth;
+    private final DocumentSequenceService documentSequenceService;
 
     public WarehouseService(
             WarehouseRepository repo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
             EmployeeRepository employeeRepo,
-            AuthContext auth
+            AuthContext auth,
+            DocumentSequenceService documentSequenceService
     ) {
         this.repo = repo;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
         this.employeeRepo = employeeRepo;
         this.auth = auth;
+        this.documentSequenceService = documentSequenceService;
     }
 
     // --------------------------
@@ -49,7 +53,12 @@ public class WarehouseService {
         Long companyId = auth.getCurrentCompanyId();
         Long userId = auth.getCurrentUserId();
 
-        if (repo.existsByCodeAndCompanyId(dto.getCode(), companyId)) {
+        String code = dto.getCode() != null ? dto.getCode().trim() : "";
+        if (code.isBlank()) {
+            code = documentSequenceService.generateNext("WH");
+        }
+
+        if (repo.existsByCodeAndCompanyId(code, companyId)) {
             throw new RuntimeException("Warehouse code already exists");
         }
 
@@ -62,8 +71,10 @@ public class WarehouseService {
         User manager = resolveManagerUser(dto.getManager(), companyId);
 
         Warehouse wh = Warehouse.builder()
-                .code(dto.getCode())
+                .code(code)
                 .name(dto.getName())
+                .warehouseType(blankToNull(dto.getWarehouseType()))
+                .capacity(dto.getCapacity())
                 .status(dto.getStatus())
                 .company(company)
                 .street(dto.getStreet())
@@ -96,6 +107,8 @@ public class WarehouseService {
                 : resolveManagerUser(dto.getManager(), companyId);
 
         wh.setName(dto.getName());
+        wh.setWarehouseType(blankToNull(dto.getWarehouseType()));
+        wh.setCapacity(dto.getCapacity());
         wh.setStatus(dto.getStatus());
         wh.setUpdatedByUser(user);
         wh.setCity(dto.getCity());
@@ -198,6 +211,8 @@ public class WarehouseService {
                 .id(wh.getId())
                 .code(wh.getCode())
                 .name(wh.getName())
+                .warehouseType(wh.getWarehouseType())
+                .capacity(wh.getCapacity())
                 .status(wh.getStatus())
                 .street(wh.getStreet())
                 .city(wh.getCity())
@@ -208,5 +223,13 @@ public class WarehouseService {
                 .managerName(managerInTenant ? manager.getFullName() : null)
                 .contactPersonName(wh.getContactPersonName())
                 .build();
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

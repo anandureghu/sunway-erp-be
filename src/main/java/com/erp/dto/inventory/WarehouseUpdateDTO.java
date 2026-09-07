@@ -5,6 +5,8 @@ import lombok.Data;
 @Data
 public class WarehouseUpdateDTO {
     private String name;
+    private String warehouseType;
+    private Double capacity;
     private String status;
     private String street;
     private String city;

@@ -9,6 +9,8 @@ public class WarehouseResponseDTO {
     private Long id;
     private String code;
     private String name;
+    private String warehouseType;
+    private Double capacity;
     private String status;
 
     private String street;

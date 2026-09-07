@@ -12,7 +12,12 @@ import java.math.BigDecimal;
 public class VendorCreateDTO {
 
     private String vendorName;
+    private String vendorCode;
     private String taxId;
+    private Long categoryId;
+    private String vendorCrNo;
+    private String bankName;
+    private String iban;
     private String paymentTerms;
     private String currencyCode;
     private BigDecimal creditLimit;

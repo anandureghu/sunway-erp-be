@@ -16,18 +16,35 @@ import java.time.Instant;
 @Table(name = "vendor",
         uniqueConstraints = {
                 @UniqueConstraint(columnNames = {"company_id", "vendor_name"}),
-                @UniqueConstraint(name = "uk_vendor_company_tax_id", columnNames = {"company_id", "tax_id"})
+                @UniqueConstraint(name = "uk_vendor_company_tax_id", columnNames = {"company_id", "tax_id"}),
+                @UniqueConstraint(name = "uk_vendor_company_code", columnNames = {"company_id", "vendor_code"})
         })
 public class Vendor {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "vendor_code", nullable = false, length = 50)
+    private String vendorCode;
+
     @Column(nullable = false, length = 150)
     private String vendorName;
 
     @Column(length = 50)
     private String taxId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private Category category;
+
+    @Column(name = "vendor_cr_no", length = 100)
+    private String vendorCrNo;
+
+    @Column(name = "bank_name", length = 150)
+    private String bankName;
+
+    @Column(length = 64)
+    private String iban;
 
     @Column(nullable = false, length = 50)
     private String paymentTerms;

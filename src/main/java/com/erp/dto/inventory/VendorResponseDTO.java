@@ -12,8 +12,14 @@ import java.math.BigDecimal;
 public class VendorResponseDTO {
 
     private Long id;
+    private String vendorCode;
     private String vendorName;
     private String taxId;
+    private Long categoryId;
+    private String categoryName;
+    private String vendorCrNo;
+    private String bankName;
+    private String iban;
     private String paymentTerms;
     private String currencyCode;
     private BigDecimal creditLimit;
