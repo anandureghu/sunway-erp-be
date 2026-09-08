@@ -42,4 +42,16 @@ public class ItemCreateDTO {
     /** JSON object of unmapped import columns (header → value). */
     private String metadata;
     private Long warehouse;
+
+    private String criticality;
+    private String hsnCode;
+    private Boolean vatApplicable;
+    private Integer reorderQty;
+    private Integer leadTimeDays;
+    private Long preferredVendorId;
+    private String supplierPartNo;
+    private Double weightKg;
+    private String dimensions;
+    private Integer warrantyMonths;
+    private String remarks;
 }

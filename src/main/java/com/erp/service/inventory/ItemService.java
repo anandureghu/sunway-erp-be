@@ -6,6 +6,7 @@ import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.ItemWarehouseStock;
 import com.erp.domain.inventory.StockBatch;
 import com.erp.domain.inventory.StockBatchSourceType;
+import com.erp.domain.inventory.Vendor;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -27,6 +28,7 @@ import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.ItemWarehouseStockRepository;
 import com.erp.repo.inventory.StockBatchMovementRepository;
 import com.erp.repo.inventory.StockBatchRepository;
+import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
@@ -57,6 +59,7 @@ public class ItemService {
     private final UserRepository userRepo;
     private final CompanyRepository companyRepo;
     private final WarehouseRepository warehouseRepo;
+    private final VendorRepository vendorRepo;
     private final AuthContext auth;
     private final FileStorageService fileStorageService;
     private final ItemWarehouseStockService itemWarehouseStockService;
@@ -72,6 +75,7 @@ public class ItemService {
             CompanyRepository companyRepo,
             AuthContext auth,
             WarehouseRepository warehouseRepo,
+            VendorRepository vendorRepo,
             FileStorageService fileStorageService,
             ItemWarehouseStockService itemWarehouseStockService,
             StockBatchService stockBatchService,
@@ -85,6 +89,7 @@ public class ItemService {
         this.companyRepo = companyRepo;
         this.auth = auth;
         this.warehouseRepo = warehouseRepo;
+        this.vendorRepo = vendorRepo;
         this.fileStorageService = fileStorageService;
         this.itemWarehouseStockService = itemWarehouseStockService;
         this.stockBatchService = stockBatchService;
@@ -141,6 +146,17 @@ public class ItemService {
                 .reorderLevel(dto.getReorderLevel())
                 .status(dto.getStatus())
                 .description(dto.getDescription())
+                .criticality(trimToNull(dto.getCriticality()))
+                .hsnCode(trimToNull(dto.getHsnCode()))
+                .vatApplicable(dto.getVatApplicable())
+                .reorderQty(dto.getReorderQty())
+                .leadTimeDays(dto.getLeadTimeDays())
+                .preferredVendor(resolvePreferredVendor(dto.getPreferredVendorId(), companyId))
+                .supplierPartNo(trimToNull(dto.getSupplierPartNo()))
+                .weightKg(dto.getWeightKg())
+                .dimensions(trimToNull(dto.getDimensions()))
+                .warrantyMonths(dto.getWarrantyMonths())
+                .remarks(trimToNull(dto.getRemarks()))
                 .metadata(dto.getMetadata() != null && !dto.getMetadata().isBlank() ? dto.getMetadata().trim() : null)
                 .company(company)
                 .warehouse(warehouse)
@@ -222,6 +238,17 @@ public class ItemService {
             item.setImageUrl(dto.getImageUrl());
         }
         item.setDescription(dto.getDescription());
+        item.setCriticality(trimToNull(dto.getCriticality()));
+        item.setHsnCode(trimToNull(dto.getHsnCode()));
+        if (dto.getVatApplicable() != null) item.setVatApplicable(dto.getVatApplicable());
+        item.setReorderQty(dto.getReorderQty());
+        item.setLeadTimeDays(dto.getLeadTimeDays());
+        item.setPreferredVendor(resolvePreferredVendor(dto.getPreferredVendorId(), auth.getCurrentCompanyId()));
+        item.setSupplierPartNo(trimToNull(dto.getSupplierPartNo()));
+        item.setWeightKg(dto.getWeightKg());
+        item.setDimensions(trimToNull(dto.getDimensions()));
+        item.setWarrantyMonths(dto.getWarrantyMonths());
+        item.setRemarks(trimToNull(dto.getRemarks()));
         if (dto.getMetadata() != null) {
             item.setMetadata(dto.getMetadata().isBlank() ? null : dto.getMetadata().trim());
         }
@@ -625,6 +652,18 @@ public class ItemService {
                 .archived(item.isArchived())
                 .imageUrl(imageUrl)
                 .metadata(item.getMetadata())
+                .criticality(item.getCriticality())
+                .hsnCode(item.getHsnCode())
+                .vatApplicable(item.getVatApplicable())
+                .reorderQty(item.getReorderQty())
+                .leadTimeDays(item.getLeadTimeDays())
+                .preferredVendorId(item.getPreferredVendor() != null ? item.getPreferredVendor().getId() : null)
+                .preferredVendorName(item.getPreferredVendor() != null ? item.getPreferredVendor().getVendorName() : null)
+                .supplierPartNo(item.getSupplierPartNo())
+                .weightKg(item.getWeightKg())
+                .dimensions(item.getDimensions())
+                .warrantyMonths(item.getWarrantyMonths())
+                .remarks(item.getRemarks())
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
                 .warehouse_id(item.getWarehouse().getId())
@@ -680,6 +719,18 @@ public class ItemService {
                 .archived(item.isArchived())
                 .imageUrl(imageUrl)
                 .metadata(item.getMetadata())
+                .criticality(item.getCriticality())
+                .hsnCode(item.getHsnCode())
+                .vatApplicable(item.getVatApplicable())
+                .reorderQty(item.getReorderQty())
+                .leadTimeDays(item.getLeadTimeDays())
+                .preferredVendorId(item.getPreferredVendor() != null ? item.getPreferredVendor().getId() : null)
+                .preferredVendorName(item.getPreferredVendor() != null ? item.getPreferredVendor().getVendorName() : null)
+                .supplierPartNo(item.getSupplierPartNo())
+                .weightKg(item.getWeightKg())
+                .dimensions(item.getDimensions())
+                .warrantyMonths(item.getWarrantyMonths())
+                .remarks(item.getRemarks())
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
                 .warehouse_id(warehouse.getId())
@@ -692,6 +743,15 @@ public class ItemService {
                                 warehouse.getCountry()
                         )
                 ).build();
+    }
+
+    private Vendor resolvePreferredVendor(Long vendorId, Long companyId) {
+        if (vendorId == null) {
+            return null;
+        }
+        return vendorRepo.findById(vendorId)
+                .filter(v -> v.getCompany() != null && companyId.equals(v.getCompany().getId()))
+                .orElse(null);
     }
 
     private BigDecimal resolveInitialListPrice(BigDecimal listPrice, BigDecimal sellingPrice) {

@@ -58,4 +58,17 @@ public class ItemResponseDTO {
     private Long warehouse_id;
     private String warehouse_location;
     private String warehouse_name;
+
+    private String criticality;
+    private String hsnCode;
+    private Boolean vatApplicable;
+    private Integer reorderQty;
+    private Integer leadTimeDays;
+    private Long preferredVendorId;
+    private String preferredVendorName;
+    private String supplierPartNo;
+    private Double weightKg;
+    private String dimensions;
+    private Integer warrantyMonths;
+    private String remarks;
 }

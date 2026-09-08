@@ -8,6 +8,7 @@ import com.erp.dto.inventory.ItemBulkIdsRequestDTO;
 import com.erp.dto.inventory.ItemBulkStatusRequestDTO;
 import com.erp.dto.inventory.ItemCreateDTO;
 import com.erp.dto.inventory.ItemCsvImportResultDTO;
+import com.erp.dto.inventory.ItemCsvPreviewDTO;
 import com.erp.dto.inventory.ItemResponseDTO;
 import com.erp.dto.inventory.ItemStockAdjustDTO;
 import com.erp.dto.inventory.ItemStockReceiveDTO;
@@ -63,9 +64,18 @@ public class ItemController {
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.CREATE})
+    @PostMapping(value = "/import-csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ItemCsvPreviewDTO previewImportCsv(@RequestPart("file") MultipartFile file) {
+        return csvImportService.preview(file);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.CREATE})
     @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ItemCsvImportResultDTO importCsv(@RequestPart("file") MultipartFile file) {
-        return csvImportService.importCsv(file);
+    public ItemCsvImportResultDTO importCsv(
+            @RequestPart("file") MultipartFile file,
+            @RequestPart(value = "mapping", required = false) String mapping
+    ) {
+        return csvImportService.importCsv(file, mapping);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})

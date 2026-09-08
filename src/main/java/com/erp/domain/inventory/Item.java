@@ -112,6 +112,40 @@ public class Item {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(length = 32)
+    private String criticality;
+
+    @Column(name = "hsn_code", length = 64)
+    private String hsnCode;
+
+    @Column(name = "vat_applicable")
+    private Boolean vatApplicable;
+
+    @Column(name = "reorder_qty")
+    private Integer reorderQty;
+
+    @Column(name = "lead_time_days")
+    private Integer leadTimeDays;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "preferred_vendor_id")
+    private Vendor preferredVendor;
+
+    @Column(name = "supplier_part_no", length = 150)
+    private String supplierPartNo;
+
+    @Column(name = "weight_kg")
+    private Double weightKg;
+
+    @Column(length = 100)
+    private String dimensions;
+
+    @Column(name = "warranty_months")
+    private Integer warrantyMonths;
+
+    @Column(columnDefinition = "TEXT")
+    private String remarks;
+
     /**
      * Extra source columns from bulk import that do not map to first-class fields.
      * Stored as a JSON object of original header → value.
