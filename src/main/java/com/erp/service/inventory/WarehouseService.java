@@ -73,9 +73,9 @@ public class WarehouseService {
         Warehouse wh = Warehouse.builder()
                 .code(code)
                 .name(dto.getName())
-                .warehouseType(blankToNull(dto.getWarehouseType()))
+                .warehouseType(normalizeWarehouseType(dto.getWarehouseType()))
                 .capacity(dto.getCapacity())
-                .status(dto.getStatus())
+                .status(normalizeStatus(dto.getStatus()))
                 .company(company)
                 .street(dto.getStreet())
                 .city(dto.getCity())
@@ -107,9 +107,9 @@ public class WarehouseService {
                 : resolveManagerUser(dto.getManager(), companyId);
 
         wh.setName(dto.getName());
-        wh.setWarehouseType(blankToNull(dto.getWarehouseType()));
+        wh.setWarehouseType(normalizeWarehouseType(dto.getWarehouseType()));
         wh.setCapacity(dto.getCapacity());
-        wh.setStatus(dto.getStatus());
+        wh.setStatus(normalizeStatus(dto.getStatus()));
         wh.setUpdatedByUser(user);
         wh.setCity(dto.getCity());
         wh.setStreet(dto.getStreet());
@@ -231,5 +231,38 @@ public class WarehouseService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    static String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return "active";
+        }
+        String n = status.trim().toLowerCase();
+        if (n.startsWith("inact") || n.equals("no") || n.equals("0") || n.equals("disabled") || n.equals("false")) {
+            return "inactive";
+        }
+        return "active";
+    }
+
+    /**
+     * Maps spreadsheet type labels onto stored warehouse_type values.
+     */
+    static String normalizeWarehouseType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String n = raw.trim().toLowerCase().replaceAll("[^a-z0-9]+", "");
+        return switch (n) {
+            case "main", "general", "mainstore", "primary" -> "MAIN";
+            case "branch", "satellite" -> "BRANCH";
+            case "transit", "staging" -> "TRANSIT";
+            case "coldstorage", "cold", "refrigerated" -> "COLD_STORAGE";
+            case "returns", "return" -> "RETURNS";
+            case "hazardous", "hazmat", "chemical" -> "HAZARDOUS";
+            case "ppesafety", "ppe", "safety" -> "PPE_SAFETY";
+            case "sitestore", "site", "jobsite" -> "SITE_STORE";
+            case "other" -> "OTHER";
+            default -> raw.trim();
+        };
     }
 }
