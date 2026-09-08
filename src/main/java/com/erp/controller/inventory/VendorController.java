@@ -3,24 +3,31 @@ package com.erp.controller.inventory;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.inventory.VendorCreateDTO;
+import com.erp.dto.inventory.VendorCsvImportResultDTO;
+import com.erp.dto.inventory.VendorCsvPreviewDTO;
 import com.erp.dto.inventory.VendorFilterDTO;
 import com.erp.dto.inventory.VendorResponseDTO;
 import com.erp.dto.inventory.VendorUpdateDTO;
+import com.erp.service.inventory.VendorCsvImportService;
 import com.erp.service.inventory.VendorService;
 import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/vendors")
 public class VendorController {
 
     private final VendorService vendorService;
+    private final VendorCsvImportService csvImportService;
 
-    public VendorController(VendorService vendorService) {
+    public VendorController(VendorService vendorService, VendorCsvImportService csvImportService) {
         this.vendorService = vendorService;
+        this.csvImportService = csvImportService;
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
@@ -65,5 +72,20 @@ public class VendorController {
     public ResponseEntity<Void> deleteVendor(@PathVariable("id") Long id) {
         vendorService.deleteVendor(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.CREATE})
+    @PostMapping(value = "/import-csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public VendorCsvPreviewDTO previewImportCsv(@RequestPart("file") MultipartFile file) {
+        return csvImportService.preview(file);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.CREATE})
+    @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public VendorCsvImportResultDTO importCsv(
+            @RequestPart("file") MultipartFile file,
+            @RequestPart(value = "mapping", required = false) String mapping
+    ) {
+        return csvImportService.importCsv(file, mapping);
     }
 }
