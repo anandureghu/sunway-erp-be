@@ -8,4 +8,6 @@ public class CategoryCreateDTO {
     private String name;
     private String status;
     private Long parentId; // null = category, not null = subcategory
+    /** Optional GL / COA account code. */
+    private String glAccountCode;
 }

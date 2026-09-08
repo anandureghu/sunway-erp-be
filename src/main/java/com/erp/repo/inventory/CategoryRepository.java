@@ -31,4 +31,12 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
             Long parentId,
             String code
     );
+
+    Optional<Category> findByCompanyIdAndParentIdIsNullAndCodeIgnoreCase(Long companyId, String code);
+
+    Optional<Category> findByCompanyIdAndParentIdAndCodeIgnoreCase(Long companyId, Long parentId, String code);
+
+    Optional<Category> findByCompanyIdAndParentIdIsNullAndNameIgnoreCase(Long companyId, String name);
+
+    Optional<Category> findByCompanyIdAndParentIdAndNameIgnoreCase(Long companyId, Long parentId, String name);
 }

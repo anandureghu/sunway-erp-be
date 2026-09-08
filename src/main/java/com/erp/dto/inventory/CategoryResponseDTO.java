@@ -12,6 +12,7 @@ public class CategoryResponseDTO {
     private String code;
     private String name;
     private String status;
+    private String glAccountCode;
     private Long parentId;
     private List<CategoryResponseDTO> subCategories;
 }

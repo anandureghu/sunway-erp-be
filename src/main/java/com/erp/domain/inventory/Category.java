@@ -34,6 +34,10 @@ public class Category {
 
     private String status; // ACTIVE / INACTIVE
 
+    /** Optional COA account code (typically on sub-categories). */
+    @Column(name = "gl_account_code", length = 64)
+    private String glAccountCode;
+
     // NULL = Category, NOT NULL = Subcategory
     @ManyToOne
     @JoinColumn(name = "parent_id")

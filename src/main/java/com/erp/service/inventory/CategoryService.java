@@ -67,7 +67,8 @@ public class CategoryService {
         Category category = Category.builder()
                 .code(dto.getCode())
                 .name(dto.getName())
-                .status(dto.getStatus())
+                .status(normalizeStatus(dto.getStatus()))
+                .glAccountCode(blankToNull(dto.getGlAccountCode()))
                 .parent(parent)
                 .company(company)
                 .createdByUser(user)
@@ -88,7 +89,8 @@ public class CategoryService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         category.setName(dto.getName());
-        category.setStatus(dto.getStatus());
+        category.setStatus(normalizeStatus(dto.getStatus()));
+        category.setGlAccountCode(blankToNull(dto.getGlAccountCode()));
         category.setUpdatedByUser(user);
 
         return toDTO(repo.save(category));
@@ -170,8 +172,27 @@ public class CategoryService {
                 .code(c.getCode())
                 .name(c.getName())
                 .status(c.getStatus())
+                .glAccountCode(c.getGlAccountCode())
                 .parentId(c.getParent() != null ? c.getParent().getId() : null)
                 .subCategories(c.getSubCategories() != null ? c.getSubCategories().stream().map(this::toDTO).toList() : new ArrayList<>())
                 .build();
+    }
+
+    static String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return "active";
+        }
+        String n = status.trim().toLowerCase();
+        if (n.startsWith("inact") || n.equals("no") || n.equals("0") || n.equals("disabled") || n.equals("false")) {
+            return "inactive";
+        }
+        return "active";
+    }
+
+    static String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }
