@@ -230,6 +230,9 @@ public class ItemCsvImportService {
                 dto.setCriticality(blankToNull(values.get("criticality")));
                 dto.setHsnCode(blankToNull(values.get("hsnCode")));
                 dto.setVatApplicable(parseOptionalBoolean(values.get("vatApplicable")));
+                if (dto.getVatApplicable() == null) {
+                    dto.setVatApplicable(false);
+                }
                 dto.setLeadTimeDays(parseOptionalInt(values.get("leadTimeDays")));
                 dto.setSupplierPartNo(blankToNull(values.get("supplierPartNo")));
                 dto.setWeightKg(parseOptionalDouble(values.get("weightKg")));

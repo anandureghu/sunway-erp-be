@@ -10,6 +10,7 @@ import com.erp.dto.inventory.WarehouseUpdateDTO;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.inventory.ItemWarehouseStockRepository;
 import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
@@ -26,6 +27,7 @@ public class WarehouseService {
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
     private final EmployeeRepository employeeRepo;
+    private final ItemWarehouseStockRepository warehouseStockRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
 
@@ -34,6 +36,7 @@ public class WarehouseService {
             CompanyRepository companyRepo,
             UserRepository userRepo,
             EmployeeRepository employeeRepo,
+            ItemWarehouseStockRepository warehouseStockRepo,
             AuthContext auth,
             DocumentSequenceService documentSequenceService
     ) {
@@ -41,6 +44,7 @@ public class WarehouseService {
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
         this.employeeRepo = employeeRepo;
+        this.warehouseStockRepo = warehouseStockRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
     }
@@ -145,7 +149,22 @@ public class WarehouseService {
     // --------------------------
     public void delete(Long id) {
         Warehouse wh = getWarehouseEntity(id);
+        assertWarehouseHasNoStock(wh);
         repo.delete(wh);
+    }
+
+    private void assertWarehouseHasNoStock(Warehouse wh) {
+        int onHand = warehouseStockRepo.findByWarehouseId(wh.getId()).stream()
+                .mapToInt(row -> row.getQuantityOnHand() == null ? 0 : row.getQuantityOnHand())
+                .sum();
+        int reserved = warehouseStockRepo.findByWarehouseId(wh.getId()).stream()
+                .mapToInt(row -> row.getReserved() == null ? 0 : row.getReserved())
+                .sum();
+        if (onHand > 0 || reserved > 0) {
+            throw new IllegalArgumentException(
+                    "Cannot delete warehouse while it has stock on hand or reserved quantity. "
+                            + "Move or adjust stock to zero first.");
+        }
     }
 
     // --------------------------

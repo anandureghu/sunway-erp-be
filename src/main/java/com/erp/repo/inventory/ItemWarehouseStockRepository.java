@@ -15,6 +15,8 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
 
     List<ItemWarehouseStock> findByItemId(Long itemId);
 
+    List<ItemWarehouseStock> findByWarehouseId(Long warehouseId);
+
     @Query("""
             SELECT iws FROM ItemWarehouseStock iws
             JOIN FETCH iws.item i

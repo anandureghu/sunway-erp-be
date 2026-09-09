@@ -148,7 +148,7 @@ public class ItemService {
                 .description(dto.getDescription())
                 .criticality(trimToNull(dto.getCriticality()))
                 .hsnCode(trimToNull(dto.getHsnCode()))
-                .vatApplicable(dto.getVatApplicable())
+                .vatApplicable(dto.getVatApplicable() != null ? dto.getVatApplicable() : Boolean.FALSE)
                 .reorderQty(dto.getReorderQty())
                 .leadTimeDays(dto.getLeadTimeDays())
                 .preferredVendor(resolvePreferredVendor(dto.getPreferredVendorId(), companyId))
@@ -938,7 +938,8 @@ public class ItemService {
     private void deleteOne(Long itemId) {
         Item item = getItemEntity(itemId);
         if (!item.isArchived()) {
-            throw new IllegalArgumentException("Only archived items can be permanently deleted.");
+            throw new IllegalArgumentException(
+                    "Active items cannot be deleted. Deactivate (archive) the item when on hand, reserved, and on-order quantities are all zero.");
         }
         validateDeletable(item);
         Long companyId = auth.getCurrentCompanyId();
@@ -992,8 +993,11 @@ public class ItemService {
         int reserved = warehouseStockRepo.findByItemId(itemId).stream()
                 .mapToInt(row -> row.getReserved() == null ? 0 : row.getReserved())
                 .sum();
-        if (onHand > 0 || reserved > 0) {
-            throw new IllegalArgumentException("Item still has stock or reservations.");
+        int onOrder = loadOnOrderByItem(auth.getCurrentCompanyId()).getOrDefault(itemId, 0);
+        if (onHand > 0 || reserved > 0 || onOrder > 0) {
+            throw new IllegalArgumentException(
+                    "Cannot delete item while on hand, reserved, or on-order quantity is greater than zero. "
+                            + "Deactivate the item when all stock parameters are zero.");
         }
     }
 
