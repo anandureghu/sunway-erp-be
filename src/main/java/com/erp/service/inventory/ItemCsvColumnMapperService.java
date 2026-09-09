@@ -136,6 +136,8 @@ public class ItemCsvColumnMapperService {
                 - Default Warehouse → warehouse. Shelf / Bin → location.
                 - Preferred Supplier → preferredSupplier. Supplier Part No. → supplierPartNo.
                 - Weight → weightKg. Dimensions → dimensions. Warranty → warrantyMonths.
+                - On Hand Quantity / Qty → quantity. Date Received → dateReceived.
+                - Sale by Date / Expiry / Best Before → expiryDate (accept DD/MM/YYYY).
                 - Remarks / notes → remarks (not description when both exist).
                 - Do not invent headers. Do not map two headers to the same canonical field.
                 """;
@@ -278,7 +280,8 @@ public class ItemCsvColumnMapperService {
             return "supplierPartNo";
         }
         if (n.equals("quantity") || n.equals("qty") || n.equals("stock") || n.equals("onhand")
-                || n.equals("stockqty") || n.equals("qtyonhand")) {
+                || n.equals("stockqty") || n.equals("qtyonhand") || n.equals("onhandquantity")
+                || n.equals("onhandqty") || n.equals("quantityonhand")) {
             return "quantity";
         }
         if (n.equals("unitmeasure") || n.equals("uom") || n.equals("unit") || n.equals("units")

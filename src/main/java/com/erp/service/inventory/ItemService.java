@@ -794,7 +794,20 @@ public class ItemService {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return LocalDate.parse(value);
+        String v = value.trim();
+        // Spreadsheet-friendly: DD/MM/YYYY or DD-MM-YYYY
+        if (v.matches("\\d{1,2}[/.-]\\d{1,2}[/.-]\\d{4}")) {
+            String[] parts = v.split("[/.-]");
+            int day = Integer.parseInt(parts[0]);
+            int month = Integer.parseInt(parts[1]);
+            int year = Integer.parseInt(parts[2]);
+            return LocalDate.of(year, month, day);
+        }
+        // ISO / native date input: YYYY-MM-DD (optionally with time)
+        if (v.length() >= 10 && v.charAt(4) == '-' && v.charAt(7) == '-') {
+            return LocalDate.parse(v.substring(0, 10));
+        }
+        return LocalDate.parse(v);
     }
 
     private static String trimToNull(String value) {
