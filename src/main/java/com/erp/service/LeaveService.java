@@ -341,9 +341,12 @@ public class LeaveService {
             throw new AccessDeniedException("Leave request not found");
         }
 
-        // Only completed leaves can be archived (restoring is always allowed).
-        if (archived && leave.getLeaveStatus() != LeaveStatus.COMPLETED) {
-            throw new IllegalArgumentException("Only completed leave requests can be archived");
+        // Only completed or rejected leaves can be archived (restoring is always allowed).
+        if (archived
+                && leave.getLeaveStatus() != LeaveStatus.COMPLETED
+                && leave.getLeaveStatus() != LeaveStatus.REJECTED) {
+            throw new IllegalArgumentException(
+                    "Only completed or rejected leave requests can be archived");
         }
 
         leave.setArchived(archived);
