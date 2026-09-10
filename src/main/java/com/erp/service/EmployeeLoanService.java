@@ -316,8 +316,10 @@ public class EmployeeLoanService {
         }
 
         // Only completed (fully repaid) loans can be archived; restoring is always allowed.
-        if (archived && !"CLOSED".equals(loan.getStatus())) {
-            throw new RuntimeException("Only completed (closed) loans can be archived");
+        if (archived
+                && !"CLOSED".equals(loan.getStatus())
+                && !"REJECTED".equals(loan.getStatus())) {
+            throw new RuntimeException("Only completed (closed) or rejected loans can be archived");
         }
 
         loan.setArchived(archived);
