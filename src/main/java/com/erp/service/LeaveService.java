@@ -38,8 +38,11 @@ import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.erp.domain.security.AppAction.APPROVE;
@@ -64,15 +67,13 @@ public class LeaveService {
     public List<String> getAvailableLeaveTypes(Long employeeId) {
         Employee emp = getEmployee(employeeId);
 
-        String role = getLeaveRole(emp);
-        if (role == null) {
+        if (getLeaveRoles(emp).isEmpty()) {
             log.warn("Employee {} has no leave role configured", employeeId);
             return List.of();
         }
 
-        return policyRepo.findByCompanyOrderByIdDesc(emp.getCompany())
+        return findPoliciesForEmployee(emp)
                 .stream()
-                .filter(policy -> same(policy.getRole(), role))
                 .filter(policy -> {
                     if (Boolean.TRUE.equals(policy.getGenderRestricted())) {
                         String employeeGender = clean(emp.getGender());
@@ -812,15 +813,12 @@ public class LeaveService {
     }
 
     private CompanyLeavePolicy getPolicy(Employee employee, String leaveType) {
-        String role = getLeaveRole(employee);
-
-        if (role == null) {
+        if (getLeaveRoles(employee).isEmpty()) {
             throw new RuntimeException("Employee company role not configured");
         }
 
-        return policyRepo.findByCompanyOrderByIdDesc(employee.getCompany())
+        return findPoliciesForEmployee(employee)
                 .stream()
-                .filter(policy -> same(policy.getRole(), role))
                 .filter(policy -> same(policy.getLeaveType(), leaveType))
                 .findFirst()
                 .orElseThrow(() ->
@@ -1100,14 +1098,43 @@ public class LeaveService {
         return day == DayOfWeek.FRIDAY || day == DayOfWeek.SATURDAY;
     }
 
-    private String getLeaveRole(Employee employee) {
-        if (employee.getCompanyRole() != null) {
-            String companyRoleName = clean(employee.getCompanyRole());
-            if (companyRoleName != null) {
-                return companyRoleName;
-            }
+    /**
+     * Company roles are HR-specific, while legacy/default leave policies can
+     * still be configured against the employee's security role. Prefer the
+     * company role, but retain the security role as a leave-policy fallback.
+     */
+    private List<String> getLeaveRoles(Employee employee) {
+        LinkedHashSet<String> roles = new LinkedHashSet<>();
+
+        String companyRole = clean(employee.getCompanyRole());
+        if (companyRole != null) {
+            roles.add(companyRole);
         }
-        return clean(employee.getRole());
+
+        String securityRole = clean(employee.getRole());
+        if (securityRole != null) {
+            roles.add(securityRole);
+        }
+
+        return List.copyOf(roles);
+    }
+
+    /**
+     * Resolves one policy per leave type. A company-role policy takes
+     * precedence; the security-role policy supplies a type only when the
+     * company role does not configure it.
+     */
+    private List<CompanyLeavePolicy> findPoliciesForEmployee(Employee employee) {
+        Map<String, CompanyLeavePolicy> policiesByLeaveType = new LinkedHashMap<>();
+
+        for (String role : getLeaveRoles(employee)) {
+            policyRepo.findByCompanyOrderByIdDesc(employee.getCompany())
+                    .stream()
+                    .filter(policy -> same(policy.getRole(), role))
+                    .forEach(policy -> policiesByLeaveType.putIfAbsent(key(policy.getLeaveType()), policy));
+        }
+
+        return List.copyOf(policiesByLeaveType.values());
     }
 
     private String balanceKey(String value) {

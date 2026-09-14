@@ -16,11 +16,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -129,9 +125,7 @@ public class LeavePolicyService {
         List<Employee> employees = employeeRepo.findByCompanyOrderByCreatedAtDesc(company);
 
         for (Employee employee : employees) {
-            String employeeRole = getLeaveRole(employee);
-
-            if (employeeRole == null || !same(employeeRole, policy.getRole())) {
+            if (!isEffectivePolicyForEmployee(employee, policy)) {
                 continue;
             }
 
@@ -184,8 +178,7 @@ public class LeavePolicyService {
 
     @Transactional
     public void initializeLeaveBalancesForEmployee(Employee employee) {
-        String employeeRole = getLeaveRole(employee);
-        if (employeeRole == null) {
+        if (getLeaveRoles(employee).isEmpty()) {
             return;
         }
 
@@ -194,7 +187,7 @@ public class LeavePolicyService {
             throw new RuntimeException("Employee company cannot be null");
         }
 
-        List<CompanyLeavePolicy> policies = findPoliciesByRole(company, employeeRole);
+        List<CompanyLeavePolicy> policies = findPoliciesForEmployee(employee);
 
         for (CompanyLeavePolicy policy : policies) {
             if (!Boolean.TRUE.equals(policy.getPaid())) {
@@ -257,9 +250,8 @@ public class LeavePolicyService {
         List<Employee> employees = employeeRepo.findByCompanyOrderByCreatedAtDesc(policy.getCompany());
 
         for (Employee employee : employees) {
-            String employeeRole = getLeaveRole(employee);
-
-            if (employeeRole == null || !same(employeeRole, policy.getRole())) {
+            if (!isEffectivePolicyForEmployee(employee, policy)
+                    || hasReplacementPolicyForLeaveType(employee, policy)) {
                 continue;
             }
 
@@ -351,15 +343,49 @@ public class LeavePolicyService {
         return dto;
     }
 
-    private String getLeaveRole(Employee employee) {
-        if (employee.getCompanyRole() != null && employee.getCompanyRole() != null) {
-            String companyRoleName = clean(employee.getCompanyRole());
-            if (companyRoleName != null && !companyRoleName.isBlank()) {
-                return companyRoleName;
-            }
+    /** Company-role policies take precedence over legacy security-role policies. */
+    private List<String> getLeaveRoles(Employee employee) {
+        LinkedHashSet<String> roles = new LinkedHashSet<>();
+
+        String companyRole = clean(employee.getCompanyRole());
+        if (companyRole != null) {
+            roles.add(companyRole);
         }
 
-        return clean(employee.getRole());
+        String securityRole = clean(employee.getRole());
+        if (securityRole != null) {
+            roles.add(securityRole);
+        }
+
+        return List.copyOf(roles);
+    }
+
+    private List<CompanyLeavePolicy> findPoliciesForEmployee(Employee employee) {
+        Map<String, CompanyLeavePolicy> policiesByLeaveType = new LinkedHashMap<>();
+
+        for (String role : getLeaveRoles(employee)) {
+            findPoliciesByRole(employee.getCompany(), role)
+                    .forEach(policy -> policiesByLeaveType.putIfAbsent(key(policy.getLeaveType()), policy));
+        }
+
+        return List.copyOf(policiesByLeaveType.values());
+    }
+
+    private boolean isEffectivePolicyForEmployee(Employee employee, CompanyLeavePolicy policy) {
+        return policy != null
+                && policy.getId() != null
+                && findPoliciesForEmployee(employee).stream()
+                        .anyMatch(candidate -> policy.getId().equals(candidate.getId()));
+    }
+
+    private boolean hasReplacementPolicyForLeaveType(Employee employee, CompanyLeavePolicy policy) {
+        return policy != null
+                && policy.getId() != null
+                && policyRepo.findByCompanyOrderByIdDesc(employee.getCompany()).stream()
+                        .anyMatch(candidate -> !policy.getId().equals(candidate.getId())
+                                && getLeaveRoles(employee).stream()
+                                .anyMatch(role -> same(candidate.getRole(), role))
+                                && same(candidate.getLeaveType(), policy.getLeaveType()));
     }
 
     private String balanceKey(String value) {

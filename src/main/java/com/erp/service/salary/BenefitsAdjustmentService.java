@@ -84,8 +84,9 @@ public class BenefitsAdjustmentService {
                 }
                 Employee e = employeeRepo.findById(req.getEmployeeId())
                         .filter(x -> belongsToCompany(x, companyId))
+                        .filter(this::isEligibleForAdjustment)
                         .orElseThrow(() -> new ResponseStatusException(
-                                HttpStatus.NOT_FOUND, "Employee not found"));
+                                HttpStatus.NOT_FOUND, "Eligible employee not found"));
                 return List.of(e);
             }
             case DEPARTMENT -> {
@@ -95,7 +96,7 @@ public class BenefitsAdjustmentService {
                 return employeeRepo.findByDepartment_IdOrderByCreatedAtDesc(req.getDepartmentId())
                         .stream()
                         .filter(e -> belongsToCompany(e, companyId))
-                        .filter(this::isActive)
+                        .filter(this::isEligibleForAdjustment)
                         .toList();
             }
             case GRADE_CODE -> {
@@ -105,7 +106,7 @@ public class BenefitsAdjustmentService {
                 String grade = req.getGradeCode().trim();
                 return employeeRepo.findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
                         .stream()
-                        .filter(this::isActive)
+                        .filter(this::isEligibleForAdjustment)
                         .filter(e -> grade.equalsIgnoreCase(gradeOf(e)))
                         .toList();
             }
@@ -113,7 +114,7 @@ public class BenefitsAdjustmentService {
                 // Every active (non-archived, non-departed) employee in the company.
                 return employeeRepo.findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
                         .stream()
-                        .filter(this::isActive)
+                        .filter(this::isEligibleForAdjustment)
                         .toList();
             }
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported scope.");
@@ -172,6 +173,10 @@ public class BenefitsAdjustmentService {
 
     private boolean isActive(Employee e) {
         return e.getStatus() == null || !e.getStatus().isDepartedOrInactive();
+    }
+
+    private boolean isEligibleForAdjustment(Employee e) {
+        return e != null && !e.isArchived() && isActive(e);
     }
 
     private boolean belongsToCompany(Employee e, Long companyId) {

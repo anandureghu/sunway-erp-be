@@ -261,10 +261,25 @@ public class PayrollService {
 
     @Transactional(readOnly = true)
     public List<PayrollHistoryDTO> getPayrollHistory(Long employeeId) {
+        return getPayrollHistory(employeeId, false);
+    }
+
+    /**
+     * Payroll processing works with the current month's run; full history is
+     * reserved for the employee history screen and reporting workflows.
+     */
+    @Transactional(readOnly = true)
+    public List<PayrollHistoryDTO> getPayrollHistory(Long employeeId, boolean includeAll) {
         Employee employee = getEmployee(employeeId);
+        LocalDate today = LocalDate.now();
+        LocalDate monthStart = today.withDayOfMonth(1);
+        LocalDate monthEnd = today.withDayOfMonth(today.lengthOfMonth());
 
         return payrollRepo.findByEmployeeOrderByPayDateDesc(employee)
                 .stream()
+                .filter(payroll -> includeAll || (payroll.getPayDate() != null
+                        && !payroll.getPayDate().isBefore(monthStart)
+                        && !payroll.getPayDate().isAfter(monthEnd)))
                 .map(this::toHistoryDTO)
                 .toList();
     }

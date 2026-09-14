@@ -66,6 +66,12 @@ Restart app if migration added.
 
 <!-- Agents: prepend new bullets here (newest first). Do not duplicate project.mdc. -->
 
+- **Payroll processing history** — `/employees/{employeeId}/salary/payroll/history` returns the current calendar month's records by default for payroll generation. Pass `all=true` only for the employee Payroll History screen or reporting flows that explicitly need prior months; payroll records are never deleted.
+
+- **Operational employee lists** — default employee directory, department, manager, and paginated APIs include Active, On Leave, and Under Probation staff, but exclude Inactive, Resigned, Terminated, Retired, and archived records. Keep dedicated history/archive APIs for inactive records; do not delete them. Benefits adjustments must enforce the same eligibility server-side.
+
+- **Leave-policy role fallback** — resolve policies per leave type using the employee's HR `companyRole` first, then legacy/security `role` only when that leave type is absent from the HR role. Use the same resolver for available types, previews/applications, balance initialization, policy saves, and policy deletion; otherwise an employee can see a leave type that cannot be applied or receive the wrong balance.
+
 - **Session idle timeout vs max-shift auto check-out** — `Company.sessionIdleTimeoutMinutes` / `HrPoliciesDTO.sessionIdleTimeoutMinutes` is ERP UI session security (frontend signs out after inactivity). Allowed: null/0 (Off), 15, 20, 30; invalid values → `IllegalArgumentException` → 400. Do **not** wire this into attendance/timesheet check-out. Attendance auto check-out remains `maxShiftCheckoutGraceMinutes` only (`V20260815__session_idle_timeout_minutes.sql`).
 - **Multi-tenancy hardening pass** — audited and fixed two systemic gaps: (1) generated business codes (`invoice_id`, `transaction_code`, `order_number`, `sku`, etc.) were globally unique in the DB while their generators reset per company, causing false "already exists" collisions across tenants; (2) several services fetched entities by plain `findById` with no check that the row belongs to the caller's company. See `multi-tenancy.mdc` for the full rules and the checklist to run before shipping tenant-scoped changes.
 - **Purchase orders (draft)** — `PUT` update may change `supplierId` via `applyDraftSupplierChange` only while status is `DRAFT`; use `ConflictException` if not draft. See `PurchaseOrderService`, `PurchaseOrderUpdateDTO`.

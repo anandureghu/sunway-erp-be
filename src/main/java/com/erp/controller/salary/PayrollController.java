@@ -62,10 +62,11 @@ public class PayrollController {
     """)
     @GetMapping("/history")
     public ResponseEntity<List<PayrollHistoryDTO>> history(
-            @PathVariable("employeeId") Long employeeId) {
+            @PathVariable("employeeId") Long employeeId,
+            @RequestParam(defaultValue = "false") boolean all) {
 
         return ResponseEntity.ok(
-                payrollService.getPayrollHistory(employeeId)
+                payrollService.getPayrollHistory(employeeId, all)
         );
     }
 
