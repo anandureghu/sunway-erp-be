@@ -50,6 +50,12 @@ import java.util.stream.Collectors;
 @Slf4j
 public class EmployeeService {
 
+    private static final List<EmployeeStatus> EXCLUDED_FROM_OPERATIONAL_LISTS = List.of(
+            EmployeeStatus.INACTIVE,
+            EmployeeStatus.RESIGNED,
+            EmployeeStatus.TERMINATED,
+            EmployeeStatus.RETIRED);
+
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
@@ -398,7 +404,8 @@ public class EmployeeService {
         if (canViewAll) {
             log.info("✅ User has VIEW_ALL permission - loading all employees");
             return employeeRepository
-                    .findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
+                    .findCurrentWorkforceByCompanyIdOrderByCreatedAtDesc(
+                            companyId, EXCLUDED_FROM_OPERATIONAL_LISTS)
                     .stream()
                     .map(this::toDTO)
                     .toList();
@@ -422,7 +429,8 @@ public class EmployeeService {
 
     public List<EmployeeResponseDTO> getEmployeesByCompany(Long companyId) {
         assertTenantCompanyScope(companyId);
-        return employeeRepository.findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
+        return employeeRepository.findCurrentWorkforceByCompanyIdOrderByCreatedAtDesc(
+                        companyId, EXCLUDED_FROM_OPERATIONAL_LISTS)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -434,7 +442,8 @@ public class EmployeeService {
         Department dept = departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new RuntimeException("Department not found"));
         assertTenantCompanyScope(dept.getCompany().getId());
-        return employeeRepository.findByDepartment_IdOrderByCreatedAtDesc(departmentId)
+        return employeeRepository.findCurrentWorkforceByDepartmentIdOrderByCreatedAtDesc(
+                        departmentId, EXCLUDED_FROM_OPERATIONAL_LISTS)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -481,7 +490,8 @@ public class EmployeeService {
         // ✅ VIEW ALL - Return paginated employees for current company only
         log.info("✅ User has VIEW_ALL permission - loading paginated employees");
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Employee> empPage = employeeRepository.findByCompany_Id(companyId, pageable);
+        Page<Employee> empPage = employeeRepository.findCurrentWorkforceByCompanyId(
+                companyId, EXCLUDED_FROM_OPERATIONAL_LISTS, pageable);
 
         return PageResponse.of(
                 empPage.getContent().stream().map(this::toDTO).toList(),
@@ -515,9 +525,9 @@ public class EmployeeService {
     // manager candidate list (see EmployeeStatus#isDepartedOrInactive).
     public List<EmployeeResponseDTO> getManagersByCompany(Long companyId) {
         assertTenantCompanyScope(companyId);
-        return employeeRepository.findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
+        return employeeRepository.findCurrentWorkforceByCompanyIdOrderByCreatedAtDesc(
+                        companyId, EXCLUDED_FROM_OPERATIONAL_LISTS)
                 .stream()
-                .filter(e -> e.getStatus() == null || !e.getStatus().isDepartedOrInactive())
                 .map(this::toDTO)
                 .toList();
     }
@@ -580,6 +590,17 @@ public class EmployeeService {
         Long companyId = resolveCurrentCompanyId();
         return employeeRepository
                 .findByCompany_IdAndArchivedTrueOrderByArchivedAtDesc(companyId)
+                .stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmployeeResponseDTO> listInactive() {
+        Long companyId = resolveCurrentCompanyId();
+        return employeeRepository
+                .findByCompany_IdAndStatusAndArchivedFalseOrderByCreatedAtDesc(
+                        companyId, EmployeeStatus.INACTIVE)
                 .stream()
                 .map(this::toDTO)
                 .toList();

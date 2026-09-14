@@ -32,6 +32,42 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     /** Active (non-archived) employees — the working set shown across the app. */
     List<Employee> findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(Long companyId);
 
+    @Query("""
+            SELECT e FROM Employee e
+            WHERE e.company.id = :companyId
+              AND e.archived = false
+              AND (e.status IS NULL OR e.status NOT IN :excludedStatuses)
+            ORDER BY e.createdAt DESC
+            """)
+    List<Employee> findCurrentWorkforceByCompanyIdOrderByCreatedAtDesc(
+            @Param("companyId") Long companyId,
+            @Param("excludedStatuses") Collection<EmployeeStatus> excludedStatuses);
+
+    @Query("""
+            SELECT e FROM Employee e
+            WHERE e.company.id = :companyId
+              AND e.archived = false
+              AND (e.status IS NULL OR e.status NOT IN :excludedStatuses)
+            """)
+    Page<Employee> findCurrentWorkforceByCompanyId(
+            @Param("companyId") Long companyId,
+            @Param("excludedStatuses") Collection<EmployeeStatus> excludedStatuses,
+            Pageable pageable);
+
+    @Query("""
+            SELECT e FROM Employee e
+            WHERE e.department.id = :departmentId
+              AND e.archived = false
+              AND (e.status IS NULL OR e.status NOT IN :excludedStatuses)
+            ORDER BY e.createdAt DESC
+            """)
+    List<Employee> findCurrentWorkforceByDepartmentIdOrderByCreatedAtDesc(
+            @Param("departmentId") Long departmentId,
+            @Param("excludedStatuses") Collection<EmployeeStatus> excludedStatuses);
+
+    List<Employee> findByCompany_IdAndStatusAndArchivedFalseOrderByCreatedAtDesc(
+            Long companyId, EmployeeStatus status);
+
     /** Archived (former) employees — the records-only list. */
     List<Employee> findByCompany_IdAndArchivedTrueOrderByArchivedAtDesc(Long companyId);
 

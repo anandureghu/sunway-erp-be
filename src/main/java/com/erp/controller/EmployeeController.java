@@ -200,6 +200,12 @@ public class EmployeeController {
         return ResponseEntity.ok(employeeService.listArchived());
     }
 
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.VIEW_ALL})
+    @GetMapping("/inactive")
+    public ResponseEntity<List<EmployeeResponseDTO>> listInactive() {
+        return ResponseEntity.ok(employeeService.listInactive());
+    }
+
     @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.EDIT})
     @PutMapping("/{id}/archive")
     public ResponseEntity<Void> archiveEmployee(@PathVariable("id") Long id) {
