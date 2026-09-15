@@ -638,6 +638,7 @@ public class SubscriptionService {
                 .id(cs.getId())
                 .companyId(cs.getCompanyId())
                 .companyName(company != null ? company.getCompanyName() : null)
+                .companyCode(company != null ? company.getCompanyCode() : null)
                 .planType(cs.getPlanType())
                 .amount(cs.getAmount())
                 .currencyCode(cs.getCurrencyCode())

@@ -20,6 +20,7 @@ public class CompanySubscriptionResponse {
     private Long id;
     private Long companyId;
     private String companyName;
+    private String companyCode;
     private SubscriptionPlanType planType;
     private BigDecimal amount;
     private String currencyCode;
