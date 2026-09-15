@@ -12,6 +12,7 @@ import java.util.Map;
 public class ItemCsvImportResultDTO {
 
     private int created;
+    private int updated;
     private int skipped;
     private int failed;
 

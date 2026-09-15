@@ -97,6 +97,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     List<Employee> findByDepartment_IdOrderByCreatedAtDesc(Long departmentId);
 
+    Optional<Employee> findByCompany_IdAndEmployeeNo(Long companyId, String employeeNo);
+
     Optional<Employee> findByUser_Id(Long userId);
 
     List<Employee> findAllByUser_Id(Long userId);

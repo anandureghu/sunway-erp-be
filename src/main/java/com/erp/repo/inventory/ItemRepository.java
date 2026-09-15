@@ -15,6 +15,8 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 
     boolean existsBySkuAndCompanyId(String sku, Long companyId);
 
+    java.util.Optional<Item> findBySkuAndCompanyId(String sku, Long companyId);
+
     /**
      * @deprecated Prefer {@link ItemWarehouseStockRepository#findLowStockLinesForReport} —
      * low stock is evaluated per warehouse stock row, not Item.available aggregates.

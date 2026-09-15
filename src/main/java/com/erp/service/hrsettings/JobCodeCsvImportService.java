@@ -68,7 +68,7 @@ public class JobCodeCsvImportService {
         Long companyId = auth.getCurrentCompanyId();
         Company company = companyRepo.findById(companyId).orElseThrow(() -> new RuntimeException("Company not found"));
 
-        int created = 0, skipped = 0, failed = 0;
+        int created = 0, updated = 0, skipped = 0, failed = 0;
         List<RowError> errors = new ArrayList<>();
 
         for (int i = 0; i < csv.rows().size(); i++) {
@@ -79,8 +79,6 @@ public class JobCodeCsvImportService {
                 String title = blankToNull(vals.get("title"));
                 if (code == null || title == null) { skipped++; continue; }
                 code = code.toUpperCase(Locale.ROOT);
-
-                if (jobCodeRepo.findByCompany_IdAndCode(companyId, code).isPresent()) { skipped++; continue; }
 
                 Department dept = null;
                 String deptName = blankToNull(vals.get("departmentName"));
@@ -103,6 +101,28 @@ public class JobCodeCsvImportService {
                 String workCity = blankToNull(vals.get("workCity"));
                 String workCountry = blankToNull(vals.get("workCountry"));
 
+                Optional<JobCode> existingOpt = jobCodeRepo.findByCompany_IdAndCode(companyId, code);
+                if (existingOpt.isPresent()) {
+                    JobCode existing = existingOpt.get();
+                    existing.setTitle(title);
+                    existing.setLevel(level);
+                    existing.setSalaryGrade(grade);
+                    if (minSalary != null) existing.setMinSalary(minSalary);
+                    if (maxSalary != null) existing.setMaxSalary(maxSalary);
+                    existing.setActive(active);
+                    existing.setStatus(JobCodeStatus.PENDING_APPROVAL);
+                    if (dept != null) existing.setDepartment(dept);
+                    if (div != null) existing.setDivision(div);
+                    if (empCat != null) existing.setEmploymentCategory(empCat);
+                    if (empType != null) existing.setEmploymentType(empType);
+                    if (workLoc != null) existing.setWorkLocation(workLoc);
+                    if (workCity != null) existing.setWorkCity(workCity);
+                    if (workCountry != null) existing.setWorkCountry(workCountry);
+                    jobCodeRepo.save(existing);
+                    updated++;
+                    continue;
+                }
+
                 JobCode jc = JobCode.builder()
                         .code(code).title(title).level(level).salaryGrade(grade)
                         .minSalary(minSalary).maxSalary(maxSalary).active(active)
@@ -118,7 +138,7 @@ public class JobCodeCsvImportService {
                 errors.add(RowError.builder().row(rowNum).message(ex.getMessage()).build());
             }
         }
-        return JobCodeCsvImportResultDTO.builder().created(created).skipped(skipped).failed(failed).errors(errors).build();
+        return JobCodeCsvImportResultDTO.builder().created(created).updated(updated).skipped(skipped).failed(failed).errors(errors).build();
     }
 
     private <E extends Enum<E>> E parseEnum(Class<E> clazz, String value) {

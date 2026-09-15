@@ -155,6 +155,7 @@ public class ItemCsvImportService {
         }
 
         int created = 0;
+        int updated = 0;
         int skipped = 0;
         int failed = 0;
         List<ItemCsvImportResultDTO.RowError> errors = new ArrayList<>();
@@ -180,10 +181,29 @@ public class ItemCsvImportService {
                     name = sku;
                 }
 
-                if (itemRepo.existsBySkuAndCompanyId(sku, companyId)) {
-                    skipped++;
-                    errors.add(ItemCsvImportResultDTO.RowError.builder()
-                            .row(rowNum).sku(sku).message("SKU already exists — skipped").build());
+                Optional<Item> existingOpt = itemRepo.findBySkuAndCompanyId(sku, companyId);
+                if (existingOpt.isPresent()) {
+                    Item existing = existingOpt.get();
+                    existing.setName(name.trim());
+                    String categoryRaw = blankToNull(values.get("category"));
+                    String subRaw = blankToNull(values.get("subCategory"));
+                    if (categoryRaw != null) existing.setCategory(resolveCategoryName(categoryRaw, parentCategories));
+                    if (subRaw != null) existing.setSubCategory(resolveSubCategoryName(existing.getCategory(), subRaw, companyId));
+                    if (blankToNull(values.get("unitMeasure")) != null) existing.setUnitMeasure(values.get("unitMeasure").trim());
+                    if (blankToNull(values.get("barcode")) != null) existing.setBarcode(values.get("barcode").trim());
+                    if (blankToNull(values.get("brand")) != null) existing.setBrand(values.get("brand").trim());
+                    if (blankToNull(values.get("model")) != null) existing.setModel(values.get("model").trim());
+                    if (blankToNull(values.get("description")) != null) existing.setDescription(values.get("description").trim());
+                    if (blankToNull(values.get("location")) != null) existing.setLocation(values.get("location").trim());
+                    if (blankToNull(values.get("status")) != null) existing.setStatus(blankToDefault(values.get("status"), "active").toLowerCase(Locale.ROOT));
+                    if (parseOptionalDecimal(values.get("costPrice")) != null) existing.setCostPrice(parseOptionalDecimal(values.get("costPrice")));
+                    if (parseOptionalDecimal(values.get("sellingPrice")) != null) existing.setSellingPrice(parseOptionalDecimal(values.get("sellingPrice")));
+                    if (parseOptionalInt(values.get("reorderLevel")) != null) existing.setReorderLevel(parseOptionalInt(values.get("reorderLevel")));
+                    if (parseOptionalInt(values.get("reorderQty")) != null) existing.setReorderQty(parseOptionalInt(values.get("reorderQty")));
+                    Vendor preferred = resolveVendor(values.get("preferredSupplier"), vendorByCode, vendorByName);
+                    if (preferred != null) existing.setPreferredVendor(preferred);
+                    itemRepo.save(existing);
+                    updated++;
                     continue;
                 }
 
@@ -256,6 +276,7 @@ public class ItemCsvImportService {
 
         return ItemCsvImportResultDTO.builder()
                 .created(created)
+                .updated(updated)
                 .skipped(skipped)
                 .failed(failed)
                 .fieldMapping(fieldMapping)

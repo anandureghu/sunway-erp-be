@@ -18,4 +18,6 @@ public interface DivisionRepository extends JpaRepository<Division, Long> {
     Optional<Division> findByNameIgnoreCaseAndCompany_Id(String name, Long companyId);
 
     boolean existsByCodeAndCompany_Id(String code, Long companyId);
+
+    Optional<Division> findByCodeIgnoreCaseAndCompany_Id(String code, Long companyId);
 }

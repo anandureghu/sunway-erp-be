@@ -5,9 +5,11 @@ import com.erp.domain.hr.Department;
 import com.erp.dto.contact.EmployeeContactInfoRequestDTO;
 import com.erp.dto.hr.CreateEmployeeDTO;
 import com.erp.dto.hr.EmployeeCsvImportResultDTO;
+import com.erp.dto.hr.UpdateEmployeeDTO;
 import com.erp.dto.hr.EmployeeCsvImportResultDTO.RowError;
 import com.erp.dto.hr.EmployeeCsvPreviewDTO;
 import com.erp.dto.hr.EmployeeResponseDTO;
+import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.DepartmentRepository;
 import com.erp.security.context.AuthContext;
@@ -39,6 +41,7 @@ public class EmployeeCsvImportService {
 
     private final EmployeeService employeeService;
     private final EmployeeContactInfoService contactInfoService;
+    private final EmployeeRepository employeeRepo;
     private final DepartmentRepository departmentRepo;
     private final CompanyRoleRepository companyRoleRepo;
     private final AuthContext auth;
@@ -69,11 +72,12 @@ public class EmployeeCsvImportService {
         }
 
         Long companyId = auth.getCurrentCompanyId();
-        int created = 0, skipped = 0, failed = 0;
+        int created = 0, updated = 0, skipped = 0, failed = 0;
         List<RowError> errors = new ArrayList<>();
 
         for (int i = 0; i < csv.rows().size(); i++) {
             int rowNum = i + 2;
+            String empNo = null;
             try {
                 Map<String, String> vals = extractValues(csv.headers(), csv.rows().get(i), fieldMapping);
                 String firstName = blankToNull(vals.get("firstName"));
@@ -81,6 +85,8 @@ public class EmployeeCsvImportService {
                 if (firstName == null && lastName == null) { skipped++; continue; }
                 if (firstName == null) firstName = lastName;
                 if (lastName == null) lastName = firstName;
+
+                empNo = blankToNull(vals.get("employeeNo"));
 
                 Long departmentId = null;
                 String deptName = blankToNull(vals.get("departmentName"));
@@ -94,6 +100,48 @@ public class EmployeeCsvImportService {
                 if (roleName != null) {
                     companyRoleId = companyRoleRepo.findByCompanyIdAndNameIgnoreCase(companyId, roleName)
                             .map(r -> r.getId()).orElse(null);
+                }
+
+                String phone = blankToNull(vals.get("phoneNo"));
+                String altPhone = blankToNull(vals.get("altPhone"));
+                String email = blankToNull(vals.get("email"));
+
+                // Upsert: if employeeNo is provided and the employee already exists, update
+                if (empNo != null) {
+                    Optional<com.erp.domain.Employee> existingOpt = employeeRepo.findByCompany_IdAndEmployeeNo(companyId, empNo);
+                    if (existingOpt.isPresent()) {
+                        com.erp.domain.Employee existing = existingOpt.get();
+                        UpdateEmployeeDTO updateDto = UpdateEmployeeDTO.builder()
+                                .firstName(firstName)
+                                .middleName(blankToNull(vals.get("middleName")))
+                                .lastName(lastName)
+                                .gender(blankToNull(vals.get("gender")))
+                                .prefix(blankToNull(vals.get("prefix")))
+                                .maritalStatus(blankToNull(vals.get("maritalStatus")))
+                                .dateOfBirth(parseDate(vals.get("dateOfBirth")))
+                                .joinDate(parseDate(vals.get("joinDate")))
+                                .status(parseStatus(vals.get("status")))
+                                .birthplace(blankToNull(vals.get("birthplace")))
+                                .hometown(blankToNull(vals.get("hometown")))
+                                .nationality(blankToNull(vals.get("nationality")))
+                                .religion(blankToNull(vals.get("religion")))
+                                .identification(blankToNull(vals.get("identification")))
+                                .departmentId(departmentId)
+                                .companyRoleId(companyRoleId)
+                                .build();
+                        EmployeeResponseDTO updatedEmp = employeeService.updateEmployee(existing.getId(), updateDto);
+                        if (phone != null || altPhone != null || email != null) {
+                            try {
+                                contactInfoService.saveOrUpdateContactInfo(
+                                        updatedEmp.getId(),
+                                        EmployeeContactInfoRequestDTO.builder()
+                                                .phone(phone).altPhone(altPhone).email(email).build()
+                                );
+                            } catch (Exception ignored) {}
+                        }
+                        updated++;
+                        continue;
+                    }
                 }
 
                 CreateEmployeeDTO dto = CreateEmployeeDTO.builder()
@@ -118,9 +166,6 @@ public class EmployeeCsvImportService {
 
                 EmployeeResponseDTO createdEmp = employeeService.createEmployee(dto);
 
-                String phone = blankToNull(vals.get("phoneNo"));
-                String altPhone = blankToNull(vals.get("altPhone"));
-                String email = blankToNull(vals.get("email"));
                 if (phone != null || altPhone != null || email != null) {
                     try {
                         contactInfoService.saveOrUpdateContactInfo(
@@ -133,10 +178,10 @@ public class EmployeeCsvImportService {
                 created++;
             } catch (Exception ex) {
                 failed++;
-                errors.add(RowError.builder().row(rowNum).message(ex.getMessage()).build());
+                errors.add(RowError.builder().row(rowNum).employeeNo(empNo).message(ex.getMessage()).build());
             }
         }
-        return EmployeeCsvImportResultDTO.builder().created(created).skipped(skipped).failed(failed).errors(errors).build();
+        return EmployeeCsvImportResultDTO.builder().created(created).updated(updated).skipped(skipped).failed(failed).errors(errors).build();
     }
 
     private static LocalDate parseDate(String value) {

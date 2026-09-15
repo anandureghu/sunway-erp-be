@@ -9,6 +9,7 @@ import java.util.List;
 @Builder
 public class JobCodeCsvImportResultDTO {
     private int created;
+    private int updated;
     private int skipped;
     private int failed;
     @Builder.Default

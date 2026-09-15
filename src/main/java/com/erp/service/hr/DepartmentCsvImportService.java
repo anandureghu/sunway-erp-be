@@ -65,7 +65,7 @@ public class DepartmentCsvImportService {
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        int created = 0, skipped = 0, failed = 0;
+        int created = 0, updated = 0, skipped = 0, failed = 0;
         List<RowError> errors = new ArrayList<>();
 
         for (int i = 0; i < csv.rows().size(); i++) {
@@ -78,8 +78,14 @@ public class DepartmentCsvImportService {
                 if (code == null)
                     code = name.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "").substring(0, Math.min(10, name.replaceAll("[^A-Z0-9]", "").length()));
 
-                if (departmentRepo.existsByDepartmentCodeAndCompanyId(code, companyId)) {
-                    skipped++;
+                Optional<Department> existingOpt = departmentRepo.findByDepartmentCodeIgnoreCaseAndCompany_Id(code, companyId);
+                if (existingOpt.isPresent()) {
+                    Department existing = existingOpt.get();
+                    existing.setDepartmentName(name);
+                    String desc = blankToNull(vals.get("description"));
+                    if (desc != null) existing.setDescription(desc);
+                    departmentRepo.save(existing);
+                    updated++;
                     continue;
                 }
                 Department dept = Department.builder()
@@ -96,7 +102,7 @@ public class DepartmentCsvImportService {
             }
         }
         return DepartmentCsvImportResultDTO.builder()
-                .created(created).skipped(skipped).failed(failed).errors(errors).build();
+                .created(created).updated(updated).skipped(skipped).failed(failed).errors(errors).build();
     }
 
     private Map<String, String> parseClientMapping(String json, List<String> headers) {

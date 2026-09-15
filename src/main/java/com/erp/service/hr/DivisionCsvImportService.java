@@ -68,7 +68,7 @@ public class DivisionCsvImportService {
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        int created = 0, skipped = 0, failed = 0;
+        int created = 0, updated = 0, skipped = 0, failed = 0;
         List<RowError> errors = new ArrayList<>();
 
         for (int i = 0; i < csv.rows().size(); i++) {
@@ -82,15 +82,22 @@ public class DivisionCsvImportService {
                     code = name.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "").substring(0, Math.min(10, name.replaceAll("[^A-Za-z0-9]", "").length()));
                 if (code.isEmpty()) code = "DIV" + (i + 1);
 
-                if (divisionRepo.existsByCodeAndCompany_Id(code, companyId)) {
-                    skipped++;
-                    continue;
-                }
-
                 Department department = null;
                 String deptName = blankToNull(vals.get("departmentName"));
                 if (deptName != null) {
                     department = departmentRepo.findByDepartmentNameIgnoreCaseAndCompany_Id(deptName, companyId).orElse(null);
+                }
+
+                Optional<Division> existingOpt = divisionRepo.findByCodeIgnoreCaseAndCompany_Id(code, companyId);
+                if (existingOpt.isPresent()) {
+                    Division existing = existingOpt.get();
+                    existing.setName(name);
+                    String desc = blankToNull(vals.get("description"));
+                    if (desc != null) existing.setDescription(desc);
+                    if (department != null) existing.setDepartment(department);
+                    divisionRepo.save(existing);
+                    updated++;
+                    continue;
                 }
 
                 Division division = Division.builder()
@@ -108,7 +115,7 @@ public class DivisionCsvImportService {
             }
         }
         return DivisionCsvImportResultDTO.builder()
-                .created(created).skipped(skipped).failed(failed).errors(errors).build();
+                .created(created).updated(updated).skipped(skipped).failed(failed).errors(errors).build();
     }
 
     private Map<String, String> parseClientMapping(String json, List<String> headers) {

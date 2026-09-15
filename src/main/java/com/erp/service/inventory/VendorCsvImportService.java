@@ -135,6 +135,7 @@ public class VendorCsvImportService {
         User actor = userRepo.findById(auth.getCurrentUserId()).orElse(null);
 
         int created = 0;
+        int updated = 0;
         int skipped = 0;
         int failed = 0;
         List<VendorCsvImportResultDTO.RowError> errors = new ArrayList<>();
@@ -157,21 +158,32 @@ public class VendorCsvImportService {
                 rowCode = code;
 
                 if (code != null) {
-                    Optional<Vendor> existing = vendorRepo.findByCompanyIdAndVendorCodeIgnoreCase(
+                    Optional<Vendor> existingOpt = vendorRepo.findByCompanyIdAndVendorCodeIgnoreCase(
                             companyId, code);
-                    if (existing.isPresent()) {
-                        skipped++;
-                        errors.add(error(rowNum, code, "Supplier code already exists — skipped"));
+                    if (existingOpt.isPresent()) {
+                        Vendor existing = existingOpt.get();
+                        existing.setVendorName(name.trim());
+                        if (blankToNull(values.get("taxId")) != null) existing.setTaxId(blankToNull(values.get("taxId")));
+                        if (blankToNull(values.get("paymentTerms")) != null) existing.setPaymentTerms(blankToNull(values.get("paymentTerms")));
+                        if (blankToNull(values.get("currencyCode")) != null) existing.setCurrencyCode(blankToNull(values.get("currencyCode")).toUpperCase(Locale.ROOT));
+                        if (parseOptionalDecimal(values.get("creditLimit")) != null) existing.setCreditLimit(parseOptionalDecimal(values.get("creditLimit")));
+                        if (blankToNull(values.get("vendorCrNo")) != null) existing.setVendorCrNo(blankToNull(values.get("vendorCrNo")));
+                        if (blankToNull(values.get("bankName")) != null) existing.setBankName(blankToNull(values.get("bankName")));
+                        if (blankToNull(values.get("iban")) != null) existing.setIban(blankToNull(values.get("iban")));
+                        if (blankToNull(values.get("street")) != null) existing.setStreet(blankToNull(values.get("street")));
+                        if (blankToNull(values.get("city")) != null) existing.setCity(blankToNull(values.get("city")));
+                        if (blankToNull(values.get("country")) != null) existing.setCountry(blankToNull(values.get("country")));
+                        if (blankToNull(values.get("phoneNo")) != null) existing.setPhoneNo(blankToNull(values.get("phoneNo")));
+                        if (blankToNull(values.get("email")) != null) existing.setEmail(blankToNull(values.get("email")));
+                        if (blankToNull(values.get("contactPersonName")) != null) existing.setContactPersonName(blankToNull(values.get("contactPersonName")));
+                        if (blankToNull(values.get("status")) != null) existing.setIsActive(normalizeActive(values.get("status")));
+                        vendorRepo.save(existing);
+                        updated++;
                         continue;
                     }
                 }
 
                 String resolvedCode = code != null ? code.trim() : documentSequenceService.generateNext("SUP");
-                if (vendorRepo.existsByVendorCodeAndCompanyId(resolvedCode, companyId)) {
-                    skipped++;
-                    errors.add(error(rowNum, resolvedCode, "Supplier code already exists — skipped"));
-                    continue;
-                }
 
                 String taxId = blankToNull(values.get("taxId"));
                 String paymentTerms = blankToNull(values.get("paymentTerms"));
@@ -221,6 +233,7 @@ public class VendorCsvImportService {
 
         return VendorCsvImportResultDTO.builder()
                 .created(created)
+                .updated(updated)
                 .skipped(skipped)
                 .failed(failed)
                 .fieldMapping(fieldMapping)
