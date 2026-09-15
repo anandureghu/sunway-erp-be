@@ -32,6 +32,8 @@ public enum AppModule {
     HRS_POLICIES,
     HRS_SOCIAL,
     HRS_PERMISSIONS,
+    /** CSV bulk import in HR Settings — admin-grantable only. */
+    HRS_BULK_UPLOAD,
 
     // ── HR Reports — per-tab permissions (HR_REPORTS is the umbrella that grants all) ──
     HRR_WORKFORCE,
@@ -54,6 +56,12 @@ public enum AppModule {
     INVENTORY_RECEIPT,
     INVENTORY_SALES,
     INVENTORY_DASHBOARD,
+    /** CSV bulk import for categories & warehouses in Inventory Settings. */
+    INVS_BULK_UPLOAD,
+    /** CSV bulk import for items (stock catalog). */
+    INVENTORY_ITEM_BULK_UPLOAD,
+    /** CSV bulk import for suppliers / vendors. */
+    INVENTORY_VENDOR_BULK_UPLOAD,
     FINANCE_COA,
     FINANCE_JOURNAL,
     FINANCE_LEDGER,
@@ -62,5 +70,7 @@ public enum AppModule {
     FINANCE_BUDGET,
     FINANCE_RECONCILIATION,
     FINANCE_REPORTS,
-    FINANCE_DASHBOARD
+    FINANCE_DASHBOARD,
+    /** CSV bulk import in Finance Settings — admin-grantable only. */
+    FINS_BULK_UPLOAD
 }

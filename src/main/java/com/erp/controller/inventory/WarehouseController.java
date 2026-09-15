@@ -61,13 +61,13 @@ public class WarehouseController {
         service.delete(id);
     }
 
-    @RequiresPermission(module = AppModule.INVENTORY_WAREHOUSE, action = {AppAction.CREATE})
+    @RequiresPermission(module = AppModule.INVS_BULK_UPLOAD, action = {AppAction.CREATE})
     @PostMapping(value = "/import-csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public WarehouseCsvPreviewDTO previewImportCsv(@RequestPart("file") MultipartFile file) {
         return csvImportService.preview(file);
     }
 
-    @RequiresPermission(module = AppModule.INVENTORY_WAREHOUSE, action = {AppAction.CREATE})
+    @RequiresPermission(module = AppModule.INVS_BULK_UPLOAD, action = {AppAction.CREATE})
     @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public WarehouseCsvImportResultDTO importCsv(
             @RequestPart("file") MultipartFile file,

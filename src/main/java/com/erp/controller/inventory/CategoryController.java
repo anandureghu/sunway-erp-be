@@ -67,13 +67,13 @@ public class CategoryController {
         service.delete(id);
     }
 
-    @RequiresPermission(module = AppModule.INVENTORY_CATEGORY, action = {AppAction.CREATE})
+    @RequiresPermission(module = AppModule.INVS_BULK_UPLOAD, action = {AppAction.CREATE})
     @PostMapping(value = "/import-csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CategoryCsvPreviewDTO previewImportCsv(@RequestPart("file") MultipartFile file) {
         return csvImportService.preview(file);
     }
 
-    @RequiresPermission(module = AppModule.INVENTORY_CATEGORY, action = {AppAction.CREATE})
+    @RequiresPermission(module = AppModule.INVS_BULK_UPLOAD, action = {AppAction.CREATE})
     @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CategoryCsvImportResultDTO importCsv(
             @RequestPart("file") MultipartFile file,

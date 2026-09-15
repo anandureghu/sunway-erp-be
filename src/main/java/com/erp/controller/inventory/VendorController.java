@@ -74,13 +74,13 @@ public class VendorController {
         return ResponseEntity.noContent().build();
     }
 
-    @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.CREATE})
+    @RequiresPermission(module = AppModule.INVENTORY_VENDOR_BULK_UPLOAD, action = {AppAction.CREATE})
     @PostMapping(value = "/import-csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public VendorCsvPreviewDTO previewImportCsv(@RequestPart("file") MultipartFile file) {
         return csvImportService.preview(file);
     }
 
-    @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.CREATE})
+    @RequiresPermission(module = AppModule.INVENTORY_VENDOR_BULK_UPLOAD, action = {AppAction.CREATE})
     @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public VendorCsvImportResultDTO importCsv(
             @RequestPart("file") MultipartFile file,

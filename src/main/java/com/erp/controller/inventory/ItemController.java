@@ -63,13 +63,13 @@ public class ItemController {
         return service.create(dto, image);
     }
 
-    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.CREATE})
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM_BULK_UPLOAD, action = {AppAction.CREATE})
     @PostMapping(value = "/import-csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ItemCsvPreviewDTO previewImportCsv(@RequestPart("file") MultipartFile file) {
         return csvImportService.preview(file);
     }
 
-    @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.CREATE})
+    @RequiresPermission(module = AppModule.INVENTORY_ITEM_BULK_UPLOAD, action = {AppAction.CREATE})
     @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ItemCsvImportResultDTO importCsv(
             @RequestPart("file") MultipartFile file,
