@@ -497,16 +497,13 @@ public class CompanyService {
             }
             company.setTimezone(tz);
         }
-        if (dto.getMaxShiftCheckoutGraceMinutes() != null) {
-            int minutes = dto.getMaxShiftCheckoutGraceMinutes();
-            // 0 clears the policy (check out at the max-shift cap with no grace).
-            if (minutes <= 0) {
-                company.setMaxShiftCheckoutGraceMinutes(null);
-            } else if (minutes == 15 || minutes == 20 || minutes == 30) {
-                company.setMaxShiftCheckoutGraceMinutes(minutes);
+        if (dto.getAutoCheckoutAfterHours() != null) {
+            int hours = dto.getAutoCheckoutAfterHours();
+            if (hours == 8 || hours == 10 || hours == 12) {
+                company.setAutoCheckoutAfterHours(hours);
             } else {
                 throw new IllegalArgumentException(
-                        "Max-shift checkout grace must be 15, 20, or 30 minutes (or 0 for none)");
+                        "Auto check-out must be after 8, 10, or 12 hours");
             }
         }
         if (dto.getSessionIdleTimeoutMinutes() != null) {
@@ -613,7 +610,10 @@ public class CompanyService {
                         company.getTimezone() != null && !company.getTimezone().isBlank()
                                 ? company.getTimezone()
                                 : "Asia/Qatar")
-                .maxShiftCheckoutGraceMinutes(company.getMaxShiftCheckoutGraceMinutes())
+                .autoCheckoutAfterHours(
+                        company.getAutoCheckoutAfterHours() != null
+                                ? company.getAutoCheckoutAfterHours()
+                                : 10)
                 .sessionIdleTimeoutMinutes(company.getSessionIdleTimeoutMinutes())
                 .probationPeriodMonths(
                         company.getProbationPeriodMonths() != null

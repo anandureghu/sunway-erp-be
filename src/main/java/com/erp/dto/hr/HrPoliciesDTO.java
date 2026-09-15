@@ -39,8 +39,11 @@ public class HrPoliciesDTO {
     private Boolean requireCheckIn;
     /** IANA timezone for attendance / company clocks; default Asia/Qatar. */
     private String timezone;
-    /** Grace minutes after max shift before auto attendance check-out; null/0 = none. */
-    private Integer maxShiftCheckoutGraceMinutes;
+    /**
+     * Auto check-out after this many hours on the clock. Allowed: 8, 10, or 12.
+     * Worked time is capped at the same duration.
+     */
+    private Integer autoCheckoutAfterHours;
 
     /**
      * ERP UI session idle timeout (minutes). Session security — not attendance.

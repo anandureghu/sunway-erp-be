@@ -30,9 +30,10 @@ public class EmployeeTimesheetService {
     /** Default when company timezone is unset / invalid. */
     private static final ZoneId DEFAULT_ATTENDANCE_ZONE = ZoneId.of("Asia/Qatar");
 
-    // Fallbacks used only when a company has no explicit standard-hours setting.
+    // Fallbacks used only when a company has no explicit setting.
     private static final double DEFAULT_STD_HOURS_PER_DAY = 6.0;
     private static final double DEFAULT_OT_MAX_HOURS = 2.0;
+    private static final int DEFAULT_AUTO_CHECKOUT_HOURS = 10;
 
     /** Company's standard full-day length in hours (default 6). */
     private double standardHours(Employee employee) {
@@ -60,9 +61,25 @@ public class EmployeeTimesheetService {
         return DEFAULT_OT_MAX_HOURS;
     }
 
-    /** Longest paid shift: standard hours + the overtime cap, in minutes. */
+    /** Auto check-out after this many hours on the clock (8 / 10 / 12). */
+    private int autoCheckoutAfterHours(Employee employee) {
+        try {
+            if (employee.getCompany() != null
+                    && employee.getCompany().getAutoCheckoutAfterHours() != null) {
+                int hours = employee.getCompany().getAutoCheckoutAfterHours();
+                if (hours == 8 || hours == 10 || hours == 12) {
+                    return hours;
+                }
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable
+        }
+        return DEFAULT_AUTO_CHECKOUT_HOURS;
+    }
+
+    /** Longest paid / auto-checkout shift in minutes (company policy: 8h, 10h, or 12h). */
     private long maxShiftMinutes(Employee employee) {
-        return Math.round((standardHours(employee) + otMaxHours(employee)) * 60.0);
+        return autoCheckoutAfterHours(employee) * 60L;
     }
 
     /** Whether the company punches in/out (default true). */
@@ -103,24 +120,12 @@ public class EmployeeTimesheetService {
         return LocalDateTime.now(attendanceZone(employee));
     }
 
-    private int checkoutGraceMinutes(Employee employee) {
-        try {
-            if (employee.getCompany() != null
-                    && employee.getCompany().getMaxShiftCheckoutGraceMinutes() != null) {
-                return Math.max(0, employee.getCompany().getMaxShiftCheckoutGraceMinutes());
-            }
-        } catch (Exception ignored) {
-            // lazy company not loadable
-        }
-        return 0;
-    }
-
     private void applyShiftPolicy(TimesheetTodayResponse response, Employee employee) {
         response.setRequireCheckIn(requireCheckIn(employee));
         response.setStandardWorkingHoursPerDay(standardHours(employee));
         response.setOtMaxHoursPerDay(otMaxHours(employee));
         response.setMaxShiftMinutes(maxShiftMinutes(employee));
-        response.setMaxShiftCheckoutGraceMinutes(checkoutGraceMinutes(employee));
+        response.setAutoCheckoutAfterHours(autoCheckoutAfterHours(employee));
         response.setTimezone(attendanceTimezoneId(employee));
     }
 

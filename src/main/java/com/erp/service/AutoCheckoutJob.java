@@ -36,10 +36,10 @@ public class AutoCheckoutJob {
 
     private static final ZoneId DEFAULT_ATTENDANCE_ZONE = ZoneId.of("Asia/Qatar");
     private static final double DEFAULT_STD_HOURS = 6.0;
-    private static final double DEFAULT_OT_MAX_HOURS = 2.0;
+    private static final int DEFAULT_AUTO_CHECKOUT_HOURS = 10;
     private static final String AUTO_NOTE = "Auto-checkout — employee did not check out.";
     private static final String MAX_SHIFT_NOTE =
-            "Auto-checkout — maximum shift (standard + overtime) reached.";
+            "Auto-checkout — maximum on-clock time reached.";
 
     private final EmployeeTimesheetRepository timesheetRepo;
     private final EmployeeRepository employeeRepo;
@@ -113,22 +113,19 @@ public class AutoCheckoutJob {
     }
 
     /**
-     * Intraday sweep: auto-check-out anyone still checked in past their maximum shift
-     * (standard hours + overtime cap) plus the company's optional grace minutes.
-     * Worked time is capped at the shift limit (grace is unpaid buffer before punch-out)
-     * and the row is flagged auto-checked-out.
+     * Intraday sweep: auto-check-out anyone still checked in past the company's
+     * fixed auto check-out duration (8, 10, or 12 hours). Worked time is capped
+     * at that duration and the row is flagged auto-checked-out.
      */
     @Transactional
-    @Scheduled(fixedRate = 60_000) // every minute so grace windows are timely
+    @Scheduled(fixedRate = 60_000) // every minute so windows are timely
     public void enforceMaxShift() {
         List<EmployeeTimesheet> open = timesheetRepo.findByStatus(TimesheetStatus.CHECKED_IN);
         if (open.isEmpty()) {
             return;
         }
 
-        Map<Long, Double> stdCache = new HashMap<>();
-        Map<Long, Double> otCache = new HashMap<>();
-        Map<Long, Integer> graceCache = new HashMap<>();
+        Map<Long, Integer> hoursCache = new HashMap<>();
         Map<Long, ZoneId> zoneByEmployee = new HashMap<>();
         int closed = 0;
 
@@ -142,13 +139,9 @@ public class AutoCheckoutJob {
                 continue;
             }
             LocalDateTime now = LocalDateTime.now(zone);
-            double capHours = resolveStandardHours(t.getEmployeeId(), stdCache)
-                    + resolveOtMax(t.getEmployeeId(), otCache);
-            long capMinutes = Math.round(capHours * 60.0);
-            int graceMinutes = resolveGrace(t.getEmployeeId(), graceCache);
+            long capMinutes = resolveAutoCheckoutHours(t.getEmployeeId(), hoursCache) * 60L;
             long elapsed = Duration.between(t.getCheckInTime(), now).toMinutes();
-            // Auto-checkout only after the grace window past the max shift.
-            if (elapsed < capMinutes + graceMinutes) {
+            if (elapsed < capMinutes) {
                 continue;
             }
 
@@ -156,9 +149,7 @@ public class AutoCheckoutJob {
             t.setWorkedMinutes(capMinutes);
             t.setStatus(TimesheetStatus.CHECKED_OUT);
             t.setAutoCheckedOut(true);
-            t.setNote(graceMinutes > 0
-                    ? MAX_SHIFT_NOTE + " Grace of " + graceMinutes + " minutes applied."
-                    : MAX_SHIFT_NOTE);
+            t.setNote(MAX_SHIFT_NOTE);
             timesheetRepo.save(t);
             closed++;
         }
@@ -186,37 +177,21 @@ public class AutoCheckoutJob {
         return hours;
     }
 
-    /** Company overtime cap (hours/day) for the employee, memoised per company. */
-    private double resolveOtMax(Long employeeId, Map<Long, Double> cache) {
+    /** Fixed auto check-out hours (8 / 10 / 12), memoised per company. */
+    private int resolveAutoCheckoutHours(Long employeeId, Map<Long, Integer> cache) {
         Employee employee = employeeRepo.findById(employeeId).orElse(null);
         if (employee == null || employee.getCompany() == null) {
-            return DEFAULT_OT_MAX_HOURS;
-        }
-        Long companyId = employee.getCompany().getId();
-        Double cached = cache.get(companyId);
-        if (cached != null) {
-            return cached;
-        }
-        double ot = employee.getCompany().getOtMaxHoursPerDay() != null
-                ? employee.getCompany().getOtMaxHoursPerDay().doubleValue()
-                : DEFAULT_OT_MAX_HOURS;
-        cache.put(companyId, ot);
-        return ot;
-    }
-
-    /** Grace minutes after max shift before auto check-out (0 = none). */
-    private int resolveGrace(Long employeeId, Map<Long, Integer> cache) {
-        Employee employee = employeeRepo.findById(employeeId).orElse(null);
-        if (employee == null || employee.getCompany() == null) {
-            return 0;
+            return DEFAULT_AUTO_CHECKOUT_HOURS;
         }
         Long companyId = employee.getCompany().getId();
         Integer cached = cache.get(companyId);
         if (cached != null) {
             return cached;
         }
-        Integer grace = employee.getCompany().getMaxShiftCheckoutGraceMinutes();
-        int value = grace != null && grace > 0 ? grace : 0;
+        Integer hours = employee.getCompany().getAutoCheckoutAfterHours();
+        int value = (hours != null && (hours == 8 || hours == 10 || hours == 12))
+                ? hours
+                : DEFAULT_AUTO_CHECKOUT_HOURS;
         cache.put(companyId, value);
         return value;
     }

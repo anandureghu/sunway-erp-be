@@ -19,10 +19,10 @@ public class TimesheetTodayResponse {
     private String timezone;
     /** Max overtime hours/day from company policy. */
     private Double otMaxHoursPerDay;
-    /** Max paid shift length in minutes (standard + OT cap). */
+    /** Max paid / auto-checkout shift length in minutes (8h / 10h / 12h policy). */
     private Long maxShiftMinutes;
-    /** Grace minutes after max shift before automatic check-out. */
-    private Integer maxShiftCheckoutGraceMinutes;
+    /** Auto check-out after this many hours on the clock (8 / 10 / 12). */
+    private Integer autoCheckoutAfterHours;
 
     public Long getEmployeeId() {
         return employeeId;
@@ -120,11 +120,11 @@ public class TimesheetTodayResponse {
         this.maxShiftMinutes = maxShiftMinutes;
     }
 
-    public Integer getMaxShiftCheckoutGraceMinutes() {
-        return maxShiftCheckoutGraceMinutes;
+    public Integer getAutoCheckoutAfterHours() {
+        return autoCheckoutAfterHours;
     }
 
-    public void setMaxShiftCheckoutGraceMinutes(Integer maxShiftCheckoutGraceMinutes) {
-        this.maxShiftCheckoutGraceMinutes = maxShiftCheckoutGraceMinutes;
+    public void setAutoCheckoutAfterHours(Integer autoCheckoutAfterHours) {
+        this.autoCheckoutAfterHours = autoCheckoutAfterHours;
     }
 }

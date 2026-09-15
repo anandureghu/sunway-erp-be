@@ -213,12 +213,20 @@ public class Company {
     private String timezone = "Asia/Qatar";
 
     /**
-     * HR policy: minutes of grace after the max shift (standard + OT cap) before
-     * the system automatically checks the employee out. {@code null}/{@code 0}
-     * means check out at the cap with no extra grace. Typical values: 15, 20, 30.
+     * Legacy: minutes of grace after max shift. No longer used by the product —
+     * auto check-out is {@link #autoCheckoutAfterHours} (8 / 10 / 12).
      */
     @Column(name = "max_shift_checkout_grace_minutes")
     private Integer maxShiftCheckoutGraceMinutes;
+
+    /**
+     * HR policy: auto check-out after this many hours on the clock.
+     * Allowed values: 8, 10, or 12. Worked time is capped at the same duration.
+     * {@code null} defaults to 10.
+     */
+    @Builder.Default
+    @Column(name = "auto_checkout_after_hours")
+    private Integer autoCheckoutAfterHours = 10;
 
     /**
      * HR policy: ERP UI session idle timeout in minutes. After this many minutes of
