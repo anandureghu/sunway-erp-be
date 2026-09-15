@@ -2,13 +2,18 @@ package com.erp.controller.hrsettings;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.hrsettings.JobCodeCsvImportResultDTO;
+import com.erp.dto.hrsettings.JobCodeCsvPreviewDTO;
 import com.erp.dto.hrsettings.JobCodeRequestDTO;
 import com.erp.dto.hrsettings.JobCodeResponseDTO;
+import com.erp.service.hrsettings.JobCodeCsvImportService;
 import com.erp.service.hrsettings.JobCodeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -18,6 +23,7 @@ import java.util.List;
 public class JobCodeController {
 
     private final JobCodeService service;
+    private final JobCodeCsvImportService csvImportService;
 
     /**
      * CREATE Job Code
@@ -130,5 +136,19 @@ public class JobCodeController {
     @DeleteMapping("/{id}")
     public void delete(@PathVariable("id") Long id) {
         service.delete(id);
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HRS_BULK_UPLOAD, T(com.erp.domain.security.AppAction).CREATE)")
+    @PostMapping(value = "/import-csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public JobCodeCsvPreviewDTO previewImportCsv(@RequestPart("file") MultipartFile file) {
+        return csvImportService.preview(file);
+    }
+
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HRS_BULK_UPLOAD, T(com.erp.domain.security.AppAction).CREATE)")
+    @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public JobCodeCsvImportResultDTO importCsv(
+            @RequestPart("file") MultipartFile file,
+            @RequestPart(value = "mapping", required = false) String mapping) {
+        return csvImportService.importCsv(file, mapping);
     }
 }

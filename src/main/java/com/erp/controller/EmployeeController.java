@@ -5,14 +5,18 @@ import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.common.PageResponse;
 import com.erp.dto.hr.CreateEmployeeDTO;
+import com.erp.dto.hr.EmployeeCsvImportResultDTO;
+import com.erp.dto.hr.EmployeeCsvPreviewDTO;
 import com.erp.dto.hr.EmployeeResponseDTO;
 import com.erp.dto.hr.UpdateEmployeeDTO;
 import com.erp.repo.UserRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.EmployeeCsvImportService;
 import com.erp.service.EmployeeService;
 import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,14 +28,17 @@ import java.util.List;
 public class EmployeeController {
 
     private final EmployeeService employeeService;
+    private final EmployeeCsvImportService csvImportService;
     private final AuthContext authContext;
     private final UserRepository userRepository;
 
     public EmployeeController(
             EmployeeService employeeService,
+            EmployeeCsvImportService csvImportService,
             AuthContext authContext,
             UserRepository userRepository) {
         this.employeeService = employeeService;
+        this.csvImportService = csvImportService;
         this.authContext = authContext;
         this.userRepository = userRepository;
     }
@@ -218,6 +225,20 @@ public class EmployeeController {
     public ResponseEntity<Void> unarchiveEmployee(@PathVariable("id") Long id) {
         employeeService.unarchiveEmployee(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @RequiresPermission(module = AppModule.HRS_BULK_UPLOAD, action = {AppAction.CREATE})
+    @PostMapping(value = "/import-csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<EmployeeCsvPreviewDTO> previewImportCsv(@RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(csvImportService.preview(file));
+    }
+
+    @RequiresPermission(module = AppModule.HRS_BULK_UPLOAD, action = {AppAction.CREATE})
+    @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<EmployeeCsvImportResultDTO> importCsv(
+            @RequestPart("file") MultipartFile file,
+            @RequestPart(value = "mapping", required = false) String mapping) {
+        return ResponseEntity.ok(csvImportService.importCsv(file, mapping));
     }
 
     // ======================================================

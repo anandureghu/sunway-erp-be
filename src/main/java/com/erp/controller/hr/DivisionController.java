@@ -1,9 +1,14 @@
 package com.erp.controller.hr;
 
 import com.erp.dto.hr.CreateDivisionDTO;
+import com.erp.dto.hr.DivisionCsvImportResultDTO;
+import com.erp.dto.hr.DivisionCsvPreviewDTO;
 import com.erp.dto.hr.DivisionResponseDTO;
+import com.erp.service.hr.DivisionCsvImportService;
 import com.erp.service.hr.DivisionService;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -11,9 +16,11 @@ import java.util.List;
 @RequestMapping("/api/divisions")
 public class DivisionController {
     private final DivisionService divisionService;
+    private final DivisionCsvImportService csvImportService;
 
-    public DivisionController(DivisionService divisionService) {
+    public DivisionController(DivisionService divisionService, DivisionCsvImportService csvImportService) {
         this.divisionService = divisionService;
+        this.csvImportService = csvImportService;
     }
 
     // Get all departments for logged-in user's companies
@@ -58,5 +65,17 @@ public class DivisionController {
     public List<DivisionResponseDTO> getDivisionsByDepartment(
             @PathVariable("departmentId") Long departmentId) {
         return divisionService.getDivisionsByDepartmentId(departmentId);
+    }
+
+    @PostMapping(value = "/import-csv/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DivisionCsvPreviewDTO previewImportCsv(@RequestPart("file") MultipartFile file) {
+        return csvImportService.preview(file);
+    }
+
+    @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DivisionCsvImportResultDTO importCsv(
+            @RequestPart("file") MultipartFile file,
+            @RequestPart(value = "mapping", required = false) String mapping) {
+        return csvImportService.importCsv(file, mapping);
     }
 }
