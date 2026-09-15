@@ -363,6 +363,8 @@ public class SubscriptionInvoiceService {
                 .paymentId(paidPayment != null ? paidPayment.getId() : null)
                 .paidOn(paidPayment != null ? paidPayment.getPaidOn() : null)
                 .receiptNo(paidPayment != null ? paidPayment.getReceiptNo() : null)
+                .archived(inv.isArchived())
+                .archivedAt(inv.getArchivedAt())
                 .build();
     }
 

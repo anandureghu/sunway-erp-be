@@ -44,4 +44,6 @@ public class SubscriptionInvoiceResponse {
     private Long paymentId;
     private LocalDate paidOn;
     private String receiptNo;
+    private boolean archived;
+    private Instant archivedAt;
 }

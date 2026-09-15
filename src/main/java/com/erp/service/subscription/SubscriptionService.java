@@ -81,8 +81,13 @@ public class SubscriptionService {
 
     @Transactional(readOnly = true)
     public CompanySubscriptionResponse getByCompanyId(Long companyId) {
+        return getByCompanyId(companyId, false);
+    }
+
+    @Transactional(readOnly = true)
+    public CompanySubscriptionResponse getByCompanyId(Long companyId, boolean includeArchived) {
         CompanySubscription cs = requireSubscription(companyId);
-        return toDetail(cs);
+        return toListItem(cs, true, includeArchived);
     }
 
     @Transactional(readOnly = true)
@@ -303,11 +308,17 @@ public class SubscriptionService {
         }
         boolean sendReceipt = req.getSendReceipt() == null || req.getSendReceipt();
         if (sendReceipt && payment.getId() != null) {
-            SubscriptionPaymentResponse receiptResult =
-                    receiptService.sendReceipt(companyId, payment.getId(), false);
-            if (!receiptResult.isReceiptSent() && receiptResult.getReceiptSendError() != null) {
-                log.warn("Payment recorded but receipt email failed for companyId={}: {}",
-                        companyId, receiptResult.getReceiptSendError());
+            // Never fail the payment transaction because email/SMTP misconfiguration.
+            try {
+                SubscriptionPaymentResponse receiptResult =
+                        receiptService.sendReceipt(companyId, payment.getId(), false);
+                if (!receiptResult.isReceiptSent() && receiptResult.getReceiptSendError() != null) {
+                    log.warn("Payment recorded but receipt email failed for companyId={}: {}",
+                            companyId, receiptResult.getReceiptSendError());
+                }
+            } catch (Exception e) {
+                log.warn("Payment recorded but receipt email threw for companyId={}: {}",
+                        companyId, e.getMessage());
             }
         }
 
@@ -629,10 +640,19 @@ public class SubscriptionService {
     }
 
     private CompanySubscriptionResponse toListItem(CompanySubscription cs, boolean withHistory) {
+        return toListItem(cs, withHistory, false);
+    }
+
+    private CompanySubscriptionResponse toListItem(
+            CompanySubscription cs,
+            boolean withHistory,
+            boolean includeArchived
+    ) {
         Company company = companyRepository.findById(cs.getCompanyId()).orElse(null);
         List<SubscriptionPayment> payments = paymentRepository
                 .findByCompanySubscriptionIdOrderByPaidOnDescCreatedAtDesc(cs.getId());
-        var lastPay = payments.stream().findFirst();
+        var lastPay = payments.stream().filter(p -> !p.isArchived()).findFirst()
+                .or(() -> payments.stream().findFirst());
 
         CompanySubscriptionResponse.CompanySubscriptionResponseBuilder b = CompanySubscriptionResponse.builder()
                 .id(cs.getId())
@@ -664,17 +684,60 @@ public class SubscriptionService {
         });
 
         if (withHistory) {
-            b.payments(payments.stream().map(this::toPaymentDto).collect(Collectors.toList()));
-            b.reminders(reminderLogRepository.findByCompanySubscriptionIdOrderBySentAtDesc(cs.getId())
-                    .stream().map(this::toReminderDto).collect(Collectors.toList()));
-            b.invoices(invoiceRepository.findByCompanySubscriptionIdOrderByCreatedAtDesc(cs.getId())
-                    .stream().map(invoiceService::toDto).collect(Collectors.toList()));
+            List<SubscriptionPayment> paymentRows = includeArchived
+                    ? payments
+                    : payments.stream().filter(p -> !p.isArchived()).toList();
+            List<SubscriptionReminderLog> reminders = includeArchived
+                    ? reminderLogRepository.findByCompanySubscriptionIdOrderBySentAtDesc(cs.getId())
+                    : reminderLogRepository.findByCompanySubscriptionIdAndArchivedOrderBySentAtDesc(cs.getId(), false);
+            List<SubscriptionInvoice> invoices = includeArchived
+                    ? invoiceRepository.findByCompanySubscriptionIdOrderByCreatedAtDesc(cs.getId())
+                    : invoiceRepository.findByCompanySubscriptionIdAndArchivedOrderByCreatedAtDesc(cs.getId(), false);
+            b.payments(paymentRows.stream().map(this::toPaymentDto).collect(Collectors.toList()));
+            b.reminders(reminders.stream().map(this::toReminderDto).collect(Collectors.toList()));
+            b.invoices(invoices.stream().map(invoiceService::toDto).collect(Collectors.toList()));
         }
         return b.build();
     }
 
     private CompanySubscriptionResponse toDetail(CompanySubscription cs) {
-        return toListItem(cs, true);
+        return toListItem(cs, true, false);
+    }
+
+    @Transactional
+    public SubscriptionPaymentResponse archivePayment(Long companyId, Long paymentId, boolean archived) {
+        SubscriptionPayment payment = paymentRepository.findByIdAndCompanyId(paymentId, companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
+        payment.setArchived(archived);
+        payment.setArchivedAt(archived ? Instant.now() : null);
+        return toPaymentDto(paymentRepository.save(payment));
+    }
+
+    @Transactional
+    public SubscriptionInvoiceResponse archiveInvoice(Long companyId, Long invoiceId, boolean archived) {
+        CompanySubscription cs = requireSubscription(companyId);
+        SubscriptionInvoice invoice = invoiceRepository.findByIdAndCompanyId(invoiceId, companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
+        String periodKey = SubscriptionInvoiceService.periodKey(cs.getStartsAt(), cs.getEndsAt());
+        if (archived && Objects.equals(invoice.getPeriodKey(), periodKey)) {
+            throw new IllegalArgumentException("Cannot archive the current period invoice");
+        }
+        invoice.setArchived(archived);
+        invoice.setArchivedAt(archived ? Instant.now() : null);
+        return invoiceService.toDto(invoiceRepository.save(invoice));
+    }
+
+    @Transactional
+    public SubscriptionReminderLogResponse archiveReminder(Long companyId, Long reminderId, boolean archived) {
+        CompanySubscription cs = requireSubscription(companyId);
+        SubscriptionReminderLog reminder = reminderLogRepository.findById(reminderId)
+                .orElseThrow(() -> new IllegalArgumentException("Reminder not found"));
+        if (!Objects.equals(reminder.getCompanySubscriptionId(), cs.getId())) {
+            throw new IllegalArgumentException("Reminder does not belong to this subscription");
+        }
+        reminder.setArchived(archived);
+        reminder.setArchivedAt(archived ? Instant.now() : null);
+        return toReminderDto(reminderLogRepository.save(reminder));
     }
 
     private SubscriptionPaymentResponse toPaymentDto(SubscriptionPayment p) {
@@ -690,6 +753,8 @@ public class SubscriptionService {
                 .toEmail(r.getToEmail())
                 .success(r.isSuccess())
                 .error(r.getError())
+                .archived(r.isArchived())
+                .archivedAt(r.getArchivedAt())
                 .build();
     }
 

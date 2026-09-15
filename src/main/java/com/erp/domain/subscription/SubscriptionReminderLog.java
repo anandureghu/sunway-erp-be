@@ -41,4 +41,11 @@ public class SubscriptionReminderLog {
 
     @Column(length = 1000)
     private String error;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean archived = false;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
 }

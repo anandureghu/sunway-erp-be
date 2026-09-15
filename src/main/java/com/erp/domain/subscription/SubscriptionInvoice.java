@@ -82,4 +82,11 @@ public class SubscriptionInvoice {
 
     @Column(name = "created_by", length = 50)
     private String createdBy;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean archived = false;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
 }

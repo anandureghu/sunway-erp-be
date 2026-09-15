@@ -71,8 +71,11 @@ public class SubscriptionController {
 
     @GetMapping("/{companyId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public CompanySubscriptionResponse get(@PathVariable Long companyId) {
-        return subscriptionService.getByCompanyId(companyId);
+    public CompanySubscriptionResponse get(
+            @PathVariable Long companyId,
+            @RequestParam(defaultValue = "false") boolean includeArchived
+    ) {
+        return subscriptionService.getByCompanyId(companyId, includeArchived);
     }
 
     @PutMapping("/{companyId}")
@@ -170,5 +173,35 @@ public class SubscriptionController {
             @RequestParam(defaultValue = "false") boolean resend
     ) {
         return receiptService.sendReceipt(companyId, paymentId, resend);
+    }
+
+    @PostMapping("/{companyId}/payments/{paymentId}/archive")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public SubscriptionPaymentResponse archivePayment(
+            @PathVariable Long companyId,
+            @PathVariable Long paymentId,
+            @RequestParam(defaultValue = "true") boolean archived
+    ) {
+        return subscriptionService.archivePayment(companyId, paymentId, archived);
+    }
+
+    @PostMapping("/{companyId}/invoices/{invoiceId}/archive")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public SubscriptionInvoiceResponse archiveInvoice(
+            @PathVariable Long companyId,
+            @PathVariable Long invoiceId,
+            @RequestParam(defaultValue = "true") boolean archived
+    ) {
+        return subscriptionService.archiveInvoice(companyId, invoiceId, archived);
+    }
+
+    @PostMapping("/{companyId}/reminders/{reminderId}/archive")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public SubscriptionReminderLogResponse archiveReminder(
+            @PathVariable Long companyId,
+            @PathVariable Long reminderId,
+            @RequestParam(defaultValue = "true") boolean archived
+    ) {
+        return subscriptionService.archiveReminder(companyId, reminderId, archived);
     }
 }

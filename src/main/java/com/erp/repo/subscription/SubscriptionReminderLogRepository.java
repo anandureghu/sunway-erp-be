@@ -11,6 +11,9 @@ public interface SubscriptionReminderLogRepository extends JpaRepository<Subscri
 
     List<SubscriptionReminderLog> findByCompanySubscriptionIdOrderBySentAtDesc(Long companySubscriptionId);
 
+    List<SubscriptionReminderLog> findByCompanySubscriptionIdAndArchivedOrderBySentAtDesc(
+            Long companySubscriptionId, boolean archived);
+
     Optional<SubscriptionReminderLog> findByCompanySubscriptionIdAndReminderTypeAndPeriodKeyAndSuccessTrue(
             Long companySubscriptionId,
             SubscriptionReminderType reminderType,

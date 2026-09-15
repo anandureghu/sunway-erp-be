@@ -154,7 +154,15 @@ public class SubscriptionPaymentReceiptService {
                     "No recipients found: set company/billing email or ensure a company ADMIN has an email.");
         }
         String toJoined = String.join(", ", recipients);
-        byte[] pdf = generateReceiptPdf(payment, company);
+        byte[] pdf;
+        try {
+            pdf = generateReceiptPdf(payment, company);
+        } catch (Exception e) {
+            log.warn("Payment receipt PDF failed for paymentId={}: {}", paymentId, e.getMessage());
+            return persistReceiptSendFailure(
+                    payment,
+                    truncate("Receipt PDF generation failed: " + e.getMessage(), 1000));
+        }
 
         String subject = "Payment receipt " + payment.getReceiptNo()
                 + " — " + (company.getCompanyName() != null ? company.getCompanyName() : "your company");
@@ -242,6 +250,8 @@ public class SubscriptionPaymentReceiptService {
                 .receiptSent(receiptSent)
                 .receiptToEmail(payment.getReceiptToEmail())
                 .receiptSendError(payment.getReceiptSendError())
+                .archived(payment.isArchived())
+                .archivedAt(payment.getArchivedAt())
                 .build();
     }
 

@@ -14,6 +14,9 @@ public interface SubscriptionPaymentRepository extends JpaRepository<Subscriptio
 
     List<SubscriptionPayment> findByCompanySubscriptionIdOrderByPaidOnDescCreatedAtDesc(Long companySubscriptionId);
 
+    List<SubscriptionPayment> findByCompanySubscriptionIdAndArchivedOrderByPaidOnDescCreatedAtDesc(
+            Long companySubscriptionId, boolean archived);
+
     List<SubscriptionPayment> findByCompanyIdOrderByPaidOnDescCreatedAtDesc(Long companyId);
 
     Optional<SubscriptionPayment> findByIdempotencyKey(String idempotencyKey);

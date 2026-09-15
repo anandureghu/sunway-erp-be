@@ -10,6 +10,9 @@ public interface SubscriptionInvoiceRepository extends JpaRepository<Subscriptio
 
     List<SubscriptionInvoice> findByCompanySubscriptionIdOrderByCreatedAtDesc(Long companySubscriptionId);
 
+    List<SubscriptionInvoice> findByCompanySubscriptionIdAndArchivedOrderByCreatedAtDesc(
+            Long companySubscriptionId, boolean archived);
+
     List<SubscriptionInvoice> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     Optional<SubscriptionInvoice> findByIdAndCompanyId(Long id, Long companyId);

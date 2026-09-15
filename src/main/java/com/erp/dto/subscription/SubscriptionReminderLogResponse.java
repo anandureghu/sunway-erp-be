@@ -18,4 +18,6 @@ public class SubscriptionReminderLogResponse {
     private String toEmail;
     private boolean success;
     private String error;
+    private boolean archived;
+    private Instant archivedAt;
 }

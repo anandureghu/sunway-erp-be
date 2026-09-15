@@ -74,4 +74,11 @@ public class SubscriptionPayment {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean archived = false;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
 }

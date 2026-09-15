@@ -31,4 +31,6 @@ public class SubscriptionPaymentResponse {
     private boolean receiptSent;
     private String receiptToEmail;
     private String receiptSendError;
+    private boolean archived;
+    private Instant archivedAt;
 }
