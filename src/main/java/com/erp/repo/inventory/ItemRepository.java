@@ -1,6 +1,7 @@
 package com.erp.repo.inventory;
 
 import com.erp.domain.inventory.Item;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -56,6 +57,10 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
             @Param("category") String category);
 
     List<Item> findByCompanyIdAndArchivedOrderByCreatedAtDesc(Long companyId, boolean archived);
+
+    Page<Item> findByCompanyIdAndArchivedTrueOrderByCreatedAtDesc(Long companyId, Pageable pageable);
+
+    List<Item> findByCompanyIdAndArchivedTrue(Long companyId);
 
     @Query("SELECT COUNT(poi) FROM PurchaseOrderItem poi WHERE poi.item.id = :itemId")
     long countPurchaseOrderLineRefs(@Param("itemId") Long itemId);

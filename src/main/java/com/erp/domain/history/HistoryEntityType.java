@@ -10,6 +10,7 @@ public enum HistoryEntityType {
     STOCK_VARIANCE(HistoryModule.INVENTORY),
     GOODS_RECEIPT(HistoryModule.INVENTORY),
     PICKLIST(HistoryModule.INVENTORY),
+    INVENTORY_ITEM(HistoryModule.INVENTORY),
     SALES_INVOICE(HistoryModule.FINANCE),
     CUSTOMER_PAYMENT(HistoryModule.FINANCE),
     PURCHASE_INVOICE(HistoryModule.FINANCE),

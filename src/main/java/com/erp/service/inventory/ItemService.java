@@ -834,6 +834,16 @@ public class ItemService {
         return runBulk(req, this::deleteOne);
     }
 
+    /** Single-item archive for history / reports bulk actions. */
+    public void archive(Long itemId) {
+        archiveOne(itemId);
+    }
+
+    /** Permanent delete of an archived item for history bulk actions. */
+    public void permanentlyDelete(Long itemId) {
+        deleteOne(itemId);
+    }
+
     public BulkActionResultDTO bulkUpdateStatus(ItemBulkStatusRequestDTO req) {
         if (req == null || req.getItemIds() == null || req.getItemIds().isEmpty()) {
             throw new IllegalArgumentException("Select at least one item.");
