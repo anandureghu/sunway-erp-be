@@ -1,7 +1,14 @@
 package com.erp.service;
 
+import com.erp.domain.Employee;
+import com.erp.domain.EmployeeCurrentJob;
 import com.erp.domain.EmployeeStatus;
+import com.erp.domain.enums.BenefitType;
 import com.erp.domain.hr.Department;
+import com.erp.domain.hrsettings.JobCode;
+import com.erp.domain.salary.AccountType;
+import com.erp.domain.salary.EmployeeBankDetails;
+import com.erp.domain.salary.EmployeeCompensation;
 import com.erp.dto.contact.EmployeeContactInfoRequestDTO;
 import com.erp.dto.hr.CreateEmployeeDTO;
 import com.erp.dto.hr.EmployeeCsvImportResultDTO;
@@ -9,9 +16,13 @@ import com.erp.dto.hr.UpdateEmployeeDTO;
 import com.erp.dto.hr.EmployeeCsvImportResultDTO.RowError;
 import com.erp.dto.hr.EmployeeCsvPreviewDTO;
 import com.erp.dto.hr.EmployeeResponseDTO;
+import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.CompanyRoleRepository;
 import com.erp.repo.hr.DepartmentRepository;
+import com.erp.repo.hrsettings.JobCodeRepository;
+import com.erp.repo.salary.EmployeeBankDetailsRepository;
+import com.erp.repo.salary.EmployeeCompensationRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.EmployeeCsvColumnMapperService.MappingResult;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -44,6 +55,10 @@ public class EmployeeCsvImportService {
     private final EmployeeRepository employeeRepo;
     private final DepartmentRepository departmentRepo;
     private final CompanyRoleRepository companyRoleRepo;
+    private final JobCodeRepository jobCodeRepo;
+    private final EmployeeBankDetailsRepository bankRepo;
+    private final EmployeeCompensationRepository compensationRepo;
+    private final EmployeeCurrentJobRepo currentJobRepo;
     private final AuthContext auth;
     private final EmployeeCsvColumnMapperService columnMapper;
     private final ObjectMapper objectMapper;
@@ -89,10 +104,14 @@ public class EmployeeCsvImportService {
                 empNo = blankToNull(vals.get("employeeNo"));
 
                 Long departmentId = null;
+                Department department = null;
                 String deptName = blankToNull(vals.get("departmentName"));
                 if (deptName != null) {
                     Optional<Department> dept = departmentRepo.findByDepartmentNameIgnoreCaseAndCompany_Id(deptName, companyId);
-                    departmentId = dept.map(Department::getId).orElse(null);
+                    if (dept.isPresent()) {
+                        department = dept.get();
+                        departmentId = department.getId();
+                    }
                 }
 
                 Long companyRoleId = null;
@@ -106,11 +125,13 @@ public class EmployeeCsvImportService {
                 String altPhone = blankToNull(vals.get("altPhone"));
                 String email = blankToNull(vals.get("email"));
 
+                Employee empEntity;
+
                 // Upsert: if employeeNo is provided and the employee already exists, update
                 if (empNo != null) {
-                    Optional<com.erp.domain.Employee> existingOpt = employeeRepo.findByCompany_IdAndEmployeeNo(companyId, empNo);
+                    Optional<Employee> existingOpt = employeeRepo.findByCompany_IdAndEmployeeNo(companyId, empNo);
                     if (existingOpt.isPresent()) {
-                        com.erp.domain.Employee existing = existingOpt.get();
+                        Employee existing = existingOpt.get();
                         UpdateEmployeeDTO updateDto = UpdateEmployeeDTO.builder()
                                 .firstName(firstName)
                                 .middleName(blankToNull(vals.get("middleName")))
@@ -130,6 +151,8 @@ public class EmployeeCsvImportService {
                                 .companyRoleId(companyRoleId)
                                 .build();
                         EmployeeResponseDTO updatedEmp = employeeService.updateEmployee(existing.getId(), updateDto);
+                        empEntity = employeeRepo.findById(updatedEmp.getId()).orElse(existing);
+
                         if (phone != null || altPhone != null || email != null) {
                             try {
                                 contactInfoService.saveOrUpdateContactInfo(
@@ -139,6 +162,12 @@ public class EmployeeCsvImportService {
                                 );
                             } catch (Exception ignored) {}
                         }
+
+                        saveProbationEndDate(empEntity, vals);
+                        saveBank(empEntity, vals);
+                        saveCompensation(empEntity, vals);
+                        saveCurrentJob(empEntity, department, companyId, vals);
+
                         updated++;
                         continue;
                     }
@@ -165,6 +194,7 @@ public class EmployeeCsvImportService {
                         .build();
 
                 EmployeeResponseDTO createdEmp = employeeService.createEmployee(dto);
+                empEntity = employeeRepo.findById(createdEmp.getId()).orElseThrow();
 
                 if (phone != null || altPhone != null || email != null) {
                     try {
@@ -175,6 +205,12 @@ public class EmployeeCsvImportService {
                         );
                     } catch (Exception ignored) {}
                 }
+
+                saveProbationEndDate(empEntity, vals);
+                saveBank(empEntity, vals);
+                saveCompensation(empEntity, vals);
+                saveCurrentJob(empEntity, department, companyId, vals);
+
                 created++;
             } catch (Exception ex) {
                 failed++;
@@ -184,6 +220,120 @@ public class EmployeeCsvImportService {
         return EmployeeCsvImportResultDTO.builder().created(created).updated(updated).skipped(skipped).failed(failed).errors(errors).build();
     }
 
+    // ── Sub-table savers ────────────────────────────────────────────────────
+
+    private void saveProbationEndDate(Employee emp, Map<String, String> vals) {
+        LocalDate probEnd = parseDate(vals.get("probationEndDate"));
+        if (probEnd == null) return;
+        emp.setProbationEndDate(probEnd);
+        employeeRepo.save(emp);
+    }
+
+    private void saveBank(Employee emp, Map<String, String> vals) {
+        String bankName = blankToNull(vals.get("bankName"));
+        String iban = blankToNull(vals.get("iban"));
+        if (bankName == null && iban == null) return;
+
+        try {
+            EmployeeBankDetails bank = bankRepo.findByEmployee(emp).orElseGet(EmployeeBankDetails::new);
+            bank.setEmployee(emp);
+            if (bankName != null) bank.setBankName(bankName);
+            else if (bank.getBankName() == null) bank.setBankName("—");
+
+            if (iban != null) {
+                bank.setIban(iban);
+                if (bank.getAccountNo() == null) bank.setAccountNo(iban);
+            }
+            if (bank.getBankBranch() == null) bank.setBankBranch("Main Branch");
+            if (bank.getAccountType() == null) bank.setAccountType(AccountType.SAVINGS_ACCOUNT);
+            bankRepo.save(bank);
+        } catch (Exception ignored) {}
+    }
+
+    private void saveCompensation(Employee emp, Map<String, String> vals) {
+        Double basic = parseMoney(vals.get("basicSalary"));
+        if (basic == null) return;
+
+        try {
+            EmployeeCompensation comp = compensationRepo.findByEmployeeAndStatus(emp, "ACTIVE")
+                    .orElseGet(EmployeeCompensation::new);
+            comp.setEmployee(emp);
+            comp.setBasicSalary(basic);
+
+            Double housing = parseMoney(vals.get("housingAllowance"));
+            Double transport = parseMoney(vals.get("transportAllowance"));
+            Double other = parseMoney(vals.get("otherAllowance"));
+
+            comp.setHousingAllowance(housing != null ? housing : (comp.getHousingAllowance() != null ? comp.getHousingAllowance() : 0.0));
+            comp.setHousingType(housing != null && housing > 0 ? BenefitType.ALLOWANCE : BenefitType.NONE);
+
+            comp.setTransportationAllowance(transport != null ? transport : (comp.getTransportationAllowance() != null ? comp.getTransportationAllowance() : 0.0));
+            comp.setTransportationType(transport != null && transport > 0 ? BenefitType.ALLOWANCE : BenefitType.NONE);
+
+            comp.setOtherAllowance(other != null ? other : (comp.getOtherAllowance() != null ? comp.getOtherAllowance() : 0.0));
+
+            if (comp.getTravelAllowance() == null) comp.setTravelAllowance(0.0);
+            if (comp.getTravelType() == null) comp.setTravelType(BenefitType.NONE);
+            if (comp.getFoodAllowance() == null) comp.setFoodAllowance(0.0);
+
+            comp.setTotalCompensation(
+                    comp.getBasicSalary() + comp.getHousingAllowance() +
+                    comp.getTransportationAllowance() + comp.getTravelAllowance() +
+                    comp.getOtherAllowance() + comp.getFoodAllowance()
+            );
+
+            comp.setStatus("ACTIVE");
+            if (comp.getEffectiveFrom() == null) {
+                LocalDate joinDate = emp.getJoinDate();
+                comp.setEffectiveFrom(joinDate != null ? joinDate : LocalDate.now());
+            }
+            compensationRepo.save(comp);
+        } catch (Exception ignored) {}
+    }
+
+    private void saveCurrentJob(Employee emp, Department department, Long companyId, Map<String, String> vals) {
+        String designation = blankToNull(vals.get("designation"));
+        String workLocation = blankToNull(vals.get("workLocation"));
+        String managerNo = blankToNull(vals.get("reportingManagerNo"));
+
+        if (designation == null && workLocation == null && managerNo == null) return;
+        if (department == null && designation == null) return;
+
+        try {
+            JobCode jobCode = null;
+            if (designation != null) {
+                jobCode = jobCodeRepo.findFirstByCompany_IdAndTitleIgnoreCase(companyId, designation).orElse(null);
+            }
+            if (jobCode == null && !currentJobRepo.existsByEmployee_Id(emp.getId())) return;
+
+            EmployeeCurrentJob job = currentJobRepo.findByEmployee_Id(emp.getId())
+                    .orElseGet(EmployeeCurrentJob::new);
+            job.setEmployee(emp);
+
+            if (jobCode != null) job.setJobCode(jobCode);
+            if (department != null) job.setDepartment(department);
+            else if (job.getDepartment() == null) return; // department required
+
+            if (job.getJobCode() == null) return; // job code required
+
+            if (workLocation != null) job.setWorkLocation(workLocation);
+
+            if (managerNo != null) {
+                employeeRepo.findByCompany_IdAndEmployeeNo(companyId, managerNo)
+                        .ifPresent(job::setReportingManager);
+            }
+
+            if (job.getStartDate() == null) {
+                LocalDate joinDate = emp.getJoinDate();
+                job.setStartDate(joinDate != null ? joinDate : LocalDate.now());
+                job.setEffectiveFrom(job.getStartDate());
+            }
+            currentJobRepo.save(job);
+        } catch (Exception ignored) {}
+    }
+
+    // ── Parsing helpers ─────────────────────────────────────────────────────
+
     private static LocalDate parseDate(String value) {
         String v = blankToNull(value);
         if (v == null) return null;
@@ -191,6 +341,15 @@ public class EmployeeCsvImportService {
             try { return LocalDate.parse(v, fmt); } catch (DateTimeParseException ignored) {}
         }
         return null;
+    }
+
+    private static Double parseMoney(String value) {
+        String v = blankToNull(value);
+        if (v == null) return null;
+        // Strip currency symbols, commas, quotes, whitespace
+        v = v.replaceAll("[,\"'\\s]", "").replaceAll("[^0-9.]", "");
+        if (v.isEmpty()) return null;
+        try { return Double.parseDouble(v); } catch (NumberFormatException e) { return null; }
     }
 
     private static EmployeeStatus parseStatus(String value) {

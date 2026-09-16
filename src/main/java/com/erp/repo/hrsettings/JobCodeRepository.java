@@ -15,4 +15,6 @@ public interface JobCodeRepository extends JpaRepository<JobCode, Long> {
     Optional<JobCode> findByCompany_IdAndCode(Long companyId, String code);
 
     Optional<JobCode> findByIdAndCompany_Id(Long id, Long companyId);
+
+    Optional<JobCode> findFirstByCompany_IdAndTitleIgnoreCase(Long companyId, String title);
 }

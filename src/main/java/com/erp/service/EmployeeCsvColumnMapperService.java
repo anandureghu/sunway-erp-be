@@ -22,7 +22,10 @@ public class EmployeeCsvColumnMapperService {
             "gender", "prefix", "maritalStatus", "dateOfBirth", "joinDate", "status",
             "birthplace", "hometown", "nationality", "religion", "identification",
             "phoneNo", "altPhone", "email",
-            "departmentName", "companyRole"
+            "departmentName", "companyRole",
+            "designation", "probationEndDate", "reportingManagerNo", "workLocation",
+            "bankName", "iban",
+            "basicSalary", "housingAllowance", "transportAllowance", "otherAllowance"
     );
 
     private final OpenAiChatClient openAiChatClient;
@@ -91,6 +94,16 @@ public class EmployeeCsvColumnMapperService {
                 - email = Email, Email Address.
                 - departmentName = Department, Department Name, Dept.
                 - companyRole = Company Role, Role, Position, Job Position.
+                - designation = Designation, Job Title, Title (when used as job designation).
+                - probationEndDate = Probation End Date, Probation End, Probation Until.
+                - reportingManagerNo = Reporting Manager ID, Manager ID, Manager No, Reports To.
+                - workLocation = Work Location, Location, Office Location.
+                - bankName = Bank Name, Bank.
+                - iban = IBAN, Bank Account, Account Number, IBAN No.
+                - basicSalary = Basic Salary, Base Salary, Basic Pay, Basic (QAR).
+                - housingAllowance = Housing Allowance, Housing, House Allowance.
+                - transportAllowance = Transport Allowance, Transportation Allowance, Transport.
+                - otherAllowance = Other Allowances, Other Allowance, Additional Allowance.
                 - Never map Arabic/AR columns — always null.
                 - Do not map two headers to the same canonical field.
                 """;
@@ -146,6 +159,16 @@ public class EmployeeCsvColumnMapperService {
             else if (n.contains("email") && !used.contains("email")) mapped = "email";
             else if ((n.contains("dept") || n.contains("department")) && !used.contains("departmentName")) mapped = "departmentName";
             else if ((n.contains("companyrole") || n.contains("role") || n.equals("position")) && !used.contains("companyRole")) mapped = "companyRole";
+            else if ((n.equals("designation") || n.contains("jobtitle")) && !used.contains("designation")) mapped = "designation";
+            else if ((n.contains("probationend") || n.contains("probationuntil")) && !used.contains("probationEndDate")) mapped = "probationEndDate";
+            else if ((n.contains("reportingmanager") || n.contains("managerid") || n.contains("managerno") || n.contains("reportsto")) && !used.contains("reportingManagerNo")) mapped = "reportingManagerNo";
+            else if ((n.contains("worklocation") || n.equals("location")) && !used.contains("workLocation")) mapped = "workLocation";
+            else if ((n.equals("bank") || n.contains("bankname")) && !used.contains("bankName")) mapped = "bankName";
+            else if (n.equals("iban") && !used.contains("iban")) mapped = "iban";
+            else if ((n.contains("basicsalary") || n.contains("basesalary") || n.contains("basicpay") || n.contains("basepay")) && !used.contains("basicSalary")) mapped = "basicSalary";
+            else if ((n.contains("housingallowance") || n.equals("housing")) && !used.contains("housingAllowance")) mapped = "housingAllowance";
+            else if ((n.contains("transportallowance") || n.contains("transportationallowance") || n.equals("transport")) && !used.contains("transportAllowance")) mapped = "transportAllowance";
+            else if ((n.contains("otherallowance") || n.contains("otherallowances") || n.contains("additionalallowance")) && !used.contains("otherAllowance")) mapped = "otherAllowance";
             if (mapped != null) used.add(mapped);
             result.put(header, mapped);
         }
