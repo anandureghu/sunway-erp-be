@@ -29,6 +29,9 @@ public class BankAccount {
     @Column(name = "account_number", nullable = false, length = 30)
     private String accountNumber;
 
+    @Column(name = "iban", length = 34)
+    private String iban;
+
     @Column(name = "ifsc_code", length = 20)
     private String ifscCode;
 

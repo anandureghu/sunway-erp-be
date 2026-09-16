@@ -36,6 +36,7 @@ public class BankAccountService {
         BankAccount account = BankAccount.builder()
                 .bankName(request.getBankName())
                 .accountNumber(request.getAccountNumber())
+                .iban(request.getIban())
                 .ifscCode(request.getIfscCode())
                 .branchName(request.getBranchName())
                 .accountHolderName(request.getAccountHolderName())
@@ -74,6 +75,7 @@ public class BankAccountService {
 
         account.setBankName(request.getBankName());
         account.setAccountNumber(request.getAccountNumber());
+        account.setIban(request.getIban());
         account.setIfscCode(request.getIfscCode());
         account.setBranchName(request.getBranchName());
         account.setAccountHolderName(request.getAccountHolderName());
@@ -120,6 +122,7 @@ public class BankAccountService {
                 .companyId(account.getCompany().getId())
                 .bankName(account.getBankName())
                 .accountNumber(account.getAccountNumber())
+                .iban(account.getIban())
                 .ifscCode(account.getIfscCode())
                 .branchName(account.getBranchName())
                 .accountHolderName(account.getAccountHolderName())

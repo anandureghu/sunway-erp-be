@@ -1108,8 +1108,9 @@ public class TransactionService {
                 .createdBy(auth.getCurrentUserId())
                 .build();
 
+        // Encumbrance is a reservation record only — COA balances are updated
+        // when the vendor payment is confirmed, not when the PO is released.
         Transaction saved = repo.save(tx);
-        applyPostingToCoa(saved);
         return toDTO(saved);
     }
 

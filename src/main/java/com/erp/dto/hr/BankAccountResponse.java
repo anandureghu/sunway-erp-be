@@ -12,6 +12,7 @@ public class BankAccountResponse {
 
     private String bankName;
     private String accountNumber;
+    private String iban;
     private String ifscCode;
     private String branchName;
     private String accountHolderName;

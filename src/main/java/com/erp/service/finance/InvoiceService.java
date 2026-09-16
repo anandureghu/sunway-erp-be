@@ -1377,6 +1377,7 @@ public class InvoiceService {
                 .bankAccountId(i.getBankAccount() != null ? i.getBankAccount().getId() : null)
                 .bankAccountName(i.getBankAccount() != null ? i.getBankAccount().getBankName() : null)
                 .bankAccountNumber(i.getBankAccount() != null ? i.getBankAccount().getAccountNumber() : null)
+                .bankIban(i.getBankAccount() != null ? i.getBankAccount().getIban() : null)
                 .bankIfscCode(i.getBankAccount() != null ? i.getBankAccount().getIfscCode() : null)
                 .bankBranchName(i.getBankAccount() != null ? i.getBankAccount().getBranchName() : null)
                 .invoiceHeaderSubtitle(invoiceSettings.getInvoiceHeaderSubtitle())

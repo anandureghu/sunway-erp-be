@@ -17,16 +17,19 @@ public final class CoaBalanceRules {
     }
 
     /**
-     * Types where stored balance may legitimately cross zero in either direction in this app.
+     * Types where stored balance may legitimately cross zero in either direction.
+     * Only BUDGET accounts are hard-blocked from going negative — overspending a
+     * budget allocation is a genuine business-rule violation.  All other account
+     * types (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE, INCOME, CASH, TAX, COST)
+     * follow normal double-entry accounting rules and may carry a negative trail
+     * balance depending on the posting sequence (e.g., an asset account can show
+     * a negative balance before the corresponding opening-balance entry is made).
      */
     private static boolean allowsNegativeResultingBalance(COAType type) {
         if (type == null) {
-            return false;
+            return true;
         }
-        return switch (type) {
-            case LIABILITY, EQUITY, REVENUE, INCOME -> true;
-            default -> false;
-        };
+        return type != COAType.BUDGET;
     }
 
     /**
