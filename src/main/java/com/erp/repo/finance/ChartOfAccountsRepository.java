@@ -13,6 +13,8 @@ import java.util.Optional;
 public interface ChartOfAccountsRepository extends JpaRepository<ChartOfAccounts, Long> {
     Optional<ChartOfAccounts> findByAccountCode(String code);
 
+    Optional<ChartOfAccounts> findByCompany_IdAndAccountCode(Long companyId, String accountCode);
+
     List<ChartOfAccounts> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
     boolean existsByCompany_IdAndAccountNo(Long companyId, String accountNo);

@@ -1,14 +1,18 @@
 package com.erp.controller.finance;
 
 import com.erp.dto.finance.ChartOfAccountResponseDTO;
+import com.erp.dto.finance.ChartOfAccountsCsvImportResultDTO;
+import com.erp.dto.finance.ChartOfAccountsCsvPreviewDTO;
 import com.erp.dto.finance.CreateAccountDTO;
 import com.erp.dto.finance.SetInitialBalanceDTO;
 import com.erp.dto.finance.UpdateAccountDTO;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.service.finance.ChartOfAccountsCsvImportService;
 import com.erp.service.finance.ChartOfAccountsService;
 import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -17,9 +21,12 @@ import java.util.List;
 public class ChartOfAccountsController {
 
     private final ChartOfAccountsService service;
+    private final ChartOfAccountsCsvImportService csvImportService;
 
-    public ChartOfAccountsController(ChartOfAccountsService service) {
+    public ChartOfAccountsController(ChartOfAccountsService service,
+                                     ChartOfAccountsCsvImportService csvImportService) {
         this.service = service;
+        this.csvImportService = csvImportService;
     }
 
     @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.CREATE})
@@ -66,5 +73,20 @@ public class ChartOfAccountsController {
     @DeleteMapping("/{id}")
     public void delete(@PathVariable("id") Long id) {
         service.delete(id);
+    }
+
+    @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.CREATE})
+    @PostMapping("/import-csv/preview")
+    public ChartOfAccountsCsvPreviewDTO previewCsv(
+            @RequestParam("file") MultipartFile file) {
+        return csvImportService.preview(file);
+    }
+
+    @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.CREATE})
+    @PostMapping("/import-csv")
+    public ChartOfAccountsCsvImportResultDTO importCsv(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "mapping", required = false) String mappingJson) {
+        return csvImportService.importCsv(file, mappingJson);
     }
 }
