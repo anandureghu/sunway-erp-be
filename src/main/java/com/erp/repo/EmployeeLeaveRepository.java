@@ -135,6 +135,19 @@ public interface EmployeeLeaveRepository extends JpaRepository<EmployeeLeave, Lo
             @Param("companyId") Long companyId,
             @Param("onDate") LocalDate onDate);
 
+    /** Approved leaves for a set of employees that overlap the given [start, end] window (for the attendance board). */
+    @Query("""
+        select l from EmployeeLeave l
+        where l.employee.id in :employeeIds
+          and l.leaveStatus = com.erp.domain.LeaveStatus.APPROVED
+          and l.startDate <= :end
+          and l.endDate >= :start
+    """)
+    List<EmployeeLeave> findApprovedLeavesOverlapping(
+            @Param("employeeIds") List<Long> employeeIds,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end);
+
     /** Leave requests submitted (dateReported) within a window, for the monthly leave-summary widget. */
     @Query("""
         select l from EmployeeLeave l

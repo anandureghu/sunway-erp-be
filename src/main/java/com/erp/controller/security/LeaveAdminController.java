@@ -11,6 +11,7 @@ import com.erp.repo.EmployeeLeaveBalanceRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.LeavePolicyKeyResolver;
 import com.erp.service.LeavePolicyService;
 import com.erp.service.security.annotation.RequiresPermission;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class LeaveAdminController {
     private final CompanyRepository companyRepository;
     private final AuthContext authContext;
     private final LeavePolicyService leavePolicyService;
+    private final LeavePolicyKeyResolver keyResolver;
 
     @RequiresPermission(module = AppModule.LEAVES, action = {AppAction.VIEW_ALL})
     @GetMapping("/diagnose/{employeeId}")
@@ -44,30 +46,33 @@ public class LeaveAdminController {
 
             assertEmployeeInCallerTenant(employee);
 
+            // Leave policies are keyed by JOB CODE. Match against the employee's
+            // resolved keys (job code -> title -> company role -> security role).
+            List<String> matchKeys = keyResolver.keysFor(employee);
+            String jobCode = keyResolver.primaryJobCode(employee);
+
             Map<String, Object> diagnosis = new HashMap<>();
             diagnosis.put("employeeId", employeeId);
             diagnosis.put("employeeName", fullName(employee));
-            diagnosis.put("employeeRole", resolveEmployeeRole(employee));
+            diagnosis.put("jobCode", jobCode);
+            diagnosis.put("matchKeys", matchKeys);
             diagnosis.put("company", employee.getCompany() != null ? employee.getCompany().getCompanyName() : null);
 
-            String effectiveRole = resolveEmployeeRole(employee);
-
-            if (effectiveRole == null || effectiveRole.isBlank()) {
-                diagnosis.put("roleStatus", "MISSING - Employee has no role set");
+            if (matchKeys.isEmpty()) {
+                diagnosis.put("jobCodeStatus", "MISSING - Employee has no job code or role set");
                 diagnosis.put("availablePolicies", List.of());
                 diagnosis.put("leaveBalances", List.of());
-                diagnosis.put("recommendation", "Update employee role before leave balance initialization");
+                diagnosis.put("recommendation", "Assign a job code (Current Job) before leave balance initialization");
                 return ResponseEntity.ok(diagnosis);
             }
 
             List<CompanyLeavePolicy> policies = policyRepository
                     .findByCompanyOrderByIdDesc(employee.getCompany())
                     .stream()
-                    .filter(p -> same(p.getRole(), effectiveRole))
+                    .filter(p -> matchKeys.stream().anyMatch(k -> same(p.getJobCode(), k)))
                     .toList();
 
-            diagnosis.put("roleStatus", "SET");
-            diagnosis.put("effectiveRole", effectiveRole);
+            diagnosis.put("jobCodeStatus", jobCode != null ? "SET" : "FALLBACK (matched by role)");
             diagnosis.put("policiesCount", policies.size());
             diagnosis.put("availablePolicies", policies.stream().map(p -> Map.of(
                     "id", p.getId(),
@@ -300,7 +305,7 @@ public class LeaveAdminController {
                     "policies", policies.stream().map(p -> Map.of(
                             "id", p.getId(),
                             "company", p.getCompany().getCompanyName(),
-                            "role", p.getRole(),
+                            "jobCode", p.getJobCode(),
                             "leaveType", p.getLeaveType(),
                             "defaultDays", p.getDefaultDays(),
                             "paid", p.getPaid(),

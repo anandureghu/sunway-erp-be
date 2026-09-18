@@ -39,7 +39,6 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -59,6 +58,7 @@ public class LeaveService {
     private final EmployeeLeaveRepository leaveRepo;
     private final UserRepository userRepo;
     private final EmployeeCurrentJobRepo currentJobRepo;
+    private final LeavePolicyKeyResolver keyResolver;
     private final AuthContext authContext;
     private final FileStorageService fileStorageService;
     private final PermissionCheckService permissionCheckService;
@@ -67,8 +67,8 @@ public class LeaveService {
     public List<String> getAvailableLeaveTypes(Long employeeId) {
         Employee emp = getEmployee(employeeId);
 
-        if (getLeaveRoles(emp).isEmpty()) {
-            log.warn("Employee {} has no leave role configured", employeeId);
+        if (keyResolver.keysFor(emp).isEmpty()) {
+            log.warn("Employee {} has no job code or role configured for leave", employeeId);
             return List.of();
         }
 
@@ -813,8 +813,9 @@ public class LeaveService {
     }
 
     private CompanyLeavePolicy getPolicy(Employee employee, String leaveType) {
-        if (getLeaveRoles(employee).isEmpty()) {
-            throw new RuntimeException("Employee company role not configured");
+        if (keyResolver.keysFor(employee).isEmpty()) {
+            throw new RuntimeException(
+                    "Employee has no job code assigned. Assign a job code (Current Job) before applying for leave.");
         }
 
         return findPoliciesForEmployee(employee)
@@ -822,7 +823,7 @@ public class LeaveService {
                 .filter(policy -> same(policy.getLeaveType(), leaveType))
                 .findFirst()
                 .orElseThrow(() ->
-                        new RuntimeException("Leave policy not configured for your role and leave type"));
+                        new RuntimeException("Leave policy not configured for your job code and leave type"));
     }
 
     private void validateGender(CompanyLeavePolicy policy, Employee employee) {
@@ -1099,38 +1100,18 @@ public class LeaveService {
     }
 
     /**
-     * Company roles are HR-specific, while legacy/default leave policies can
-     * still be configured against the employee's security role. Prefer the
-     * company role, but retain the security role as a leave-policy fallback.
-     */
-    private List<String> getLeaveRoles(Employee employee) {
-        LinkedHashSet<String> roles = new LinkedHashSet<>();
-
-        String companyRole = clean(employee.getCompanyRole());
-        if (companyRole != null) {
-            roles.add(companyRole);
-        }
-
-        String securityRole = clean(employee.getRole());
-        if (securityRole != null) {
-            roles.add(securityRole);
-        }
-
-        return List.copyOf(roles);
-    }
-
-    /**
-     * Resolves one policy per leave type. A company-role policy takes
-     * precedence; the security-role policy supplies a type only when the
-     * company role does not configure it.
+     * Resolves one policy per leave type. Leave policies are keyed by JOB CODE:
+     * the employee's current job code (then its title) takes precedence, with the
+     * company role and legacy security role as fallbacks so policies configured
+     * before the role&rarr;job-code move keep working. See {@link LeavePolicyKeyResolver}.
      */
     private List<CompanyLeavePolicy> findPoliciesForEmployee(Employee employee) {
         Map<String, CompanyLeavePolicy> policiesByLeaveType = new LinkedHashMap<>();
 
-        for (String role : getLeaveRoles(employee)) {
+        for (String matchKey : keyResolver.keysFor(employee)) {
             policyRepo.findByCompanyOrderByIdDesc(employee.getCompany())
                     .stream()
-                    .filter(policy -> same(policy.getRole(), role))
+                    .filter(policy -> same(policy.getJobCode(), matchKey))
                     .forEach(policy -> policiesByLeaveType.putIfAbsent(key(policy.getLeaveType()), policy));
         }
 

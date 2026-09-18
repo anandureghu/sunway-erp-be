@@ -10,6 +10,8 @@ import com.erp.dto.timesheet.AttendanceHistoryItemResponse;
 import com.erp.dto.timesheet.MonthlySummaryResponse;
 import com.erp.dto.timesheet.TimesheetDashboardResponse;
 import com.erp.dto.timesheet.TimesheetTodayResponse;
+import com.erp.domain.EmployeeLeave;
+import com.erp.repo.EmployeeLeaveRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.EmployeeTimesheetRepository;
 import com.erp.security.guard.EmployeeAccessGuard;
@@ -131,14 +133,17 @@ public class EmployeeTimesheetService {
 
     private final EmployeeTimesheetRepository repository;
     private final EmployeeRepository employeeRepository;
+    private final EmployeeLeaveRepository leaveRepository;
     private final EmployeeAccessGuard accessGuard;
 
     public EmployeeTimesheetService(
             EmployeeTimesheetRepository repository,
             EmployeeRepository employeeRepository,
+            EmployeeLeaveRepository leaveRepository,
             EmployeeAccessGuard accessGuard) {
         this.repository = repository;
         this.employeeRepository = employeeRepository;
+        this.leaveRepository = leaveRepository;
         this.accessGuard = accessGuard;
     }
 
@@ -260,12 +265,20 @@ public class EmployeeTimesheetService {
         response.setAvgHoursPerDay(stdHours);
 
         // Companies that don't punch in/out: every working day up to today is present
-        // for the standard day (no reliance on timesheet rows).
+        // for the standard day (no reliance on timesheet rows), minus any unpaid-leave
+        // working days (those are absences that don't count toward worked days).
         if (!requireCheckIn(employee)) {
             int workingDays = countWorkingDaysUpToToday(year, month, employee);
-            response.setDaysRecorded(workingDays);
-            response.setDaysPresent(workingDays);
-            response.setTotalHours(roundToSingleDecimal(workingDays * stdHours));
+            YearMonth ym = YearMonth.of(year, month);
+            LocalDate today = todayInAttendanceZone(employee);
+            LocalDate countEnd = ym.atEndOfMonth().isAfter(today) ? today : ym.atEndOfMonth();
+            List<EmployeeLeave> leaves = leaveRepository.findApprovedLeavesOverlapping(
+                    List.of(employeeId), ym.atDay(1), ym.atEndOfMonth());
+            int unpaidDays = LeaveAttendanceUtil.countUnpaidWorkingDays(leaves, ym.atDay(1), countEnd);
+            int daysWorked = Math.max(0, workingDays - unpaidDays);
+            response.setDaysRecorded(daysWorked);
+            response.setDaysPresent(daysWorked);
+            response.setTotalHours(roundToSingleDecimal(daysWorked * stdHours));
             return response;
         }
 

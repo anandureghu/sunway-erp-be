@@ -5,7 +5,7 @@ import lombok.Data;
 @Data
 public class LeavePolicyRequestDTO {
 
-    private String role;
+    private String jobCode;
     private String leaveType;
 
     private Boolean paid;

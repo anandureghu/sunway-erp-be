@@ -7,7 +7,7 @@ public class LeavePolicyResponseDTO {
 
     private Long id;
 
-    private String role;              // ADMIN, USER
+    private String jobCode;           // e.g. ENG-003
     private String leaveType;         // Annual Leave
 
     private boolean paid;

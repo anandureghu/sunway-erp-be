@@ -1,12 +1,14 @@
 package com.erp.service;
 
 import com.erp.domain.Employee;
+import com.erp.domain.EmployeeLeave;
 import com.erp.domain.EmployeeOvertimeOverride;
 import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.hr.Company;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.timesheet.EmployeeMonthlyAttendanceDTO;
+import com.erp.repo.EmployeeLeaveRepository;
 import com.erp.repo.EmployeeOvertimeOverrideRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.EmployeeTimesheetRepository;
@@ -43,6 +45,7 @@ public class AttendanceReportService {
     private final EmployeeRepository employeeRepo;
     private final EmployeeTimesheetRepository timesheetRepo;
     private final EmployeeOvertimeOverrideRepository overtimeOverrideRepo;
+    private final EmployeeLeaveRepository leaveRepo;
     private final AuthContext authContext;
     private final PermissionCheckService permissionCheck;
 
@@ -104,7 +107,13 @@ public class AttendanceReportService {
         overtimeOverrideRepo.save(override);
     }
 
-    private List<EmployeeMonthlyAttendanceDTO> summarize(List<Employee> employees, int year, int month) {
+    private List<EmployeeMonthlyAttendanceDTO> summarize(List<Employee> employeesIn, int year, int month) {
+        // Only currently-employed staff belong on the timesheet: active, on probation,
+        // or on leave. Departed / inactive employees (resigned, terminated, retired,
+        // inactive) are excluded.
+        List<Employee> employees = employeesIn.stream()
+                .filter(e -> e.getStatus() == null || !e.getStatus().isDepartedOrInactive())
+                .toList();
         if (employees.isEmpty()) {
             return List.of();
         }
@@ -113,6 +122,15 @@ public class AttendanceReportService {
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
         LocalDate today = LocalDate.now();
+
+        // Approved leaves overlapping the month, grouped by employee. Unpaid-leave
+        // working days are dropped from worked days; any leave covering "today" makes
+        // the employee show as absent for the day.
+        List<Long> rosterIds = employees.stream().map(Employee::getId).toList();
+        Map<Long, List<EmployeeLeave>> leavesByEmployee = leaveRepo
+                .findApprovedLeavesOverlapping(rosterIds, start, end)
+                .stream()
+                .collect(Collectors.groupingBy(l -> l.getEmployee().getId()));
 
         // Company attendance policy (all rows here belong to one company).
         double stdHours = 6.0;
@@ -138,7 +156,8 @@ public class AttendanceReportService {
         // No-punch companies: every weekday up to today is a full standard day.
         if (!requireCheckIn) {
             int workingDays = countWorkingDaysUpToToday(year, month);
-            double regularHours = Math.round(workingDays * stdHours * 10.0) / 10.0;
+            // Last day counted toward worked days (clamped to today for the current month).
+            LocalDate countEnd = end.isAfter(today) ? today : end;
             boolean todayIsWorkday = ym.equals(YearMonth.from(today)) && isWeekday(today);
             // Overtime can't be derived without punches — it's whatever HR keyed in for
             // this month (nothing by default). Regular hours stay full; overtime adds on top.
@@ -153,20 +172,29 @@ public class AttendanceReportService {
             List<EmployeeMonthlyAttendanceDTO> autoRows = new ArrayList<>();
             for (Employee e : employees) {
                 double overtimeHours = Math.round(overrides.getOrDefault(e.getId(), 0.0) * 10.0) / 10.0;
+
+                // Unpaid-leave working days are absences: drop them from worked days.
+                List<EmployeeLeave> leaves = leavesByEmployee.getOrDefault(e.getId(), List.of());
+                int unpaidDays = LeaveAttendanceUtil.countUnpaidWorkingDays(leaves, start, countEnd);
+                int daysWorked = Math.max(0, workingDays - unpaidDays);
+                double regularHours = Math.round(daysWorked * stdHours * 10.0) / 10.0;
+                boolean onLeaveToday = todayIsWorkday && LeaveAttendanceUtil.isOnLeave(leaves, today);
+
                 autoRows.add(EmployeeMonthlyAttendanceDTO.builder()
                         .employeeId(e.getId())
                         .employeeNo(e.getEmployeeNo())
                         .employeeName(fullName(e))
                         .department(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
-                        .daysRecorded(workingDays)
-                        .daysPresent(workingDays)
+                        .employeeStatus(e.getStatus() != null ? e.getStatus().name() : null)
+                        .daysRecorded(daysWorked)
+                        .daysPresent(daysWorked)
                         .totalHours(Math.round((regularHours + overtimeHours) * 10.0) / 10.0)
                         .overtimeHours(overtimeHours)
                         .editableOvertime(true) // HR keys overtime manually for no-punch companies
-                        .todayStatus(todayIsWorkday ? "PRESENT" : "NOT_CHECKED_IN")
+                        .todayStatus(onLeaveToday ? "ON_LEAVE" : (todayIsWorkday ? "PRESENT" : "NOT_CHECKED_IN"))
                         .todayCheckIn(null)
                         .todayCheckOut(null)
-                        .todayHours(todayIsWorkday ? Math.round(stdHours * 10.0) / 10.0 : 0.0)
+                        .todayHours(onLeaveToday ? 0.0 : (todayIsWorkday ? Math.round(stdHours * 10.0) / 10.0 : 0.0))
                         .build());
             }
             autoRows.sort(Comparator.comparing(r -> r.getEmployeeName() == null ? "" : r.getEmployeeName()));
@@ -205,25 +233,33 @@ public class AttendanceReportService {
                     .filter(r -> today.equals(r.getAttendanceDate()))
                     .findFirst()
                     .orElse(null);
-            String todayStatus = todayRec != null && todayRec.getStatus() != null
-                    ? todayRec.getStatus().name()
-                    : "NOT_CHECKED_IN";
-            double todayHours = todayRec != null
-                    ? Math.round(resolveWorkedMinutes(todayRec) / 60.0 * 10.0) / 10.0
-                    : 0.0;
+            // An employee on approved leave today counts as absent for the day.
+            List<EmployeeLeave> leaves = leavesByEmployee.getOrDefault(e.getId(), List.of());
+            boolean onLeaveToday = LeaveAttendanceUtil.isOnLeave(leaves, today);
+            String todayStatus = onLeaveToday
+                    ? "ON_LEAVE"
+                    : (todayRec != null && todayRec.getStatus() != null
+                        ? todayRec.getStatus().name()
+                        : "NOT_CHECKED_IN");
+            double todayHours = onLeaveToday
+                    ? 0.0
+                    : (todayRec != null
+                        ? Math.round(resolveWorkedMinutes(todayRec) / 60.0 * 10.0) / 10.0
+                        : 0.0);
 
             rows.add(EmployeeMonthlyAttendanceDTO.builder()
                     .employeeId(e.getId())
                     .employeeNo(e.getEmployeeNo())
                     .employeeName(fullName(e))
                     .department(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
+                    .employeeStatus(e.getStatus() != null ? e.getStatus().name() : null)
                     .daysRecorded(daysRecorded)
                     .daysPresent(daysPresent)
                     .totalHours(totalHours)
                     .overtimeHours(overtimeHours)
                     .todayStatus(todayStatus)
-                    .todayCheckIn(todayRec != null ? todayRec.getCheckInTime() : null)
-                    .todayCheckOut(todayRec != null ? todayRec.getCheckOutTime() : null)
+                    .todayCheckIn(onLeaveToday ? null : (todayRec != null ? todayRec.getCheckInTime() : null))
+                    .todayCheckOut(onLeaveToday ? null : (todayRec != null ? todayRec.getCheckOutTime() : null))
                     .todayHours(todayHours)
                     .build());
         }
