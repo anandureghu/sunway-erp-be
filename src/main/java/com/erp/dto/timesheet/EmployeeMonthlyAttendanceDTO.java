@@ -18,6 +18,8 @@ public class EmployeeMonthlyAttendanceDTO {
     private String employeeNo;
     private String employeeName;
     private String department;
+    /** Employment status: ACTIVE | UNDER_PROBATION | ON_LEAVE (departed/inactive are excluded from the board). */
+    private String employeeStatus;
     /** Days with any timesheet record (checked in and/or out). */
     private int daysRecorded;
     /** Days actually worked (>= 6h) — the payable worked days. */

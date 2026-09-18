@@ -176,7 +176,7 @@ public class VendorCsvImportService {
                         if (blankToNull(values.get("phoneNo")) != null) existing.setPhoneNo(blankToNull(values.get("phoneNo")));
                         if (blankToNull(values.get("email")) != null) existing.setEmail(blankToNull(values.get("email")));
                         if (blankToNull(values.get("contactPersonName")) != null) existing.setContactPersonName(blankToNull(values.get("contactPersonName")));
-                        if (blankToNull(values.get("status")) != null) existing.setIsActive(normalizeActive(values.get("status")));
+                        if (blankToNull(values.get("status")) != null) existing.setActive(normalizeActive(values.get("status")));
                         vendorRepo.save(existing);
                         updated++;
                         continue;

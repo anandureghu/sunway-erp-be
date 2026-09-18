@@ -1,11 +1,11 @@
 package com.erp.service.hr;
 
 import com.erp.domain.hr.Company;
-import com.erp.domain.hr.CompanyRole;
+import com.erp.domain.hrsettings.JobCode;
 import com.erp.dto.leave.LeavePolicyRequestDTO;
 import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.hr.CompanyRepository;
-import com.erp.repo.hr.CompanyRoleRepository;
+import com.erp.repo.hrsettings.JobCodeRepository;
 import com.erp.service.LeavePolicyService;
 import com.erp.service.hrsettings.JobCodeService;
 import com.erp.service.salary.EmployeeCompensationService;
@@ -40,7 +40,7 @@ public class QatarLaborLawDefaultsService {
     public static final BigDecimal DEFAULT_FOOD_ALLOWANCE = new BigDecimal("300.00");
 
     private final CompanyRepository companyRepository;
-    private final CompanyRoleRepository companyRoleRepository;
+    private final JobCodeRepository jobCodeRepository;
     private final CompanyLeavePolicyRepository leavePolicyRepository;
     private final LeavePolicyService leavePolicyService;
     private final EmployeeCompensationService employeeCompensationService;
@@ -48,13 +48,13 @@ public class QatarLaborLawDefaultsService {
 
     public QatarLaborLawDefaultsService(
             CompanyRepository companyRepository,
-            CompanyRoleRepository companyRoleRepository,
+            JobCodeRepository jobCodeRepository,
             CompanyLeavePolicyRepository leavePolicyRepository,
             LeavePolicyService leavePolicyService,
             @Lazy EmployeeCompensationService employeeCompensationService,
             @Lazy JobCodeService jobCodeService) {
         this.companyRepository = companyRepository;
-        this.companyRoleRepository = companyRoleRepository;
+        this.jobCodeRepository = jobCodeRepository;
         this.leavePolicyRepository = leavePolicyRepository;
         this.leavePolicyService = leavePolicyService;
         this.employeeCompensationService = employeeCompensationService;
@@ -74,30 +74,33 @@ public class QatarLaborLawDefaultsService {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        Set<String> roles = new LinkedHashSet<>();
-        for (CompanyRole role : companyRoleRepository.findByCompanyIdOrderByCreatedDateDesc(companyId)) {
-            if (role.getName() != null && !role.getName().isBlank()) {
-                roles.add(role.getName().trim());
+        // Leave policies are keyed by JOB CODE. Seed statutory defaults for every
+        // active job code, plus any job code that already carries a policy (so a
+        // "reset defaults" re-applies to already-configured codes, including legacy
+        // rows). If the company has no job codes yet, there is nothing to seed —
+        // defaults get applied once job codes exist and the admin resets again.
+        Set<String> jobCodes = new LinkedHashSet<>();
+        for (JobCode jc : jobCodeRepository.findByCompany_IdAndActiveTrue(companyId)) {
+            if (jc.getCode() != null && !jc.getCode().isBlank()) {
+                jobCodes.add(jc.getCode().trim());
             }
         }
         leavePolicyRepository.findByCompanyOrderByIdDesc(company).forEach(p -> {
-            if (p.getRole() != null && !p.getRole().isBlank()) {
-                roles.add(p.getRole().trim());
+            if (p.getJobCode() != null && !p.getJobCode().isBlank()) {
+                jobCodes.add(p.getJobCode().trim());
             }
         });
-        if (roles.isEmpty()) {
-            roles.add("Employee");
-            roles.add("Admin");
-            roles.add("HR");
+        if (jobCodes.isEmpty()) {
+            return;
         }
 
         List<LeavePolicyRequestDTO> dtos = new ArrayList<>();
-        for (String role : roles) {
-            dtos.add(leave(role, "Sick Leave", 7, false, null, false, null));
-            dtos.add(leave(role, "Maternity Leave", 50, true, "FEMALE", false, null));
-            dtos.add(leave(role, "Hajj Leave", 10, false, null, true, "Islam"));
-            dtos.add(leave(role, "Marriage Leave", 3, false, null, false, null));
-            dtos.add(leave(role, "Bereavement Leave", 3, false, null, false, null));
+        for (String jobCode : jobCodes) {
+            dtos.add(leave(jobCode, "Sick Leave", 7, false, null, false, null));
+            dtos.add(leave(jobCode, "Maternity Leave", 50, true, "FEMALE", false, null));
+            dtos.add(leave(jobCode, "Hajj Leave", 10, false, null, true, "Islam"));
+            dtos.add(leave(jobCode, "Marriage Leave", 3, false, null, false, null));
+            dtos.add(leave(jobCode, "Bereavement Leave", 3, false, null, false, null));
         }
 
         leavePolicyService.savePoliciesAsSystem(companyId, dtos);
@@ -121,7 +124,7 @@ public class QatarLaborLawDefaultsService {
     }
 
     private static LeavePolicyRequestDTO leave(
-            String role,
+            String jobCode,
             String leaveType,
             int days,
             boolean genderRestricted,
@@ -129,7 +132,7 @@ public class QatarLaborLawDefaultsService {
             boolean religionRestricted,
             String allowedReligion) {
         LeavePolicyRequestDTO dto = new LeavePolicyRequestDTO();
-        dto.setRole(role);
+        dto.setJobCode(jobCode);
         dto.setLeaveType(leaveType);
         dto.setDefaultDays(days);
         dto.setPaid(true);
