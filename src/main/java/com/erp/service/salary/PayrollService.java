@@ -84,6 +84,7 @@ public class PayrollService {
     private final EmployeeLeaveRepository leaveRepo;
     private final EmployeeCurrentJobRepo currentJobRepo;
     private final CompanyLeavePolicyRepository leavePolicyRepo;
+    private final com.erp.service.LeavePolicyKeyResolver leaveKeyResolver;
     private final PayrollRepository payrollRepo;
     private final DocumentSequenceService documentSequenceService;
     private final RetirementCompensationService retirementCompensationService;
@@ -645,15 +646,20 @@ public class PayrollService {
     }
 
     private boolean isPaidLeave(Employee employee, String leaveType) {
-        String role = getLeaveRole(employee);
+        if (employee == null || employee.getCompany() == null) {
+            return false;
+        }
 
-        if (employee == null || employee.getCompany() == null || role == null) {
+        // Leave policies are keyed by job code (with role fallbacks) — match any of
+        // the employee's resolved keys. See LeavePolicyKeyResolver.
+        List<String> keys = leaveKeyResolver.keysFor(employee);
+        if (keys.isEmpty()) {
             return false;
         }
 
         return leavePolicyRepo.findByCompanyOrderByIdDesc(employee.getCompany())
                 .stream()
-                .filter(policy -> same(policy.getRole(), role))
+                .filter(policy -> keys.stream().anyMatch(k -> same(policy.getJobCode(), k)))
                 .filter(policy -> same(policy.getLeaveType(), leaveType))
                 .findFirst()
                 .map(CompanyLeavePolicy::getPaid)
@@ -1022,16 +1028,6 @@ public class PayrollService {
         dto.setOvertimeHours(payroll.getOvertimeHours());
         dto.setFinalSettlement(payroll.isFinalSettlement());
         return dto;
-    }
-
-    private String getLeaveRole(Employee employee) {
-        if (employee.getCompanyRole() != null) {
-            String companyRole = clean(employee.getCompanyRole());
-            if (companyRole != null) {
-                return companyRole;
-            }
-        }
-        return clean(employee.getRole());
     }
 
     private String clean(String value) {

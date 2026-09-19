@@ -14,16 +14,16 @@ public interface CompanyLeavePolicyRepository
 
     List<CompanyLeavePolicy> findByCompanyOrderByIdDesc(Company company);
 
-    /* ================= ROLE BASED ================= */
+    /* ================= JOB CODE BASED ================= */
 
-    List<CompanyLeavePolicy> findByCompanyAndRole(
+    List<CompanyLeavePolicy> findByCompanyAndJobCode(
             Company company,
-            String role
+            String jobCode
     );
 
-    Optional<CompanyLeavePolicy> findByCompanyAndRoleAndLeaveType(
+    Optional<CompanyLeavePolicy> findByCompanyAndJobCodeAndLeaveType(
             Company company,
-            String role,
+            String jobCode,
             String leaveType
     );
 

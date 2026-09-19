@@ -27,6 +27,7 @@ public class LeavePolicyService {
     private final EmployeeRepository employeeRepo;
     private final EmployeeLeaveBalanceRepository balanceRepo;
     private final AuthContext authContext;
+    private final LeavePolicyKeyResolver keyResolver;
 
     public List<LeavePolicyResponseDTO> getAllPolicies(Long companyId) {
         assertSameTenant(companyId);
@@ -39,16 +40,16 @@ public class LeavePolicyService {
                 .toList();
     }
 
-    public List<LeavePolicyResponseDTO> getPoliciesByRole(Long companyId, String role) {
+    public List<LeavePolicyResponseDTO> getPoliciesByJobCode(Long companyId, String jobCode) {
         Company company = companyRepo.findById(companyId)
                 .orElseThrow(() -> new RuntimeException("Company not found"));
 
-        String cleanRole = clean(role);
-        if (cleanRole == null || cleanRole.isBlank()) {
-            throw new IllegalArgumentException("Role cannot be null or empty");
+        String cleanJobCode = clean(jobCode);
+        if (cleanJobCode == null || cleanJobCode.isBlank()) {
+            throw new IllegalArgumentException("Job code cannot be null or empty");
         }
 
-        return findPoliciesByRole(company, cleanRole)
+        return findPoliciesByJobCode(company, cleanJobCode)
                 .stream()
                 .map(this::toDTO)
                 .toList();
@@ -80,30 +81,30 @@ public class LeavePolicyService {
         Map<String, LeavePolicyRequestDTO> unique = new LinkedHashMap<>();
 
         for (LeavePolicyRequestDTO dto : dtos) {
-            String role = clean(dto.getRole());
+            String jobCode = clean(dto.getJobCode());
             String leaveType = clean(dto.getLeaveType());
 
-            if (role == null || leaveType == null) {
+            if (jobCode == null || leaveType == null) {
                 continue;
             }
 
-            unique.put(key(role) + "_" + key(leaveType), dto);
+            unique.put(key(jobCode) + "_" + key(leaveType), dto);
         }
 
         for (LeavePolicyRequestDTO dto : unique.values()) {
-            String role = clean(dto.getRole());
+            String jobCode = clean(dto.getJobCode());
             String leaveType = clean(dto.getLeaveType());
             String allowedGender = clean(dto.getAllowedGender());
             String allowedReligion = clean(dto.getAllowedReligion());
 
-            CompanyLeavePolicy policy = findPolicy(company, role, leaveType)
+            CompanyLeavePolicy policy = findPolicy(company, jobCode, leaveType)
                     .orElseGet(() -> {
                         CompanyLeavePolicy p = new CompanyLeavePolicy();
                         p.setCompany(company);
                         return p;
                     });
 
-            policy.setRole(role);
+            policy.setJobCode(jobCode);
             policy.setLeaveType(leaveType);
             policy.setDefaultDays(dto.getDefaultDays() != null ? dto.getDefaultDays() : 0);
             policy.setPaid(dto.getPaid() != null ? dto.getPaid() : true);
@@ -178,7 +179,7 @@ public class LeavePolicyService {
 
     @Transactional
     public void initializeLeaveBalancesForEmployee(Employee employee) {
-        if (getLeaveRoles(employee).isEmpty()) {
+        if (keyResolver.keysFor(employee).isEmpty()) {
             return;
         }
 
@@ -276,17 +277,17 @@ public class LeavePolicyService {
         assertSameTenant(company != null ? company.getId() : null);
     }
 
-    private List<CompanyLeavePolicy> findPoliciesByRole(Company company, String role) {
+    private List<CompanyLeavePolicy> findPoliciesByJobCode(Company company, String jobCode) {
         return policyRepo.findByCompanyOrderByIdDesc(company)
                 .stream()
-                .filter(policy -> same(policy.getRole(), role))
+                .filter(policy -> same(policy.getJobCode(), jobCode))
                 .toList();
     }
 
-    private Optional<CompanyLeavePolicy> findPolicy(Company company, String role, String leaveType) {
+    private Optional<CompanyLeavePolicy> findPolicy(Company company, String jobCode, String leaveType) {
         return policyRepo.findByCompanyOrderByIdDesc(company)
                 .stream()
-                .filter(policy -> same(policy.getRole(), role))
+                .filter(policy -> same(policy.getJobCode(), jobCode))
                 .filter(policy -> same(policy.getLeaveType(), leaveType))
                 .findFirst();
     }
@@ -332,7 +333,7 @@ public class LeavePolicyService {
     private LeavePolicyResponseDTO toDTO(CompanyLeavePolicy policy) {
         LeavePolicyResponseDTO dto = new LeavePolicyResponseDTO();
         dto.setId(policy.getId());
-        dto.setRole(policy.getRole());
+        dto.setJobCode(policy.getJobCode());
         dto.setLeaveType(policy.getLeaveType());
         dto.setDefaultDays(policy.getDefaultDays());
         dto.setPaid(Boolean.TRUE.equals(policy.getPaid()));
@@ -343,28 +344,13 @@ public class LeavePolicyService {
         return dto;
     }
 
-    /** Company-role policies take precedence over legacy security-role policies. */
-    private List<String> getLeaveRoles(Employee employee) {
-        LinkedHashSet<String> roles = new LinkedHashSet<>();
-
-        String companyRole = clean(employee.getCompanyRole());
-        if (companyRole != null) {
-            roles.add(companyRole);
-        }
-
-        String securityRole = clean(employee.getRole());
-        if (securityRole != null) {
-            roles.add(securityRole);
-        }
-
-        return List.copyOf(roles);
-    }
-
     private List<CompanyLeavePolicy> findPoliciesForEmployee(Employee employee) {
         Map<String, CompanyLeavePolicy> policiesByLeaveType = new LinkedHashMap<>();
 
-        for (String role : getLeaveRoles(employee)) {
-            findPoliciesByRole(employee.getCompany(), role)
+        // Job-code policies take precedence; job title / company role / security role
+        // are legacy fallbacks (see LeavePolicyKeyResolver).
+        for (String matchKey : keyResolver.keysFor(employee)) {
+            findPoliciesByJobCode(employee.getCompany(), matchKey)
                     .forEach(policy -> policiesByLeaveType.putIfAbsent(key(policy.getLeaveType()), policy));
         }
 
@@ -379,12 +365,13 @@ public class LeavePolicyService {
     }
 
     private boolean hasReplacementPolicyForLeaveType(Employee employee, CompanyLeavePolicy policy) {
+        List<String> keys = keyResolver.keysFor(employee);
         return policy != null
                 && policy.getId() != null
                 && policyRepo.findByCompanyOrderByIdDesc(employee.getCompany()).stream()
                         .anyMatch(candidate -> !policy.getId().equals(candidate.getId())
-                                && getLeaveRoles(employee).stream()
-                                .anyMatch(role -> same(candidate.getRole(), role))
+                                && keys.stream()
+                                .anyMatch(matchKey -> same(candidate.getJobCode(), matchKey))
                                 && same(candidate.getLeaveType(), policy.getLeaveType()));
     }
 

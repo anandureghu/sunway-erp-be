@@ -11,7 +11,7 @@ import lombok.Setter;
 @Table(
         name = "company_leave_policies",
         uniqueConstraints = @UniqueConstraint(
-                columnNames = {"company_id", "role", "leave_type"}
+                columnNames = {"company_id", "job_code", "leave_type"}
         )
 )
 public class CompanyLeavePolicy {
@@ -24,8 +24,13 @@ public class CompanyLeavePolicy {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
-    @Column(nullable = false)
-    private String role;
+    /**
+     * The JOB CODE this policy applies to (matched against the employee's current
+     * job code). Historically held a company/security role name; such legacy rows
+     * still resolve via {@link com.erp.service.LeavePolicyKeyResolver}'s fallback.
+     */
+    @Column(name = "job_code", nullable = false)
+    private String jobCode;
 
     @Column(name = "leave_type", nullable = false)
     private String leaveType;

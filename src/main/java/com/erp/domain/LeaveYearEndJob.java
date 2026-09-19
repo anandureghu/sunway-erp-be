@@ -2,6 +2,7 @@ package com.erp.domain;
 
 import com.erp.repo.CompanyLeavePolicyRepository;
 import com.erp.repo.EmployeeLeaveBalanceRepository;
+import com.erp.service.LeavePolicyKeyResolver;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,6 +16,7 @@ public class LeaveYearEndJob {
 
     private final EmployeeLeaveBalanceRepository balanceRepo;
     private final CompanyLeavePolicyRepository policyRepo;
+    private final LeavePolicyKeyResolver keyResolver;
 
     @Transactional
     @Scheduled(cron = "0 0 0 1 1 *") // Every Jan 1st at midnight
@@ -24,14 +26,21 @@ public class LeaveYearEndJob {
 
         for (EmployeeLeaveBalance balance : balances) {
 
-            String role = balance.getEmployee().getRole();
+            Employee employee = balance.getEmployee();
 
-            CompanyLeavePolicy policy =
-                    policyRepo.findByCompanyAndRoleAndLeaveType(
-                                    balance.getEmployee().getCompany(),
-                                    role,
-                                    balance.getLeaveType())
-                            .orElse(null);
+            // Leave policies are keyed by job code (with role fallbacks). Try the
+            // employee's resolved keys in order until a matching policy is found.
+            CompanyLeavePolicy policy = null;
+            for (String matchKey : keyResolver.keysFor(employee)) {
+                policy = policyRepo.findByCompanyAndJobCodeAndLeaveType(
+                                employee.getCompany(),
+                                matchKey,
+                                balance.getLeaveType())
+                        .orElse(null);
+                if (policy != null) {
+                    break;
+                }
+            }
 
             if (policy != null && policy.isPaid()) {
 

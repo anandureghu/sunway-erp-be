@@ -1,6 +1,7 @@
 package com.erp.service.inventory;
 
 import com.erp.domain.inventory.Category;
+import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.Vendor;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.dto.inventory.ItemCreateDTO;
