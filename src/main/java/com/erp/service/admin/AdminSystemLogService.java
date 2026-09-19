@@ -205,6 +205,22 @@ public class AdminSystemLogService {
         };
     }
 
+    @Transactional
+    public void deleteById(Long id) {
+        if (!repo.existsById(id)) {
+            throw new NotFoundException("System log not found");
+        }
+        repo.deleteById(id);
+    }
+
+    @Transactional
+    public void deleteBulk(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        repo.deleteAllById(ids);
+    }
+
     private AdminSystemLogResponseDTO toDto(AdminSystemLog log) {
         return AdminSystemLogResponseDTO.builder()
                 .id(log.getId())
