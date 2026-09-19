@@ -768,8 +768,8 @@ public class PaymentService {
     }
 
     /**
-     * Posts vendor payment to GL. When the PO has no prior encumbrance, accrues expense to AP first,
-     * then settles AP using purchase defaults only (Dr purchase credit, Cr purchase debit).
+     * Posts vendor payment to GL. When the PO has no prior encumbrance, records the purchase
+     * encumbrance first, then settles AP: Dr AP (purchase credit account), Cr Bank/Cash.
      */
     private void postVendorPaymentToAccounting(Payment payment) {
         if (payment.getPurchaseOrderId() == null) {
@@ -799,7 +799,7 @@ public class PaymentService {
         }
 
         Long debitAccountId = accounts.creditAccountId();
-        Long creditAccountId = accounts.debitAccountId();
+        Long creditAccountId = accountingDefaults.requireCashGlAccountId(companyId);
         accountingDefaults.assertDistinctAccounts(
                 "Vendor payment posting", debitAccountId, creditAccountId);
 
