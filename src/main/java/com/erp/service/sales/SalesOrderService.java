@@ -198,7 +198,7 @@ public class SalesOrderService {
         SalesOrder order = getEntity(id);
 
         if (!"QUOTATION".equals(order.getStatus())) {
-            throw new RuntimeException("Only QUOTATION orders can be confirmed");
+            throw new ConflictException("Only QUOTATION orders can be confirmed");
         }
 
         ChartOfAccounts debitAccount = order.getDebitAccount();
