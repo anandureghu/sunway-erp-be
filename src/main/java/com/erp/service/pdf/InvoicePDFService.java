@@ -115,9 +115,15 @@ public class InvoicePDFService {
             String partyName = isSales
                     ? firstNonBlank(salesOrder != null ? salesOrder.getCustomerName() : null, invoice.getToParty(), "—")
                     : firstNonBlank(purchaseOrder != null ? purchaseOrder.getSupplierName() : null, invoice.getToParty(), "—");
-            String partyEmail = isSales && salesOrder != null ? nullToEmpty(salesOrder.getCustomerEmail()) : "";
-            String partyPhone = isSales && salesOrder != null ? nullToEmpty(salesOrder.getCustomerPhone()) : "";
-            String partyAddress = isSales && salesOrder != null ? nullToEmpty(salesOrder.getCustomerAddress()) : "";
+            String partyEmail = isSales && salesOrder != null
+                    ? nullToEmpty(salesOrder.getCustomerEmail())
+                    : (!isSales && purchaseOrder != null ? nullToEmpty(purchaseOrder.getSupplierEmail()) : "");
+            String partyPhone = isSales && salesOrder != null
+                    ? nullToEmpty(salesOrder.getCustomerPhone())
+                    : (!isSales && purchaseOrder != null ? nullToEmpty(purchaseOrder.getSupplierPhone()) : "");
+            String partyAddress = isSales && salesOrder != null
+                    ? nullToEmpty(salesOrder.getCustomerAddress())
+                    : (!isSales && purchaseOrder != null ? nullToEmpty(purchaseOrder.getSupplierAddress()) : "");
             String orderLabel = isSales ? "Sales Order" : "Purchase Order";
             String orderNumber = isSales
                     ? (salesOrder != null ? nullToDash(salesOrder.getOrderNumber()) : "—")
@@ -213,6 +219,18 @@ public class InvoicePDFService {
                             && !splitTerms(invoiceSettings.getInvoiceTerms()).isEmpty());
             context.setVariable("sigPartyName", partyName);
             context.setVariable("sigPartyRole", isSales ? "Customer Signature and Date" : "Supplier Signature and Date");
+
+            boolean showSupplierBankDetails = !isSales
+                    && purchaseOrder != null
+                    && ((purchaseOrder.getSupplierBankName() != null && !purchaseOrder.getSupplierBankName().isBlank())
+                        || (purchaseOrder.getSupplierIban() != null && !purchaseOrder.getSupplierIban().isBlank()));
+            context.setVariable("showSupplierBankDetails", showSupplierBankDetails);
+            context.setVariable("supplierBankName",
+                    !isSales && purchaseOrder != null ? nullToEmpty(purchaseOrder.getSupplierBankName()) : "");
+            context.setVariable("supplierIban",
+                    !isSales && purchaseOrder != null ? nullToEmpty(purchaseOrder.getSupplierIban()) : "");
+            context.setVariable("supplierCurrencyCode",
+                    !isSales && purchaseOrder != null ? nullToEmpty(purchaseOrder.getSupplierCurrencyCode()) : "");
 
             // Touch bank account fields while session is open.
             if (invoice.getBankAccount() != null) {

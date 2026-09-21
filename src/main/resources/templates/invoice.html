@@ -233,6 +233,24 @@
         </div>
     </div>
 
+    <div class="section" th:if="${showSupplierBankDetails}">
+        <div class="section-title">Supplier Bank Details</div>
+        <div class="box">
+            <p th:if="${supplierBankName != null and !#strings.isEmpty(supplierBankName)}">
+                <strong>Bank Name:</strong>
+                <span th:text="${supplierBankName}">—</span>
+            </p>
+            <p th:if="${supplierIban != null and !#strings.isEmpty(supplierIban)}">
+                <strong>IBAN:</strong>
+                <span th:text="${supplierIban}">—</span>
+            </p>
+            <p th:if="${supplierCurrencyCode != null and !#strings.isEmpty(supplierCurrencyCode)}">
+                <strong>Currency:</strong>
+                <span th:text="${supplierCurrencyCode}">—</span>
+            </p>
+        </div>
+    </div>
+
     <div class="section" th:if="${showNotes}">
         <div class="section-title">Notes</div>
         <div class="box" th:text="${notesText}">Notes</div>
