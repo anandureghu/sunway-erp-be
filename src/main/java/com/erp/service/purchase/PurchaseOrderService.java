@@ -46,6 +46,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.StringJoiner;
 
 @Service
 @Transactional
@@ -642,12 +643,12 @@ public class PurchaseOrderService {
                 .build();
     }
 
-    private static String buildSupplierAddress(com.erp.domain.inventory.Vendor supplier) {
+    private static String buildSupplierAddress(Vendor supplier) {
         if (supplier == null) return null;
-        java.util.StringJoiner sj = new java.util.StringJoiner(", ");
+        StringJoiner sj = new StringJoiner(", ");
         if (supplier.getStreet() != null && !supplier.getStreet().isBlank()) sj.add(supplier.getStreet().trim());
-        if (supplier.getCity()   != null && !supplier.getCity().isBlank())   sj.add(supplier.getCity().trim());
-        if (supplier.getCountry()!= null && !supplier.getCountry().isBlank())sj.add(supplier.getCountry().trim());
+        if (supplier.getCity() != null && !supplier.getCity().isBlank()) sj.add(supplier.getCity().trim());
+        if (supplier.getCountry() != null && !supplier.getCountry().isBlank()) sj.add(supplier.getCountry().trim());
         String result = sj.toString();
         return result.isBlank() ? null : result;
     }
