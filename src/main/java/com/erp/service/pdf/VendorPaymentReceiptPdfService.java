@@ -46,6 +46,20 @@ public class VendorPaymentReceiptPdfService {
             context.setVariable("vendorInvoiceNumber", vendorInvoiceNumber);
             context.setVariable("showVendorInvoiceNumber",
                     vendorInvoiceNumber != null && !vendorInvoiceNumber.isBlank());
+
+            // Touch lazy-loaded supplier fields while session is open.
+            String supplierBankName = null;
+            String supplierIban = null;
+            if (purchaseOrder != null && purchaseOrder.getSupplier() != null) {
+                supplierBankName = purchaseOrder.getSupplier().getBankName();
+                supplierIban = purchaseOrder.getSupplier().getIban();
+            }
+            boolean showSupplierBankDetails =
+                    (supplierBankName != null && !supplierBankName.isBlank())
+                    || (supplierIban != null && !supplierIban.isBlank());
+            context.setVariable("showSupplierBankDetails", showSupplierBankDetails);
+            context.setVariable("supplierBankName", supplierBankName != null ? supplierBankName : "");
+            context.setVariable("supplierIban", supplierIban != null ? supplierIban : "");
             context.setVariable(
                     "paymentMethodLabel",
                     PaymentMethodLabels.displayLabel(payment.getPaymentMethod()));
