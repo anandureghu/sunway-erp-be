@@ -593,6 +593,18 @@ public class PurchaseOrderService {
                                 : null)
                 .supplierId(po.getSupplier() != null ? po.getSupplier().getId() : null)
                 .supplierName(po.getSupplier() != null ? po.getSupplier().getVendorName() : null)
+                .supplierEmail(
+                        po.getSupplier() != null ? po.getSupplier().getEmail() : null)
+                .supplierPhone(
+                        po.getSupplier() != null ? po.getSupplier().getPhoneNo() : null)
+                .supplierAddress(
+                        po.getSupplier() != null ? buildSupplierAddress(po.getSupplier()) : null)
+                .supplierBankName(
+                        po.getSupplier() != null ? po.getSupplier().getBankName() : null)
+                .supplierIban(
+                        po.getSupplier() != null ? po.getSupplier().getIban() : null)
+                .supplierCurrencyCode(
+                        po.getSupplier() != null ? po.getSupplier().getCurrencyCode() : null)
                 .orderDate(po.getOrderDate())
                 .requiredDeliveryDate(requiredDeliveryDate)
                 .status(po.getStatus().name())
@@ -628,5 +640,15 @@ public class PurchaseOrderService {
                         ).toList()
                 )
                 .build();
+    }
+
+    private static String buildSupplierAddress(com.erp.domain.inventory.Vendor supplier) {
+        if (supplier == null) return null;
+        java.util.StringJoiner sj = new java.util.StringJoiner(", ");
+        if (supplier.getStreet() != null && !supplier.getStreet().isBlank()) sj.add(supplier.getStreet().trim());
+        if (supplier.getCity()   != null && !supplier.getCity().isBlank())   sj.add(supplier.getCity().trim());
+        if (supplier.getCountry()!= null && !supplier.getCountry().isBlank())sj.add(supplier.getCountry().trim());
+        String result = sj.toString();
+        return result.isBlank() ? null : result;
     }
 }
