@@ -21,6 +21,18 @@ public class PurchaseOrderResponseDTO {
     private String sourceRequisitionNumber;
     private Long supplierId;
     private String supplierName;
+    /** Supplier's email address from the vendor master. */
+    private String supplierEmail;
+    /** Supplier's phone number from the vendor master. */
+    private String supplierPhone;
+    /** Formatted address: "street, city, country" (blank parts omitted). */
+    private String supplierAddress;
+    /** Supplier's bank name from the vendor master. */
+    private String supplierBankName;
+    /** Supplier's IBAN from the vendor master. */
+    private String supplierIban;
+    /** Supplier's currency code from the vendor master (e.g. QAR). */
+    private String supplierCurrencyCode;
     private LocalDate orderDate;
     private LocalDate requiredDeliveryDate;
     private String status;
