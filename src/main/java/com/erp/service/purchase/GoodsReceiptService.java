@@ -259,7 +259,7 @@ public class GoodsReceiptService {
 
     private InspectionFinanceOutcome applyRejectionToInvoice(
             PurchaseOrder po, BigDecimal rejectedValue, Long goodsReceiptId) {
-        Invoice invoice = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE).orElse(null);
+        Invoice invoice = invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE).orElse(null);
         String reason = "Goods rejected at inspection for purchase order " + po.getOrderNumber();
 
         if (invoice == null) {

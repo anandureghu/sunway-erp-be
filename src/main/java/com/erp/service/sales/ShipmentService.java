@@ -96,7 +96,7 @@ public class ShipmentService {
                     "Cannot create dispatch: sales order is already "
                             + salesOrder.getStatus().toLowerCase());
         }
-        var invoice = invoiceRepo.findByOrderIdAndType(salesOrder.getId(), InvoiceType.SALES)
+        var invoice = invoiceRepo.findFirstByOrderIdAndType(salesOrder.getId(), InvoiceType.SALES)
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this sales order"));
         if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
             throw new RuntimeException("Shipment can be created only after full customer payment");

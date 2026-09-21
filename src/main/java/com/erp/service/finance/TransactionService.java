@@ -1244,7 +1244,7 @@ public class TransactionService {
         if (purchaseOrderId == null) {
             return null;
         }
-        return invoiceRepo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
+        return invoiceRepo.findFirstByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
                 .map(Invoice::getInvoiceId)
                 .filter(id -> id != null && !id.isBlank())
                 .orElse(null);
@@ -1254,7 +1254,7 @@ public class TransactionService {
         if (salesOrderId == null) {
             return null;
         }
-        return invoiceRepo.findByOrderIdAndType(salesOrderId, InvoiceType.SALES)
+        return invoiceRepo.findFirstByOrderIdAndType(salesOrderId, InvoiceType.SALES)
                 .map(Invoice::getInvoiceId)
                 .filter(id -> id != null && !id.isBlank())
                 .orElse(null);

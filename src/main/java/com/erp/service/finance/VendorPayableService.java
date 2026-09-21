@@ -105,7 +105,7 @@ public class VendorPayableService {
             return;
         }
         Long userId = auth.getCurrentUserId();
-        String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+        String purchaseInvoiceCode = invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                 .map(inv -> inv.getInvoiceId())
                 .orElse(null);
         Payment payment = Payment.builder()
@@ -128,7 +128,7 @@ public class VendorPayableService {
      * Whether the purchase invoice linked to this PO is fully paid.
      */
     public boolean isVendorPaymentSettledForPurchaseOrder(Long purchaseOrderId) {
-        return invoiceRepo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
+        return invoiceRepo.findFirstByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
                 .map(inv -> {
                     if ("PAID".equalsIgnoreCase(inv.getStatus())) {
                         return true;

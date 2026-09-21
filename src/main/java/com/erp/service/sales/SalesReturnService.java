@@ -232,7 +232,7 @@ public class SalesReturnService {
 
     private void applyFinancialAdjustment(
             SalesOrder so, BigDecimal returnValue, String reason, SalesReturn salesReturn) {
-        Invoice invoice = invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES).orElse(null);
+        Invoice invoice = invoiceRepo.findFirstByOrderIdAndType(so.getId(), InvoiceType.SALES).orElse(null);
         String noteReason = reason != null && !reason.isBlank()
                 ? reason
                 : "Customer return for sales order " + so.getOrderNumber();

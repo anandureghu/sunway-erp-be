@@ -87,7 +87,7 @@ public class InvoiceService {
             return;
         }
 
-        Optional<Invoice> invoiceOpt = repo.findByOrderIdAndType(salesOrderId, InvoiceType.SALES);
+        Optional<Invoice> invoiceOpt = repo.findFirstByOrderIdAndType(salesOrderId, InvoiceType.SALES);
         if (invoiceOpt.isEmpty()) {
             return;
         }
@@ -344,13 +344,13 @@ public class InvoiceService {
         }
         Long orderId = req.getOrderId();
         if (req.getType() == InvoiceType.SALES) {
-            if (repo.findByOrderIdAndType(orderId, InvoiceType.SALES).isPresent()) {
+            if (repo.findFirstByOrderIdAndType(orderId, InvoiceType.SALES).isPresent()) {
                 throw new RuntimeException("Invoice already exists for selected order");
             }
             return;
         }
         if (req.getType() == InvoiceType.PURCHASE) {
-            Optional<Invoice> dup = repo.findByOrderIdAndType(orderId, InvoiceType.PURCHASE);
+            Optional<Invoice> dup = repo.findFirstByOrderIdAndType(orderId, InvoiceType.PURCHASE);
             if (dup.isPresent() && dup.get().getCompany().getId().equals(company.getId())) {
                 throw new RuntimeException("Invoice already exists for this purchase order");
             }
@@ -555,7 +555,7 @@ public class InvoiceService {
     public InvoiceResponse createInvoiceForConfirmedSalesOrder(Long salesOrderId) {
         var order = salesOrderRepo.findById(salesOrderId)
                 .orElseThrow(() -> new RuntimeException("Sales order not found"));
-        if (repo.findByOrderIdAndType(order.getId(), InvoiceType.SALES).isPresent()) {
+        if (repo.findFirstByOrderIdAndType(order.getId(), InvoiceType.SALES).isPresent()) {
             throw new RuntimeException("Invoice already exists for this sales order");
         }
         Long companyId = order.getCompany().getId();
@@ -609,7 +609,7 @@ public class InvoiceService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public InvoiceResponse createOrGetGeneratedPurchaseInvoiceForPurchaseOrder(Long purchaseOrderId) {
-        Optional<Invoice> existing = repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
+        Optional<Invoice> existing = repo.findFirstByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
         if (existing.isPresent()) {
             linkPurchaseInvoiceToFinanceReferences(purchaseOrderId, existing.get().getInvoiceId());
             return toDTO(existing.get());
@@ -697,7 +697,7 @@ public class InvoiceService {
         if (rejectedAmount == null || rejectedAmount.compareTo(BigDecimal.ZERO) <= 0) {
             return GoodsAdjustmentResult.none();
         }
-        Optional<Invoice> existing = repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
+        Optional<Invoice> existing = repo.findFirstByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE);
         if (existing.isEmpty()) {
             log.warn("No purchase invoice found for PO {} to reduce for rejected goods ({}); {}",
                     purchaseOrderId, rejectedAmount, reason);
@@ -717,7 +717,7 @@ public class InvoiceService {
         if (returnedAmount == null || returnedAmount.compareTo(BigDecimal.ZERO) <= 0) {
             return GoodsAdjustmentResult.none();
         }
-        Optional<Invoice> existing = repo.findByOrderIdAndType(salesOrderId, InvoiceType.SALES);
+        Optional<Invoice> existing = repo.findFirstByOrderIdAndType(salesOrderId, InvoiceType.SALES);
         if (existing.isEmpty()) {
             log.warn("No sales invoice found for SO {} to reduce for returned goods ({}); {}",
                     salesOrderId, returnedAmount, reason);
@@ -986,7 +986,7 @@ public class InvoiceService {
         if (purchaseOrderId == null || amount == null) {
             return;
         }
-        repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE).ifPresent(inv -> {
+        repo.findFirstByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE).ifPresent(inv -> {
             if (inv.getInvoiceId() == null || inv.getInvoiceId().isBlank() || inv.getCompany() == null) {
                 return;
             }
@@ -1002,7 +1002,7 @@ public class InvoiceService {
         if (purchaseOrderId == null) {
             return;
         }
-        repo.findByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
+        repo.findFirstByOrderIdAndType(purchaseOrderId, InvoiceType.PURCHASE)
                 .filter(inv -> inv.getDocumentSource() == InvoiceDocumentSource.GENERATED)
                 .filter(this::isFullyPaid)
                 .ifPresent(inv -> generateAndUploadInvoicePdf(inv, true));

@@ -342,7 +342,7 @@ public class SalesOrderService {
         }
 
         Long companyId = auth.getCurrentCompanyId();
-        invoiceRepo.findByOrderIdAndType(order.getId(), InvoiceType.SALES).ifPresent(invoice -> {
+        invoiceRepo.findFirstByOrderIdAndType(order.getId(), InvoiceType.SALES).ifPresent(invoice -> {
             if ("PAID".equalsIgnoreCase(invoice.getStatus())) {
                 throw new ConflictException("Cannot cancel a sales order after the invoice has been paid");
             }
@@ -472,10 +472,10 @@ public class SalesOrderService {
                 .shippingAddress(so.getShippingAddress())
                 .status(so.getStatus())
                 .archived(so.isArchived())
-                .paymentStatus(invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
+                .paymentStatus(invoiceRepo.findFirstByOrderIdAndType(so.getId(), InvoiceType.SALES)
                         .map(inv -> inv.getStatus())
                         .orElse("UNPAID"))
-                .outstandingAmount(invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
+                .outstandingAmount(invoiceRepo.findFirstByOrderIdAndType(so.getId(), InvoiceType.SALES)
                         .map(Invoice::getOutstanding)
                         .orElse(null))
                 .subtotalAmount(so.getSubtotalAmount() == null ? BigDecimal.ZERO : so.getSubtotalAmount())
@@ -489,7 +489,7 @@ public class SalesOrderService {
                 .creditAccountId(so.getCreditAccount() != null ? so.getCreditAccount().getId() : null)
                 .creditAccountName(so.getCreditAccount() != null ? so.getCreditAccount().getAccountName() : null)
                 .salesInvoiceId(
-                        invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
+                        invoiceRepo.findFirstByOrderIdAndType(so.getId(), InvoiceType.SALES)
                                 .map(Invoice::getId)
                                 .orElse(null))
                 .items(

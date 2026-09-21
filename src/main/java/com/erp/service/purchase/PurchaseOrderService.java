@@ -572,7 +572,7 @@ public class PurchaseOrderService {
     }
 
     private PurchaseOrderResponseDTO toDTO(PurchaseOrder po) {
-        var purchaseInvoice = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE);
+        var purchaseInvoice = invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE);
         PurchaseRequisition sourcePr = po.getSourceRequisition();
         LocalDate requiredDeliveryDate = po.getRequiredDeliveryDate() != null
                 ? po.getRequiredDeliveryDate()

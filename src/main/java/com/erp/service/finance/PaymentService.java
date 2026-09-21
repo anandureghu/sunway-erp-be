@@ -327,7 +327,7 @@ public class PaymentService {
             return;
         }
         if (p.getPurchaseOrderId() != null) {
-            invoiceRepo.findByOrderIdAndType(p.getPurchaseOrderId(), InvoiceType.PURCHASE).ifPresent(inv -> {
+            invoiceRepo.findFirstByOrderIdAndType(p.getPurchaseOrderId(), InvoiceType.PURCHASE).ifPresent(inv -> {
                 b.invoiceTotal(inv.getAmount());
                 b.invoiceOutstanding(inv.getOutstanding() != null ? inv.getOutstanding() : inv.getAmount());
                 b.supplierInvoiceNumber(inv.getSupplierInvoiceNumber());
@@ -633,7 +633,7 @@ public class PaymentService {
             throw new ConflictException(
                     "Release the purchase order to the supplier before confirming vendor payment in Accounts Payable.");
         }
-        Invoice purchaseInvoice = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+        Invoice purchaseInvoice = invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                 .orElseThrow(() -> new RuntimeException("Purchase invoice not found for this purchase order"));
         if (isBlank(purchaseInvoice.getSupplierInvoiceNumber())) {
             throw new ConflictException(
@@ -657,7 +657,7 @@ public class PaymentService {
         payment.setCreditAppliedAmount(creditApplied.compareTo(BigDecimal.ZERO) > 0 ? creditApplied : null);
 
         if (creditApplied.compareTo(BigDecimal.ZERO) > 0) {
-            String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+            String purchaseInvoiceCode = invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                     .map(Invoice::getInvoiceId).orElse(null);
             postCreditAppliedToAccountingPurchase(payment, creditApplied, purchaseInvoiceCode, po);
         }
@@ -677,7 +677,7 @@ public class PaymentService {
 
         BigDecimal confirmAmount = resolveConfirmAmount(body, purchaseInvoice, payment);
         payment.setAmount(confirmAmount);
-        invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+        invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                 .map(Invoice::getInvoiceId)
                 .ifPresent(code -> {
                     if (payment.getInvoiceId() == null || payment.getInvoiceId().isBlank()) {
@@ -701,7 +701,7 @@ public class PaymentService {
                     e.getMessage());
         }
         try {
-            Invoice invoiceForReceipt = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+            Invoice invoiceForReceipt = invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                     .orElse(null);
             String purchaseInvoiceCode = invoiceForReceipt != null ? invoiceForReceipt.getInvoiceId() : null;
             String vendorInvoiceNumber = invoiceForReceipt != null
@@ -747,7 +747,7 @@ public class PaymentService {
         }
         PurchaseOrder po = purchaseOrderRepo.findById(payment.getPurchaseOrderId())
                 .orElseThrow(() -> new RuntimeException("Purchase order not found for vendor payment"));
-        Invoice invoiceForReceipt = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+        Invoice invoiceForReceipt = invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                 .orElse(null);
         String purchaseInvoiceCode = invoiceForReceipt != null ? invoiceForReceipt.getInvoiceId() : null;
         String vendorInvoiceNumber = invoiceForReceipt != null
@@ -809,7 +809,7 @@ public class PaymentService {
                 payment.getAmount(),
                 companyId);
 
-        String purchaseInvoiceCode = invoiceRepo.findByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+        String purchaseInvoiceCode = invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
                 .map(Invoice::getInvoiceId)
                 .orElse(payment.getInvoiceId());
 

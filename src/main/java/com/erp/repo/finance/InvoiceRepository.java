@@ -26,8 +26,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     List<Invoice> findByCompany_IdAndArchivedTrueAndType(Long companyId, InvoiceType type);
 
-    Invoice findByOrderId(Long orderId);
-    Optional<Invoice> findByOrderIdAndType(Long orderId, InvoiceType type);
+    Optional<Invoice> findFirstByOrderId(Long orderId);
+    Optional<Invoice> findFirstByOrderIdAndType(Long orderId, InvoiceType type);
 
     Optional<Invoice> findByCompany_IdAndOrderIdAndTypeAndSupplierInvoiceNumber(
             Long companyId,

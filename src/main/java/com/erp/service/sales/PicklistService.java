@@ -80,7 +80,7 @@ public class PicklistService {
         if (!"CONFIRMED".equals(so.getStatus())) {
             throw new RuntimeException("Picklist can be generated only for confirmed sales orders");
         }
-        var invoice = invoiceRepo.findByOrderIdAndType(so.getId(), InvoiceType.SALES)
+        var invoice = invoiceRepo.findFirstByOrderIdAndType(so.getId(), InvoiceType.SALES)
                 .orElseThrow(() -> new RuntimeException("Invoice not found for this sales order"));
         if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
             throw new RuntimeException("Picklist can be generated only after full customer payment");

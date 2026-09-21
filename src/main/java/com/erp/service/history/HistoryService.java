@@ -328,7 +328,7 @@ public class HistoryService {
         if (picklistRepo.findBySalesOrderId(id).isPresent()) {
             throw new RuntimeException("Cannot delete: picklist exists for this order");
         }
-        if (invoiceRepo.findByOrderIdAndType(id, InvoiceType.SALES).isPresent()) {
+        if (invoiceRepo.findFirstByOrderIdAndType(id, InvoiceType.SALES).isPresent()) {
             throw new RuntimeException("Cannot delete: invoice exists for this order");
         }
         salesOrderRepo.delete(order);
@@ -341,7 +341,7 @@ public class HistoryService {
         if (!po.isArchived()) {
             throw new RuntimeException("Only archived purchase orders can be permanently deleted");
         }
-        if (invoiceRepo.findByOrderIdAndType(id, InvoiceType.PURCHASE).isPresent()) {
+        if (invoiceRepo.findFirstByOrderIdAndType(id, InvoiceType.PURCHASE).isPresent()) {
             throw new RuntimeException("Cannot delete: invoice exists for this purchase order");
         }
         purchaseOrderRepo.delete(po);
