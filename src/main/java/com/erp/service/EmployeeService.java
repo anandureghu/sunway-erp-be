@@ -56,6 +56,13 @@ public class EmployeeService {
             EmployeeStatus.TERMINATED,
             EmployeeStatus.RETIRED);
 
+    /** Former staff awaiting final settlement / archive — shown on Archive panel. */
+    private static final List<EmployeeStatus> FORMER_OR_INACTIVE_STATUSES = List.of(
+            EmployeeStatus.INACTIVE,
+            EmployeeStatus.RESIGNED,
+            EmployeeStatus.TERMINATED,
+            EmployeeStatus.RETIRED);
+
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
@@ -400,12 +407,12 @@ public class EmployeeService {
 
         log.debug("👤 getEmployees: canViewAll={}, canViewOwn={}", canViewAll, canViewOwn);
 
-        // ✅ VIEW ALL - Return all employees for company
+        // VIEW ALL — non-archived directory (includes resigned/terminated/retired so HR can
+        // still open those profiles before final settlement marks them INACTIVE).
         if (canViewAll) {
             log.info("✅ User has VIEW_ALL permission - loading all employees");
             return employeeRepository
-                    .findCurrentWorkforceByCompanyIdOrderByCreatedAtDesc(
-                            companyId, EXCLUDED_FROM_OPERATIONAL_LISTS)
+                    .findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
                     .stream()
                     .map(this::toDTO)
                     .toList();
@@ -429,8 +436,7 @@ public class EmployeeService {
 
     public List<EmployeeResponseDTO> getEmployeesByCompany(Long companyId) {
         assertTenantCompanyScope(companyId);
-        return employeeRepository.findCurrentWorkforceByCompanyIdOrderByCreatedAtDesc(
-                        companyId, EXCLUDED_FROM_OPERATIONAL_LISTS)
+        return employeeRepository.findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(companyId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -442,8 +448,7 @@ public class EmployeeService {
         Department dept = departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new RuntimeException("Department not found"));
         assertTenantCompanyScope(dept.getCompany().getId());
-        return employeeRepository.findCurrentWorkforceByDepartmentIdOrderByCreatedAtDesc(
-                        departmentId, EXCLUDED_FROM_OPERATIONAL_LISTS)
+        return employeeRepository.findByDepartment_IdAndArchivedFalseOrderByCreatedAtDesc(departmentId)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
@@ -487,11 +492,11 @@ public class EmployeeService {
 
         Long companyId = resolveCurrentCompanyId();
 
-        // ✅ VIEW ALL - Return paginated employees for current company only
+        // VIEW ALL — paginated non-archived directory (includes exit statuses).
         log.info("✅ User has VIEW_ALL permission - loading paginated employees");
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Employee> empPage = employeeRepository.findCurrentWorkforceByCompanyId(
-                companyId, EXCLUDED_FROM_OPERATIONAL_LISTS, pageable);
+        Page<Employee> empPage = employeeRepository.findByCompany_IdAndArchivedFalse(
+                companyId, pageable);
 
         return PageResponse.of(
                 empPage.getContent().stream().map(this::toDTO).toList(),
@@ -599,8 +604,8 @@ public class EmployeeService {
     public List<EmployeeResponseDTO> listInactive() {
         Long companyId = resolveCurrentCompanyId();
         return employeeRepository
-                .findByCompany_IdAndStatusAndArchivedFalseOrderByCreatedAtDesc(
-                        companyId, EmployeeStatus.INACTIVE)
+                .findByCompany_IdAndStatusInAndArchivedFalseOrderByCreatedAtDesc(
+                        companyId, FORMER_OR_INACTIVE_STATUSES)
                 .stream()
                 .map(this::toDTO)
                 .toList();

@@ -32,6 +32,13 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     /** Active (non-archived) employees — the working set shown across the app. */
     List<Employee> findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(Long companyId);
 
+    Page<Employee> findByCompany_IdAndArchivedFalse(Long companyId, Pageable pageable);
+
+    List<Employee> findByDepartment_IdAndArchivedFalseOrderByCreatedAtDesc(Long departmentId);
+
+    List<Employee> findByCompany_IdAndStatusInAndArchivedFalseOrderByCreatedAtDesc(
+            Long companyId, Collection<EmployeeStatus> statuses);
+
     @Query("""
             SELECT e FROM Employee e
             WHERE e.company.id = :companyId
