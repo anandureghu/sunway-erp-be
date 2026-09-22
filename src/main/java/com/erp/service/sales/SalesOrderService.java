@@ -57,6 +57,7 @@ public class SalesOrderService {
     private final InvoiceRepository invoiceRepo;
     private final PicklistRepository picklistRepo;
     private final ShipmentRepository shipmentRepo;
+    private final ShipmentService shipmentService;
     private final UserRepository userRepo;
     private final AuthContext auth;
     private final DocumentSequenceService documentSequenceService;
@@ -74,6 +75,7 @@ public class SalesOrderService {
             InvoiceRepository invoiceRepo,
             PicklistRepository picklistRepo,
             ShipmentRepository shipmentRepo,
+            ShipmentService shipmentService,
             UserRepository userRepo,
             AuthContext auth,
             DocumentSequenceService documentSequenceService
@@ -90,6 +92,7 @@ public class SalesOrderService {
         this.invoiceRepo = invoiceRepo;
         this.picklistRepo = picklistRepo;
         this.shipmentRepo = shipmentRepo;
+        this.shipmentService = shipmentService;
         this.userRepo = userRepo;
         this.auth = auth;
         this.documentSequenceService = documentSequenceService;
@@ -386,6 +389,56 @@ public class SalesOrderService {
         }
 
         order.setStatus("CANCELLED");
+        return toDTO(repo.save(order));
+    }
+
+    // --------------------------
+    // Complete Sales Order (all items returned)
+    // --------------------------
+    public SalesOrderResponseDTO complete(Long id) {
+        SalesOrder order = getEntity(id);
+
+        if (!"CONFIRMED".equals(order.getStatus())) {
+            throw new ConflictException("Only CONFIRMED orders can be completed manually");
+        }
+
+        List<SalesOrderItem> items = order.getItems();
+        if (items == null || items.isEmpty()) {
+            throw new ConflictException("Cannot complete an order with no line items");
+        }
+
+        boolean allReturned = items.stream().allMatch(line -> {
+            int ordered = line.getQuantity() == null ? 0 : line.getQuantity();
+            int returned = line.getReturnedQty() == null ? 0 : line.getReturnedQty();
+            return returned >= ordered;
+        });
+        if (!allReturned) {
+            throw new ConflictException(
+                    "Cannot complete order until all line items are fully returned");
+        }
+
+        Long companyId = auth.getCurrentCompanyId();
+        picklistRepo.findByCompanyIdAndSalesOrderId(companyId, order.getId()).ifPresent(picklist -> {
+            if ("CANCELLED".equals(picklist.getStatus())) {
+                return;
+            }
+            shipmentRepo.findByPicklistId(picklist.getId()).ifPresent(shipment -> {
+                String shipmentStatus = shipment.getStatus();
+                if ("DELIVERED".equals(shipmentStatus)) {
+                    throw new ConflictException(
+                            "Cannot complete order: shipment "
+                                    + shipment.getShipmentNumber()
+                                    + " is already delivered");
+                }
+                if (!"CANCELLED".equals(shipmentStatus)) {
+                    shipmentService.cancel(shipment.getId());
+                }
+            });
+            picklist.setStatus("CANCELLED");
+            picklistRepo.save(picklist);
+        });
+
+        order.setStatus("COMPLETED");
         return toDTO(repo.save(order));
     }
 

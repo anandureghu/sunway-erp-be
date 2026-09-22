@@ -66,6 +66,12 @@ public class SalesOrderController {
         return cancelled;
     }
 
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.EDIT, AppAction.APPROVE})
+    @PostMapping("/{id}/complete")
+    public SalesOrderResponseDTO complete(@PathVariable("id") Long id) {
+        return service.complete(id);
+    }
+
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.DELETE})
     @PostMapping("/{id}/archive")
     public SalesOrderResponseDTO archive(@PathVariable Long id) {

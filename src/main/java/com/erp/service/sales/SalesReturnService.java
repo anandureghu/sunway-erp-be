@@ -83,22 +83,28 @@ public class SalesReturnService {
             throw new ConflictException("Cannot return items on a quotation or cancelled order");
         }
 
-        picklistRepo.findByCompanyIdAndSalesOrderId(companyId, so.getId()).ifPresent(picklist -> {
-            if ("CANCELLED".equals(picklist.getStatus())) {
-                return;
-            }
-            var shipmentOpt = shipmentRepo.findByPicklistId(picklist.getId());
-            if (shipmentOpt.isEmpty()) {
+        var picklist = picklistRepo.findByCompanyIdAndSalesOrderId(companyId, so.getId())
+                .orElseThrow(() -> new ConflictException(
+                        "Cannot create a sales return until items have been picked"));
+        if ("CANCELLED".equals(picklist.getStatus())) {
+            throw new ConflictException(
+                    "Cannot create a sales return for a cancelled picklist");
+        }
+        if (!"PICKED".equalsIgnoreCase(picklist.getStatus())) {
+            throw new ConflictException(
+                    "Cannot create a sales return until picklist "
+                            + picklist.getPicklistNumber()
+                            + " is marked picked");
+        }
+        shipmentRepo.findByPicklistId(picklist.getId()).ifPresent(shipment -> {
+            String shipmentStatus = shipment.getStatus();
+            if ("DELIVERED".equalsIgnoreCase(shipmentStatus)) {
                 throw new ConflictException(
-                        "Cannot create a sales return while picklist "
-                                + picklist.getPicklistNumber()
-                                + " is still in progress");
+                        "Cannot create a sales return after the shipment has been delivered");
             }
-            String shipmentStatus = shipmentOpt.get().getStatus();
-            if (!List.of("DELIVERED", "CANCELLED").contains(shipmentStatus)) {
+            if ("CANCELLED".equalsIgnoreCase(shipmentStatus)) {
                 throw new ConflictException(
-                        "Cannot create a sales return while shipment is still open ("
-                                + shipmentStatus + ")");
+                        "Cannot create a sales return for a cancelled shipment");
             }
         });
 
