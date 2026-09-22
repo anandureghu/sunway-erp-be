@@ -23,9 +23,27 @@ public class CustomerEmailService {
     @Value("${app.mail.enabled:false}")
     private boolean mailEnabled;
 
+    /** Best-effort (used by payment/order flows — never fails the transaction). */
     public void sendInvoiceCreatedEmail(Customer customer, Invoice invoice) {
+        try {
+            sendInvoiceCreatedEmailRequired(customer, invoice);
+        } catch (Exception e) {
+            log.warn("Skipping invoice email: {}", e.getMessage());
+        }
+    }
+
+    /** Best-effort (used by payment flows — never fails the transaction). */
+    public void sendReceiptEmail(Customer customer, Invoice invoice) {
+        try {
+            sendReceiptEmailRequired(customer, invoice);
+        } catch (Exception e) {
+            log.warn("Skipping receipt email: {}", e.getMessage());
+        }
+    }
+
+    public void sendInvoiceCreatedEmailRequired(Customer customer, Invoice invoice) {
         if (customer == null || customer.getEmail() == null || customer.getEmail().isBlank()) {
-            return;
+            throw new IllegalStateException("Customer email is missing on this invoice");
         }
         String subject = "Invoice " + invoice.getInvoiceId() + " - Payment requested";
         String body = "Dear Customer,\n\n"
@@ -35,12 +53,12 @@ public class CustomerEmailService {
                 + "Due Date: " + invoice.getDueDate() + "\n\n"
                 + "Please complete payment to proceed with order processing.\n\n"
                 + "Regards,\nSunway ERP";
-        sendMail(customer.getEmail(), subject, body);
+        sendMailRequired(customer.getEmail(), subject, body);
     }
 
-    public void sendReceiptEmail(Customer customer, Invoice invoice) {
+    public void sendReceiptEmailRequired(Customer customer, Invoice invoice) {
         if (customer == null || customer.getEmail() == null || customer.getEmail().isBlank()) {
-            return;
+            throw new IllegalStateException("Customer email is missing on this invoice");
         }
         String subject = "Receipt - " + invoice.getInvoiceId();
         String body = "Dear Customer,\n\n"
@@ -49,18 +67,46 @@ public class CustomerEmailService {
                 + "Amount: " + invoice.getAmount() + "\n\n"
                 + "Thank you for your payment.\n\n"
                 + "Regards,\nSunway ERP";
-        sendMail(customer.getEmail(), subject, body);
+        sendMailRequired(customer.getEmail(), subject, body);
     }
 
-    private void sendMail(String to, String subject, String text) {
+    public void sendPurchaseInvoiceEmailRequired(String supplierName, String supplierEmail, Invoice invoice) {
+        if (supplierEmail == null || supplierEmail.isBlank()) {
+            throw new IllegalStateException("Supplier email is missing on this purchase order");
+        }
+        String name = supplierName == null || supplierName.isBlank() ? "Supplier" : supplierName;
+        String subject = "Purchase invoice " + invoice.getInvoiceId();
+        String body = "Dear " + name + ",\n\n"
+                + "Please find details for purchase invoice " + invoice.getInvoiceId() + ".\n"
+                + "Amount: " + invoice.getAmount() + "\n"
+                + "Due Date: " + invoice.getDueDate() + "\n\n"
+                + "Regards,\nSunway ERP";
+        sendMailRequired(supplierEmail, subject, body);
+    }
+
+    public void sendPurchaseReceiptEmailRequired(String supplierName, String supplierEmail, Invoice invoice) {
+        if (supplierEmail == null || supplierEmail.isBlank()) {
+            throw new IllegalStateException("Supplier email is missing on this purchase order");
+        }
+        String name = supplierName == null || supplierName.isBlank() ? "Supplier" : supplierName;
+        String subject = "Payment receipt - " + invoice.getInvoiceId();
+        String body = "Dear " + name + ",\n\n"
+                + "Payment has been recorded for purchase invoice " + invoice.getInvoiceId() + ".\n"
+                + "Paid Date: " + invoice.getPaidDate() + "\n"
+                + "Amount: " + invoice.getAmount() + "\n\n"
+                + "Regards,\nSunway ERP";
+        sendMailRequired(supplierEmail, subject, body);
+    }
+
+    private void sendMailRequired(String to, String subject, String text) {
         if (!mailEnabled) {
-            log.debug("Mail disabled. Skipping email to {} with subject '{}'", to, subject);
-            return;
+            throw new IllegalStateException(
+                    "Email is disabled. Enable app.mail.enabled and configure SMTP to send invoices.");
         }
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
         if (mailSender == null) {
-            log.info("Email provider not configured. Skipping email to {} with subject '{}'", to, subject);
-            return;
+            throw new IllegalStateException(
+                    "Email provider is not configured. Configure spring.mail.* settings to send invoices.");
         }
 
         try {
@@ -71,8 +117,7 @@ public class CustomerEmailService {
             message.setText(text);
             mailSender.send(message);
         } catch (Exception e) {
-            // Never fail the business transaction (e.g. payment confirm) because SMTP auth failed.
-            log.warn("Failed to send email to {} subject '{}': {}", to, subject, e.getMessage());
+            throw new IllegalStateException("Failed to send email: " + e.getMessage(), e);
         }
     }
 }

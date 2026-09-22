@@ -1094,13 +1094,22 @@ public class InvoiceService {
         Invoice invoice = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
         assertInvoiceInTenant(invoice);
-        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+        if (invoice.getType() == InvoiceType.PURCHASE) {
+            if (invoice.getOrderId() == null) {
+                throw new RuntimeException("Purchase invoice is not linked to a purchase order");
+            }
+            PurchaseOrderResponseDTO po = purchaseOrderService.get(invoice.getOrderId());
+            customerEmailService.sendPurchaseInvoiceEmailRequired(
+                    po.getSupplierName(), po.getSupplierEmail(), invoice);
             return;
+        }
+        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+            throw new RuntimeException("Invoice email is only supported for sales or purchase invoices");
         }
         Customer customer = salesOrderRepo.findById(invoice.getOrderId())
                 .map(so -> so.getCustomer())
                 .orElse(null);
-        customerEmailService.sendInvoiceCreatedEmail(customer, invoice);
+        customerEmailService.sendInvoiceCreatedEmailRequired(customer, invoice);
     }
 
     public void emailReceipt(Long invoiceId) {
@@ -1110,13 +1119,22 @@ public class InvoiceService {
         if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
             throw new RuntimeException("Receipt can be sent only for paid invoices");
         }
-        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+        if (invoice.getType() == InvoiceType.PURCHASE) {
+            if (invoice.getOrderId() == null) {
+                throw new RuntimeException("Purchase invoice is not linked to a purchase order");
+            }
+            PurchaseOrderResponseDTO po = purchaseOrderService.get(invoice.getOrderId());
+            customerEmailService.sendPurchaseReceiptEmailRequired(
+                    po.getSupplierName(), po.getSupplierEmail(), invoice);
             return;
+        }
+        if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
+            throw new RuntimeException("Receipt email is only supported for sales or purchase invoices");
         }
         Customer customer = salesOrderRepo.findById(invoice.getOrderId())
                 .map(so -> so.getCustomer())
                 .orElse(null);
-        customerEmailService.sendReceiptEmail(customer, invoice);
+        customerEmailService.sendReceiptEmailRequired(customer, invoice);
     }
 
     // ============================================================
@@ -1439,6 +1457,8 @@ public class InvoiceService {
             if (paidSubtitle != null && !paidSubtitle.isBlank()) {
                 return paidSubtitle.trim();
             }
+            // Do not fall back to the unpaid subtitle on paid documents.
+            return null;
         }
         return settings.getInvoiceHeaderSubtitle();
     }

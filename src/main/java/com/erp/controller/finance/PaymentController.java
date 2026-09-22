@@ -73,8 +73,8 @@ public class PaymentController {
 
     @RequiresPermission(module = AppModule.FINANCE_PAYMENT, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}/pdf")
-    public ResponseEntity<String> getVendorPaymentReceiptPdf(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(paymentService.getOrCreateVendorPaymentReceiptPdfUrl(id));
+    public ResponseEntity<String> getPaymentReceiptPdf(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(paymentService.getOrCreatePaymentReceiptPdfUrl(id));
     }
 
     // ----------------------------------------------------------

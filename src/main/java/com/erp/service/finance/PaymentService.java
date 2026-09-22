@@ -149,26 +149,14 @@ public class PaymentService {
                 .createdBy(userId)
                 .build();
 
-        payment.setPdfUrl("https://dummy.url/payments/" + payment.getPaymentCode() + ".pdf");
-
         Payment saved = paymentRepo.save(payment);
         Invoice invoice = invoiceService.applyPayment(company.getId(), dto.getInvoiceId(), dto.getAmount());
         postPaymentToAccounting(saved, invoice);
         if ("PAID".equalsIgnoreCase(invoice.getStatus())) {
+            attachCustomerReceiptPdf(saved, invoice);
             salesOrderRepo.findById(invoice.getOrderId())
                     .ifPresent(order -> customerEmailService.sendReceiptEmail(order.getCustomer(), invoice));
         }
-
-//        // 4️⃣TODO: Create transaction
-//        transactionService.createTransactionForPayment(
-//                saved.getId(),
-//                company.getId(),
-//                dto.getAmount(),
-//                coaService.getCompanyBankAccountCode(company.getId()),
-//                coaService.getCustomerARAccountCode(company.getId()),
-//                saved.getEffectiveDate(),
-//                "PAYMENT"
-//        );
 
         return toDTO(saved);
     }
@@ -600,6 +588,10 @@ public class PaymentService {
             // Fully settled by credit alone — nothing left to collect in cash.
             payment.setAmount(BigDecimal.ZERO);
             invoiceService.completeLinkedDocumentsIfPaid(invoice);
+            Invoice settled = requireInvoiceForCustomerPayment(payment);
+            if ("PAID".equalsIgnoreCase(settled.getStatus() == null ? "" : settled.getStatus())) {
+                attachCustomerReceiptPdf(payment, settled);
+            }
             return toDTO(paymentRepo.save(payment));
         }
 
@@ -614,6 +606,7 @@ public class PaymentService {
             invoiceService.ensurePendingPaymentRequestForOutstanding(updatedInvoice);
         }
         if ("PAID".equalsIgnoreCase(updatedInvoice.getStatus())) {
+            attachCustomerReceiptPdf(saved, updatedInvoice);
             salesOrderRepo.findById(updatedInvoice.getOrderId())
                     .ifPresent(order -> customerEmailService.sendReceiptEmail(order.getCustomer(), updatedInvoice));
         }
@@ -727,10 +720,59 @@ public class PaymentService {
         return toDTO(saved);
     }
 
-    public String getOrCreateVendorPaymentReceiptPdfUrl(Long paymentId) {
+    public String getOrCreatePaymentReceiptPdfUrl(Long paymentId) {
         Payment payment = paymentRepo.findById(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
         assertPaymentInTenant(payment);
+        PaymentDirection dir = payment.getPaymentDirection() != null
+                ? payment.getPaymentDirection()
+                : PaymentDirection.CUSTOMER;
+        if (dir == PaymentDirection.VENDOR) {
+            return getOrCreateVendorPaymentReceiptPdfUrl(payment);
+        }
+        if (dir != PaymentDirection.CUSTOMER) {
+            throw new RuntimeException("Receipt PDF is only available for customer or vendor payments");
+        }
+        return getOrCreateCustomerPaymentReceiptPdfUrl(payment);
+    }
+
+    /** @deprecated Prefer {@link #getOrCreatePaymentReceiptPdfUrl(Long)}. */
+    public String getOrCreateVendorPaymentReceiptPdfUrl(Long paymentId) {
+        return getOrCreatePaymentReceiptPdfUrl(paymentId);
+    }
+
+    private String getOrCreateCustomerPaymentReceiptPdfUrl(Payment payment) {
+        if ("PENDING_REQUEST".equalsIgnoreCase(payment.getPaymentMethod())) {
+            throw new RuntimeException("Confirm the customer payment before downloading the receipt");
+        }
+        Invoice invoice = requireInvoiceForCustomerPayment(payment);
+        if (!"PAID".equalsIgnoreCase(invoice.getStatus() == null ? "" : invoice.getStatus().trim())) {
+            throw new RuntimeException("Receipt PDF is available after the invoice is fully paid");
+        }
+        String existing = payment.getPdfUrl();
+        if (existing != null && !existing.isBlank() && !existing.contains("dummy.url")) {
+            return existing;
+        }
+        String receiptUrl = invoiceService.getOrCreateInvoicePdfUrl(invoice.getId());
+        payment.setPdfUrl(receiptUrl);
+        paymentRepo.save(payment);
+        return receiptUrl;
+    }
+
+    private void attachCustomerReceiptPdf(Payment payment, Invoice invoice) {
+        try {
+            String receiptUrl = invoiceService.getOrCreateInvoicePdfUrl(invoice.getId());
+            payment.setPdfUrl(receiptUrl);
+            paymentRepo.save(payment);
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to generate customer payment receipt PDF for payment id={}: {}",
+                    payment.getId(),
+                    e.getMessage());
+        }
+    }
+
+    private String getOrCreateVendorPaymentReceiptPdfUrl(Payment payment) {
         if (payment.getPaymentDirection() != PaymentDirection.VENDOR) {
             throw new RuntimeException("Receipt PDF is only available for vendor payments");
         }
