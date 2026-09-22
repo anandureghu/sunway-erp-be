@@ -13,7 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional(readOnly = true)
@@ -51,12 +53,14 @@ public class InventoryReportService {
         long totalAvailable = toLong(valueAt(totalsRow, 2));
         BigDecimal valueCost = toBigDecimal(valueAt(totalsRow, 3));
         BigDecimal batchValueCost = stockBatchService.sumBatchValueForReport(companyId, warehouseId, cat);
-        if (batchValueCost.compareTo(BigDecimal.ZERO) > 0) {
+        boolean useBatchValuation = batchValueCost.compareTo(BigDecimal.ZERO) > 0;
+        if (useBatchValuation) {
             valueCost = batchValueCost;
         }
         BigDecimal valueSelling = toBigDecimal(valueAt(totalsRow, 4));
 
         List<PurchaseOrderStatus> openOrderStatuses = List.of(
+                PurchaseOrderStatus.APPROVED,
                 PurchaseOrderStatus.CONFIRMED,
                 PurchaseOrderStatus.PARTIALLY_RECEIVED
         );
@@ -74,44 +78,108 @@ public class InventoryReportService {
                 .build();
 
         List<InventoryWarehouseBreakdownDTO> byWh = new ArrayList<>();
-        for (Object[] row : stockRepo.aggregateByWarehouse(companyId, warehouseId, cat)) {
-            byWh.add(InventoryWarehouseBreakdownDTO.builder()
-                    .warehouseId(((Number) row[0]).longValue())
-                    .warehouseName((String) row[1])
-                    .onHand(toLong(row[2]))
-                    .reserved(toLong(row[3]))
-                    .available(toLong(row[4]))
-                    .valueAtCost(toBigDecimal(row[5]))
-                    .build());
+        if (useBatchValuation) {
+            // Keep qty from stock rows; overlay cost from batch layers so charts match the KPI.
+            Map<Long, BigDecimal> batchValueByWh = new HashMap<>();
+            Map<Long, String> whNames = new HashMap<>();
+            for (Object[] row : stockBatchService.aggregateBatchValueByWarehouse(
+                    companyId, warehouseId, cat)) {
+                Long wid = ((Number) row[0]).longValue();
+                whNames.put(wid, (String) row[1]);
+                batchValueByWh.put(wid, toBigDecimal(row[3]));
+            }
+            for (Object[] row : stockRepo.aggregateByWarehouse(companyId, warehouseId, cat)) {
+                Long wid = ((Number) row[0]).longValue();
+                byWh.add(InventoryWarehouseBreakdownDTO.builder()
+                        .warehouseId(wid)
+                        .warehouseName((String) row[1])
+                        .onHand(toLong(row[2]))
+                        .reserved(toLong(row[3]))
+                        .available(toLong(row[4]))
+                        .valueAtCost(batchValueByWh.getOrDefault(wid, BigDecimal.ZERO))
+                        .build());
+            }
+            // Include warehouses that have batch value but no stock-row aggregate (edge case).
+            for (Map.Entry<Long, BigDecimal> e : batchValueByWh.entrySet()) {
+                boolean present = byWh.stream().anyMatch(w -> w.getWarehouseId().equals(e.getKey()));
+                if (!present) {
+                    byWh.add(InventoryWarehouseBreakdownDTO.builder()
+                            .warehouseId(e.getKey())
+                            .warehouseName(whNames.get(e.getKey()))
+                            .onHand(0L)
+                            .reserved(0L)
+                            .available(0L)
+                            .valueAtCost(e.getValue())
+                            .build());
+                }
+            }
+        } else {
+            for (Object[] row : stockRepo.aggregateByWarehouse(companyId, warehouseId, cat)) {
+                byWh.add(InventoryWarehouseBreakdownDTO.builder()
+                        .warehouseId(((Number) row[0]).longValue())
+                        .warehouseName((String) row[1])
+                        .onHand(toLong(row[2]))
+                        .reserved(toLong(row[3]))
+                        .available(toLong(row[4]))
+                        .valueAtCost(toBigDecimal(row[5]))
+                        .build());
+            }
         }
 
         List<InventoryCategoryBreakdownDTO> byCat = new ArrayList<>();
-        for (Object[] row : stockRepo.aggregateByCategory(companyId, warehouseId, cat)) {
-            byCat.add(InventoryCategoryBreakdownDTO.builder()
-                    .category((String) row[0])
-                    .skuCount(toLong(row[1]))
-                    .onHand(toLong(row[2]))
-                    .valueAtCost(toBigDecimal(row[3]))
-                    .build());
+        if (useBatchValuation) {
+            for (Object[] row : stockBatchService.aggregateBatchValueByCategory(
+                    companyId, warehouseId, cat)) {
+                byCat.add(InventoryCategoryBreakdownDTO.builder()
+                        .category((String) row[0])
+                        .skuCount(toLong(row[1]))
+                        .onHand(toLong(row[2]))
+                        .valueAtCost(toBigDecimal(row[3]))
+                        .build());
+            }
+        } else {
+            for (Object[] row : stockRepo.aggregateByCategory(companyId, warehouseId, cat)) {
+                byCat.add(InventoryCategoryBreakdownDTO.builder()
+                        .category((String) row[0])
+                        .skuCount(toLong(row[1]))
+                        .onHand(toLong(row[2]))
+                        .valueAtCost(toBigDecimal(row[3]))
+                        .build());
+            }
         }
 
-        List<ItemWarehouseStock> topLines = stockRepo.findStockLinesOrderByValueDesc(
-                companyId, warehouseId, cat, PageRequest.of(0, TOP_STOCK_LINES));
         List<InventoryTopStockLineDTO> topDtos = new ArrayList<>();
-        for (ItemWarehouseStock iws : topLines) {
-            var i = iws.getItem();
-            var w = iws.getWarehouse();
-            BigDecimal lineValue = BigDecimal.valueOf(nz(iws.getQuantityOnHand()))
-                    .multiply(i.getCostPrice() != null ? i.getCostPrice() : BigDecimal.ZERO);
-            topDtos.add(InventoryTopStockLineDTO.builder()
-                    .itemId(i.getId())
-                    .sku(i.getSku())
-                    .name(i.getName())
-                    .warehouseId(w.getId())
-                    .warehouseName(w.getName())
-                    .quantityOnHand(nz(iws.getQuantityOnHand()))
-                    .valueAtCost(lineValue)
-                    .build());
+        if (useBatchValuation) {
+            for (Object[] row : stockBatchService.topBatchLinesByValue(
+                    companyId, warehouseId, cat, TOP_STOCK_LINES)) {
+                topDtos.add(InventoryTopStockLineDTO.builder()
+                        .itemId(((Number) row[0]).longValue())
+                        .sku((String) row[1])
+                        .name((String) row[2])
+                        .warehouseId(((Number) row[3]).longValue())
+                        .warehouseName((String) row[4])
+                        .quantityOnHand((int) toLong(row[5]))
+                        .valueAtCost(toBigDecimal(row[6]))
+                        .build());
+            }
+        } else {
+            List<ItemWarehouseStock> topLines = stockRepo.findStockLinesOrderByValueDesc(
+                    companyId, warehouseId, cat, PageRequest.of(0, TOP_STOCK_LINES));
+            for (ItemWarehouseStock iws : topLines) {
+                var i = iws.getItem();
+                var w = iws.getWarehouse();
+                BigDecimal lineValue = BigDecimal.valueOf(nz(iws.getQuantityOnHand()))
+                        .multiply(i.getCostPrice() != null ? i.getCostPrice() : BigDecimal.ZERO);
+                topDtos.add(InventoryTopStockLineDTO.builder()
+                        .itemId(i.getId())
+                        .sku(i.getSku())
+                        .name(i.getName())
+                        .warehouseId(w.getId())
+                        .warehouseName(w.getName())
+                        .quantityOnHand(nz(iws.getQuantityOnHand()))
+                        .valueAtCost(lineValue)
+                        .build());
+            }
         }
 
         long lowCount = stockRepo.countLowStockLinesForReport(companyId, warehouseId, cat);

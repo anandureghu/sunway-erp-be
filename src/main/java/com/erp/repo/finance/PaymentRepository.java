@@ -68,13 +68,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     //  Finance report aggregations
     // ======================================================
 
-    /** Sum of payment amounts in [from, to] for a given direction, scoped to company. */
+    /** Sum of confirmed payment amounts in [from, to] for a given direction (excludes pending). */
     @Query("""
             SELECT COALESCE(SUM(p.amount), 0), COUNT(p)
             FROM Payment p
             WHERE p.company.id = :companyId
               AND p.paymentDirection = :direction
               AND p.archived = false
+              AND UPPER(COALESCE(p.paymentMethod, '')) NOT IN ('PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT')
               AND (:from IS NULL OR p.effectiveDate >= :from)
               AND (:to IS NULL OR p.effectiveDate <= :to)
             """)
@@ -85,7 +86,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             @Param("to") LocalDate to);
 
     /**
-     * Monthly aggregation by year + month over effectiveDate.
+     * Monthly aggregation by year + month over effectiveDate (confirmed payments only).
      * Returns rows of (year, month, totalAmount).
      */
     @Query("""
@@ -94,6 +95,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             WHERE p.company.id = :companyId
               AND p.paymentDirection = :direction
               AND p.archived = false
+              AND UPPER(COALESCE(p.paymentMethod, '')) NOT IN ('PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT')
               AND p.effectiveDate IS NOT NULL
               AND (:from IS NULL OR p.effectiveDate >= :from)
               AND (:to IS NULL OR p.effectiveDate <= :to)

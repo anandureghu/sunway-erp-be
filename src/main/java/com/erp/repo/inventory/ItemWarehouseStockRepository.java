@@ -38,6 +38,7 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
             JOIN iws.item i
             JOIN iws.warehouse w
             WHERE i.company.id = :companyId
+              AND i.archived = false
               AND iws.quantityOnHand > 0
               AND (:warehouseId IS NULL OR w.id = :warehouseId)
               AND (:category IS NULL OR :category = '' OR i.category = :category)
@@ -58,6 +59,7 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
             JOIN iws.item i
             JOIN iws.warehouse w
             WHERE i.company.id = :companyId
+              AND i.archived = false
               AND (:warehouseId IS NULL OR w.id = :warehouseId)
               AND (:category IS NULL OR :category = '' OR i.category = :category)
             """)
@@ -77,6 +79,7 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
             JOIN iws.item i
             JOIN iws.warehouse w
             WHERE i.company.id = :companyId
+              AND i.archived = false
               AND (:warehouseId IS NULL OR w.id = :warehouseId)
               AND (:category IS NULL OR :category = '' OR i.category = :category)
             GROUP BY w.id, w.name
@@ -96,6 +99,7 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
             JOIN iws.item i
             JOIN iws.warehouse w
             WHERE i.company.id = :companyId
+              AND i.archived = false
               AND (:warehouseId IS NULL OR w.id = :warehouseId)
               AND (:category IS NULL OR :category = '' OR i.category = :category)
             GROUP BY COALESCE(NULLIF(TRIM(i.category), ''), 'Uncategorized')
@@ -111,20 +115,23 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
             JOIN FETCH iws.item i
             JOIN FETCH iws.warehouse w
             WHERE i.company.id = :companyId
+              AND i.archived = false
               AND (:warehouseId IS NULL OR w.id = :warehouseId)
               AND (:category IS NULL OR :category = '' OR i.category = :category)
             ORDER BY (iws.quantityOnHand * COALESCE(i.costPrice, 0)) DESC
             """)
-            List<ItemWarehouseStock> findStockLinesOrderByValueDesc(
+    List<ItemWarehouseStock> findStockLinesOrderByValueDesc(
             @Param("companyId") Long companyId,
             @Param("warehouseId") Long warehouseId,
             @Param("category") String category,
             Pageable pageable);
+
     @Query("""
             SELECT iws FROM ItemWarehouseStock iws
             JOIN FETCH iws.item i
             JOIN FETCH iws.warehouse w
             WHERE i.company.id = :companyId
+              AND i.archived = false
               AND i.reorderLevel IS NOT NULL
               AND (CASE WHEN (iws.quantityOnHand - iws.reserved) < 0 THEN 0
                         ELSE (iws.quantityOnHand - iws.reserved) END) <= i.reorderLevel
@@ -145,6 +152,7 @@ public interface ItemWarehouseStockRepository extends JpaRepository<ItemWarehous
             JOIN iws.item i
             JOIN iws.warehouse w
             WHERE i.company.id = :companyId
+              AND i.archived = false
               AND i.reorderLevel IS NOT NULL
               AND (CASE WHEN (iws.quantityOnHand - iws.reserved) < 0 THEN 0
                         ELSE (iws.quantityOnHand - iws.reserved) END) <= i.reorderLevel

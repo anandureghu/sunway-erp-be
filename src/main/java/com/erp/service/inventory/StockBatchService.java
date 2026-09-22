@@ -456,6 +456,23 @@ public class StockBatchService {
     }
 
     @Transactional(readOnly = true)
+    public List<Object[]> aggregateBatchValueByWarehouse(Long companyId, Long warehouseId, String category) {
+        return batchRepo.aggregateBatchValueByWarehouse(companyId, warehouseId, category);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Object[]> aggregateBatchValueByCategory(Long companyId, Long warehouseId, String category) {
+        return batchRepo.aggregateBatchValueByCategory(companyId, warehouseId, category);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Object[]> topBatchLinesByValue(
+            Long companyId, Long warehouseId, String category, int limit) {
+        return batchRepo.topBatchLinesByValue(
+                companyId, warehouseId, category, PageRequest.of(0, Math.max(1, limit)));
+    }
+
+    @Transactional(readOnly = true)
     public StockBatchMovementReportDTO buildMovementReport(
             Long companyId,
             Long warehouseId,

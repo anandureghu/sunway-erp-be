@@ -90,23 +90,19 @@ public class FinanceReportService {
         long inflowCount = toLong(valueAt(inflowRow, 1));
         long outflowCount = toLong(valueAt(outflowRow, 1));
 
-        // Expenses for the netProfit number: prefer ledger-based expense from transactions
-        // (more precise than purchase invoice totals which include unpaid + tax).
-        List<Object[]> expenseAccountsRaw = transactionRepo.aggregateByDebitAccountTypes(
-                companyId,
-                List.of(COAType.EXPENSE, COAType.COST),
-                effectiveFrom,
-                effectiveTo,
-                PageRequest.of(0, TOP_ACCOUNTS));
-        BigDecimal expenseTotalFromLedger = sumThird(expenseAccountsRaw);
+        List<COAType> expenseTypes = List.of(COAType.EXPENSE, COAType.COST);
+
+        // Full ledger expense total (not truncated to top-N accounts).
+        BigDecimal expenseTotalFromLedger = nz(transactionRepo.sumDebitByAccountTypes(
+                companyId, expenseTypes, effectiveFrom, effectiveTo));
+        boolean useLedgerExpenses = expenseTotalFromLedger.signum() > 0;
         // If no GL data exists yet, fall back to purchase invoices as expense proxy.
-        BigDecimal expenses = expenseTotalFromLedger.signum() > 0
-                ? expenseTotalFromLedger
-                : purchases;
+        BigDecimal expenses = useLedgerExpenses ? expenseTotalFromLedger : purchases;
 
         BigDecimal netProfit = revenue.subtract(expenses);
 
-        long invoiceCount = invoiceRepo.countInvoicesBetween(companyId, effectiveFrom, effectiveTo);
+        long invoiceCount = invoiceRepo.countInvoicesByTypeBetween(
+                companyId, InvoiceType.SALES, effectiveFrom, effectiveTo);
 
         FinanceReportTotalsDTO totals = FinanceReportTotalsDTO.builder()
                 .revenue(revenue)
@@ -126,8 +122,13 @@ public class FinanceReportService {
         List<FinanceMonthlyPointDTO> revenueByMonth = monthlySeries(
                 invoiceRepo.monthlyByType(companyId, InvoiceType.SALES, effectiveFrom, effectiveTo),
                 months);
+        // Keep expense chart on the same source as the expenses KPI.
         List<FinanceMonthlyPointDTO> expenseByMonth = monthlySeries(
-                invoiceRepo.monthlyByType(companyId, InvoiceType.PURCHASE, effectiveFrom, effectiveTo),
+                useLedgerExpenses
+                        ? transactionRepo.monthlyDebitByAccountTypes(
+                                companyId, expenseTypes, effectiveFrom, effectiveTo)
+                        : invoiceRepo.monthlyByType(
+                                companyId, InvoiceType.PURCHASE, effectiveFrom, effectiveTo),
                 months);
         List<FinanceMonthlyPointDTO> cashInflowByMonth = monthlySeries(
                 paymentRepo.monthlyByDirection(companyId, PaymentDirection.CUSTOMER, effectiveFrom, effectiveTo),
@@ -150,13 +151,19 @@ public class FinanceReportService {
                 companyId, InvoiceType.PURCHASE, effectiveFrom, effectiveTo,
                 PageRequest.of(0, TOP_PARTIES)));
 
-        // Income / Expenses by account
+        // Income / Expenses by account (top-N breakdown only)
         List<FinanceAccountAmountDTO> incomeByAccount = mapAccountRows(
                 transactionRepo.aggregateByCreditAccountTypes(
                         companyId,
                         List.of(COAType.REVENUE, COAType.INCOME),
                         effectiveFrom, effectiveTo,
                         PageRequest.of(0, TOP_ACCOUNTS)));
+        List<Object[]> expenseAccountsRaw = transactionRepo.aggregateByDebitAccountTypes(
+                companyId,
+                expenseTypes,
+                effectiveFrom,
+                effectiveTo,
+                PageRequest.of(0, TOP_ACCOUNTS));
         List<FinanceAccountAmountDTO> expensesByAccount = mapAccountRows(expenseAccountsRaw);
 
         List<FinanceDepartmentBudgetSpendDTO> departmentBudgetSpend = buildDepartmentBudgetSpend(
@@ -353,14 +360,6 @@ public class FinanceReportService {
                     .build());
         }
         return out;
-    }
-
-    private static BigDecimal sumThird(List<Object[]> rows) {
-        BigDecimal sum = BigDecimal.ZERO;
-        for (Object[] row : rows) {
-            sum = sum.add(toBigDecimal(row[2]));
-        }
-        return sum;
     }
 
     private static BigDecimal nz(BigDecimal v) {

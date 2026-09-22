@@ -125,9 +125,17 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     long countByCompany_Id(Long companyId);
 
+    /** Directory-aligned total: non-archived employees only. */
+    long countByCompany_IdAndArchivedFalse(Long companyId);
+
     long countByCompany_IdAndStatus(Long companyId, EmployeeStatus employeeStatus);
 
+    long countByCompany_IdAndStatusAndArchivedFalse(Long companyId, EmployeeStatus employeeStatus);
+
     long countByCompany_IdAndJoinDateBetween(Long companyId, LocalDate from, LocalDate to);
+
+    long countByCompany_IdAndArchivedFalseAndJoinDateBetween(
+            Long companyId, LocalDate from, LocalDate to);
 
     /** Best-effort "resigned this month" proxy: no dedicated resignation-date field exists yet. */
     long countByCompany_IdAndStatusAndUpdatedAtBetween(
@@ -138,6 +146,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             SELECT e.department.id, e.department.departmentName, COUNT(e)
             FROM Employee e
             WHERE e.company.id = :companyId
+              AND e.archived = false
               AND e.department IS NOT NULL
             GROUP BY e.department.id, e.department.departmentName
             ORDER BY COUNT(e) DESC

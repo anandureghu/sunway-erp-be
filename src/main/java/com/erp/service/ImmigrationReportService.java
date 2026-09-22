@@ -55,12 +55,14 @@ public class ImmigrationReportService {
             // Company-wide view (admins / HR / anyone granted IMMIGRATION VIEW_ALL).
             for (Passport p : passportRepo
                     .findByEmployee_Company_IdAndExpiryDateLessThanEqual(companyId, cutoff)) {
+                if (!isReportableEmployee(p.getEmployee())) continue;
                 items.add(toItem("PASSPORT", p.getEmployee(), p.getPassportNo(),
                         p.getExpiryDate(), today));
             }
 
             for (ResidencePermit rp : permitRepo
                     .findByEmployee_Company_IdAndEndDateLessThanEqual(companyId, cutoff)) {
+                if (!isReportableEmployee(rp.getEmployee())) continue;
                 items.add(toItem("RESIDENCE_PERMIT", rp.getEmployee(), rp.getPermitIdNumber(),
                         rp.getEndDate(), today));
             }
@@ -74,12 +76,14 @@ public class ImmigrationReportService {
 
             passportRepo.findByEmployeeId(employeeId)
                     .filter(p -> sameCompany(p.getEmployee(), companyId))
+                    .filter(p -> isReportableEmployee(p.getEmployee()))
                     .filter(p -> p.getExpiryDate() != null && !p.getExpiryDate().isAfter(cutoff))
                     .ifPresent(p -> items.add(toItem("PASSPORT", p.getEmployee(),
                             p.getPassportNo(), p.getExpiryDate(), today)));
 
             permitRepo.findByEmployeeId(employeeId)
                     .filter(rp -> sameCompany(rp.getEmployee(), companyId))
+                    .filter(rp -> isReportableEmployee(rp.getEmployee()))
                     .filter(rp -> rp.getEndDate() != null && !rp.getEndDate().isAfter(cutoff))
                     .ifPresent(rp -> items.add(toItem("RESIDENCE_PERMIT", rp.getEmployee(),
                             rp.getPermitIdNumber(), rp.getEndDate(), today)));
@@ -99,6 +103,17 @@ public class ImmigrationReportService {
     private boolean sameCompany(Employee emp, Long companyId) {
         return emp != null && emp.getCompany() != null
                 && companyId.equals(emp.getCompany().getId());
+    }
+
+    /**
+     * Operational immigration report: skip archived and departed/inactive employees
+     * so former-staff documents do not clutter the expiry board.
+     */
+    private boolean isReportableEmployee(Employee emp) {
+        if (emp == null || emp.isArchived()) {
+            return false;
+        }
+        return emp.getStatus() == null || !emp.getStatus().isDepartedOrInactive();
     }
 
     private ImmigrationExpiryItemDTO toItem(

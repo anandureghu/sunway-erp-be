@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -118,6 +119,45 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("from") LocalDate from,
             @Param("to") LocalDate to,
             Pageable pageable);
+
+    /** Full expense/cost debit total for a date window (no top-N truncation). */
+    @Query("""
+            SELECT COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            JOIN t.debitAccount a
+            WHERE t.company.id = :companyId
+              AND a.type IN :types
+              AND (t.archived IS NULL OR t.archived = false)
+              AND (:from IS NULL OR t.transactionDate >= :from)
+              AND (:to IS NULL OR t.transactionDate <= :to)
+            """)
+    BigDecimal sumDebitByAccountTypes(
+            @Param("companyId") Long companyId,
+            @Param("types") Collection<COAType> types,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    /**
+     * Monthly debit totals by account type. Returns rows of (year, month, totalAmount).
+     */
+    @Query("""
+            SELECT YEAR(t.transactionDate), MONTH(t.transactionDate), COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            JOIN t.debitAccount a
+            WHERE t.company.id = :companyId
+              AND a.type IN :types
+              AND (t.archived IS NULL OR t.archived = false)
+              AND t.transactionDate IS NOT NULL
+              AND (:from IS NULL OR t.transactionDate >= :from)
+              AND (:to IS NULL OR t.transactionDate <= :to)
+            GROUP BY YEAR(t.transactionDate), MONTH(t.transactionDate)
+            ORDER BY YEAR(t.transactionDate), MONTH(t.transactionDate)
+            """)
+    List<Object[]> monthlyDebitByAccountTypes(
+            @Param("companyId") Long companyId,
+            @Param("types") Collection<COAType> types,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 
     /**
      * Expense debits grouped by the department on the debit account.

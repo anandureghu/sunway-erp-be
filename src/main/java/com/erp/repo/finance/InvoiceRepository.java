@@ -154,6 +154,21 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
 
+    @Query("""
+            SELECT COUNT(i)
+            FROM Invoice i
+            WHERE i.company.id = :companyId
+              AND i.type = :type
+              AND i.archived = false
+              AND (:from IS NULL OR i.invoiceDate >= :from)
+              AND (:to IS NULL OR i.invoiceDate <= :to)
+            """)
+    long countInvoicesByTypeBetween(
+            @Param("companyId") Long companyId,
+            @Param("type") InvoiceType type,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
     // ======================================================
     //  Dashboard aggregations
     // ======================================================

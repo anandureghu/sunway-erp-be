@@ -172,10 +172,12 @@ public class HrDashboardService {
         Instant startOfMonthInstant = startOfMonth.atStartOfDay(ZoneId.systemDefault()).toInstant();
 
         return HrDashboardKpisDTO.builder()
-                .totalEmployees(employeeRepo.countByCompany_Id(companyId))
-                .activeEmployees(employeeRepo.countByCompany_IdAndStatus(companyId, EmployeeStatus.ACTIVE))
+                .totalEmployees(employeeRepo.countByCompany_IdAndArchivedFalse(companyId))
+                .activeEmployees(employeeRepo.countByCompany_IdAndStatusAndArchivedFalse(
+                        companyId, EmployeeStatus.ACTIVE))
                 .employeesOnLeave(onLeaveTodayIds.size())
-                .newJoinersThisMonth(employeeRepo.countByCompany_IdAndJoinDateBetween(companyId, startOfMonth, today))
+                .newJoinersThisMonth(employeeRepo.countByCompany_IdAndArchivedFalseAndJoinDateBetween(
+                        companyId, startOfMonth, today))
                 .resignationsThisMonth(employeeRepo.countByCompany_IdAndStatusAndUpdatedAtBetween(
                         companyId, EmployeeStatus.RESIGNED, startOfMonthInstant, Instant.now()))
                 .qidExpiring30d(expiringPermits.size())
@@ -201,7 +203,8 @@ public class HrDashboardService {
     }
 
     private HrWorkforceStatusDTO buildWorkforceStatus(Long companyId, LocalDate today, Set<Long> onLeaveTodayIds) {
-        List<Employee> activeEmployees = employeeRepo.findByCompany_IdAndStatus(companyId, EmployeeStatus.ACTIVE);
+        List<Employee> activeEmployees = employeeRepo
+                .findByCompany_IdAndStatusAndArchivedFalseOrderByCreatedAtDesc(companyId, EmployeeStatus.ACTIVE);
         List<Long> activeIds = activeEmployees.stream().map(Employee::getId).toList();
 
         Map<Long, TimesheetStatus> statusByEmployee = new HashMap<>();
@@ -312,7 +315,8 @@ public class HrDashboardService {
         }
 
         LocalDate cutoff = today.plusDays(EXPIRY_WINDOW_DAYS);
-        for (Employee e : employeeRepo.findByCompany_IdAndStatus(companyId, EmployeeStatus.ACTIVE)) {
+        for (Employee e : employeeRepo.findByCompany_IdAndStatusAndArchivedFalseOrderByCreatedAtDesc(
+                companyId, EmployeeStatus.ACTIVE)) {
             LocalDate joinDate = e.getJoinDate();
             if (joinDate == null) continue;
             LocalDate anniversary = nextAnniversary(joinDate, today);
