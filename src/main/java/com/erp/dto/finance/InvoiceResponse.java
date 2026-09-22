@@ -85,6 +85,7 @@ public class InvoiceResponse {
     private Long bankAccountId;
     private String bankAccountName;
     private String bankAccountNumber;
+    private String bankAccountHolderName;
     private String bankIban;
     private String bankIfscCode;
     private String bankBranchName;

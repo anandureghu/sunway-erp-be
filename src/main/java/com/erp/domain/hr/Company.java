@@ -291,6 +291,12 @@ public class Company {
     private String invoiceHeaderSubtitle;
 
     @Transient
+    private String invoiceHeaderSubtitleUnpaid;
+
+    @Transient
+    private String invoiceHeaderSubtitlePaid;
+
+    @Transient
     private String invoiceNotesUnpaid;
 
     @Transient

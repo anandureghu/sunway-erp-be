@@ -23,6 +23,9 @@ public class CompanyInvoiceSettings {
     @Column(name = "invoice_header_subtitle", length = 200)
     private String invoiceHeaderSubtitle;
 
+    @Column(name = "invoice_header_subtitle_paid", length = 200)
+    private String invoiceHeaderSubtitlePaid;
+
     @Column(name = "invoice_notes_unpaid", length = 1000)
     private String invoiceNotesUnpaid;
 

@@ -352,7 +352,11 @@ public class CompanyService {
     }
 
     private void applyInvoiceBrandingSettings(CompanyInvoiceSettings settings, InvoiceBrandingSettingsDTO dto) {
-        settings.setInvoiceHeaderSubtitle(trimToNull(dto.getInvoiceHeaderSubtitle()));
+        String unpaidSubtitle = firstNonBlank(
+                dto.getInvoiceHeaderSubtitleUnpaid(),
+                dto.getInvoiceHeaderSubtitle());
+        settings.setInvoiceHeaderSubtitle(trimToNull(unpaidSubtitle));
+        settings.setInvoiceHeaderSubtitlePaid(trimToNull(dto.getInvoiceHeaderSubtitlePaid()));
         settings.setInvoiceNotesUnpaid(trimToNull(dto.getInvoiceNotesUnpaid()));
         settings.setInvoiceNotesPaid(trimToNull(dto.getInvoiceNotesPaid()));
         settings.setInvoiceTerms(trimToNull(dto.getInvoiceTerms()));
@@ -372,6 +376,8 @@ public class CompanyService {
     private Company hydrateInvoiceBrandingView(Company company) {
         CompanyInvoiceSettings settings = getOrCreateInvoiceSettings(company);
         company.setInvoiceHeaderSubtitle(settings.getInvoiceHeaderSubtitle());
+        company.setInvoiceHeaderSubtitleUnpaid(settings.getInvoiceHeaderSubtitle());
+        company.setInvoiceHeaderSubtitlePaid(settings.getInvoiceHeaderSubtitlePaid());
         company.setInvoiceNotesUnpaid(settings.getInvoiceNotesUnpaid());
         company.setInvoiceNotesPaid(settings.getInvoiceNotesPaid());
         company.setInvoiceTerms(settings.getInvoiceTerms());
@@ -733,6 +739,19 @@ public class CompanyService {
     private String defaultIfBlank(String value, String defaultValue) {
         String trimmed = trimToNull(value);
         return trimmed == null ? defaultValue : trimmed;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String trimmed = trimToNull(value);
+            if (trimmed != null) {
+                return trimmed;
+            }
+        }
+        return null;
     }
 
     private String trimToNull(String value) {

@@ -1377,25 +1377,40 @@ public class InvoiceService {
                 .bankAccountId(i.getBankAccount() != null ? i.getBankAccount().getId() : null)
                 .bankAccountName(i.getBankAccount() != null ? i.getBankAccount().getBankName() : null)
                 .bankAccountNumber(i.getBankAccount() != null ? i.getBankAccount().getAccountNumber() : null)
+                .bankAccountHolderName(i.getBankAccount() != null ? i.getBankAccount().getAccountHolderName() : null)
                 .bankIban(i.getBankAccount() != null ? i.getBankAccount().getIban() : null)
                 .bankIfscCode(i.getBankAccount() != null ? i.getBankAccount().getIfscCode() : null)
                 .bankBranchName(i.getBankAccount() != null ? i.getBankAccount().getBranchName() : null)
-                .invoiceHeaderSubtitle(invoiceSettings.getInvoiceHeaderSubtitle())
+                .invoiceHeaderSubtitle(resolveInvoiceHeaderSubtitle(invoiceSettings, i.getStatus()))
                 .invoiceNotesUnpaid(invoiceSettings.getInvoiceNotesUnpaid())
                 .invoiceNotesPaid(invoiceSettings.getInvoiceNotesPaid())
                 .invoiceTerms(invoiceSettings.getInvoiceTerms())
                 .invoiceFooterCompanyLine(invoiceSettings.getInvoiceFooterCompanyLine())
                 .invoiceFooterTaxLine(invoiceSettings.getInvoiceFooterTaxLine())
                 .invoiceFooterSignatureNote(invoiceSettings.getInvoiceFooterSignatureNote())
-                .invoiceFooterSupportEmail(i.getCompany().getCompanyEmail() != null
-                        ? i.getCompany().getCompanyEmail()
-                        : invoiceSettings.getInvoiceFooterSupportEmail())
-                .invoiceFooterBillingEmail(i.getCompany().getBillingEmail() != null
-                        ? i.getCompany().getBillingEmail()
-                        : invoiceSettings.getInvoiceFooterBillingEmail())
+                .invoiceFooterSupportEmail(
+                        firstNonBlank(
+                                invoiceSettings.getInvoiceFooterSupportEmail(),
+                                i.getCompany().getCompanyEmail()))
+                .invoiceFooterBillingEmail(
+                        firstNonBlank(
+                                invoiceSettings.getInvoiceFooterBillingEmail(),
+                                i.getCompany().getBillingEmail()))
                 .invoiceQrEnabled(invoiceSettings.isInvoiceQrEnabled())
                 .publicInvoiceUrl(buildPublicInvoiceUrl(i))
                 .build();
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private String buildPublicInvoiceUrl(Invoice invoice) {
@@ -1415,6 +1430,17 @@ public class InvoiceService {
     private CompanyInvoiceSettings getOrCreateInvoiceSettings(Company company) {
         return invoiceSettingsRepo.findByCompanyId(company.getId())
                 .orElseGet(() -> invoiceSettingsRepo.save(InvoiceSettingsDefaults.buildDefaults(company)));
+    }
+
+    private String resolveInvoiceHeaderSubtitle(CompanyInvoiceSettings settings, String status) {
+        boolean paid = status != null && "PAID".equalsIgnoreCase(status.trim());
+        if (paid) {
+            String paidSubtitle = settings.getInvoiceHeaderSubtitlePaid();
+            if (paidSubtitle != null && !paidSubtitle.isBlank()) {
+                return paidSubtitle.trim();
+            }
+        }
+        return settings.getInvoiceHeaderSubtitle();
     }
 
     private boolean isSuperAdmin() {

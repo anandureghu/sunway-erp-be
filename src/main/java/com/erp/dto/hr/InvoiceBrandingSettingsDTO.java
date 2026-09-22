@@ -10,7 +10,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class InvoiceBrandingSettingsDTO {
+    /** @deprecated Prefer unpaid/paid fields; kept for backward compatibility. */
     private String invoiceHeaderSubtitle;
+    private String invoiceHeaderSubtitleUnpaid;
+    private String invoiceHeaderSubtitlePaid;
     private String invoiceNotesUnpaid;
     private String invoiceNotesPaid;
     private String invoiceTerms;
