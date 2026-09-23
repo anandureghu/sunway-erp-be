@@ -27,6 +27,11 @@ public class PlatformSettingsService {
                 .orElseGet(() -> repository.save(PlatformSettings.builder().build()));
     }
 
+    /**
+     * Must stay non-read-only: this calls getOrCreate() via self-invocation, which
+     * bypasses the Spring proxy, so getOrCreate()'s own REQUIRES_NEW has no effect
+     * here — the lazy insert-on-first-read runs in *this* method's transaction.
+     */
     @Transactional
     public PlatformSettingsResponse get() {
         return toDto(getOrCreate());
