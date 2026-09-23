@@ -546,9 +546,11 @@ public class PurchaseOrderService {
         if (po.isArchived()) {
             return toDTO(po);
         }
-        if (po.getStatus() != PurchaseOrderStatus.RECEIVED
-                && po.getStatus() != PurchaseOrderStatus.CANCELLED) {
-            throw new RuntimeException("Only RECEIVED or CANCELLED purchase orders can be archived");
+        boolean archivable = po.getStatus() == PurchaseOrderStatus.CANCELLED
+                || (po.getStatus() == PurchaseOrderStatus.RECEIVED && isFullyPaid(po));
+        if (!archivable) {
+            throw new RuntimeException(
+                    "Only fully paid RECEIVED purchase orders, or CANCELLED purchase orders, can be archived");
         }
         po.setArchived(true);
         repo.save(po);
@@ -560,6 +562,13 @@ public class PurchaseOrderService {
         }
 
         return toDTO(po);
+    }
+
+    private boolean isFullyPaid(PurchaseOrder po) {
+        return invoiceRepo.findFirstByOrderIdAndType(po.getId(), InvoiceType.PURCHASE)
+                .map(Invoice::getStatus)
+                .map("PAID"::equals)
+                .orElse(false);
     }
 
     private PurchaseOrder getEntity(Long id) {
