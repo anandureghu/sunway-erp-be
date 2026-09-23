@@ -343,18 +343,14 @@ public class SubscriptionPaymentReceiptService {
                     platformSettings.getState(),
                     platformSettings.getCountry()
             );
-            String receiverBankName = isNotBlank(platformSettings.getBankName())
-                    ? platformSettings.getBankName().trim()
-                    : null;
-            String receiverIban = isNotBlank(platformSettings.getIban())
-                    ? platformSettings.getIban().trim()
-                    : null;
+            String receiverBankName = platformSettings.getBankName();
+            String receiverIban = platformSettings.getIban();
             context.setVariable("receiverAddress", receiverAddress);
             context.setVariable("receiverBankName", receiverBankName);
             context.setVariable("receiverIban", receiverIban);
             context.setVariable(
                     "showReceiverDetails",
-                    receiverAddress != null || receiverBankName != null || receiverIban != null
+                    receiverAddress != null || isNotBlank(receiverBankName) || isNotBlank(receiverIban)
             );
 
             String html = templateEngine.process("subscription_receipt", context);
