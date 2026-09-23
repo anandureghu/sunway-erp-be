@@ -95,7 +95,31 @@
                     <div class="info-value" th:text="${invoiceDate}">01 Jan 2026</div>
                 </td>
             </tr>
+            <tr th:if="${companyAddress != null}">
+                <td colspan="3">
+                    <div class="info-label">Address</div>
+                    <div class="info-value" th:text="${companyAddress}">Company address</div>
+                </td>
+            </tr>
         </table>
+    </div>
+
+    <div class="section" th:if="${showReceiverDetails}">
+        <div class="section-title">Receiver details</div>
+        <table class="info-table">
+            <tr th:if="${receiverAddress != null}">
+                <td colspan="3">
+                    <div class="info-label">Address</div>
+                    <div class="info-value" th:text="${receiverAddress}">Receiver address</div>
+                </td>
+            </tr>
+        </table>
+        <p th:if="${receiverBankName != null}">
+            <strong>Bank Name:</strong> <span th:text="${receiverBankName}">—</span>
+        </p>
+        <p th:if="${receiverIban != null}">
+            <strong>IBAN:</strong> <span th:text="${receiverIban}">—</span>
+        </p>
     </div>
 
     <div class="section">
