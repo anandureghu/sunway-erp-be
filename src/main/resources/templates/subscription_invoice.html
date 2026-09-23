@@ -113,13 +113,17 @@
                     <div class="info-value" th:text="${receiverAddress}">Receiver address</div>
                 </td>
             </tr>
+            <tr th:if="${receiverBankName != null or receiverIban != null}">
+                <td th:if="${receiverBankName != null}">
+                    <div class="info-label">Bank Name</div>
+                    <div class="info-value" th:text="${receiverBankName}">Bank</div>
+                </td>
+                <td th:if="${receiverIban != null}">
+                    <div class="info-label">IBAN</div>
+                    <div class="info-value" th:text="${receiverIban}">IBAN</div>
+                </td>
+            </tr>
         </table>
-        <p th:if="${receiverBankName != null}">
-            <strong>Bank Name:</strong> <span th:text="${receiverBankName}">—</span>
-        </p>
-        <p th:if="${receiverIban != null}">
-            <strong>IBAN:</strong> <span th:text="${receiverIban}">—</span>
-        </p>
     </div>
 
     <div class="section">
