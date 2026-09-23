@@ -2,6 +2,7 @@ package com.erp.service.subscription;
 
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
+import com.erp.domain.platform.PlatformSettings;
 import com.erp.domain.subscription.SubscriptionInvoice;
 import com.erp.domain.subscription.SubscriptionPayment;
 import com.erp.dto.file.FileCategory;
@@ -14,6 +15,7 @@ import com.erp.repo.subscription.SubscriptionPaymentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.notification.EmailService;
+import com.erp.service.platform.PlatformSettingsService;
 import com.erp.util.InMemoryMultipartFile;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +55,7 @@ public class SubscriptionPaymentReceiptService {
     private final FileStorageService fileStorageService;
     private final EmailService emailService;
     private final AuthContext authContext;
+    private final PlatformSettingsService platformSettingsService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SubscriptionPayment generateReceipt(SubscriptionPayment payment) {
@@ -290,6 +293,10 @@ public class SubscriptionPaymentReceiptService {
                     company.getCompanyName() != null ? company.getCompanyName() : "—"
             );
             context.setVariable(
+                    "companyAddress",
+                    buildAddress(company.getStreet(), company.getCity(), company.getState(), company.getCountry())
+            );
+            context.setVariable(
                     "planType",
                     invoice != null && invoice.getPlanType() != null
                             ? invoice.getPlanType().name()
@@ -329,6 +336,27 @@ public class SubscriptionPaymentReceiptService {
             context.setVariable("amountFormatted", formatAmount(payment.getAmount()));
             context.setVariable("generatedAt", Instant.now().toString());
 
+            PlatformSettings platformSettings = platformSettingsService.getOrCreate();
+            String receiverAddress = buildAddress(
+                    platformSettings.getStreet(),
+                    platformSettings.getCity(),
+                    platformSettings.getState(),
+                    platformSettings.getCountry()
+            );
+            String receiverBankName = isNotBlank(platformSettings.getBankName())
+                    ? platformSettings.getBankName().trim()
+                    : null;
+            String receiverIban = isNotBlank(platformSettings.getIban())
+                    ? platformSettings.getIban().trim()
+                    : null;
+            context.setVariable("receiverAddress", receiverAddress);
+            context.setVariable("receiverBankName", receiverBankName);
+            context.setVariable("receiverIban", receiverIban);
+            context.setVariable(
+                    "showReceiverDetails",
+                    receiverAddress != null || receiverBankName != null || receiverIban != null
+            );
+
             String html = templateEngine.process("subscription_receipt", context);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PdfRendererBuilder builder = new PdfRendererBuilder();
@@ -340,6 +368,19 @@ public class SubscriptionPaymentReceiptService {
         } catch (Exception e) {
             throw new RuntimeException("Subscription receipt PDF generation failed", e);
         }
+    }
+
+    private static String buildAddress(String street, String city, String state, String country) {
+        List<String> parts = new ArrayList<>();
+        if (isNotBlank(street)) parts.add(street.trim());
+        if (isNotBlank(city)) parts.add(city.trim());
+        if (isNotBlank(state)) parts.add(state.trim());
+        if (isNotBlank(country)) parts.add(country.trim());
+        return parts.isEmpty() ? null : String.join(", ", parts);
+    }
+
+    private static boolean isNotBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     private List<String> resolveReceiptRecipients(Long companyId, Company company) {
