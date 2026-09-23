@@ -45,6 +45,7 @@ import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.List;
@@ -460,14 +461,24 @@ public class PayrollService {
                             + "includes at least one working day (Sun–Thu).");
         }
 
-        // Daily rate: an organisation with no check-in/out data prorates against a fixed
-        // 22-day standard month (Gross / 22 × days worked); a punch-in organisation uses
-        // the actual working days in the period.
+        // Gross earnings for the period: monthlyGross is a per-calendar-month figure, so a
+        // period is walked one calendar month at a time and each month's share is weighted
+        // by (days of that month inside the period) / (actual days in that month — 28, 29,
+        // 30 or 31). A period covering exactly N whole months totals N × monthlyGross; a
+        // final-settlement period spanning several unpaid months (e.g. Aug 1 – Sep 30) is
+        // no longer flattened down to a single month's pay.
+        double grossEarnings = prorateAcrossCalendarMonths(monthlyGross, periodStart, periodEnd);
+
+        // Daily rate: an organisation with no check-in/out data prorates against the
+        // standard 22-day month, itself spread across the period the same way gross
+        // earnings is, so a multi-month settlement period doesn't collapse the divisor
+        // back down to a single month; a punch-in organisation uses the actual working
+        // days in the period.
         boolean requireCheckIn = companyRequireCheckIn(employee);
         double referenceDays = requireCheckIn
                 ? workingDays
-                : STANDARD_WORKING_DAYS_PER_MONTH;
-        double perDaySalary = monthlyGross / referenceDays;
+                : prorateAcrossCalendarMonths(STANDARD_WORKING_DAYS_PER_MONTH, periodStart, periodEnd);
+        double perDaySalary = grossEarnings / referenceDays;
 
         // Approved leaves within the period, split into paid vs unpaid. Computed up
         // front because a no-punch organisation derives its worked days from these.
@@ -522,14 +533,12 @@ public class PayrollService {
 
         // Overtime = hours logged beyond the standard for the whole period. In a
         // no-punch organisation there are no punches to derive it from, so it comes
-        // from the manual monthly override HR keyed in the Time Sheets tab (0 if none).
+        // from the manual monthly override HR keyed in the Time Sheets tab (0 if none),
+        // summed across every calendar month the period touches — a multi-month
+        // settlement period must not lose the later months' overrides.
         double overtimeHours;
         if (!requireCheckIn) {
-            overtimeHours = overtimeOverrideRepo
-                    .findByEmployee_IdAndYearAndMonth(
-                            employee.getId(), periodStart.getYear(), periodStart.getMonthValue())
-                    .map(o -> Math.max(0.0, o.getOvertimeHours()))
-                    .orElse(0.0);
+            overtimeHours = sumOvertimeOverrideHours(employee.getId(), periodStart, periodEnd);
         } else {
             overtimeHours = Math.max(0.0, workedHours - (workingDays * stdHoursPerDay));
         }
@@ -547,10 +556,9 @@ public class PayrollService {
         double payableDays = Math.min(workedDays + paidLeaveDays, referenceDays);
         double lopDays = Math.max(referenceDays - payableDays, 0.0);
         double lopAmount = lopDays * perDaySalary;
-        // Gross earnings are the FULL monthly package; unpaid absence (LOP) is shown
-        // as a deduction below rather than silently shrinking the gross, so the payslip
-        // always reconciles: gross earnings − deductions = net pay.
-        double grossEarnings = monthlyGross;
+        // Gross earnings (computed above) are the FULL package for the period; unpaid
+        // absence (LOP) is shown as a deduction below rather than silently shrinking the
+        // gross, so the payslip always reconciles: gross earnings − deductions = net pay.
 
         boolean finalSettlement = isFinalSettlement(employee);
 
@@ -928,6 +936,47 @@ public class PayrollService {
         // Qatar workweek: Sunday–Thursday, with Friday & Saturday as the weekend.
         DayOfWeek day = date.getDayOfWeek();
         return day == DayOfWeek.FRIDAY || day == DayOfWeek.SATURDAY;
+    }
+
+    /**
+     * Spreads a flat "per calendar month" figure (e.g. monthlyGross, or the 22-day
+     * standard month) across {@code [start, end]} by walking one calendar month at a
+     * time and weighting each month's contribution by (days of that month inside the
+     * period) / (actual days in that month — 28, 29, 30 or 31, per {@link LocalDate#lengthOfMonth()}).
+     * A period covering exactly N whole calendar months yields N × value; a partial
+     * month (e.g. a 24- or 36-day settlement period) yields that month's exact
+     * fractional share rather than assuming a flat 30-day month.
+     */
+    private double prorateAcrossCalendarMonths(double perMonthValue, LocalDate start, LocalDate end) {
+        double total = 0.0;
+        LocalDate segmentStart = start;
+        while (!segmentStart.isAfter(end)) {
+            LocalDate segmentMonthEnd = segmentStart.withDayOfMonth(segmentStart.lengthOfMonth());
+            LocalDate segmentEnd = segmentMonthEnd.isBefore(end) ? segmentMonthEnd : end;
+            long daysInSegment = ChronoUnit.DAYS.between(segmentStart, segmentEnd) + 1;
+            int daysInMonth = segmentStart.lengthOfMonth();
+            total += perMonthValue * daysInSegment / daysInMonth;
+            segmentStart = segmentEnd.plusDays(1);
+        }
+        return total;
+    }
+
+    /**
+     * Sums the manual monthly overtime override (Time Sheets tab, no-punch organisations
+     * only) for every calendar month the pay period touches.
+     */
+    private double sumOvertimeOverrideHours(Long employeeId, LocalDate periodStart, LocalDate periodEnd) {
+        double total = 0.0;
+        LocalDate month = periodStart.withDayOfMonth(1);
+        LocalDate lastMonth = periodEnd.withDayOfMonth(1);
+        while (!month.isAfter(lastMonth)) {
+            total += overtimeOverrideRepo
+                    .findByEmployee_IdAndYearAndMonth(employeeId, month.getYear(), month.getMonthValue())
+                    .map(o -> Math.max(0.0, o.getOvertimeHours()))
+                    .orElse(0.0);
+            month = month.plusMonths(1);
+        }
+        return total;
     }
 
     private PayrollPreviewDTO toPreviewDTO(
