@@ -2,6 +2,7 @@ package com.erp.service.subscription;
 
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
+import com.erp.domain.platform.PlatformSettings;
 import com.erp.domain.subscription.*;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -14,6 +15,7 @@ import com.erp.repo.subscription.SubscriptionPaymentRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.service.notification.EmailService;
+import com.erp.service.platform.PlatformSettingsService;
 import com.erp.util.InMemoryMultipartFile;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +56,7 @@ public class SubscriptionInvoiceService {
     private final EmailService emailService;
     private final AuthContext authContext;
     private final SubscriptionPaymentReceiptService receiptService;
+    private final PlatformSettingsService platformSettingsService;
 
     @Transactional(readOnly = true)
     public List<SubscriptionInvoiceResponse> listForSubscription(Long companySubscriptionId) {
@@ -281,6 +284,10 @@ public class SubscriptionInvoiceService {
                     "companyName",
                     company.getCompanyName() != null ? company.getCompanyName() : "—"
             );
+            context.setVariable(
+                    "companyAddress",
+                    buildAddress(company.getStreet(), company.getCity(), company.getState(), company.getCountry())
+            );
             context.setVariable("planType", invoice.getPlanType() != null ? invoice.getPlanType().name() : "—");
             context.setVariable(
                     "invoiceDate",
@@ -303,6 +310,23 @@ public class SubscriptionInvoiceService {
                     Instant.now().toString()
             );
 
+            PlatformSettings platformSettings = platformSettingsService.getOrCreate();
+            String receiverAddress = buildAddress(
+                    platformSettings.getStreet(),
+                    platformSettings.getCity(),
+                    platformSettings.getState(),
+                    platformSettings.getCountry()
+            );
+            String receiverBankName = platformSettings.getBankName();
+            String receiverIban = platformSettings.getIban();
+            context.setVariable("receiverAddress", receiverAddress);
+            context.setVariable("receiverBankName", receiverBankName);
+            context.setVariable("receiverIban", receiverIban);
+            context.setVariable(
+                    "showReceiverDetails",
+                    receiverAddress != null || isNotBlank(receiverBankName) || isNotBlank(receiverIban)
+            );
+
             String html = templateEngine.process("subscription_invoice", context);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             PdfRendererBuilder builder = new PdfRendererBuilder();
@@ -314,6 +338,19 @@ public class SubscriptionInvoiceService {
         } catch (Exception e) {
             throw new RuntimeException("Subscription invoice PDF generation failed", e);
         }
+    }
+
+    private static String buildAddress(String street, String city, String state, String country) {
+        List<String> parts = new ArrayList<>();
+        if (isNotBlank(street)) parts.add(street.trim());
+        if (isNotBlank(city)) parts.add(city.trim());
+        if (isNotBlank(state)) parts.add(state.trim());
+        if (isNotBlank(country)) parts.add(country.trim());
+        return parts.isEmpty() ? null : String.join(", ", parts);
+    }
+
+    private static boolean isNotBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     public SubscriptionInvoiceResponse toDto(SubscriptionInvoice inv) {
