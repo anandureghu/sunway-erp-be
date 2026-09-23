@@ -6,6 +6,7 @@ import com.erp.dto.platform.PlatformSettingsResponse;
 import com.erp.repo.platform.PlatformSettingsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -14,7 +15,12 @@ public class PlatformSettingsService {
 
     private final PlatformSettingsRepository repository;
 
-    @Transactional
+    /**
+     * Runs in its own transaction (REQUIRES_NEW) because this is called from
+     * read-only transactional contexts elsewhere (e.g. PDF download endpoints);
+     * joining a read-only transaction would make the lazy insert-on-first-read fail.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public PlatformSettings getOrCreate() {
         return repository.findAll().stream()
                 .findFirst()
