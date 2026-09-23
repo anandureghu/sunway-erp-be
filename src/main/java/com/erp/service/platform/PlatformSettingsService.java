@@ -21,7 +21,7 @@ public class PlatformSettingsService {
                 .orElseGet(() -> repository.save(PlatformSettings.builder().build()));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PlatformSettingsResponse get() {
         return toDto(getOrCreate());
     }
