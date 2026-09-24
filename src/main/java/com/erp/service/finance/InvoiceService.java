@@ -240,6 +240,12 @@ public class InvoiceService {
 
     /** Post-payment receipt document. */
     private String getOrCreateReceiptPdfUrl(Invoice invoice) {
+        // Always rebuild system-generated receipts so template fixes (e.g. hide terms on
+        // paid docs) apply on download — same policy as getOrCreateOriginalInvoicePdfUrl.
+        if (invoice.getDocumentSource() == null
+                || invoice.getDocumentSource() == InvoiceDocumentSource.GENERATED) {
+            return generateAndUploadInvoicePdf(invoice, true);
+        }
         if (invoice.getReceiptPdfUrl() != null && !invoice.getReceiptPdfUrl().isBlank()) {
             return invoice.getReceiptPdfUrl();
         }
