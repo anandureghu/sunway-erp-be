@@ -205,8 +205,12 @@ public class PayrollService {
         Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
         Payroll saved = payrollRepo.save(payroll);
 
-        applyLoanRecovery(employee, computation.finalSettlement(),
-                computation.loanDeduction());
+        applyLoanRecovery(
+                employee,
+                computation.finalSettlement(),
+                computation.loanDeduction(),
+                dto.getPayPeriodStart(),
+                dto.getPayPeriodEnd());
         postPayrollToAccounting(saved, employee);
         emailPayslip(employee, saved);
 
@@ -246,8 +250,12 @@ public class PayrollService {
             Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
             Payroll saved = payrollRepo.save(payroll);
 
-            applyLoanRecovery(employee, computation.finalSettlement(),
-                    computation.loanDeduction());
+            applyLoanRecovery(
+                    employee,
+                    computation.finalSettlement(),
+                    computation.loanDeduction(),
+                    dto.getPayPeriodStart(),
+                    dto.getPayPeriodEnd());
             postPayrollToAccounting(saved, employee);
             emailPayslip(employee, saved);
             generatedCount++;
@@ -572,6 +580,10 @@ public class PayrollService {
         // Amount the run can pay before loan recovery: full package + EOS + OT, less LOP.
         double availableBeforeLoan = grossEarnings + endOfServiceCompensation + overtimePay - lopAmount;
 
+        // How many calendar-month equivalents the period covers (2.0 for two full months,
+        // ~2.5 for a 2.5-month window). Used to scale monthly loan installments.
+        double monthFactor = prorateAcrossCalendarMonths(1.0, periodStart, periodEnd);
+
         double loanDeduction;
         if (finalSettlement) {
             // A final settlement clears the outstanding balance — but only up to what the
@@ -582,10 +594,13 @@ public class PayrollService {
                     .sum();
             loanDeduction = Math.min(outstanding, Math.max(availableBeforeLoan, 0.0));
         } else {
-            // Normal runs recover one monthly installment per active loan.
+            // Normal runs recover one monthly installment per active loan, scaled across
+            // the full pay period so a 2–3 month window deducts 2–3 installments (capped
+            // at each loan's remaining balance).
             loanDeduction = activeLoans.stream()
                     .mapToDouble(loan -> Math.min(
-                            safe(loan.getMonthlyDeduction()), Math.max(safe(loan.getBalance()), 0.0)))
+                            safe(loan.getMonthlyDeduction()) * monthFactor,
+                            Math.max(safe(loan.getBalance()), 0.0)))
                     .sum();
         }
 
@@ -714,13 +729,20 @@ public class PayrollService {
     }
 
     private void applyLoanRecovery(
-            Employee employee, boolean finalSettlement, double finalSettlementRecovery) {
+            Employee employee,
+            boolean finalSettlement,
+            double periodLoanDeduction,
+            LocalDate periodStart,
+            LocalDate periodEnd) {
         List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, STATUS_ACTIVE);
 
         // For a final settlement, recover exactly the amount deducted on the payslip
         // ({@code loanDeduction}), drawn down loan by loan so balances reconcile to the
         // cent. Any residual beyond what the settlement could cover stays owed.
-        double remaining = Math.max(finalSettlementRecovery, 0.0);
+        double remaining = Math.max(periodLoanDeduction, 0.0);
+        double monthFactor = finalSettlement
+                ? 1.0
+                : prorateAcrossCalendarMonths(1.0, periodStart, periodEnd);
 
         for (EmployeeLoan loan : activeLoans) {
             double monthlyDeduction = safe(loan.getMonthlyDeduction());
@@ -731,7 +753,8 @@ public class PayrollService {
                 actualRecovery = Math.min(balance, remaining);
                 remaining -= actualRecovery;
             } else {
-                actualRecovery = Math.min(monthlyDeduction, balance);
+                // Match computePayroll: installment × period month-factor, capped at balance.
+                actualRecovery = Math.min(monthlyDeduction * monthFactor, balance);
             }
             double newBalance = round2(Math.max(balance - actualRecovery, 0.0));
             loan.setBalance(newBalance);
@@ -963,18 +986,24 @@ public class PayrollService {
 
     /**
      * Sums the manual monthly overtime override (Time Sheets tab, no-punch organisations
-     * only) for every calendar month the pay period touches.
+     * only) for every calendar month the pay period touches, prorating each month's
+     * override by the share of that month inside the period — same weighting as gross.
      */
     private double sumOvertimeOverrideHours(Long employeeId, LocalDate periodStart, LocalDate periodEnd) {
         double total = 0.0;
-        LocalDate month = periodStart.withDayOfMonth(1);
-        LocalDate lastMonth = periodEnd.withDayOfMonth(1);
-        while (!month.isAfter(lastMonth)) {
-            total += overtimeOverrideRepo
-                    .findByEmployee_IdAndYearAndMonth(employeeId, month.getYear(), month.getMonthValue())
+        LocalDate segmentStart = periodStart;
+        while (!segmentStart.isAfter(periodEnd)) {
+            LocalDate segmentMonthEnd = segmentStart.withDayOfMonth(segmentStart.lengthOfMonth());
+            LocalDate segmentEnd = segmentMonthEnd.isBefore(periodEnd) ? segmentMonthEnd : periodEnd;
+            long daysInSegment = ChronoUnit.DAYS.between(segmentStart, segmentEnd) + 1;
+            int daysInMonth = segmentStart.lengthOfMonth();
+            double monthHours = overtimeOverrideRepo
+                    .findByEmployee_IdAndYearAndMonth(
+                            employeeId, segmentStart.getYear(), segmentStart.getMonthValue())
                     .map(o -> Math.max(0.0, o.getOvertimeHours()))
                     .orElse(0.0);
-            month = month.plusMonths(1);
+            total += monthHours * daysInSegment / daysInMonth;
+            segmentStart = segmentEnd.plusDays(1);
         }
         return total;
     }

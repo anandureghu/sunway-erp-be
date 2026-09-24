@@ -206,18 +206,39 @@ public class PayslipDocumentService {
             return list;
         }
 
-        if (loans == null) {
+        if (loans == null || loans.isEmpty()) {
+            double stored = payroll.getLoanDeduction() != null ? payroll.getLoanDeduction() : 0.0;
+            if (stored > 0) {
+                list.add(line("Loan deduction", stored));
+            }
             return list;
         }
 
+        // Scale each loan's monthly installment to the period total already stored on the
+        // payroll (covers multi-month pay periods). Cap display at the stored total.
+        double storedTotal = payroll.getLoanDeduction() != null ? payroll.getLoanDeduction() : 0.0;
+        double monthlySum = loans.stream()
+                .filter(l -> l.getMonthlyDeduction() > 0)
+                .mapToDouble(EmployeeLoan::getMonthlyDeduction)
+                .sum();
+        double scale = monthlySum > 0 ? storedTotal / monthlySum : 0.0;
+
         loans.stream()
                 .filter(l -> l.getMonthlyDeduction() > 0)
-                .forEach(l -> list.add(
-                        line("Loan " + l.getLoanCode() + " (" + l.getLoanType().getName() + ")",
-                                l.getMonthlyDeduction())
-                ));
+                .forEach(l -> {
+                    double amount = round2(l.getMonthlyDeduction() * scale);
+                    if (amount > 0) {
+                        list.add(line(
+                                "Loan " + l.getLoanCode() + " (" + l.getLoanType().getName() + ")",
+                                amount));
+                    }
+                });
 
         return list;
+    }
+
+    private static double round2(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     private String esc(String value) {
