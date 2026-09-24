@@ -113,15 +113,23 @@
             <tr>
                 <td>
                     <div class="brand-name" th:text="${company.companyName}">Company</div>
-                    <div class="brand-sub"
-                         th:text="${invoiceSettings.invoiceHeaderSubtitle != null and !#strings.isEmpty(invoiceSettings.invoiceHeaderSubtitle)
-                             ? invoiceSettings.invoiceHeaderSubtitle
-                             : (isSales ? 'Accounts Receivable' : 'Accounts Payable')}">
+                    <div class="info-muted" th:if="${company.street != null or company.city != null or company.state != null or company.country != null}">
+                        <strong>address:</strong>
+                        <span th:text="${(company.street ?: '') + (company.city != null ? ', ' + company.city : '') + (company.state != null ? ', ' + company.state : '') + (company.country != null ? ', ' + company.country : '')}">address</span>
+                    </div>
+                    <div class="info-muted" th:if="${company.companyEmail != null and !#strings.isEmpty(company.companyEmail)}">
+                        <strong>email:</strong> <span th:text="${company.companyEmail}">email</span>
+                    </div>
+                    <div class="info-muted" th:if="${company.phoneNo != null and !#strings.isEmpty(company.phoneNo)}">
+                        <strong>phone:</strong> <span th:text="${company.phoneNo}">phone</span>
+                    </div>
+                    <div class="brand-sub" th:if="${showHeaderSubtitle}" th:text="${headerSubtitleText}">
                         Accounts Receivable
                     </div>
                 </td>
                 <td class="header-right">
                     <div class="doc-title" th:text="${docTitle}">Sales Invoice</div>
+                    <div class="info-muted" th:if="${showPurchaseBadge}">Accounts Payable</div>
                     <div class="doc-code" th:text="${invoice.invoiceId}">INV-0000</div>
                     <span class="status-badge"
                           th:style="'background:' + ${statusColor}"
@@ -138,12 +146,12 @@
                 <td>
                     <div class="info-label" th:text="${partyLabel}">Bill To</div>
                     <div class="info-value" th:text="${partyName}">Party</div>
+                    <div class="info-muted" th:if="${partyAddress != null and !#strings.isEmpty(partyAddress)}"
+                         th:text="${partyAddress}">address</div>
                     <div class="info-muted" th:if="${partyEmail != null and !#strings.isEmpty(partyEmail)}"
                          th:text="${partyEmail}">email</div>
                     <div class="info-muted" th:if="${partyPhone != null and !#strings.isEmpty(partyPhone)}"
                          th:text="${partyPhone}">phone</div>
-                    <div class="info-muted" th:if="${partyAddress != null and !#strings.isEmpty(partyAddress)}"
-                         th:text="${partyAddress}">address</div>
                 </td>
                 <td>
                     <div class="info-label">Invoice Date</div>
@@ -158,8 +166,10 @@
                         <div class="info-label" style="margin-top:8px;">Vendor Invoice #</div>
                         <div class="info-value" th:text="${supplierInvoiceNumber}">—</div>
                     </div>
-                    <div class="info-label" style="margin-top:8px;">Paid Date</div>
-                    <div class="info-value" th:text="${paidDateFormatted}">—</div>
+                    <div th:if="${showPaidDate}">
+                        <div class="info-label" style="margin-top:8px;" th:text="${paidDateLabel}">Paid Date</div>
+                        <div class="info-value" th:text="${paidDateFormatted}">—</div>
+                    </div>
                 </td>
             </tr>
         </table>
@@ -171,9 +181,9 @@
             <thead>
             <tr>
                 <th class="center">#</th>
-                <th>Description</th>
+                <th>Item Name</th>
                 <th class="right">Qty</th>
-                <th class="right">Unit</th>
+                <th class="right">Unit Cost</th>
                 <th class="right">Discount</th>
                 <th class="right">Line item</th>
             </tr>
@@ -188,7 +198,7 @@
                          th:if="${line.description != null and !#strings.isEmpty(line.description)}"
                          th:text="${line.description}">Description</div>
                 </td>
-                <td class="right" th:text="${line.quantity}">1</td>
+                <td class="right" th:text="${line.quantityFormatted}">1</td>
                 <td class="right" th:text="${line.unitFormatted}">0.00</td>
                 <td class="right" th:text="${line.discountFormatted}">—</td>
                 <td class="right" th:text="${line.amountFormatted}">0.00</td>
@@ -225,8 +235,8 @@
         <div class="section-title">Payment Information</div>
         <div class="box">
             <p><strong>Bank Name:</strong> <span th:text="${invoice.bankAccount.bankName}">Bank</span></p>
-            <p><strong>Account Holder:</strong> <span th:text="${invoice.bankAccount.accountHolderName}">Holder</span></p>
-            <p><strong>Account Number:</strong> <span th:text="${invoice.bankAccount.accountNumber}">0000</span></p>
+            <p><strong>Account Holder:</strong> <span th:text="${bankAccountHolder}">Holder</span></p>
+            <p><strong>IBAN Number:</strong> <span th:text="${bankIbanNumber}">0000</span></p>
             <p><strong>IFSC/SWIFT:</strong> <span th:text="${invoice.bankAccount.ifscCode}">IFSC</span></p>
             <p><strong>Branch:</strong> <span th:text="${invoice.bankAccount.branchName}">Branch</span></p>
             <p><strong>Reference:</strong> <span th:text="${invoice.invoiceId}">INV-0000</span></p>
@@ -295,13 +305,28 @@
                 </div>
                 <div th:if="${invoiceSettings.invoiceFooterTaxLine != null and !#strings.isEmpty(invoiceSettings.invoiceFooterTaxLine)}"
                      th:text="${invoiceSettings.invoiceFooterTaxLine}">Tax line</div>
+                <div th:if="${footerAddress != null}" th:text="'Address: ' + ${footerAddress}">Address</div>
                 <div th:text="${invoiceSettings.invoiceFooterSignatureNote != null and !#strings.isEmpty(invoiceSettings.invoiceFooterSignatureNote)
                     ? invoiceSettings.invoiceFooterSignatureNote
                     : 'This is a computer-generated document and does not require a physical signature.'}">
                     Signature note
                 </div>
+                <div th:if="${footerSupportEmail != null or footerBillingEmail != null}">
+                    <span th:if="${footerSupportEmail != null}" th:text="'For support: ' + ${footerSupportEmail}">For support</span>
+                    <span th:if="${footerSupportEmail != null and footerBillingEmail != null}"> | </span>
+                    <span th:if="${footerBillingEmail != null}" th:text="'For billing: ' + ${footerBillingEmail}">For billing</span>
+                </div>
+                <div th:if="${footerWebsiteUrl != null and !#strings.isEmpty(footerWebsiteUrl)}"
+                     th:text="'Website: ' + ${footerWebsiteUrl}">Website</div>
             </td>
-            <td class="right" th:text="'Ref: ' + ${invoice.invoiceId} + ' | ' + ${company.companyName}">Ref</td>
+            <td class="right" th:if="${!showQr}" th:text="'Ref: ' + ${invoice.invoiceId} + ' | ' + ${company.companyName}">Ref</td>
+            <td th:if="${showQr}" style="text-align:center;">
+                <img th:src="${qrImageUrl}" width="90" height="90" alt="Invoice QR"/>
+                <div style="margin-top:4px;">Scan to View Online</div>
+            </td>
+        </tr>
+        <tr th:if="${showQr}">
+            <td colspan="2" class="right" th:text="'Ref: ' + ${invoice.invoiceId} + ' | ' + ${company.companyName}">Ref</td>
         </tr>
     </table>
 

@@ -96,6 +96,8 @@ public class InvoicePDFService {
             }
 
             String status = invoice.getStatus() != null ? invoice.getStatus().toUpperCase(Locale.ROOT) : "UNPAID";
+            boolean isPaid = "PAID".equals(status);
+            boolean isPartiallyPaid = "PARTIALLY_PAID".equals(status);
             String statusColor = switch (status) {
                 case "PAID" -> "#16a34a";
                 case "PARTIALLY_PAID" -> "#d97706";
@@ -104,7 +106,7 @@ public class InvoicePDFService {
                 default -> "#dc2626";
             };
 
-            String docTitle = "PAID".equals(status)
+            String docTitle = isPaid
                     ? "Payment Receipt"
                     : (invoice.getType() != null && "PURCHASE".equalsIgnoreCase(invoice.getType().name())
                     ? "Purchase Invoice"
@@ -138,13 +140,30 @@ public class InvoicePDFService {
 
             String notesText = buildNotes(invoice, invoiceSettings, company,
                     invoiceDateFormatted, dueDateFormatted, paidDateFormatted);
+            String headerSubtitleText = applyTemplate(invoiceSettings.getInvoiceHeaderSubtitle(),
+                    company, invoiceDateFormatted, dueDateFormatted, paidDateFormatted, invoice.getInvoiceId());
 
             Context context = new Context();
             context.setVariable("invoice", invoice);
             context.setVariable("company", company);
             context.setVariable("invoiceSettings", invoiceSettings);
             context.setVariable("currencyCode", currencyCode);
-            context.setVariable("publicInvoiceUrl", buildPublicInvoiceUrl(invoiceSettings, invoice.getInvoiceId()));
+            String publicInvoiceUrl = buildPublicInvoiceUrl(invoiceSettings, invoice.getInvoiceId());
+            context.setVariable("publicInvoiceUrl", publicInvoiceUrl);
+            context.setVariable("showQr", publicInvoiceUrl != null);
+            context.setVariable("qrImageUrl", publicInvoiceUrl != null ? buildQrImageUrl(publicInvoiceUrl) : null);
+            String footerAddress = buildAddress(company.getStreet(), company.getCity(),
+                    company.getState(), company.getCountry());
+            context.setVariable("footerAddress", footerAddress);
+            context.setVariable("footerSupportEmail",
+                    isNotBlank(invoiceSettings.getInvoiceFooterSupportEmail())
+                            ? invoiceSettings.getInvoiceFooterSupportEmail()
+                            : company.getCompanyEmail());
+            context.setVariable("footerBillingEmail",
+                    isNotBlank(invoiceSettings.getInvoiceFooterBillingEmail())
+                            ? invoiceSettings.getInvoiceFooterBillingEmail()
+                            : company.getBillingEmail());
+            context.setVariable("footerWebsiteUrl", company.getWebsiteUrl());
             context.setVariable("invoiceTermsList", splitTerms(invoiceSettings.getInvoiceTerms()));
             context.setVariable("invoiceDateFormatted", invoiceDateFormatted);
             context.setVariable("dueDateFormatted", dueDateFormatted);
@@ -153,7 +172,10 @@ public class InvoicePDFService {
             context.setVariable("statusText", status);
             context.setVariable("docTitle", docTitle);
             context.setVariable("isSales", isSales);
-            context.setVariable("isPaid", "PAID".equals(status));
+            context.setVariable("isPaid", isPaid);
+            context.setVariable("showPurchaseBadge", !isSales);
+            context.setVariable("headerSubtitleText", headerSubtitleText);
+            context.setVariable("showHeaderSubtitle", headerSubtitleText != null && !headerSubtitleText.isBlank());
             context.setVariable("partyLabel", partyLabel);
             context.setVariable("partyName", partyName);
             context.setVariable("partyEmail", partyEmail);
@@ -165,6 +187,9 @@ public class InvoicePDFService {
             context.setVariable("showSupplierInvoiceNumber",
                     !isSales && invoice.getSupplierInvoiceNumber() != null
                             && !invoice.getSupplierInvoiceNumber().isBlank());
+            context.setVariable("showPaidDate",
+                    (isPaid || isPartiallyPaid) && invoice.getPaidDate() != null);
+            context.setVariable("paidDateLabel", isPaid ? "Paid Date" : "Last Payment");
             context.setVariable("lines", lines);
             context.setVariable("notesText", notesText);
             // subtotalAmount is stored post-discount; show pre-discount gross in the PDF summary.
@@ -212,7 +237,17 @@ public class InvoicePDFService {
             context.setVariable("showDiscount", isPositive(discountAmount));
             context.setVariable("showTax", isPositive(invoice.getTaxAmount()));
             context.setVariable("showPaymentInfo",
-                    isSales && invoice.getBankAccount() != null && !"PAID".equals(status));
+                    isSales && invoice.getBankAccount() != null && !isPaid);
+            if (invoice.getBankAccount() != null) {
+                String bankIbanNumber = isNotBlank(invoice.getBankAccount().getAccountNumber())
+                        ? invoice.getBankAccount().getAccountNumber()
+                        : invoice.getBankAccount().getIban();
+                context.setVariable("bankIbanNumber", bankIbanNumber);
+                String bankAccountHolder = isNotBlank(invoice.getBankAccount().getAccountHolderName())
+                        ? invoice.getBankAccount().getAccountHolderName()
+                        : company.getCompanyName();
+                context.setVariable("bankAccountHolder", bankAccountHolder);
+            }
             context.setVariable("showNotes", isSales && notesText != null && !notesText.isBlank());
             context.setVariable("showTerms",
                     isSales && invoiceSettings.getInvoiceTerms() != null
@@ -273,7 +308,7 @@ public class InvoicePDFService {
                 .index(index)
                 .name(firstNonBlank(item.getItemName(), "—"))
                 .description(nullToEmpty(item.getItemDescription()))
-                .quantity(qty)
+                .quantityFormatted(String.valueOf(qty))
                 .unitFormatted(formatMoney(unit, currencyCode))
                 .discountFormatted(discount)
                 // Exact line item amount before discount (unit × qty).
@@ -282,16 +317,42 @@ public class InvoicePDFService {
     }
 
     private InvoiceLineView toPurchaseLine(int index, PurchaseOrderItemDTO item, String currencyCode) {
-        BigDecimal unit = item.getUnitPrice() != null ? item.getUnitPrice() : item.getUnitCost();
+        BigDecimal unit = item.getUnitCost() != null ? item.getUnitCost() : item.getUnitPrice();
         return InvoiceLineView.builder()
                 .index(index)
                 .name(firstNonBlank(item.getItemName(), "—"))
                 .description(nullToEmpty(item.getItemDescription()))
-                .quantity(item.getQuantity() != null ? item.getQuantity() : 0)
+                .quantityFormatted(purchaseLineQuantity(item, unit))
                 .unitFormatted(formatMoney(unit, currencyCode))
                 .discountFormatted("—")
                 .amountFormatted(formatMoney(item.getLineTotal(), currencyCode))
                 .build();
+    }
+
+    /**
+     * Mirrors frontend purchaseInvoiceLineQuantity (lib/purchase-line-item.ts): shows the
+     * quantity implied by the line total when it diverges from ordered qty × unit (e.g. after
+     * inspection adjustments), falling back to received quantity, then ordered quantity.
+     */
+    private static String purchaseLineQuantity(PurchaseOrderItemDTO item, BigDecimal unit) {
+        int orderedQty = item.getQuantity() != null ? item.getQuantity() : 0;
+        BigDecimal lineTotal = item.getLineTotal() != null ? item.getLineTotal() : BigDecimal.ZERO;
+        if (unit != null && unit.compareTo(BigDecimal.ZERO) > 0 && lineTotal.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal orderedTotal = unit.multiply(BigDecimal.valueOf(orderedQty));
+            if (lineTotal.subtract(orderedTotal).abs().compareTo(BigDecimal.valueOf(0.01)) > 0) {
+                BigDecimal implied = lineTotal.divide(unit, 3, RoundingMode.HALF_UP);
+                BigDecimal rounded = implied.setScale(0, RoundingMode.HALF_UP);
+                if (implied.subtract(rounded).abs().compareTo(BigDecimal.valueOf(0.001)) < 0) {
+                    return String.valueOf(rounded.intValueExact());
+                }
+                return implied.stripTrailingZeros().toPlainString();
+            }
+        }
+        Integer received = item.getReceivedQty();
+        if (received != null && received > 0 && !received.equals(orderedQty)) {
+            return String.valueOf(received);
+        }
+        return String.valueOf(orderedQty);
     }
 
     private String buildNotes(
@@ -302,21 +363,53 @@ public class InvoicePDFService {
             String dueDateFormatted,
             String paidDateFormatted
     ) {
-        String template;
-        if ("PAID".equalsIgnoreCase(invoice.getStatus())) {
-            template = settings.getInvoiceNotesPaid();
-        } else {
-            template = settings.getInvoiceNotesUnpaid();
-        }
+        String template = "PAID".equalsIgnoreCase(invoice.getStatus())
+                ? settings.getInvoiceNotesPaid()
+                : settings.getInvoiceNotesUnpaid();
+        return applyTemplate(template, company, invoiceDateFormatted, dueDateFormatted,
+                paidDateFormatted, invoice.getInvoiceId());
+    }
+
+    private static String applyTemplate(
+            String template,
+            Company company,
+            String invoiceDateFormatted,
+            String dueDateFormatted,
+            String paidDateFormatted,
+            String invoiceId
+    ) {
         if (template == null) {
-            template = "";
+            return "";
         }
         return template
                 .replace("{{companyName}}", nullToEmpty(company.getCompanyName()))
                 .replace("{{invoiceDate}}", invoiceDateFormatted)
                 .replace("{{dueDate}}", dueDateFormatted)
                 .replace("{{paidDate}}", paidDateFormatted)
-                .replace("{{invoiceId}}", nullToEmpty(invoice.getInvoiceId()));
+                .replace("{{invoiceId}}", nullToEmpty(invoiceId));
+    }
+
+    /** Joins non-blank parts with ", "; returns null (not an empty string) when everything is blank. */
+    private static String buildAddress(String... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (part != null && !part.isBlank()) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append(part.trim());
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : null;
+    }
+
+    private static String buildQrImageUrl(String data) {
+        String encoded = java.net.URLEncoder.encode(data, java.nio.charset.StandardCharsets.UTF_8);
+        return "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encoded;
+    }
+
+    private static boolean isNotBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static boolean isPositive(BigDecimal value) {
@@ -395,7 +488,7 @@ public class InvoicePDFService {
         int index;
         String name;
         String description;
-        int quantity;
+        String quantityFormatted;
         String unitFormatted;
         String discountFormatted;
         String amountFormatted;
