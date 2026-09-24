@@ -249,8 +249,10 @@ public class InvoicePDFService {
                 context.setVariable("bankAccountHolder", bankAccountHolder);
             }
             context.setVariable("showNotes", isSales && notesText != null && !notesText.isBlank());
+            // Terms are configured for unpaid invoices only — hide on paid invoices / receipts.
             context.setVariable("showTerms",
-                    isSales && invoiceSettings.getInvoiceTerms() != null
+                    isSales && !isPaid
+                            && invoiceSettings.getInvoiceTerms() != null
                             && !splitTerms(invoiceSettings.getInvoiceTerms()).isEmpty());
             context.setVariable("sigPartyName", partyName);
             context.setVariable("sigPartyRole", isSales ? "Customer Signature and Date" : "Supplier Signature and Date");
