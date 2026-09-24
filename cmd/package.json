@@ -1,0 +1,19 @@
+{
+  "name": "sunway-backend-cmd",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Interactive admin CLI for Sunway backend maintenance ops",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@azure/storage-blob": "^12.27.0",
+    "@inquirer/prompts": "^7.3.2",
+    "dotenv": "^16.4.7",
+    "mysql2": "^3.12.0"
+  }
+}

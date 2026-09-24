@@ -1,4 +1,5 @@
 *.env
+/cmd/node_modules/
 /target/
 *.class
 !/target/sunway-1.0.0.jar
