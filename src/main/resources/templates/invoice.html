@@ -87,15 +87,23 @@
         }
         .box {
             background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
-            padding: 12px; font-size: 11px; color: #475569; line-height: 1.6;
+            padding: 10px 12px; font-size: 11px; color: #475569; line-height: 1.35;
+        }
+        .box-pre {
             white-space: pre-wrap;
         }
-        .box p { margin-bottom: 4px; white-space: normal; }
+        .kv-table { width: auto; max-width: 100%; border-collapse: collapse; }
+        .kv-table td {
+            padding: 2px 0; vertical-align: top; font-size: 11px; line-height: 1.35; color: #475569;
+        }
+        .kv-table td.kv-label {
+            padding-right: 12px; white-space: nowrap; font-weight: 700; color: #334155;
+        }
         .terms-list { margin: 0; padding-left: 18px; }
         .terms-list li { margin-bottom: 8px; line-height: 1.5; color: #475569; }
         .sig-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
         .sig-table td { width: 50%; padding: 0 12px; vertical-align: bottom; text-align: center; }
-        .sig-line { margin-top: 48px; border-top: 2px solid #0f172a; padding-top: 8px; }
+        .sig-line { margin-top: 28px; border-top: 2px solid #0f172a; padding-top: 8px; }
         .sig-label { font-size: 11px; font-weight: 700; color: #0f172a; }
         .sig-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
         .footer-table {
@@ -234,36 +242,58 @@
     <div class="section" th:if="${showPaymentInfo}">
         <div class="section-title">Payment Information</div>
         <div class="box">
-            <p><strong>Bank Name:</strong> <span th:text="${invoice.bankAccount.bankName}">Bank</span></p>
-            <p><strong>Account Holder:</strong> <span th:text="${bankAccountHolder}">Holder</span></p>
-            <p><strong>IBAN Number:</strong> <span th:text="${bankIbanNumber}">0000</span></p>
-            <p><strong>IFSC/SWIFT:</strong> <span th:text="${invoice.bankAccount.ifscCode}">IFSC</span></p>
-            <p><strong>Branch:</strong> <span th:text="${invoice.bankAccount.branchName}">Branch</span></p>
-            <p><strong>Reference:</strong> <span th:text="${invoice.invoiceId}">INV-0000</span></p>
+            <table class="kv-table">
+                <tr>
+                    <td class="kv-label">Bank Name:</td>
+                    <td th:text="${invoice.bankAccount.bankName}">Bank</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">Account Holder:</td>
+                    <td th:text="${bankAccountHolder}">Holder</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">IBAN Number:</td>
+                    <td th:text="${bankIbanNumber}">0000</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">IFSC/SWIFT:</td>
+                    <td th:text="${invoice.bankAccount.ifscCode}">IFSC</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">Branch:</td>
+                    <td th:text="${invoice.bankAccount.branchName}">Branch</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">Reference:</td>
+                    <td th:text="${invoice.invoiceId}">INV-0000</td>
+                </tr>
+            </table>
         </div>
     </div>
 
     <div class="section" th:if="${showSupplierBankDetails}">
         <div class="section-title">Supplier Bank Details</div>
         <div class="box">
-            <p th:if="${supplierBankName != null and !#strings.isEmpty(supplierBankName)}">
-                <strong>Bank Name:</strong>
-                <span th:text="${supplierBankName}">—</span>
-            </p>
-            <p th:if="${supplierIban != null and !#strings.isEmpty(supplierIban)}">
-                <strong>IBAN:</strong>
-                <span th:text="${supplierIban}">—</span>
-            </p>
-            <p th:if="${supplierCurrencyCode != null and !#strings.isEmpty(supplierCurrencyCode)}">
-                <strong>Currency:</strong>
-                <span th:text="${supplierCurrencyCode}">—</span>
-            </p>
+            <table class="kv-table">
+                <tr th:if="${supplierBankName != null and !#strings.isEmpty(supplierBankName)}">
+                    <td class="kv-label">Bank Name:</td>
+                    <td th:text="${supplierBankName}">—</td>
+                </tr>
+                <tr th:if="${supplierIban != null and !#strings.isEmpty(supplierIban)}">
+                    <td class="kv-label">IBAN:</td>
+                    <td th:text="${supplierIban}">—</td>
+                </tr>
+                <tr th:if="${supplierCurrencyCode != null and !#strings.isEmpty(supplierCurrencyCode)}">
+                    <td class="kv-label">Currency:</td>
+                    <td th:text="${supplierCurrencyCode}">—</td>
+                </tr>
+            </table>
         </div>
     </div>
 
     <div class="section" th:if="${showNotes}">
         <div class="section-title">Notes</div>
-        <div class="box" th:text="${notesText}">Notes</div>
+        <div class="box box-pre" th:text="${notesText}">Notes</div>
     </div>
 
     <div class="section" th:if="${showTerms}">

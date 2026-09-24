@@ -528,9 +528,12 @@ public class SalesOrderService {
                 .paymentStatus(invoiceRepo.findFirstByOrderIdAndType(so.getId(), InvoiceType.SALES)
                         .map(inv -> inv.getStatus())
                         .orElse("UNPAID"))
+                // No sales invoice yet → full order total is outstanding (not null).
                 .outstandingAmount(invoiceRepo.findFirstByOrderIdAndType(so.getId(), InvoiceType.SALES)
-                        .map(Invoice::getOutstanding)
-                        .orElse(null))
+                        .map(inv -> inv.getOutstanding() != null
+                                ? inv.getOutstanding()
+                                : (inv.getAmount() != null ? inv.getAmount() : so.getTotalAmount()))
+                        .orElse(so.getTotalAmount()))
                 .subtotalAmount(so.getSubtotalAmount() == null ? BigDecimal.ZERO : so.getSubtotalAmount())
                 .discountAmount(so.getDiscountAmount() == null ? BigDecimal.ZERO : so.getDiscountAmount())
                 .taxAmount(so.getTaxAmount() == null ? BigDecimal.ZERO : so.getTaxAmount())

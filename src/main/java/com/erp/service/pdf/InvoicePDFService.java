@@ -258,7 +258,9 @@ public class InvoicePDFService {
             boolean showSupplierBankDetails = !isSales
                     && purchaseOrder != null
                     && ((purchaseOrder.getSupplierBankName() != null && !purchaseOrder.getSupplierBankName().isBlank())
-                        || (purchaseOrder.getSupplierIban() != null && !purchaseOrder.getSupplierIban().isBlank()));
+                        || (purchaseOrder.getSupplierIban() != null && !purchaseOrder.getSupplierIban().isBlank())
+                        || (purchaseOrder.getSupplierCurrencyCode() != null
+                            && !purchaseOrder.getSupplierCurrencyCode().isBlank()));
             context.setVariable("showSupplierBankDetails", showSupplierBankDetails);
             context.setVariable("supplierBankName",
                     !isSales && purchaseOrder != null ? nullToEmpty(purchaseOrder.getSupplierBankName()) : "");

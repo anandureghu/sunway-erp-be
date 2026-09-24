@@ -50,22 +50,32 @@ public class VendorPaymentReceiptPdfService {
             // Touch lazy-loaded supplier fields while session is open.
             String supplierBankName = null;
             String supplierIban = null;
+            String supplierCurrencyCode = null;
             if (purchaseOrder != null && purchaseOrder.getSupplier() != null) {
                 supplierBankName = purchaseOrder.getSupplier().getBankName();
                 supplierIban = purchaseOrder.getSupplier().getIban();
+                supplierCurrencyCode = purchaseOrder.getSupplier().getCurrencyCode();
             }
             boolean showSupplierBankDetails =
                     (supplierBankName != null && !supplierBankName.isBlank())
-                    || (supplierIban != null && !supplierIban.isBlank());
+                    || (supplierIban != null && !supplierIban.isBlank())
+                    || (supplierCurrencyCode != null && !supplierCurrencyCode.isBlank());
             context.setVariable("showSupplierBankDetails", showSupplierBankDetails);
             context.setVariable("supplierBankName", supplierBankName != null ? supplierBankName : "");
             context.setVariable("supplierIban", supplierIban != null ? supplierIban : "");
             context.setVariable(
+                    "supplierCurrencyCode",
+                    supplierCurrencyCode != null ? supplierCurrencyCode : "");
+            context.setVariable(
                     "paymentMethodLabel",
                     PaymentMethodLabels.displayLabel(payment.getPaymentMethod()));
-            String currencyCode = company.getCurrency() != null
-                    ? company.getCurrency().getCurrencyCode()
-                    : "";
+            // Receipt amount currency: prefer supplier currency, else company currency.
+            String currencyCode = supplierCurrencyCode;
+            if (currencyCode == null || currencyCode.isBlank()) {
+                currencyCode = company.getCurrency() != null
+                        ? company.getCurrency().getCurrencyCode()
+                        : "";
+            }
             context.setVariable("currencyCode", currencyCode != null ? currencyCode : "");
             String paymentDateFormatted = payment.getEffectiveDate() != null
                     ? payment.getEffectiveDate()

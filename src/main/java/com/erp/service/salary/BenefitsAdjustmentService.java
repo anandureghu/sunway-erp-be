@@ -34,6 +34,9 @@ public class BenefitsAdjustmentService {
     private static final Set<String> ALL_ALLOWANCES =
             Set.of("HOUSING", "TRANSPORT", "FOOD", "TRAVEL", "OTHER");
 
+    private static final Set<String> OTHER_BENEFIT_TYPES = Set.of(
+            "ANNUAL_TICKET", "BONUS", "ADVANCE_SALARY", "REIMBURSEMENT");
+
     private final EmployeeRepository employeeRepo;
     private final EmployeeCompensationRepository compensationRepo;
     private final EmployeeCurrentJobRepo currentJobRepo;
@@ -57,6 +60,16 @@ public class BenefitsAdjustmentService {
         Set<String> components = (req.getComponents() == null || req.getComponents().isEmpty())
                 ? ALL_ALLOWANCES
                 : req.getComponents().stream().map(String::toUpperCase).collect(Collectors.toSet());
+
+        if (components.contains("OTHER")) {
+            String otherType = req.getOtherBenefitType() == null
+                    ? ""
+                    : req.getOtherBenefitType().trim().toUpperCase().replace(' ', '_');
+            if (!OTHER_BENEFIT_TYPES.contains(otherType)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Select a benefit type for Other (Annual Ticket, Bonus, Advance Salary, or reimbursement).");
+            }
+        }
 
         List<Employee> targets = resolveTargets(req, companyId);
         BigDecimal factor = BigDecimal.ONE.add(

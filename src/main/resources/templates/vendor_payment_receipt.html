@@ -62,7 +62,14 @@
         .amount-value { font-size: 22px; font-weight: 800; color: #059669; margin-top: 4px; }
         .box {
             background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
-            padding: 12px; font-size: 11px; color: #475569; line-height: 1.6;
+            padding: 10px 12px; font-size: 11px; color: #475569; line-height: 1.35;
+        }
+        .kv-table { width: auto; max-width: 100%; border-collapse: collapse; }
+        .kv-table td {
+            padding: 2px 0; vertical-align: top; font-size: 11px; line-height: 1.35; color: #475569;
+        }
+        .kv-table td.kv-label {
+            padding-right: 12px; white-space: nowrap; font-weight: 700; color: #334155;
         }
         .sig-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
         .sig-table td { width: 50%; padding: 0 12px; vertical-align: bottom; text-align: center; }
@@ -159,14 +166,20 @@
     <div class="section" th:if="${showSupplierBankDetails}">
         <div class="section-title">Supplier Bank Details</div>
         <div class="box">
-            <p th:if="${supplierBankName != null and !#strings.isEmpty(supplierBankName)}">
-                <strong>Bank Name:</strong>
-                <span th:text="${supplierBankName}">—</span>
-            </p>
-            <p th:if="${supplierIban != null and !#strings.isEmpty(supplierIban)}">
-                <strong>IBAN:</strong>
-                <span th:text="${supplierIban}">—</span>
-            </p>
+            <table class="kv-table">
+                <tr th:if="${supplierBankName != null and !#strings.isEmpty(supplierBankName)}">
+                    <td class="kv-label">Bank Name:</td>
+                    <td th:text="${supplierBankName}">—</td>
+                </tr>
+                <tr th:if="${supplierIban != null and !#strings.isEmpty(supplierIban)}">
+                    <td class="kv-label">IBAN:</td>
+                    <td th:text="${supplierIban}">—</td>
+                </tr>
+                <tr th:if="${supplierCurrencyCode != null and !#strings.isEmpty(supplierCurrencyCode)}">
+                    <td class="kv-label">Currency:</td>
+                    <td th:text="${supplierCurrencyCode}">—</td>
+                </tr>
+            </table>
         </div>
     </div>
 
