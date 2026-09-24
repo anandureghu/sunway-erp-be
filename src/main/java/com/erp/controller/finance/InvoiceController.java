@@ -101,6 +101,12 @@ public class InvoiceController {
     }
 
     @RequiresPermission(module = AppModule.FINANCE_INVOICE, action = {AppAction.EDIT})
+    @PostMapping("/{id}/pdf/regenerate")
+    public ResponseEntity<String> regenerateInvoicePdf(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(invoiceService.regenerateInvoicePdf(id));
+    }
+
+    @RequiresPermission(module = AppModule.FINANCE_INVOICE, action = {AppAction.EDIT})
     @PostMapping("/{id}/email")
     public ResponseEntity<Void> sendInvoiceEmail(@PathVariable("id") Long id) {
         invoiceService.emailInvoice(id);

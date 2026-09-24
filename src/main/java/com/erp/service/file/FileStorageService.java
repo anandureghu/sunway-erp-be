@@ -326,4 +326,67 @@ public class FileStorageService {
 
         return blobClient.getBlobUrl() + "?" + blobClient.generateSas(values);
     }
+
+    /**
+     * Deletes a previously uploaded blob (and its storage-ledger row) by public/private URL.
+     * Safe to call with null/blank/unknown URLs — returns false without throwing.
+     */
+    public boolean deleteByPublicUrl(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) {
+            return false;
+        }
+        String blobPath = extractBlobPathFromUrl(fileUrl);
+        if (blobPath == null || blobPath.isBlank()) {
+            return false;
+        }
+        return deleteByBlobPath(blobPath);
+    }
+
+    /** Deletes blob from public then private container if present, and removes the ledger row. */
+    public boolean deleteByBlobPath(String blobPath) {
+        if (blobPath == null || blobPath.isBlank()) {
+            return false;
+        }
+        boolean deleted = false;
+        for (String containerName : new String[]{publicContainer, privateContainer}) {
+            try {
+                BlobContainerClient container =
+                        blobServiceClient.getBlobContainerClient(containerName);
+                BlobClient blobClient = container.getBlobClient(blobPath);
+                if (Boolean.TRUE.equals(blobClient.exists())) {
+                    blobClient.delete();
+                    deleted = true;
+                }
+            } catch (Exception ignored) {
+                // Best-effort cleanup — continue so ledger can still be cleared.
+            }
+        }
+        storedFileRepository.findByBlobPath(blobPath).ifPresent(storedFileRepository::delete);
+        return deleted;
+    }
+
+    /**
+     * Resolves blob path from a full Azure blob URL (with or without SAS query).
+     * Returns null when the URL does not belong to configured containers.
+     */
+    private String extractBlobPathFromUrl(String fileUrl) {
+        String clean = fileUrl.trim().split("\\?", 2)[0];
+        for (String containerName : new String[]{publicContainer, privateContainer}) {
+            if (containerName == null || containerName.isBlank()) {
+                continue;
+            }
+            BlobContainerClient container =
+                    blobServiceClient.getBlobContainerClient(containerName);
+            String base = container.getBlobContainerUrl() + "/";
+            if (clean.startsWith(base)) {
+                return clean.substring(base.length());
+            }
+            String marker = "/" + containerName + "/";
+            int idx = clean.indexOf(marker);
+            if (idx >= 0) {
+                return clean.substring(idx + marker.length());
+            }
+        }
+        return null;
+    }
 }

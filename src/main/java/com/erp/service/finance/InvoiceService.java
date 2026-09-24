@@ -193,6 +193,33 @@ public class InvoiceService {
         return getOrCreateOriginalInvoicePdfUrl(invoice);
     }
 
+    /**
+     * Force-rebuild the active PDF (invoice or receipt), deleting the previous blob from storage first.
+     * Only allowed for system-generated documents.
+     */
+    public String regenerateInvoicePdf(Long invoiceId) {
+        Invoice invoice = repo.findById(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Invoice not found"));
+        assertInvoiceInTenant(invoice);
+
+        InvoiceDocumentSource src = invoice.getDocumentSource();
+        if (src != null && src != InvoiceDocumentSource.GENERATED) {
+            throw new RuntimeException(
+                    "Only system-generated invoices can regenerate their PDF.");
+        }
+
+        boolean receipt = isFullyPaid(invoice);
+        if (receipt) {
+            fileStorageService.deleteByPublicUrl(invoice.getReceiptPdfUrl());
+            invoice.setReceiptPdfUrl(null);
+        } else {
+            fileStorageService.deleteByPublicUrl(invoice.getPdfUrl());
+            invoice.setPdfUrl(null);
+        }
+        repo.save(invoice);
+        return generateAndUploadInvoicePdf(invoice, receipt);
+    }
+
     private boolean isFullyPaid(Invoice invoice) {
         return "PAID".equalsIgnoreCase(invoice.getStatus() == null ? "" : invoice.getStatus().trim());
     }
@@ -1261,6 +1288,10 @@ public class InvoiceService {
             String storageKey = receipt
                     ? invoice.getId() + "/receipt"
                     : invoice.getId() + "/invoice";
+
+            // Drop the previous blob for this variant so regenerations do not orphan storage.
+            String previousUrl = receipt ? invoice.getReceiptPdfUrl() : invoice.getPdfUrl();
+            fileStorageService.deleteByPublicUrl(previousUrl);
 
             MultipartFile pdfFile = new InMemoryMultipartFile(
                     pdfBytes,
