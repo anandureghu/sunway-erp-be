@@ -28,6 +28,13 @@ public interface PayrollRepository extends JpaRepository<Payroll, Long> {
             LocalDate payPeriodEnd
     );
 
+    /** Whether the employee's final-settlement payroll has been processed. */
+    /** Payrolls whose period overlaps [start, end]: pass (employee, end, start). */
+    List<Payroll> findByEmployeeAndPayPeriodStartLessThanEqualAndPayPeriodEndGreaterThanEqual(
+            Employee employee, LocalDate end, LocalDate start);
+
+    boolean existsByEmployeeAndFinalSettlementTrue(Employee employee);
+
     // ======================================================
     //  Finance report aggregations
     // ======================================================

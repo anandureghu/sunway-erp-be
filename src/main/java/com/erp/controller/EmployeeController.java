@@ -3,6 +3,7 @@ package com.erp.controller;
 import com.erp.domain.User;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.DuplicateEmployeeMatchDTO;
 import com.erp.dto.common.PageResponse;
 import com.erp.dto.hr.CreateEmployeeDTO;
 import com.erp.dto.hr.EmployeeCsvImportResultDTO;
@@ -53,6 +54,21 @@ public class EmployeeController {
 
         EmployeeResponseDTO response = employeeService.createEmployee(dto);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Before creating: existing employees (any status, archived included) with the same
+     * identification number or the exact same first + middle + last name.
+     */
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.CREATE})
+    @GetMapping("/duplicate-check")
+    public ResponseEntity<List<DuplicateEmployeeMatchDTO>> duplicateCheck(
+            @RequestParam(name = "firstName", required = false) String firstName,
+            @RequestParam(name = "middleName", required = false) String middleName,
+            @RequestParam(name = "lastName", required = false) String lastName,
+            @RequestParam(name = "identification", required = false) String identification) {
+        return ResponseEntity.ok(
+                employeeService.findDuplicates(firstName, middleName, lastName, identification));
     }
 
     // ======================================================
@@ -196,6 +212,13 @@ public class EmployeeController {
     public ResponseEntity<EmployeeResponseDTO> confirmEmployee(
             @PathVariable("id") Long id) {
         return ResponseEntity.ok(employeeService.confirmEmployee(id));
+    }
+
+    /** Re-hire an INACTIVE employee (status → ACTIVE, un-archived). */
+    @RequiresPermission(module = AppModule.EMPLOYEE_PROFILE, action = {AppAction.EDIT})
+    @PutMapping("/{id}/reactivate")
+    public ResponseEntity<EmployeeResponseDTO> reactivateEmployee(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(employeeService.reactivateEmployee(id));
     }
 
     // ======================================================

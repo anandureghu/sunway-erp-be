@@ -1,6 +1,9 @@
 package com.erp.service.history;
 
+import com.erp.domain.Employee;
 import com.erp.domain.InvoiceType;
+import com.erp.repo.EmployeeRepository;
+import com.erp.service.EmployeeService;
 import com.erp.domain.finance.Invoice;
 import com.erp.domain.finance.JournalEntry;
 import com.erp.domain.finance.Payment;
@@ -85,6 +88,8 @@ public class HistoryService {
     private final PaymentService paymentService;
     private final JournalEntryService journalEntryService;
     private final TransactionService transactionService;
+    private final EmployeeRepository employeeRepo;
+    private final EmployeeService employeeService;
 
     public HistoryService(
             AuthContext auth,
@@ -109,9 +114,13 @@ public class HistoryService {
             InvoiceService invoiceService,
             PaymentService paymentService,
             JournalEntryService journalEntryService,
-            TransactionService transactionService
+            TransactionService transactionService,
+            EmployeeRepository employeeRepo,
+            @org.springframework.context.annotation.Lazy EmployeeService employeeService
     ) {
         this.auth = auth;
+        this.employeeRepo = employeeRepo;
+        this.employeeService = employeeService;
         this.salesOrderRepo = salesOrderRepo;
         this.picklistRepo = picklistRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
@@ -226,6 +235,11 @@ public class HistoryService {
                     this::toTransactionRecord,
                     normalizedSearch
             );
+            case EMPLOYEE -> mapPage(
+                    employeeRepo.findByCompany_IdAndArchivedTrueOrderByArchivedAtDesc(companyId, pageable),
+                    this::toEmployeeRecord,
+                    normalizedSearch
+            );
         };
 
         return HistoryPageResponse.builder()
@@ -293,6 +307,7 @@ public class HistoryService {
             case CUSTOMER_PAYMENT, VENDOR_PAYMENT -> paymentService.archivePayment(id);
             case JOURNAL_ENTRY -> journalEntryService.archive(id);
             case TRANSACTION, BUDGET_DISTRIBUTION -> transactionService.archiveTransaction(id);
+            case EMPLOYEE -> employeeService.archiveEmployee(id);
         }
     }
 
@@ -314,6 +329,8 @@ public class HistoryService {
             case VENDOR_PAYMENT -> deletePayment(id, companyId, PaymentDirection.VENDOR);
             case JOURNAL_ENTRY -> deleteJournalEntry(id, companyId);
             case TRANSACTION, BUDGET_DISTRIBUTION -> deleteTransaction(id, companyId);
+            case EMPLOYEE -> throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Employee records cannot be permanently deleted");
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported type");
         }
     }
@@ -433,6 +450,8 @@ public class HistoryService {
                     companyId, TransactionService.TYPE_BUDGET_DISTRIBUTION).stream().map(Transaction::getId).toList();
             case BUDGET_DISTRIBUTION -> transactionRepo.findByCompany_IdAndArchivedTrueAndTransactionType(
                     companyId, TransactionService.TYPE_BUDGET_DISTRIBUTION).stream().map(Transaction::getId).toList();
+            case EMPLOYEE -> employeeRepo.findByCompany_IdAndArchivedTrueOrderByArchivedAtDesc(companyId)
+                    .stream().map(Employee::getId).toList();
         };
     }
 
@@ -484,6 +503,21 @@ public class HistoryService {
 
     private boolean contains(String value, String search) {
         return value != null && value.toLowerCase(Locale.ROOT).contains(search);
+    }
+
+    private HistoryRecordDTO toEmployeeRecord(Employee e) {
+        String name = ((e.getFirstName() == null ? "" : e.getFirstName()) + " "
+                + (e.getLastName() == null ? "" : e.getLastName())).trim();
+        String dept = e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null;
+        return HistoryRecordDTO.builder()
+                .id(e.getId())
+                .type(HistoryEntityType.EMPLOYEE)
+                .referenceNo(e.getEmployeeNo())
+                .status(e.getStatus() != null ? e.getStatus().name() : null)
+                .partyName(dept != null && !dept.isBlank() ? name + " · " + dept : name)
+                .createdAt(e.getCreatedAt())
+                .archivedAt(e.getArchivedAt())
+                .build();
     }
 
     private HistoryRecordDTO toSalesOrderRecord(SalesOrder order) {

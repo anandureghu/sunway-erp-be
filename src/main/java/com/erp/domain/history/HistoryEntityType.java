@@ -17,7 +17,8 @@ public enum HistoryEntityType {
     VENDOR_PAYMENT(HistoryModule.FINANCE),
     JOURNAL_ENTRY(HistoryModule.FINANCE),
     TRANSACTION(HistoryModule.FINANCE),
-    BUDGET_DISTRIBUTION(HistoryModule.FINANCE);
+    BUDGET_DISTRIBUTION(HistoryModule.FINANCE),
+    EMPLOYEE(HistoryModule.HR);
 
     private final HistoryModule module;
 

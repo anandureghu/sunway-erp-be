@@ -172,7 +172,8 @@ public class HrDashboardService {
         Instant startOfMonthInstant = startOfMonth.atStartOfDay(ZoneId.systemDefault()).toInstant();
 
         return HrDashboardKpisDTO.builder()
-                .totalEmployees(employeeRepo.countByCompany_IdAndArchivedFalse(companyId))
+                // Inactive employees (separation complete) are not part of the headcount.
+                .totalEmployees(employeeRepo.countHeadcountExcluding(companyId, EmployeeStatus.INACTIVE))
                 .activeEmployees(employeeRepo.countByCompany_IdAndStatusAndArchivedFalse(
                         companyId, EmployeeStatus.ACTIVE))
                 .employeesOnLeave(onLeaveTodayIds.size())

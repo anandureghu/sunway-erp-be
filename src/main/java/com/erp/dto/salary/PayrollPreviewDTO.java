@@ -26,4 +26,8 @@ public class PayrollPreviewDTO {
     private boolean finalSettlement;
     private double grossPay;
     private PayrollAccountStatusDTO payrollAccount;
+    /** Benefit grants (annual ticket, bonus, reimbursement) this run will pay. */
+    private double benefitsAmount;
+    /** Calendar months the pay period covers (3.0 for Jun 1 – Aug 31). */
+    private double periodMonths;
 }

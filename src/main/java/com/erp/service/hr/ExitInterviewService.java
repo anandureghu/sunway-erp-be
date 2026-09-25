@@ -49,6 +49,7 @@ public class ExitInterviewService {
     private final AuthContext authContext;
     private final ObjectMapper objectMapper;
     private final RetirementCompensationService retirementCompensationService;
+    private final EmployeeSeparationService separationService;
 
     /** Company-wide list of exit / termination interviews for the HR Reports tab. */
     @Transactional(readOnly = true)
@@ -141,6 +142,11 @@ public class ExitInterviewService {
         }
 
         interviewRepo.save(interview);
+        // Submitting the interview may finish the separation (if the final
+        // settlement is already processed) — move the employee to INACTIVE then.
+        if ("SUBMITTED".equals(status)) {
+            separationService.completeIfReady(employee);
+        }
         return get(employeeId);
     }
 

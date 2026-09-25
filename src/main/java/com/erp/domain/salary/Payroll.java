@@ -81,6 +81,10 @@ public class Payroll {
     @Column(name = "overtime_pay", nullable = false)
     private Double overtimePay = 0.0;
 
+    /** One-off benefit grants (annual ticket, bonus, reimbursement) paid in this run. */
+    @Column(name = "benefits_amount", nullable = false)
+    private Double benefitsAmount = 0.0;
+
     @Column(name = "worked_days", nullable = false)
     private Double workedDays = 0.0;
 
@@ -141,6 +145,7 @@ public class Payroll {
         workedHours = safe(workedHours);
         overtimeHours = safe(overtimeHours);
         overtimePay = safe(overtimePay);
+        benefitsAmount = safe(benefitsAmount);
         workedDays = safe(workedDays);
         paidLeaveDays = safe(paidLeaveDays);
         unpaidLeaveDays = safe(unpaidLeaveDays);

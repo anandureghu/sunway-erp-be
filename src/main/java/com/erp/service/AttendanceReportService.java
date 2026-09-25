@@ -8,7 +8,10 @@ import com.erp.domain.hr.Company;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.timesheet.EmployeeMonthlyAttendanceDTO;
+import com.erp.domain.EmployeeStatus;
+import com.erp.repo.EmployeeCurrentJobRepo;
 import com.erp.repo.EmployeeLeaveRepository;
+import com.erp.service.hr.EmployeeSeparationService;
 import com.erp.repo.EmployeeOvertimeOverrideRepository;
 import com.erp.repo.EmployeeRepository;
 import com.erp.repo.EmployeeTimesheetRepository;
@@ -27,6 +30,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -46,6 +50,7 @@ public class AttendanceReportService {
     private final EmployeeTimesheetRepository timesheetRepo;
     private final EmployeeOvertimeOverrideRepository overtimeOverrideRepo;
     private final EmployeeLeaveRepository leaveRepo;
+    private final EmployeeCurrentJobRepo currentJobRepo;
     private final AuthContext authContext;
     private final PermissionCheckService permissionCheck;
 
@@ -108,11 +113,11 @@ public class AttendanceReportService {
     }
 
     private List<EmployeeMonthlyAttendanceDTO> summarize(List<Employee> employeesIn, int year, int month) {
-        // Only currently-employed staff belong on the timesheet: active, on probation,
-        // or on leave. Departed / inactive employees (resigned, terminated, retired,
-        // inactive) are excluded.
+        // Everyone still on the books belongs on the timesheet: active, on probation,
+        // on leave, and resigned / terminated / retired staff whose separation is not
+        // yet complete. Only INACTIVE (exit interview + final settlement done) drops off.
         List<Employee> employees = employeesIn.stream()
-                .filter(e -> e.getStatus() == null || !e.getStatus().isDepartedOrInactive())
+                .filter(e -> e.getStatus() != EmployeeStatus.INACTIVE)
                 .toList();
         if (employees.isEmpty()) {
             return List.of();
@@ -122,6 +127,17 @@ public class AttendanceReportService {
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
         LocalDate today = LocalDate.now();
+
+        // Exiting employees are marked absent; their worked days stop at their last
+        // working day (the current job's expected end date), when one is recorded.
+        Map<Long, LocalDate> exitLastDay = new HashMap<>();
+        for (Employee e : employees) {
+            if (EmployeeSeparationService.EXIT_STATUSES.contains(e.getStatus())) {
+                currentJobRepo.findByEmployee_Id(e.getId())
+                        .map(job -> job.getExpectedEndDate())
+                        .ifPresent(d -> exitLastDay.put(e.getId(), d));
+            }
+        }
 
         // Approved leaves overlapping the month, grouped by employee. Unpaid-leave
         // working days are dropped from worked days; any leave covering "today" makes
@@ -173,12 +189,28 @@ public class AttendanceReportService {
             for (Employee e : employees) {
                 double overtimeHours = Math.round(overrides.getOrDefault(e.getId(), 0.0) * 10.0) / 10.0;
 
+                // An exiting employee only accrues worked days up to their last working day.
+                boolean exiting = EmployeeSeparationService.EXIT_STATUSES.contains(e.getStatus());
+                LocalDate lastDay = exitLastDay.get(e.getId());
+                LocalDate empCountEnd = countEnd;
+                if (exiting && lastDay != null && lastDay.isBefore(countEnd)) {
+                    empCountEnd = lastDay;
+                }
+                // A mid-month joiner only accrues worked days from their join date
+                // (matches payroll, which prorates the same way).
+                LocalDate empCountStart = e.getJoinDate() != null && e.getJoinDate().isAfter(start)
+                        ? e.getJoinDate() : start;
+                int baseDays = (empCountStart.equals(start) && empCountEnd.equals(countEnd))
+                        ? workingDays
+                        : LeaveAttendanceUtil.countWorkingDays(empCountStart, empCountEnd);
+
                 // Unpaid-leave working days are absences: drop them from worked days.
                 List<EmployeeLeave> leaves = leavesByEmployee.getOrDefault(e.getId(), List.of());
-                int unpaidDays = LeaveAttendanceUtil.countUnpaidWorkingDays(leaves, start, countEnd);
-                int daysWorked = Math.max(0, workingDays - unpaidDays);
+                int unpaidDays = LeaveAttendanceUtil.countUnpaidWorkingDays(leaves, empCountStart, empCountEnd);
+                int daysWorked = Math.max(0, baseDays - unpaidDays);
                 double regularHours = Math.round(daysWorked * stdHours * 10.0) / 10.0;
                 boolean onLeaveToday = todayIsWorkday && LeaveAttendanceUtil.isOnLeave(leaves, today);
+                boolean absentToday = exiting && todayIsWorkday;
 
                 autoRows.add(EmployeeMonthlyAttendanceDTO.builder()
                         .employeeId(e.getId())
@@ -191,10 +223,13 @@ public class AttendanceReportService {
                         .totalHours(Math.round((regularHours + overtimeHours) * 10.0) / 10.0)
                         .overtimeHours(overtimeHours)
                         .editableOvertime(true) // HR keys overtime manually for no-punch companies
-                        .todayStatus(onLeaveToday ? "ON_LEAVE" : (todayIsWorkday ? "PRESENT" : "NOT_CHECKED_IN"))
+                        .todayStatus(absentToday ? "ABSENT"
+                                : onLeaveToday ? "ON_LEAVE"
+                                : (todayIsWorkday ? "PRESENT" : "NOT_CHECKED_IN"))
                         .todayCheckIn(null)
                         .todayCheckOut(null)
-                        .todayHours(onLeaveToday ? 0.0 : (todayIsWorkday ? Math.round(stdHours * 10.0) / 10.0 : 0.0))
+                        .todayHours(absentToday || onLeaveToday ? 0.0
+                                : (todayIsWorkday ? Math.round(stdHours * 10.0) / 10.0 : 0.0))
                         .build());
             }
             autoRows.sort(Comparator.comparing(r -> r.getEmployeeName() == null ? "" : r.getEmployeeName()));
@@ -212,17 +247,25 @@ public class AttendanceReportService {
             List<EmployeeTimesheet> records = byEmployee.getOrDefault(e.getId(), List.of());
 
             int daysRecorded = records.size();
+            // Days worked counts Sun–Thu only; a Friday/Saturday punch is rest-day
+            // overtime (as in payroll), not a working day.
             int daysPresent = (int) records.stream()
+                    .filter(t -> t.getAttendanceDate() != null && isWeekday(t.getAttendanceDate()))
                     .filter(t -> resolveWorkedMinutes(t) >= minMinutes)
                     .count();
             long totalMinutes = records.stream().mapToLong(this::resolveWorkedMinutes).sum();
             double totalHours = Math.round(totalMinutes / 60.0 * 10.0) / 10.0;
 
             // Overtime is computed per day (hours beyond the standard day, capped at
-            // the company's daily overtime limit) and summed across the month.
+            // the company's daily overtime limit) and summed across the month. Every
+            // hour on a rest day is overtime, capped at the maximum working day.
             long overtimeMinutes = records.stream()
                     .mapToLong(t -> {
-                        long over = resolveWorkedMinutes(t) - minMinutes;
+                        long worked = resolveWorkedMinutes(t);
+                        if (t.getAttendanceDate() != null && !isWeekday(t.getAttendanceDate())) {
+                            return Math.min(Math.max(worked, 0L), minMinutes + otMaxMinutes);
+                        }
+                        long over = worked - minMinutes;
                         return over <= 0 ? 0L : Math.min(over, otMaxMinutes);
                     })
                     .sum();
@@ -233,14 +276,18 @@ public class AttendanceReportService {
                     .filter(r -> today.equals(r.getAttendanceDate()))
                     .findFirst()
                     .orElse(null);
-            // An employee on approved leave today counts as absent for the day.
+            // An exiting employee is absent; one on approved leave today is absent for the day.
+            boolean exiting = EmployeeSeparationService.EXIT_STATUSES.contains(e.getStatus());
             List<EmployeeLeave> leaves = leavesByEmployee.getOrDefault(e.getId(), List.of());
             boolean onLeaveToday = LeaveAttendanceUtil.isOnLeave(leaves, today);
-            String todayStatus = onLeaveToday
+            String todayStatus = exiting
+                    ? "ABSENT"
+                    : onLeaveToday
                     ? "ON_LEAVE"
                     : (todayRec != null && todayRec.getStatus() != null
                         ? todayRec.getStatus().name()
                         : "NOT_CHECKED_IN");
+            onLeaveToday = onLeaveToday || exiting;
             double todayHours = onLeaveToday
                     ? 0.0
                     : (todayRec != null
