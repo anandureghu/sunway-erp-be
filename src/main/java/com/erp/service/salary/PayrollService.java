@@ -8,6 +8,7 @@ import com.erp.domain.EmployeeLoan;
 import com.erp.domain.EmployeeStatus;
 import com.erp.domain.EmployeeTimesheet;
 import com.erp.domain.salary.EmployeeBankDetails;
+import com.erp.domain.salary.EmployeeBenefitGrant;
 import com.erp.domain.salary.EmployeeCompensation;
 import com.erp.domain.finance.AccountingProcessCode;
 import com.erp.domain.finance.ChartOfAccounts;
@@ -62,9 +63,6 @@ public class PayrollService {
     private static final String STATUS_CLOSED = "CLOSED";
     // Fallback used only when a company has no explicit standard-hours setting.
     private static final double STANDARD_HOURS_PER_DAY = 6.0;
-    // Standard paid working days in a month — the divisor for the daily rate when an
-    // organisation has no check-in/out data (Gross / 22 × days worked).
-    private static final double STANDARD_WORKING_DAYS_PER_MONTH = 22.0;
 
     /**
      * Employment-ending statuses. A payroll run for an employee in any of these
@@ -95,6 +93,8 @@ public class PayrollService {
     private final AuthContext authContext;
     private final PayslipDocumentService payslipDocumentService;
     private final com.erp.service.notification.EmailService emailService;
+    private final com.erp.service.hr.EmployeeSeparationService separationService;
+    private final BenefitGrantService benefitGrantService;
 
     @Transactional(readOnly = true)
     public PayrollPreviewDTO previewPayroll(Long employeeId, PayrollGenerateRequestDTO dto) {
@@ -111,15 +111,15 @@ public class PayrollService {
                 dto.getPayPeriodEnd()
         );
 
-        double grossPay = round2(computation.grossEarnings() + computation.endOfServiceCompensation()
-                + computation.overtimePay());
+        double grossPay = round2(computation.totalGross());
         // The funds check should reflect what actually posts to the ledger — the earned
         // salary expense (gross minus loss of pay), not the pre-LOP gross.
         double payrollExpense = round2(grossPay - computation.lopAmount());
         PayrollAccountStatusDTO accountStatus = resolvePayrollAccountStatus(
                 employee.getCompanyId(), payrollExpense);
 
-        return toPreviewDTO(computation, grossPay, accountStatus);
+        return toPreviewDTO(computation, grossPay, accountStatus,
+                PayPeriodMath.monthFactor(dto.getPayPeriodStart(), dto.getPayPeriodEnd()));
     }
 
     @Transactional(readOnly = true)
@@ -204,6 +204,7 @@ public class PayrollService {
 
         Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
         Payroll saved = payrollRepo.save(payroll);
+        benefitGrantService.markPaid(computation.benefitGrants(), saved.getId());
 
         applyLoanRecovery(
                 employee,
@@ -214,11 +215,11 @@ public class PayrollService {
         postPayrollToAccounting(saved, employee);
         emailPayslip(employee, saved);
 
-        // A final settlement is the employee's last run — once it's processed, mark
-        // them INACTIVE so they drop out of payroll/org listings and can be archived.
+        // A final settlement is the employee's last run. They move to INACTIVE (and
+        // drop out of the operational lists) only once their exit interview is also
+        // submitted — until then they stay visible so HR can finish the separation.
         if (computation.finalSettlement()) {
-            employee.setStatus(EmployeeStatus.INACTIVE);
-            employeeRepo.save(employee);
+            separationService.completeIfReady(employee);
         }
 
         return saved;
@@ -249,6 +250,7 @@ public class PayrollService {
 
             Payroll payroll = buildPayroll(employee, bankDetails, dto, computation);
             Payroll saved = payrollRepo.save(payroll);
+            benefitGrantService.markPaid(computation.benefitGrants(), saved.getId());
 
             applyLoanRecovery(
                     employee,
@@ -321,8 +323,7 @@ public class PayrollService {
         );
 
         return Optional.of(new ProjectedPayrollAmounts(
-                computation.grossEarnings() + computation.endOfServiceCompensation()
-                        + computation.overtimePay(),
+                computation.totalGross(),
                 computation.totalDeductions(),
                 computation.netPayable()
         ));
@@ -344,8 +345,8 @@ public class PayrollService {
 
         // Gross is the full monthly package plus any end-of-service gratuity; loss of pay
         // and loans are carried in `deductions`, so gross − deductions = net.
-        payroll.setGrossPay(round2(computation.grossEarnings() + computation.endOfServiceCompensation()
-                + computation.overtimePay()));
+        payroll.setGrossPay(round2(computation.totalGross()));
+        payroll.setBenefitsAmount(computation.benefitsAmount());
         payroll.setEndOfServiceCompensation(computation.endOfServiceCompensation());
         payroll.setFinalSettlement(computation.finalSettlement());
         payroll.setLoanDeduction(computation.loanDeduction());
@@ -477,29 +478,40 @@ public class PayrollService {
         // no longer flattened down to a single month's pay.
         double grossEarnings = prorateAcrossCalendarMonths(monthlyGross, periodStart, periodEnd);
 
-        // Daily rate: an organisation with no check-in/out data prorates against the
-        // standard 22-day month, itself spread across the period the same way gross
-        // earnings is, so a multi-month settlement period doesn't collapse the divisor
-        // back down to a single month; a punch-in organisation uses the actual working
-        // days in the period.
+        // Daily rate = the period's gross spread over the period's ACTUAL working days
+        // (Sun–Thu), for every organisation. Using the real count (20–23 per month)
+        // rather than a flat 22 means a month of full attendance always pays in full —
+        // no phantom loss-of-pay in 20/21-day months, and no unpaid day silently
+        // absorbed in 23-day months. Multi-month periods stay consistent because both
+        // gross and working days span the same window.
         boolean requireCheckIn = companyRequireCheckIn(employee);
-        double referenceDays = requireCheckIn
-                ? workingDays
-                : prorateAcrossCalendarMonths(STANDARD_WORKING_DAYS_PER_MONTH, periodStart, periodEnd);
+        double referenceDays = workingDays;
         double perDaySalary = grossEarnings / referenceDays;
 
-        // Approved leaves within the period, split into paid vs unpaid. Computed up
-        // front because a no-punch organisation derives its worked days from these.
-        List<EmployeeLeave> approvedLeaves = leaveRepo.findApprovedLeavesForPayrollPeriod(
-                employee.getId(),
-                periodStart,
-                periodEnd
-        );
+        // Working days before the employee joined are not payable: a mid-period joiner
+        // is prorated to the days they were actually employed.
+        LocalDate joinDate = resolveJoinDate(employee);
+        LocalDate employedFrom = joinDate != null && joinDate.isAfter(periodStart) ? joinDate : periodStart;
+        int notEmployedDays = employedFrom.isAfter(periodEnd)
+                ? workingDays
+                : countWorkingDays(periodStart, employedFrom.minusDays(1));
+        int employedWorkingDays = Math.max(workingDays - notEmployedDays, 0);
+
+        // Approved leaves within the (employed part of the) period, split into paid vs
+        // unpaid and counted in WORKING days — the same unit as the daily rate — so a
+        // leave recorded "incl. weekends" doesn't over-deduct Fridays/Saturdays.
+        List<EmployeeLeave> approvedLeaves = employedFrom.isAfter(periodEnd)
+                ? List.of()
+                : leaveRepo.findApprovedLeavesForPayrollPeriod(
+                        employee.getId(),
+                        employedFrom,
+                        periodEnd
+                );
 
         double paidLeaveDays = 0.0;
         double unpaidLeaveDays = 0.0;
         for (EmployeeLeave leave : approvedLeaves) {
-            double leaveDays = calculateLeaveDaysWithinPeriod(leave, periodStart, periodEnd);
+            double leaveDays = calculateLeaveDaysWithinPeriod(leave, employedFrom, periodEnd);
             if (leaveDays <= 0) {
                 continue;
             }
@@ -521,10 +533,11 @@ public class PayrollService {
         double workedHours;
         double workedDays;
         if (!requireCheckIn) {
-            // Organisation doesn't punch in/out — every working day is paid EXCEPT
-            // approved unpaid leave. Worked days = working days minus all leave; paid
-            // leave is added back in payableDays below so only unpaid leave reduces pay.
-            workedDays = Math.max(workingDays - paidLeaveDays - unpaidLeaveDays, 0.0);
+            // Organisation doesn't punch in/out — every employed working day is paid
+            // EXCEPT approved unpaid leave. Worked days = employed working days minus all
+            // leave; paid leave is added back in payableDays below so only unpaid leave
+            // (and days before joining) reduce pay.
+            workedDays = Math.max(employedWorkingDays - paidLeaveDays - unpaidLeaveDays, 0.0);
             workedHours = workedDays * stdHoursPerDay;
         } else {
             // Align exactly with the Attendance History report: worked hours = sum of
@@ -534,7 +547,11 @@ public class PayrollService {
                     .mapToLong(this::resolveWorkedMinutes)
                     .sum();
             workedHours = totalMinutes / 60.0;
+            // Only Sun–Thu punches count toward worked days: the salary covers the
+            // working week, so a Friday/Saturday punch is rest-day overtime (below),
+            // never a substitute for a missed working day.
             workedDays = timesheets.stream()
+                    .filter(t -> t.getAttendanceDate() != null && !isWeekend(t.getAttendanceDate()))
                     .filter(t -> resolveWorkedMinutes(t) >= stdMinutes)
                     .count();
         }
@@ -545,23 +562,44 @@ public class PayrollService {
         // summed across every calendar month the period touches — a multi-month
         // settlement period must not lose the later months' overrides.
         double overtimeHours;
+        double restDayOvertimeHours = 0.0;
         if (!requireCheckIn) {
             overtimeHours = sumOvertimeOverrideHours(employee.getId(), periodStart, periodEnd);
         } else {
-            overtimeHours = Math.max(0.0, workedHours - (workingDays * stdHoursPerDay));
+            // Per DAY: hours beyond the standard day, capped at the company's daily
+            // overtime limit — exactly how the Time Sheets board computes it. (Netting
+            // total hours against the period's standard let absences cancel out genuine
+            // overtime and ignored the daily cap.) On a rest day (Fri/Sat) every hour
+            // worked is overtime, capped at the maximum working day (standard + OT cap).
+            long otCapMinutes = Math.round(companyOtMaxHours(employee) * 60.0);
+            long weekdayOtMinutes = 0L;
+            long restDayMinutes = 0L;
+            for (EmployeeTimesheet t : timesheets) {
+                long minutes = resolveWorkedMinutes(t);
+                if (t.getAttendanceDate() != null && isWeekend(t.getAttendanceDate())) {
+                    restDayMinutes += Math.min(Math.max(minutes, 0L), stdMinutes + otCapMinutes);
+                } else {
+                    long over = minutes - stdMinutes;
+                    weekdayOtMinutes += over <= 0 ? 0L : Math.min(over, otCapMinutes);
+                }
+            }
+            restDayOvertimeHours = restDayMinutes / 60.0;
+            overtimeHours = (weekdayOtMinutes + restDayMinutes) / 60.0;
         }
 
         // Overtime is paid ON TOP of the monthly package: hourly rate is the package
-        // spread over the month's working hours (per-day salary ÷ standard hours), and
-        // each OT hour earns that rate uplifted by the company's day multiplier.
+        // spread over the month's working hours (per-day salary ÷ standard hours).
+        // Working-day OT earns the company's day multiplier; rest-day (Fri/Sat) work
+        // earns the Friday/holiday multiplier.
         double hourlyRate = stdHoursPerDay > 0 ? perDaySalary / stdHoursPerDay : 0.0;
-        double overtimePay = overtimeHours * hourlyRate * companyOtMultiplier(employee);
+        double overtimePay = (overtimeHours - restDayOvertimeHours) * hourlyRate * companyOtMultiplier(employee)
+                + restDayOvertimeHours * hourlyRate * companyRestDayOtMultiplier(employee);
 
         // Paid leave counts toward payable days; the worked-days figure already excludes
-        // it (and unpaid leave). Payable days are capped at the reference month (22 with
-        // no check-in data, else the period's working days) so a full month pays in full
-        // and a partial month prorates as Gross / referenceDays × days worked.
-        double payableDays = Math.min(workedDays + paidLeaveDays, referenceDays);
+        // it (and unpaid leave). Payable days are capped at the days the employee was
+        // employed in the period, so a full month of attendance pays in full and loss of
+        // pay = unpaid leave + days not worked/employed, at Gross / working days per day.
+        double payableDays = Math.min(workedDays + paidLeaveDays, employedWorkingDays);
         double lopDays = Math.max(referenceDays - payableDays, 0.0);
         double lopAmount = lopDays * perDaySalary;
         // Gross earnings (computed above) are the FULL package for the period; unpaid
@@ -577,8 +615,17 @@ public class PayrollService {
 
         List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, STATUS_ACTIVE);
 
-        // Amount the run can pay before loan recovery: full package + EOS + OT, less LOP.
-        double availableBeforeLoan = grossEarnings + endOfServiceCompensation + overtimePay - lopAmount;
+        // One-off benefit grants (annual ticket, bonus, reimbursement) still unpaid for
+        // this month or earlier are paid on top of the package in this run.
+        List<EmployeeBenefitGrant> benefitGrants =
+                benefitGrantService.pendingForPeriod(employee.getId(), periodEnd);
+        double benefitsAmount = benefitGrants.stream()
+                .mapToDouble(g -> g.getAmount() != null ? g.getAmount().doubleValue() : 0.0)
+                .sum();
+
+        // Amount the run can pay before loan recovery: full package + EOS + OT + benefits, less LOP.
+        double availableBeforeLoan = grossEarnings + endOfServiceCompensation + overtimePay
+                + benefitsAmount - lopAmount;
 
         // How many calendar-month equivalents the period covers (2.0 for two full months,
         // ~2.5 for a 2.5-month window). Used to scale monthly loan installments.
@@ -605,7 +652,8 @@ public class PayrollService {
         }
 
         double totalDeductions = lopAmount + loanDeduction;
-        double netPayable = (grossEarnings + endOfServiceCompensation + overtimePay) - totalDeductions;
+        double netPayable = (grossEarnings + endOfServiceCompensation + overtimePay + benefitsAmount)
+                - totalDeductions;
 
         if (netPayable < 0) {
             netPayable = 0.0;
@@ -629,7 +677,9 @@ public class PayrollService {
                 round2(netPayable),
                 round2(grossEarnings),
                 round2(endOfServiceCompensation),
-                finalSettlement
+                finalSettlement,
+                round2(benefitsAmount),
+                benefitGrants
         );
     }
 
@@ -654,18 +704,35 @@ public class PayrollService {
             return 0.0;
         }
 
-        boolean includeWeekends = Boolean.TRUE.equals(leave.getIncludeWeekends());
-        return calculateDays(effectiveStart, effectiveEnd, includeWeekends);
+        // Payroll pays per WORKING day, so only working days of the leave count here —
+        // even when the leave itself was recorded "including weekends".
+        return countWorkingDays(effectiveStart, effectiveEnd);
     }
 
-    private int calculateDays(LocalDate start, LocalDate end, boolean includeWeekends) {
-        int days = 0;
-        for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
-            if (includeWeekends || !isWeekend(date)) {
-                days++;
-            }
+    /** Employee's join date, falling back to the current job's start date. */
+    private LocalDate resolveJoinDate(Employee employee) {
+        if (employee.getJoinDate() != null) {
+            return employee.getJoinDate();
         }
-        return days;
+        return currentJobRepo.findByEmployee_Id(employee.getId())
+                .map(job -> job.getStartDate())
+                .orElse(null);
+    }
+
+    /** Company's maximum overtime hours per day (default 2). */
+    private double companyOtMaxHours(Employee employee) {
+        try {
+            if (employee.getCompany() != null
+                    && employee.getCompany().getOtMaxHoursPerDay() != null) {
+                double v = employee.getCompany().getOtMaxHoursPerDay().doubleValue();
+                if (v >= 0) {
+                    return v;
+                }
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable — use default
+        }
+        return 2.0;
     }
 
     private boolean isPaidLeave(Employee employee, String leaveType) {
@@ -703,17 +770,28 @@ public class PayrollService {
         }
     }
 
+    /**
+     * A pay period may not overlap any payroll already processed for the employee —
+     * otherwise a multi-month run (e.g. Jun–Aug) and a later single-month run (Jul)
+     * would pay the same days twice.
+     */
     private void validateDuplicatePayroll(Employee employee, LocalDate payPeriodStart, LocalDate payPeriodEnd) {
-        boolean exists = payrollRepo.existsByEmployeeAndPayPeriodStartAndPayPeriodEnd(
-                employee,
-                payPeriodStart,
-                payPeriodEnd
-        );
+        List<Payroll> overlapping = payrollRepo
+                .findByEmployeeAndPayPeriodStartLessThanEqualAndPayPeriodEndGreaterThanEqual(
+                        employee, payPeriodEnd, payPeriodStart);
 
-        if (exists) {
+        if (!overlapping.isEmpty()) {
+            Payroll existing = overlapping.get(0);
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
             throw new PayrollGenerationException(
-                    "Payroll has already been generated for " + employeeLabel(employee)
-                            + " for this pay period.");
+                    "Payroll has already been processed for " + employeeLabel(employee)
+                            + " covering " + existing.getPayPeriodStart().format(fmt)
+                            + " – " + existing.getPayPeriodEnd().format(fmt)
+                            + " (" + existing.getPayrollCode() + "). The new pay period must not "
+                            + "overlap it — start it on "
+                            + existing.getPayPeriodEnd().plusDays(1).format(fmt)
+                            + " or later, or end it before "
+                            + existing.getPayPeriodStart().format(fmt) + ".");
         }
     }
 
@@ -862,6 +940,16 @@ public class PayrollService {
             throw new IllegalArgumentException(
                     "Payroll cannot be processed for a future period that has not started yet.");
         }
+
+        // A period may span several past months but can run only up to the end of the
+        // current month — never into a future month.
+        LocalDate currentMonthEnd = LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth());
+        if (dto.getPayPeriodEnd().isAfter(currentMonthEnd)) {
+            throw new IllegalArgumentException(
+                    "Payroll can be processed for past months up to the current month only. "
+                            + "The pay period cannot end after "
+                            + currentMonthEnd.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) + ".");
+        }
     }
 
     /**
@@ -933,6 +1021,22 @@ public class PayrollService {
         return 1.25;
     }
 
+    /** OT multiplier for rest-day (Fri/Sat) and holiday work (default 1.50). */
+    private double companyRestDayOtMultiplier(com.erp.domain.Employee employee) {
+        try {
+            if (employee.getCompany() != null
+                    && employee.getCompany().getOtNightFridayHolidayRateMultiplier() != null) {
+                double m = employee.getCompany().getOtNightFridayHolidayRateMultiplier().doubleValue();
+                if (m > 0) {
+                    return m;
+                }
+            }
+        } catch (Exception ignored) {
+            // lazy company not loadable — use default
+        }
+        return 1.50;
+    }
+
     /** Whether the company punches in/out (default true). */
     private boolean companyRequireCheckIn(com.erp.domain.Employee employee) {
         try {
@@ -962,8 +1066,8 @@ public class PayrollService {
     }
 
     /**
-     * Spreads a flat "per calendar month" figure (e.g. monthlyGross, or the 22-day
-     * standard month) across {@code [start, end]} by walking one calendar month at a
+     * Spreads a flat "per calendar month" figure (e.g. monthlyGross, or a monthly loan
+     * installment) across {@code [start, end]} by walking one calendar month at a
      * time and weighting each month's contribution by (days of that month inside the
      * period) / (actual days in that month — 28, 29, 30 or 31, per {@link LocalDate#lengthOfMonth()}).
      * A period covering exactly N whole calendar months yields N × value; a partial
@@ -971,17 +1075,7 @@ public class PayrollService {
      * fractional share rather than assuming a flat 30-day month.
      */
     private double prorateAcrossCalendarMonths(double perMonthValue, LocalDate start, LocalDate end) {
-        double total = 0.0;
-        LocalDate segmentStart = start;
-        while (!segmentStart.isAfter(end)) {
-            LocalDate segmentMonthEnd = segmentStart.withDayOfMonth(segmentStart.lengthOfMonth());
-            LocalDate segmentEnd = segmentMonthEnd.isBefore(end) ? segmentMonthEnd : end;
-            long daysInSegment = ChronoUnit.DAYS.between(segmentStart, segmentEnd) + 1;
-            int daysInMonth = segmentStart.lengthOfMonth();
-            total += perMonthValue * daysInSegment / daysInMonth;
-            segmentStart = segmentEnd.plusDays(1);
-        }
-        return total;
+        return perMonthValue * PayPeriodMath.monthFactor(start, end);
     }
 
     /**
@@ -1011,7 +1105,8 @@ public class PayrollService {
     private PayrollPreviewDTO toPreviewDTO(
             PayrollComputation computation,
             double grossPay,
-            PayrollAccountStatusDTO payrollAccount) {
+            PayrollAccountStatusDTO payrollAccount,
+            double periodMonths) {
         return new PayrollPreviewDTO(
                 computation.monthlyGross(),
                 computation.workingDays(),
@@ -1031,7 +1126,9 @@ public class PayrollService {
                 computation.endOfServiceCompensation(),
                 computation.finalSettlement(),
                 grossPay,
-                payrollAccount
+                payrollAccount,
+                computation.benefitsAmount(),
+                Math.round(periodMonths * 100.0) / 100.0
         );
     }
 
@@ -1164,7 +1261,13 @@ public class PayrollService {
             double netPayable,
             double grossEarnings,
             double endOfServiceCompensation,
-            boolean finalSettlement
+            boolean finalSettlement,
+            double benefitsAmount,
+            List<EmployeeBenefitGrant> benefitGrants
     ) {
+        /** Everything the run pays before deductions: package + EOS + overtime + benefits. */
+        public double totalGross() {
+            return grossEarnings + endOfServiceCompensation + overtimePay + benefitsAmount;
+        }
     }
 }

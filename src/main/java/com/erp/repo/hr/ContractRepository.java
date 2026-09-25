@@ -14,6 +14,9 @@ public interface ContractRepository extends JpaRepository<Contract, Long> {
 
     Optional<Contract> findFirstByEmployeeIdAndDeletedFalseOrderByCreatedAtDesc(Long employeeId);
 
+    /** All live contracts in the company, newest first — the first per employee is their current one. */
+    List<Contract> findByCompany_IdAndDeletedFalseOrderByCreatedAtDesc(Long companyId);
+
     boolean existsByContractCode(String contractCode);
 
     // ======================================================

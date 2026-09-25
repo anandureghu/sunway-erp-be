@@ -30,6 +30,20 @@ public final class LeaveAttendanceUtil {
         return day == DayOfWeek.FRIDAY || day == DayOfWeek.SATURDAY;
     }
 
+    /** Number of working days (Sun–Thu) in {@code [start, end]}; 0 when the range is empty. */
+    public static int countWorkingDays(LocalDate start, LocalDate end) {
+        if (start == null || end == null || end.isBefore(start)) {
+            return 0;
+        }
+        int count = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (!isWeekend(d)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     /** True when {@code date} falls within any of the given (already approved) leave intervals. */
     public static boolean isOnLeave(List<EmployeeLeave> approvedLeaves, LocalDate date) {
         if (approvedLeaves == null || approvedLeaves.isEmpty() || date == null) {

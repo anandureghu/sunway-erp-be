@@ -43,6 +43,7 @@ public class PayslipDocumentService {
     private final EmployeeLoanRepository loanRepo;
     private final EmployeeBankDetailsRepository bankRepo;
     private final com.erp.repo.EmployeeCurrentJobRepo currentJobRepo;
+    private final com.erp.repo.salary.EmployeeBenefitGrantRepository benefitGrantRepo;
     private final TemplateEngine templateEngine;
     private final AuthContext authContext;
 
@@ -118,7 +119,15 @@ public class PayslipDocumentService {
         dto.setLopDays(payroll.getLopDays());
         dto.setLopAmount(payroll.getLopAmount());
 
-        List<LineItemDTO> earnings = buildEarnings(compensation);
+        // The compensation record holds MONTHLY amounts; a pay period can span several
+        // months (e.g. Jun 1 – Aug 31), so each component is scaled by the months the
+        // period covers — the lines then add up to the period's gross, not one month's.
+        double monthFactor = PayPeriodMath.monthFactor(
+                payroll.getPayPeriodStart(), payroll.getPayPeriodEnd());
+        if (monthFactor <= 0) {
+            monthFactor = 1.0;
+        }
+        List<LineItemDTO> earnings = buildEarnings(compensation, monthFactor);
         // Overtime is paid on top of the monthly package — show it as its own earnings
         // line so the gross reconciles (basic + allowances + overtime + gratuity = gross).
         if (payroll.getOvertimePay() != null && payroll.getOvertimePay() > 0) {
@@ -126,6 +135,14 @@ public class PayslipDocumentService {
         }
         if (payroll.getEndOfServiceCompensation() != null && payroll.getEndOfServiceCompensation() > 0) {
             earnings.add(line("End of Service Compensation", payroll.getEndOfServiceCompensation()));
+        }
+        // One-off benefit grants paid in this run (annual ticket, bonus, reimbursement).
+        if (payroll.getId() != null && payroll.getBenefitsAmount() != null && payroll.getBenefitsAmount() > 0) {
+            for (com.erp.domain.salary.EmployeeBenefitGrant grant : benefitGrantRepo.findByPayrollId(payroll.getId())) {
+                if (grant.getAmount() != null && grant.getBenefitType() != null) {
+                    earnings.add(line(grant.getBenefitType().getLabel(), grant.getAmount().doubleValue()));
+                }
+            }
         }
         dto.setEarnings(earnings);
         dto.setDeductions(buildDeductions(activeLoans, payroll));
@@ -148,34 +165,43 @@ public class PayslipDocumentService {
         return dto;
     }
 
-    private List<LineItemDTO> buildEarnings(EmployeeCompensation c) {
+    private List<LineItemDTO> buildEarnings(EmployeeCompensation c, double monthFactor) {
         List<LineItemDTO> list = new ArrayList<>();
+        // "Basic Salary" for a one-month period; "Basic Salary (3 months)" otherwise.
+        String suffix = PayPeriodMath.isSingleMonth(monthFactor)
+                ? ""
+                : " (" + PayPeriodMath.describeMonths(monthFactor) + ")";
 
-        list.add(line("Basic Salary", amt(c.getBasicSalary())));
+        list.add(line("Basic Salary" + suffix, scaled(c.getBasicSalary(), monthFactor)));
 
         // Only cash allowances appear as line items. COMPANY_PROVIDED benefits are
         // stored as 0 on the compensation record and are not paid via payroll.
         if (c.getHousingType() == BenefitType.ALLOWANCE && amt(c.getHousingAllowance()) > 0) {
-            list.add(line("Housing Allowance", amt(c.getHousingAllowance())));
+            list.add(line("Housing Allowance" + suffix, scaled(c.getHousingAllowance(), monthFactor)));
         }
 
         if (amt(c.getFoodAllowance()) > 0) {
-            list.add(line("Food Allowance", amt(c.getFoodAllowance())));
+            list.add(line("Food Allowance" + suffix, scaled(c.getFoodAllowance(), monthFactor)));
         }
 
         if (c.getTransportationType() == BenefitType.ALLOWANCE && amt(c.getTransportationAllowance()) > 0) {
-            list.add(line("Transport Allowance", amt(c.getTransportationAllowance())));
+            list.add(line("Transport Allowance" + suffix, scaled(c.getTransportationAllowance(), monthFactor)));
         }
 
         if (c.getTravelType() == BenefitType.ALLOWANCE && amt(c.getTravelAllowance()) > 0) {
-            list.add(line("Travel Allowance", amt(c.getTravelAllowance())));
+            list.add(line("Travel Allowance" + suffix, scaled(c.getTravelAllowance(), monthFactor)));
         }
 
         if (amt(c.getOtherAllowance()) > 0) {
-            list.add(line("Other Allowance", amt(c.getOtherAllowance())));
+            list.add(line("Other Allowance" + suffix, scaled(c.getOtherAllowance(), monthFactor)));
         }
 
         return list;
+    }
+
+    /** Monthly amount × months in the pay period, rounded to cents. */
+    private static double scaled(Double monthly, double monthFactor) {
+        return Math.round(amt(monthly) * monthFactor * 100.0) / 100.0;
     }
 
     private static double amt(Double value) {

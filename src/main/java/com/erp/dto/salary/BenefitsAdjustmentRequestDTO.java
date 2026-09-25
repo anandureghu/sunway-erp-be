@@ -31,10 +31,4 @@ public class BenefitsAdjustmentRequestDTO {
      * Empty/null means every allowance (everything except BASIC).
      */
     private Set<String> components;
-
-    /**
-     * When OTHER is among {@link #components}, classifies the other-allowance increase
-     * (ANNUAL_TICKET, BONUS, ADVANCE_SALARY, REIMBURSEMENT). Required for OTHER.
-     */
-    private String otherBenefitType;
 }

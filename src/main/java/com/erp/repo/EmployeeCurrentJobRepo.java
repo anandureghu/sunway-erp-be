@@ -16,6 +16,16 @@ public interface EmployeeCurrentJobRepo extends JpaRepository<EmployeeCurrentJob
     @EntityGraph(attributePaths = {"employee", "jobCode", "department"})
     Optional<EmployeeCurrentJob> findByEmployee_Id(Long employeeId);
 
+    /** Every current job in the company with job code, department and division — for HR reports. */
+    @Query("""
+            SELECT j FROM EmployeeCurrentJob j
+            LEFT JOIN FETCH j.jobCode
+            LEFT JOIN FETCH j.department
+            LEFT JOIN FETCH j.division
+            WHERE j.employee.company.id = :companyId
+            """)
+    java.util.List<EmployeeCurrentJob> findAllForCompanyReport(@Param("companyId") Long companyId);
+
     boolean existsByEmployee_Id(Long employeeId);
     boolean existsByDepartment_Id(Long departmentId);
     boolean existsByDivision_Id(Long divisionId);

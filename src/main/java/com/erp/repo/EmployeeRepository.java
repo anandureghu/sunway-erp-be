@@ -29,6 +29,33 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     List<Employee> findByCompany_IdOrderByCreatedAtDesc(Long companyId);
 
+    /**
+     * Duplicate-check candidates: same company (archived included) whose first AND
+     * last names match case-insensitively. The middle name is compared in Java so
+     * "Rashid Mubarak Al Naimi" and "Rashid Abdullah Al Naimi" stay distinct.
+     */
+    @Query("""
+            SELECT e FROM Employee e
+            WHERE e.company.id = :companyId
+              AND LOWER(TRIM(e.firstName)) = :firstName
+              AND LOWER(TRIM(e.lastName)) = :lastName
+            """)
+    List<Employee> findNameMatchCandidates(
+            @Param("companyId") Long companyId,
+            @Param("firstName") String firstName,
+            @Param("lastName") String lastName);
+
+    /** Employees in the company (archived included) carrying this identification / QID. */
+    @Query("""
+            SELECT e FROM Employee e
+            WHERE e.company.id = :companyId
+              AND e.identification IS NOT NULL
+              AND LOWER(TRIM(e.identification)) = :identification
+            """)
+    List<Employee> findByCompanyAndIdentification(
+            @Param("companyId") Long companyId,
+            @Param("identification") String identification);
+
     /** Active (non-archived) employees — the working set shown across the app. */
     List<Employee> findByCompany_IdAndArchivedFalseOrderByCreatedAtDesc(Long companyId);
 
@@ -77,6 +104,9 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     /** Archived (former) employees — the records-only list. */
     List<Employee> findByCompany_IdAndArchivedTrueOrderByArchivedAtDesc(Long companyId);
+
+    /** Paged archived employees — the HR "Audit" history view. */
+    Page<Employee> findByCompany_IdAndArchivedTrueOrderByArchivedAtDesc(Long companyId, Pageable pageable);
 
     Page<Employee> findByCompany_Id(Long companyId, Pageable pageable);
 
@@ -128,6 +158,19 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     /** Directory-aligned total: non-archived employees only. */
     long countByCompany_IdAndArchivedFalse(Long companyId);
 
+    /**
+     * Current headcount for the HR dashboard: non-archived employees excluding the given
+     * status (INACTIVE — separation complete). Null-status rows are counted.
+     */
+    @Query("""
+            SELECT COUNT(e) FROM Employee e
+            WHERE e.company.id = :companyId
+              AND e.archived = false
+              AND (e.status IS NULL OR e.status <> :excluded)
+            """)
+    long countHeadcountExcluding(@Param("companyId") Long companyId,
+                                 @Param("excluded") EmployeeStatus excluded);
+
     long countByCompany_IdAndStatus(Long companyId, EmployeeStatus employeeStatus);
 
     long countByCompany_IdAndStatusAndArchivedFalse(Long companyId, EmployeeStatus employeeStatus);
@@ -148,6 +191,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             WHERE e.company.id = :companyId
               AND e.archived = false
               AND e.department IS NOT NULL
+              AND (e.status IS NULL OR e.status <> com.erp.domain.EmployeeStatus.INACTIVE)
             GROUP BY e.department.id, e.department.departmentName
             ORDER BY COUNT(e) DESC
             """)

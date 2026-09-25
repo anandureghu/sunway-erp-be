@@ -140,18 +140,28 @@ public class PayrollBankFileExportService {
                     .filter(s -> !s.isEmpty())
                     .orElse("");
 
-            double basic = nz(comp.getBasicSalary());
-            double housing = comp.getHousingType() == BenefitType.ALLOWANCE ? nz(comp.getHousingAllowance()) : 0d;
-            double food = nz(comp.getFoodAllowance());
-            double transport = comp.getTransportationType() == BenefitType.ALLOWANCE ? nz(comp.getTransportationAllowance()) : 0d;
+            // Compensation holds MONTHLY amounts; a processed payroll can cover several
+            // months (e.g. Jun 1 – Aug 31), so scale each component by the months its
+            // period covers — otherwise Basic + Extra Income would not reconcile to Net.
+            double f = payroll != null
+                    ? PayPeriodMath.monthFactor(payroll.getPayPeriodStart(), payroll.getPayPeriodEnd())
+                    : 1.0;
+            if (f <= 0) {
+                f = 1.0;
+            }
+            double basic = r2(nz(comp.getBasicSalary()) * f);
+            double housing = comp.getHousingType() == BenefitType.ALLOWANCE ? r2(nz(comp.getHousingAllowance()) * f) : 0d;
+            double food = r2(nz(comp.getFoodAllowance()) * f);
+            double transport = comp.getTransportationType() == BenefitType.ALLOWANCE ? r2(nz(comp.getTransportationAllowance()) * f) : 0d;
             double overtime = payroll != null ? nz(payroll.getOvertimePay()) : 0d;
-            double travelAllow = comp.getTravelType() == BenefitType.ALLOWANCE ? nz(comp.getTravelAllowance()) : 0d;
-            double otherAllow = nz(comp.getOtherAllowance());
+            double travelAllow = comp.getTravelType() == BenefitType.ALLOWANCE ? r2(nz(comp.getTravelAllowance()) * f) : 0d;
+            double otherAllow = r2(nz(comp.getOtherAllowance()) * f);
             // WPS: Net ≈ Basic + Extra Income − Deductions. Extra Income is the aggregate of
             // everything above basic (allowances + OT). Housing/Food/Transport/OT columns are
             // optional MoL breakdowns and are not validated against Extra Income.
             // Extra Field 1/2 are reserved for future use — leave blank (do not repeat amounts).
-            double extraIncome = housing + food + transport + travelAllow + otherAllow + overtime;
+            double benefits = payroll != null ? nz(payroll.getBenefitsAmount()) : 0d;
+            double extraIncome = housing + food + transport + travelAllow + otherAllow + overtime + benefits;
             double extraHours = payroll != null && payroll.getOvertimeHours() != null
                     ? nz(payroll.getOvertimeHours())
                     : 0d;
@@ -374,6 +384,10 @@ public class PayrollBankFileExportService {
             return String.valueOf((long) Math.rint(v));
         }
         return String.format(Locale.US, "%.2f", v);
+    }
+
+    private static double r2(double v) {
+        return Math.round(v * 100.0) / 100.0;
     }
 
     private static double nz(Double d) {

@@ -7,6 +7,7 @@ import com.erp.domain.hr.Department;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.domain.security.Role;
+import com.erp.dto.DuplicateEmployeeMatchDTO;
 import com.erp.dto.common.PageResponse;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
@@ -131,6 +132,16 @@ public class EmployeeService {
                 ? companyRepository.findById(dto.getCompanyId())
                 .orElseThrow(() -> new RuntimeException("Company not found"))
                 : resolveCurrentCompany();
+
+        // Never create the same person twice: reject when the identification (QID / ID
+        // number) or the exact full name (first + middle + last) already exists in this
+        // company — including inactive and archived records, which must be restored instead.
+        List<DuplicateEmployeeMatchDTO> duplicates = findDuplicates(
+                company.getId(), dto.getFirstName(), dto.getMiddleName(),
+                dto.getLastName(), dto.getIdentification());
+        if (!duplicates.isEmpty()) {
+            throw new com.erp.exception.ConflictException(describeDuplicate(duplicates.get(0)));
+        }
 
         Department department = dto.getDepartmentId() != null
                 ? departmentRepository.findById(dto.getDepartmentId())
@@ -578,6 +589,105 @@ public class EmployeeService {
         employeeRepository.save(employee);
     }
 
+    // ======================================================
+    // DUPLICATE CHECK — one record per person
+    // ======================================================
+
+    /** Duplicate check for the caller's company (used by the Add Employee form). */
+    @Transactional(readOnly = true)
+    public List<DuplicateEmployeeMatchDTO> findDuplicates(
+            String firstName, String middleName, String lastName, String identification) {
+        return findDuplicates(resolveCurrentCompanyId(), firstName, middleName, lastName, identification);
+    }
+
+    /**
+     * Existing employees (any status, archived included) that are the same person as a
+     * new hire. Two rules:
+     * <ul>
+     *   <li><b>Identification</b> — the same QID / ID number.</li>
+     *   <li><b>Full name</b> — first, middle AND last name all match exactly (case and
+     *       extra spaces ignored). All three are required because many people in Qatar
+     *       share a first and last name ("Rashid Mubarak Al Naimi" vs "Rashid Abdullah
+     *       Al Naimi" are different people); a blank middle name only matches a blank one.</li>
+     * </ul>
+     */
+    @Transactional(readOnly = true)
+    public List<DuplicateEmployeeMatchDTO> findDuplicates(
+            Long companyId, String firstName, String middleName, String lastName, String identification) {
+        if (companyId == null) {
+            return List.of();
+        }
+        java.util.LinkedHashMap<Long, DuplicateEmployeeMatchDTO> matches = new java.util.LinkedHashMap<>();
+
+        String id = normalizeName(identification);
+        if (!id.isEmpty()) {
+            for (Employee e : employeeRepository.findByCompanyAndIdentification(companyId, id)) {
+                matches.putIfAbsent(e.getId(), toDuplicateMatch(e, "IDENTIFICATION"));
+            }
+        }
+
+        String first = normalizeName(firstName);
+        String last = normalizeName(lastName);
+        String middle = normalizeName(middleName);
+        if (!first.isEmpty() && !last.isEmpty()) {
+            for (Employee e : employeeRepository.findNameMatchCandidates(companyId, first, last)) {
+                boolean sameFirst = normalizeName(e.getFirstName()).equals(first);
+                boolean sameLast = normalizeName(e.getLastName()).equals(last);
+                boolean sameMiddle = normalizeName(e.getMiddleName()).equals(middle);
+                if (sameFirst && sameMiddle && sameLast) {
+                    matches.putIfAbsent(e.getId(), toDuplicateMatch(e, "FULL_NAME"));
+                }
+            }
+        }
+        return List.copyOf(matches.values());
+    }
+
+    /** Lower-case, trimmed, inner whitespace collapsed; null → "". */
+    private static String normalizeName(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private DuplicateEmployeeMatchDTO toDuplicateMatch(Employee e, String matchedBy) {
+        String fullName = java.util.stream.Stream.of(e.getFirstName(), e.getMiddleName(), e.getLastName())
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .collect(Collectors.joining(" "));
+        return DuplicateEmployeeMatchDTO.builder()
+                .id(e.getId())
+                .employeeNo(e.getEmployeeNo())
+                .fullName(fullName)
+                .status(e.getStatus() != null ? e.getStatus().name() : null)
+                .archived(e.isArchived())
+                .identification(e.getIdentification())
+                .departmentName(e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null)
+                .matchedBy(matchedBy)
+                .build();
+    }
+
+    /** User-facing reason a create was refused, including how to bring the record back. */
+    private String describeDuplicate(DuplicateEmployeeMatchDTO m) {
+        String who = m.getFullName() + (m.getEmployeeNo() != null ? " (Employee No " + m.getEmployeeNo() + ")" : "");
+        String by = "IDENTIFICATION".equals(m.getMatchedBy())
+                ? "with the same identification number"
+                : "with the same first, middle and last name";
+        String status = m.getStatus() == null ? "Unknown"
+                : m.getStatus().charAt(0) + m.getStatus().substring(1).toLowerCase().replace('_', ' ');
+        StringBuilder msg = new StringBuilder("Employee already exists: ")
+                .append(who).append(' ').append(by).append(" — status ").append(status)
+                .append(m.isArchived() ? ", archived" : "").append(". ");
+        if ("INACTIVE".equals(m.getStatus())) {
+            msg.append(m.isArchived()
+                    ? "Restore the employee from HR Reports → Archive, then use Activate Employee on the profile instead of creating a new record."
+                    : "Open the existing profile and use Activate Employee instead of creating a new record.");
+        } else {
+            msg.append("Open the existing profile instead of creating a new record.");
+        }
+        return msg.toString();
+    }
+
     /** Restore an archived employee back into the active listings. */
     @Transactional
     public void unarchiveEmployee(Long id) {
@@ -641,6 +751,33 @@ public class EmployeeService {
         }
         employee.setStatus(EmployeeStatus.ACTIVE);
         employee.setProbationEndDate(null);
+        return toDTO(employeeRepository.save(employee));
+    }
+
+    /**
+     * Re-hire an INACTIVE employee: back to ACTIVE, restored to the directory (un-archived)
+     * and the old separation details cleared so they show up again on every list. Sign-in is
+     * status-based, so becoming ACTIVE also restores their login.
+     */
+    @Transactional
+    public EmployeeResponseDTO reactivateEmployee(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        employeeAccessGuard.assertCanWrite(employee, AppModule.EMPLOYEE_PROFILE);
+        if (employee.getStatus() != EmployeeStatus.INACTIVE) {
+            throw new IllegalStateException("Only inactive employees can be activated.");
+        }
+        employee.setStatus(EmployeeStatus.ACTIVE);
+        employee.setTerminationCode(null);
+        employee.setArchived(false);
+        employee.setArchivedAt(null);
+        // The previous last-working-day no longer applies to the re-hired employee.
+        currentJobRepo.findByEmployee_Id(employeeId).ifPresent(job -> {
+            if (job.getExpectedEndDate() != null) {
+                job.setExpectedEndDate(null);
+                currentJobRepo.save(job);
+            }
+        });
         return toDTO(employeeRepository.save(employee));
     }
 

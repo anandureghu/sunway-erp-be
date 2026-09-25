@@ -232,7 +232,7 @@ public class FileStorageService {
                 }
             }
 
-            case CONTRACT_ATTACHMENT, PURCHASE_REQUISITION_DOCUMENT -> {
+            case CONTRACT_ATTACHMENT, PURCHASE_REQUISITION_DOCUMENT, BENEFIT_REIMBURSEMENT_DOCUMENT -> {
                 String contentType = Objects.requireNonNull(file.getContentType());
                 boolean isPdf = Objects.equals(contentType, "application/pdf");
                 boolean isWord = Objects.equals(contentType, "application/msword")
@@ -292,6 +292,9 @@ public class FileStorageService {
                     + UUID.randomUUID() + "." + extension;
 
             case RESIDENCE_PERMIT_DOCUMENT -> "immigration/" + entityId + "/residence-permit/"
+                    + UUID.randomUUID() + "." + extension;
+
+            case BENEFIT_REIMBURSEMENT_DOCUMENT -> "benefits/" + entityId + "/reimbursement-"
                     + UUID.randomUUID() + "." + extension;
         };
     }
