@@ -154,12 +154,15 @@
                 <td>
                     <div class="info-label" th:text="${partyLabel}">Bill To</div>
                     <div class="info-value" th:text="${partyName}">Party</div>
-                    <div class="info-muted" th:if="${partyAddress != null and !#strings.isEmpty(partyAddress)}"
-                         th:text="${partyAddress}">address</div>
-                    <div class="info-muted" th:if="${partyEmail != null and !#strings.isEmpty(partyEmail)}"
-                         th:text="${partyEmail}">email</div>
-                    <div class="info-muted" th:if="${partyPhone != null and !#strings.isEmpty(partyPhone)}"
-                         th:text="${partyPhone}">phone</div>
+                    <div class="info-muted" th:if="${partyAddress != null and !#strings.isEmpty(partyAddress)}">
+                        <strong>address:</strong> <span th:text="${partyAddress}">address</span>
+                    </div>
+                    <div class="info-muted" th:if="${partyEmail != null and !#strings.isEmpty(partyEmail)}">
+                        <strong>email:</strong> <span th:text="${partyEmail}">email</span>
+                    </div>
+                    <div class="info-muted" th:if="${partyPhone != null and !#strings.isEmpty(partyPhone)}">
+                        <strong>phone:</strong> <span th:text="${partyPhone}">phone</span>
+                    </div>
                 </td>
                 <td>
                     <div class="info-label">Invoice Date</div>
