@@ -317,18 +317,30 @@ public class SubscriptionInvoiceService {
                     platformSettings.getState(),
                     platformSettings.getCountry()
             );
-            String receiverBankName = isNotBlank(platformSettings.getBankName())
-                    ? platformSettings.getBankName()
-                    : null;
-            String receiverIban = isNotBlank(platformSettings.getIban())
-                    ? platformSettings.getIban()
-                    : null;
+            String bankName = blankToNull(platformSettings.getBankName());
+            String accountHolder = blankToNull(platformSettings.getAccountHolder());
+            String iban = blankToNull(platformSettings.getIban());
+            String ifscCode = blankToNull(platformSettings.getIfscCode());
+            String branchName = blankToNull(platformSettings.getBranchName());
+
             context.setVariable("receiverAddress", receiverAddress);
-            context.setVariable("receiverBankName", receiverBankName);
-            context.setVariable("receiverIban", receiverIban);
+            context.setVariable("receiverBankName", bankName);
+            context.setVariable("receiverIban", iban);
             context.setVariable(
                     "showReceiverDetails",
-                    receiverAddress != null || receiverBankName != null || receiverIban != null
+                    receiverAddress != null
+            );
+
+            context.setVariable("paymentBankName", bankName);
+            context.setVariable("paymentAccountHolder", accountHolder);
+            context.setVariable("paymentIban", iban);
+            context.setVariable("paymentIfsc", ifscCode);
+            context.setVariable("paymentBranch", branchName);
+            context.setVariable("paymentReference", invoice.getInvoiceNo());
+            context.setVariable(
+                    "showPaymentInfo",
+                    bankName != null || accountHolder != null || iban != null
+                            || ifscCode != null || branchName != null
             );
 
             String html = templateEngine.process("subscription_invoice", context);
@@ -355,6 +367,10 @@ public class SubscriptionInvoiceService {
 
     private static boolean isNotBlank(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static String blankToNull(String value) {
+        return isNotBlank(value) ? value.trim() : null;
     }
 
     public SubscriptionInvoiceResponse toDto(SubscriptionInvoice inv) {

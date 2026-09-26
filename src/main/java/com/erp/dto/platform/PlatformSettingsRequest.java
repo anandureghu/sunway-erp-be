@@ -23,6 +23,15 @@ public class PlatformSettingsRequest {
     @Size(max = 100)
     private String bankName;
 
+    @Size(max = 150)
+    private String accountHolder;
+
     @Size(max = 64)
     private String iban;
+
+    @Size(max = 32)
+    private String ifscCode;
+
+    @Size(max = 100)
+    private String branchName;
 }

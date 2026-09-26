@@ -343,18 +343,21 @@ public class SubscriptionPaymentReceiptService {
                     platformSettings.getState(),
                     platformSettings.getCountry()
             );
-            String receiverBankName = isNotBlank(platformSettings.getBankName())
-                    ? platformSettings.getBankName()
-                    : null;
-            String receiverIban = isNotBlank(platformSettings.getIban())
-                    ? platformSettings.getIban()
-                    : null;
+            String receiverBankName = blankToNull(platformSettings.getBankName());
+            String receiverAccountHolder = blankToNull(platformSettings.getAccountHolder());
+            String receiverIban = blankToNull(platformSettings.getIban());
+            String receiverIfsc = blankToNull(platformSettings.getIfscCode());
+            String receiverBranch = blankToNull(platformSettings.getBranchName());
             context.setVariable("receiverAddress", receiverAddress);
             context.setVariable("receiverBankName", receiverBankName);
+            context.setVariable("receiverAccountHolder", receiverAccountHolder);
             context.setVariable("receiverIban", receiverIban);
+            context.setVariable("receiverIfsc", receiverIfsc);
+            context.setVariable("receiverBranch", receiverBranch);
             context.setVariable(
                     "showReceiverDetails",
-                    receiverAddress != null || receiverBankName != null || receiverIban != null
+                    receiverAddress != null || receiverBankName != null || receiverAccountHolder != null
+                            || receiverIban != null || receiverIfsc != null || receiverBranch != null
             );
 
             String html = templateEngine.process("subscription_receipt", context);
@@ -381,6 +384,10 @@ public class SubscriptionPaymentReceiptService {
 
     private static boolean isNotBlank(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static String blankToNull(String value) {
+        return isNotBlank(value) ? value.trim() : null;
     }
 
     private List<String> resolveReceiptRecipients(Long companyId, Company company) {

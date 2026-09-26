@@ -113,14 +113,28 @@
                     <div class="info-value" th:text="${receiverAddress}">Receiver address</div>
                 </td>
             </tr>
-            <tr th:if="${receiverBankName != null or receiverIban != null}">
+            <tr th:if="${receiverBankName != null or receiverAccountHolder != null or receiverIban != null}">
                 <td th:if="${receiverBankName != null}">
                     <div class="info-label">Bank Name</div>
                     <div class="info-value" th:text="${receiverBankName}">Bank</div>
                 </td>
+                <td th:if="${receiverAccountHolder != null}">
+                    <div class="info-label">Account Holder</div>
+                    <div class="info-value" th:text="${receiverAccountHolder}">Holder</div>
+                </td>
                 <td th:if="${receiverIban != null}">
                     <div class="info-label">IBAN</div>
                     <div class="info-value" th:text="${receiverIban}">IBAN</div>
+                </td>
+            </tr>
+            <tr th:if="${receiverIfsc != null or receiverBranch != null}">
+                <td th:if="${receiverIfsc != null}">
+                    <div class="info-label">IFSC / SWIFT</div>
+                    <div class="info-value" th:text="${receiverIfsc}">—</div>
+                </td>
+                <td th:if="${receiverBranch != null}">
+                    <div class="info-label">Branch</div>
+                    <div class="info-value" th:text="${receiverBranch}">Branch</div>
                 </td>
             </tr>
         </table>

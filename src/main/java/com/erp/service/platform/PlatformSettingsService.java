@@ -45,7 +45,10 @@ public class PlatformSettingsService {
         settings.setState(request.getState());
         settings.setCountry(request.getCountry());
         settings.setBankName(request.getBankName());
+        settings.setAccountHolder(request.getAccountHolder());
         settings.setIban(request.getIban());
+        settings.setIfscCode(request.getIfscCode());
+        settings.setBranchName(request.getBranchName());
         return toDto(repository.save(settings));
     }
 
@@ -57,7 +60,10 @@ public class PlatformSettingsService {
                 .state(settings.getState())
                 .country(settings.getCountry())
                 .bankName(settings.getBankName())
+                .accountHolder(settings.getAccountHolder())
                 .iban(settings.getIban())
+                .ifscCode(settings.getIfscCode())
+                .branchName(settings.getBranchName())
                 .build();
     }
 }

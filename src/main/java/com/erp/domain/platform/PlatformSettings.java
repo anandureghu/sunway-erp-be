@@ -31,6 +31,15 @@ public class PlatformSettings {
     @Column(name = "bank_name", length = 100)
     private String bankName;
 
+    @Column(name = "account_holder", length = 150)
+    private String accountHolder;
+
     @Column(length = 64)
     private String iban;
+
+    @Column(name = "ifsc_code", length = 32)
+    private String ifscCode;
+
+    @Column(name = "branch_name", length = 100)
+    private String branchName;
 }

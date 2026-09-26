@@ -54,6 +54,16 @@
             letter-spacing: 0.1em; color: #1e40af;
         }
         .amount-value { font-size: 22px; font-weight: 800; color: #1e3a5f; margin-top: 4px; }
+        .box {
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;
+        }
+        .kv-table { width: auto; max-width: 100%; border-collapse: collapse; }
+        .kv-table td {
+            padding: 3px 16px 3px 0; font-size: 11px; color: #334155; vertical-align: top;
+        }
+        .kv-table td.kv-label {
+            font-weight: 700; color: #0f172a; white-space: nowrap; padding-right: 10px;
+        }
         .footer-table {
             width: 100%; border-collapse: collapse; border-top: 1px solid #e2e8f0; margin-top: 22px;
         }
@@ -113,16 +123,6 @@
                     <div class="info-value" th:text="${receiverAddress}">Receiver address</div>
                 </td>
             </tr>
-            <tr th:if="${receiverBankName != null or receiverIban != null}">
-                <td th:if="${receiverBankName != null}">
-                    <div class="info-label">Bank Name</div>
-                    <div class="info-value" th:text="${receiverBankName}">Bank</div>
-                </td>
-                <td th:if="${receiverIban != null}">
-                    <div class="info-label">IBAN</div>
-                    <div class="info-value" th:text="${receiverIban}">IBAN</div>
-                </td>
-            </tr>
         </table>
     </div>
 
@@ -148,6 +148,38 @@
             <div class="amount-label">Amount due</div>
             <div class="amount-value"
                  th:text="${currencyCode} + ' ' + ${amountFormatted}">QAR 0.00</div>
+        </div>
+    </div>
+
+    <div class="section" th:if="${showPaymentInfo}">
+        <div class="section-title">Payment Information</div>
+        <div class="box">
+            <table class="kv-table">
+                <tr>
+                    <td class="kv-label">Bank Name:</td>
+                    <td th:text="${paymentBankName != null ? paymentBankName : '—'}">Bank</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">Account Holder:</td>
+                    <td th:text="${paymentAccountHolder != null ? paymentAccountHolder : '—'}">Holder</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">IBAN Number:</td>
+                    <td th:text="${paymentIban != null ? paymentIban : '—'}">IBAN</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">IFSC/SWIFT:</td>
+                    <td th:text="${paymentIfsc != null ? paymentIfsc : '—'}">—</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">Branch:</td>
+                    <td th:text="${paymentBranch != null ? paymentBranch : '—'}">Branch</td>
+                </tr>
+                <tr>
+                    <td class="kv-label">Reference:</td>
+                    <td th:text="${paymentReference != null ? paymentReference : '—'}">INV-0000</td>
+                </tr>
+            </table>
         </div>
     </div>
 

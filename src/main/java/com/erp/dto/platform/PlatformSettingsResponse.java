@@ -15,5 +15,8 @@ public class PlatformSettingsResponse {
     private String state;
     private String country;
     private String bankName;
+    private String accountHolder;
     private String iban;
+    private String ifscCode;
+    private String branchName;
 }
