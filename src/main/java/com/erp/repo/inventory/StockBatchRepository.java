@@ -32,6 +32,42 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, Long> {
             java.math.BigDecimal unitCost
     );
 
+    /**
+     * STOCK_SHEET_REPORTS — items with on-hand batches expiring on or before {@code until}.
+     * Delete when Stock Summary / Item Summary report pages are retired.
+     */
+    @Query("""
+            SELECT DISTINCT i.id
+            FROM StockBatch sb
+            JOIN sb.item i
+            WHERE sb.company.id = :companyId
+              AND sb.quantityOnHand > 0
+              AND sb.expiryDate IS NOT NULL
+              AND sb.expiryDate >= :today
+              AND sb.expiryDate <= :until
+            """)
+    List<Long> itemIdsWithExpiringBatches(
+            @Param("companyId") Long companyId,
+            @Param("today") java.time.LocalDate today,
+            @Param("until") java.time.LocalDate until
+    );
+
+    /**
+     * STOCK_SHEET_REPORTS — weighted average unit cost per item from on-hand layers.
+     * Delete when Stock Summary / Item Summary report pages are retired.
+     */
+    @Query("""
+            SELECT i.id,
+                   COALESCE(SUM(sb.quantityOnHand * sb.unitCost), 0),
+                   COALESCE(SUM(sb.quantityOnHand), 0)
+            FROM StockBatch sb
+            JOIN sb.item i
+            WHERE sb.company.id = :companyId
+              AND sb.quantityOnHand > 0
+            GROUP BY i.id
+            """)
+    List<Object[]> batchCostTotalsByItem(@Param("companyId") Long companyId);
+
     @Query("""
             SELECT sb FROM StockBatch sb
             JOIN FETCH sb.item i

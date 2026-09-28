@@ -72,4 +72,41 @@ public interface StockBatchMovementRepository extends JpaRepository<StockBatchMo
     );
 
     void deleteByStockBatchId(Long stockBatchId);
+
+    /**
+     * STOCK_SHEET_REPORTS — last outbound movement per item (SALE / TRANSFER_OUT).
+     * Delete when Stock Summary / Item Summary report pages are retired.
+     */
+    @Query("""
+            SELECT i.id, MAX(m.createdAt)
+            FROM StockBatchMovement m
+            JOIN m.stockBatch sb
+            JOIN sb.item i
+            WHERE sb.company.id = :companyId
+              AND m.archived = false
+              AND m.movementType IN (
+                    com.erp.domain.inventory.StockBatchMovementType.SALE,
+                    com.erp.domain.inventory.StockBatchMovementType.TRANSFER_OUT
+              )
+            GROUP BY i.id
+            """)
+    List<Object[]> lastOutboundByItem(@Param("companyId") Long companyId);
+
+    /**
+     * STOCK_SHEET_REPORTS — delete when Stock Summary / Item Summary pages are retired.
+     */
+    @Query("""
+            SELECT m FROM StockBatchMovement m
+            JOIN FETCH m.stockBatch sb
+            JOIN FETCH sb.warehouse w
+            WHERE sb.company.id = :companyId
+              AND sb.item.id = :itemId
+              AND m.archived = false
+            ORDER BY m.createdAt DESC
+            """)
+    List<StockBatchMovement> findRecentForItem(
+            @Param("companyId") Long companyId,
+            @Param("itemId") Long itemId,
+            Pageable pageable
+    );
 }

@@ -3,9 +3,13 @@ package com.erp.controller.inventory;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.inventory.InventoryReportSummaryDTO;
+import com.erp.dto.inventory.report.ItemSummaryReportDTO;
+import com.erp.dto.inventory.report.StockSummaryReportDTO;
 import com.erp.service.inventory.InventoryReportService;
+import com.erp.service.inventory.StockSheetReportService;
 import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,9 +19,35 @@ import org.springframework.web.bind.annotation.RestController;
 public class InventoryReportController {
 
     private final InventoryReportService inventoryReportService;
+    /** STOCK_SHEET_REPORTS — remove with Stock Summary / Item Summary pages. */
+    private final StockSheetReportService stockSheetReportService;
 
-    public InventoryReportController(InventoryReportService inventoryReportService) {
+    public InventoryReportController(
+            InventoryReportService inventoryReportService,
+            StockSheetReportService stockSheetReportService
+    ) {
         this.inventoryReportService = inventoryReportService;
+        this.stockSheetReportService = stockSheetReportService;
+    }
+
+    /**
+     * STOCK_SHEET_REPORTS — Stock Summary sheet (all SKUs).
+     * Delete this mapping when the Stock Summary report page is retired.
+     */
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/stock-summary")
+    public StockSummaryReportDTO stockSummary() {
+        return stockSheetReportService.stockSummary();
+    }
+
+    /**
+     * STOCK_SHEET_REPORTS — Item Summary sheet (one SKU).
+     * Delete this mapping when the Item Summary report page is retired.
+     */
+    @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/items/{itemId}/summary")
+    public ItemSummaryReportDTO itemSummary(@PathVariable Long itemId) {
+        return stockSheetReportService.itemSummary(itemId);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
