@@ -96,16 +96,24 @@ public class SalesReturnService {
                             + picklist.getPicklistNumber()
                             + " is marked picked");
         }
-        shipmentRepo.findByPicklistId(picklist.getId()).ifPresent(shipment -> {
-            String shipmentStatus = shipment.getStatus();
-            if ("DELIVERED".equalsIgnoreCase(shipmentStatus)) {
-                throw new ConflictException(
-                        "Cannot create a sales return after the shipment has been delivered");
-            }
+        shipmentRepo.findByPicklistId(picklist.getId()).ifPresentOrElse(shipment -> {
+            String shipmentStatus = shipment.getStatus() == null ? "" : shipment.getStatus();
             if ("CANCELLED".equalsIgnoreCase(shipmentStatus)) {
                 throw new ConflictException(
                         "Cannot create a sales return for a cancelled shipment");
             }
+            // Customer returns are only allowed after delivery (order completed).
+            if (!"DELIVERED".equalsIgnoreCase(shipmentStatus)) {
+                throw new ConflictException(
+                        "Cannot create a sales return until shipment "
+                                + shipment.getShipmentNumber()
+                                + " is delivered (current status: "
+                                + shipmentStatus
+                                + ")");
+            }
+        }, () -> {
+            throw new ConflictException(
+                    "Cannot create a sales return until the order has been shipped and delivered");
         });
 
         Map<Long, SalesOrderItem> linesById = new HashMap<>();
