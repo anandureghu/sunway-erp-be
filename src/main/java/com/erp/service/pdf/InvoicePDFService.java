@@ -140,8 +140,13 @@ public class InvoicePDFService {
 
             String notesText = buildNotes(invoice, invoiceSettings, company,
                     invoiceDateFormatted, dueDateFormatted, paidDateFormatted);
-            String headerSubtitleText = applyTemplate(invoiceSettings.getInvoiceHeaderSubtitle(),
-                    company, invoiceDateFormatted, dueDateFormatted, paidDateFormatted, invoice.getInvoiceId());
+            // Header subtitle is sales branding only (e.g. "Customer Sales Invoice").
+            // Purchase invoices already show "Accounts Payable" on the right — do not reuse it.
+            String headerSubtitleText = isSales
+                    ? applyTemplate(invoiceSettings.getInvoiceHeaderSubtitle(),
+                            company, invoiceDateFormatted, dueDateFormatted, paidDateFormatted,
+                            invoice.getInvoiceId())
+                    : null;
 
             Context context = new Context();
             context.setVariable("invoice", invoice);

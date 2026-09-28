@@ -1436,7 +1436,10 @@ public class InvoiceService {
                 .bankIban(i.getBankAccount() != null ? i.getBankAccount().getIban() : null)
                 .bankIfscCode(i.getBankAccount() != null ? i.getBankAccount().getIfscCode() : null)
                 .bankBranchName(i.getBankAccount() != null ? i.getBankAccount().getBranchName() : null)
-                .invoiceHeaderSubtitle(resolveInvoiceHeaderSubtitle(invoiceSettings, i.getStatus()))
+                .invoiceHeaderSubtitle(
+                        i.getType() == InvoiceType.SALES
+                                ? resolveInvoiceHeaderSubtitle(invoiceSettings, i.getStatus())
+                                : null)
                 .invoiceNotesUnpaid(invoiceSettings.getInvoiceNotesUnpaid())
                 .invoiceNotesPaid(invoiceSettings.getInvoiceNotesPaid())
                 .invoiceTerms(invoiceSettings.getInvoiceTerms())
