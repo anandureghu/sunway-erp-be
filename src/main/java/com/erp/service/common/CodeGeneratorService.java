@@ -1,34 +1,25 @@
 package com.erp.service.common;
 
-import com.erp.domain.common.CodeSequence;
-import com.erp.repo.hr.CodeSequenceRepository;
+import com.erp.service.DocumentSequenceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-
+/**
+ * Thin wrappers around {@link DocumentSequenceService} for HR document codes
+ * that are configured under Company → Number Sequences.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class CodeGeneratorService {
 
-    private final CodeSequenceRepository repository;
+    /** Doc type key in company_numbering_configs / Number Sequences UI. */
+    public static final String CONTRACT_DOC_TYPE = "CTR";
 
-    public synchronized String generateContractCode() {
+    private final DocumentSequenceService documentSequenceService;
 
-        int year = LocalDate.now().getYear();
-        String key = "CONTRACT_" + year;
-
-        CodeSequence sequence = repository.findById(key)
-                .orElse(CodeSequence.builder()
-                        .codeKey(key)
-                        .lastNumber(0L)
-                        .build());
-
-        sequence.setLastNumber(sequence.getLastNumber() + 1);
-        repository.save(sequence);
-
-        return String.format("CON-%d-%05d", year, sequence.getLastNumber());
+    public String generateContractCode() {
+        return documentSequenceService.generateNext(CONTRACT_DOC_TYPE);
     }
 }

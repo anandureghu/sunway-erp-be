@@ -31,7 +31,8 @@ public class CompanyNumberingConfigController {
         new CompanyNumberingConfigDTO("PAYROLL", "PAYROLL",  1000L),
         new CompanyNumberingConfigDTO("SUP",     "SUP",      1000L),
         new CompanyNumberingConfigDTO("WH",      "WH",       1000L),
-        new CompanyNumberingConfigDTO("TX",      "TX",       1000L)
+        new CompanyNumberingConfigDTO("TX",      "TX",       1000L),
+        new CompanyNumberingConfigDTO("CTR",     "CTR",      1000L)
     );
 
     @GetMapping
