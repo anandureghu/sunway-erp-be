@@ -183,4 +183,89 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             @Param("excludeType") String excludeType,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
+
+    /**
+     * FIN_SHEET_REPORTS — period debit totals per debit account.
+     * Delete when Financial/Account Summary report pages are retired.
+     */
+    @Query("""
+            SELECT a.id, COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            JOIN t.debitAccount a
+            WHERE t.company.id = :companyId
+              AND (t.archived IS NULL OR t.archived = false)
+              AND (:from IS NULL OR t.transactionDate >= :from)
+              AND (:to IS NULL OR t.transactionDate <= :to)
+            GROUP BY a.id
+            """)
+    List<Object[]> sumDebitsByAccount(
+            @Param("companyId") Long companyId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    /**
+     * FIN_SHEET_REPORTS — period credit totals per credit account.
+     * Delete when Financial/Account Summary report pages are retired.
+     */
+    @Query("""
+            SELECT a.id, COALESCE(SUM(t.amount), 0)
+            FROM Transaction t
+            JOIN t.creditAccount a
+            WHERE t.company.id = :companyId
+              AND (t.archived IS NULL OR t.archived = false)
+              AND (:from IS NULL OR t.transactionDate >= :from)
+              AND (:to IS NULL OR t.transactionDate <= :to)
+            GROUP BY a.id
+            """)
+    List<Object[]> sumCreditsByAccount(
+            @Param("companyId") Long companyId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    /**
+     * FIN_SHEET_REPORTS — monthly net movement for one account (debits as +, credits as -).
+     * Delete when Financial/Account Summary report pages are retired.
+     */
+    @Query("""
+            SELECT YEAR(t.transactionDate), MONTH(t.transactionDate),
+                   COALESCE(SUM(CASE WHEN t.debitAccount.id = :accountId THEN t.amount ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN t.creditAccount.id = :accountId THEN t.amount ELSE 0 END), 0)
+            FROM Transaction t
+            WHERE t.company.id = :companyId
+              AND (t.debitAccount.id = :accountId OR t.creditAccount.id = :accountId)
+              AND (t.archived IS NULL OR t.archived = false)
+              AND t.transactionDate IS NOT NULL
+              AND (:from IS NULL OR t.transactionDate >= :from)
+              AND (:to IS NULL OR t.transactionDate <= :to)
+            GROUP BY YEAR(t.transactionDate), MONTH(t.transactionDate)
+            ORDER BY YEAR(t.transactionDate), MONTH(t.transactionDate)
+            """)
+    List<Object[]> monthlyMovementForAccount(
+            @Param("companyId") Long companyId,
+            @Param("accountId") Long accountId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    /**
+     * FIN_SHEET_REPORTS — recent postings touching an account.
+     * Delete when Financial/Account Summary report pages are retired.
+     */
+    @Query("""
+            SELECT t FROM Transaction t
+            LEFT JOIN FETCH t.debitAccount
+            LEFT JOIN FETCH t.creditAccount
+            WHERE t.company.id = :companyId
+              AND (t.debitAccount.id = :accountId OR t.creditAccount.id = :accountId)
+              AND (t.archived IS NULL OR t.archived = false)
+              AND (:from IS NULL OR t.transactionDate >= :from)
+              AND (:to IS NULL OR t.transactionDate <= :to)
+            ORDER BY t.transactionDate DESC, t.createdAt DESC
+            """)
+    List<Transaction> findRecentForAccount(
+            @Param("companyId") Long companyId,
+            @Param("accountId") Long accountId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            Pageable pageable
+    );
 }

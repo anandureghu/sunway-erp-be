@@ -3,10 +3,14 @@ package com.erp.controller.finance.report;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.dto.finance.report.FinanceReportSummaryDTO;
+import com.erp.dto.finance.report.sheet.AccountSummaryReportDTO;
+import com.erp.dto.finance.report.sheet.FinancialSummaryReportDTO;
 import com.erp.service.finance.report.FinanceReportService;
+import com.erp.service.finance.report.FinanceSheetReportService;
 import com.erp.service.security.annotation.RequiresPermission;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,9 +22,15 @@ import java.time.LocalDate;
 public class FinanceReportController {
 
     private final FinanceReportService financeReportService;
+    /** FIN_SHEET_REPORTS — remove with Financial/Account Summary pages. */
+    private final FinanceSheetReportService financeSheetReportService;
 
-    public FinanceReportController(FinanceReportService financeReportService) {
+    public FinanceReportController(
+            FinanceReportService financeReportService,
+            FinanceSheetReportService financeSheetReportService
+    ) {
         this.financeReportService = financeReportService;
+        this.financeSheetReportService = financeSheetReportService;
     }
 
     /**
@@ -39,5 +49,36 @@ public class FinanceReportController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         return financeReportService.buildSummary(from, to);
+    }
+
+    /**
+     * FIN_SHEET_REPORTS — Financial Summary sheet.
+     * Delete when the Financial Summary report page is retired.
+     */
+    @RequiresPermission(module = AppModule.FINANCE_REPORTS, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/financial-summary")
+    public FinancialSummaryReportDTO financialSummary(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return financeSheetReportService.financialSummary(from, to);
+    }
+
+    /**
+     * FIN_SHEET_REPORTS — Account Summary sheet.
+     * Delete when the Account Summary report page is retired.
+     */
+    @RequiresPermission(module = AppModule.FINANCE_REPORTS, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/accounts/{accountId}/summary")
+    public AccountSummaryReportDTO accountSummary(
+            @PathVariable Long accountId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return financeSheetReportService.accountSummary(accountId, from, to);
     }
 }
