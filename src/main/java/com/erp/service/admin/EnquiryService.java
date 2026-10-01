@@ -122,7 +122,7 @@ public class EnquiryService {
             emailService.sendPlainText(enquiryInbox.trim(), subject, body);
         } catch (Exception e) {
             // Enquiry is already saved; don't fail the public submit on mail errors
-            log.error("Failed to send enquiry notification email for {}: {}", enquiry.getEmail(), e.getMessage());
+            log.error("Failed to send enquiry notification email for {}", enquiry.getEmail(), e);
         }
     }
 

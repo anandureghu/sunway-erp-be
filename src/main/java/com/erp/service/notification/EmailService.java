@@ -10,6 +10,7 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,24 +28,58 @@ public class EmailService {
     @Value("${app.mail.enabled:false}")
     private boolean mailEnabled;
 
+    @Value("${spring.mail.username:}")
+    private String smtpUsername;
+
+    @Value("${spring.mail.password:}")
+    private String smtpPassword;
+
+    /**
+     * Soft send: skips when mail is not fully configured (enabled + username + password + sender bean).
+     * Throws when SMTP/send fails after a real attempt.
+     */
     public void sendPlainText(String to, String subject, String body) {
         if (to == null || to.isBlank()) {
             throw new IllegalArgumentException("Recipient email is required");
         }
 
-        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
-        if (!mailEnabled || mailSender == null) {
-            log.warn("Mail is not configured. Skipping email to {} with subject '{}'", to, subject);
+        if (!isConfigured()) {
+            log.warn("Mail is not fully configured. Skipping email to {} with subject '{}'", to, subject);
             return;
         }
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromAddress);
-        message.setTo(to.trim());
-        message.setSubject(subject);
-        message.setText(body);
-        mailSender.send(message);
-        log.info("Email sent to {} with subject '{}'", maskEmail(to), subject);
+        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
+        if (mailSender == null) {
+            log.warn("Mail is not fully configured. Skipping email to {} with subject '{}'", to, subject);
+            return;
+        }
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromAddress);
+            message.setTo(to.trim());
+            message.setSubject(subject);
+            message.setText(body);
+            mailSender.send(message);
+            log.info("Email sent to {} with subject '{}'", maskEmail(to), subject);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send email: " + enrichMailError(e), e);
+        }
+    }
+
+    /**
+     * Hard send for required customer/invoice flows: throws if mail is not configured or send fails.
+     */
+    public void sendPlainTextRequired(String to, String subject, String body) {
+        if (to == null || to.isBlank()) {
+            throw new IllegalArgumentException("Recipient email is required");
+        }
+        if (!isConfigured()) {
+            throw new IllegalStateException(
+                    "Email is not fully configured. Set MAIL_ENABLED=true with MAIL_USERNAME, "
+                            + "MAIL_PASSWORD, and MAIL_FROM (SMTP app password for Gmail/Microsoft)."
+            );
+        }
+        sendPlainText(to, subject, body);
     }
 
     public void sendWithPdfAttachment(
@@ -78,16 +113,24 @@ public class EmailService {
             throw new IllegalArgumentException("PDF attachment is required");
         }
 
-        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
-        if (!mailEnabled || mailSender == null) {
+        if (!isConfigured()) {
             log.warn(
-                    "Mail is not configured. Skipping email with attachment to {} subject '{}'",
+                    "Mail is not fully configured. Skipping email with attachment to {} subject '{}'",
                     tos,
                     subject
             );
             return;
         }
 
+        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
+        if (mailSender == null) {
+            log.warn(
+                    "Mail is not fully configured. Skipping email with attachment to {} subject '{}'",
+                    tos,
+                    subject
+            );
+            return;
+        }
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -106,12 +149,7 @@ public class EmailService {
                     subject
             );
         } catch (Exception e) {
-            String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            if (detail.toLowerCase().contains("authentication failed")) {
-                detail += ". Verify MAIL_USERNAME, MAIL_PASSWORD, and MAIL_FROM on the server "
-                        + "(use an app password for Gmail/Microsoft SMTP).";
-            }
-            throw new RuntimeException("Failed to send email with attachment: " + detail, e);
+            throw new RuntimeException("Failed to send email with attachment: " + enrichMailError(e), e);
         }
     }
 
@@ -129,8 +167,24 @@ public class EmailService {
         return List.copyOf(unique);
     }
 
+    /**
+     * Ready to send only when enabled and SMTP credentials are present (avoids auth failures
+     * from empty username/password while host still defaults to smtp.gmail.com).
+     */
     public boolean isConfigured() {
-        return mailEnabled && mailSenderProvider.getIfAvailable() != null;
+        return mailEnabled
+                && StringUtils.hasText(smtpUsername)
+                && StringUtils.hasText(smtpPassword)
+                && mailSenderProvider.getIfAvailable() != null;
+    }
+
+    private static String enrichMailError(Exception e) {
+        String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        if (detail.toLowerCase().contains("authentication failed")) {
+            detail += ". Verify MAIL_USERNAME, MAIL_PASSWORD, and MAIL_FROM on the server "
+                    + "(use an app password for Gmail/Microsoft SMTP).";
+        }
+        return detail;
     }
 
     private static String maskEmail(String email) {

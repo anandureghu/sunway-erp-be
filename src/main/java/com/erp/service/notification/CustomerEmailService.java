@@ -4,10 +4,6 @@ import com.erp.domain.finance.Invoice;
 import com.erp.domain.inventory.Customer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,13 +11,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class CustomerEmailService {
 
-    private final ObjectProvider<JavaMailSender> mailSenderProvider;
-
-    @Value("${app.mail.from:no-reply@sunwayerp.local}")
-    private String fromAddress;
-
-    @Value("${app.mail.enabled:false}")
-    private boolean mailEnabled;
+    private final EmailService emailService;
 
     /** Best-effort (used by payment/order flows — never fails the transaction). */
     public void sendInvoiceCreatedEmail(Customer customer, Invoice invoice) {
@@ -99,23 +89,10 @@ public class CustomerEmailService {
     }
 
     private void sendMailRequired(String to, String subject, String text) {
-        if (!mailEnabled) {
-            throw new IllegalStateException(
-                    "Email is disabled. Enable app.mail.enabled and configure SMTP to send invoices.");
-        }
-        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
-        if (mailSender == null) {
-            throw new IllegalStateException(
-                    "Email provider is not configured. Configure spring.mail.* settings to send invoices.");
-        }
-
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromAddress);
-            message.setTo(to);
-            message.setSubject(subject);
-            message.setText(text);
-            mailSender.send(message);
+            emailService.sendPlainTextRequired(to, subject, text);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to send email: " + e.getMessage(), e);
         }
