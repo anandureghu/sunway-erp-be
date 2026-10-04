@@ -32,7 +32,9 @@ public class CompanyNumberingConfigController {
         new CompanyNumberingConfigDTO("SUP",     "SUP",      1000L),
         new CompanyNumberingConfigDTO("WH",      "WH",       1000L),
         new CompanyNumberingConfigDTO("TX",      "TX",       1000L),
-        new CompanyNumberingConfigDTO("CTR",     "CTR",      1000L)
+        new CompanyNumberingConfigDTO("CTR",     "CTR",      1000L),
+        // Prefix unused — budget codes are {fiscalYear}-{type}-{####}
+        new CompanyNumberingConfigDTO("BUDGET",  "",         1000L)
     );
 
     @GetMapping

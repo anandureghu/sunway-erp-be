@@ -117,4 +117,40 @@ public class DocumentSequenceService {
         repo.save(seq);
         return outputPrefix + "-" + val;
     }
+
+    /**
+     * Budget codes: {@code {fiscalYear}-{budgetType}-{####}}.
+     * Sequence key is per company + fiscal year + type so OPEX/CAPEX/PROJECT
+     * counters stay independent (e.g. {@code 5_BUDGET_2026_OPEX}).
+     * Start number comes from the company's BUDGET numbering config (default 1000).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public String generateBudgetCode(Long companyId, String fiscalYear, String budgetType) {
+        if (companyId == null) {
+            throw new IllegalStateException("Company is required to generate a budget code");
+        }
+        if (fiscalYear == null || fiscalYear.isBlank()) {
+            throw new IllegalArgumentException("Fiscal year is required for budget code");
+        }
+        if (budgetType == null || budgetType.isBlank()) {
+            throw new IllegalArgumentException("Budget type is required for budget code");
+        }
+        String fy = fiscalYear.trim();
+        String type = budgetType.trim().toUpperCase();
+        String sequenceKey = companyId + "_BUDGET_" + fy + "_" + type;
+
+        long startNumber = 1000L;
+        CompanyNumberingConfig cfg = numberingConfigRepo
+                .findByCompanyIdAndDocType(companyId, "BUDGET").orElse(null);
+        if (cfg != null && cfg.getStartNumber() != null && cfg.getStartNumber() > 0) {
+            startNumber = cfg.getStartNumber();
+        }
+
+        DocumentSequence seq = repo.findForUpdate(sequenceKey)
+                .orElseGet(() -> new DocumentSequence(sequenceKey, startNumber));
+        long val = seq.getNextValue();
+        seq.setNextValue(val + 1);
+        repo.save(seq);
+        return String.format("%s-%s-%04d", fy, type, val);
+    }
 }

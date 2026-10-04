@@ -12,6 +12,7 @@ import com.erp.repo.finance.BudgetHeaderRepository;
 import com.erp.repo.finance.ChartOfAccountsRepository;
 import com.erp.repo.hr.CompanyRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.service.DocumentSequenceService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,19 +35,22 @@ public class BudgetService {
     private final AuthContext auth;
     private final CompanyRepository companyRepository;
     private final TransactionService transactionService;
+    private final DocumentSequenceService documentSequenceService;
 
     public BudgetService(
             BudgetHeaderRepository headerRepo,
             ChartOfAccountsRepository accountRepo,
             AuthContext auth,
             CompanyRepository companyRepository,
-            TransactionService transactionService
+            TransactionService transactionService,
+            DocumentSequenceService documentSequenceService
     ) {
         this.headerRepo = headerRepo;
         this.accountRepo = accountRepo;
         this.auth = auth;
         this.companyRepository = companyRepository;
         this.transactionService = transactionService;
+        this.documentSequenceService = documentSequenceService;
     }
 
     public BudgetResponseDTO createBudget(BudgetCreateDTO dto) {
@@ -67,9 +71,12 @@ public class BudgetService {
         ChartOfAccounts budgetAccount = resolveBudgetAccount(dto.getBudgetAccountId(), companyId);
 
         User user = User.builder().id(auth.getCurrentUserId()).build();
+        String budgetCode = documentSequenceService.generateBudgetCode(
+                companyId, dto.getFiscalYear(), budgetType.name());
 
         BudgetHeader header = BudgetHeader.builder()
                 .budgetName(dto.getBudgetName())
+                .budgetCode(budgetCode)
                 .fiscalYear(dto.getFiscalYear())
                 .budgetType(budgetType)
                 .budgetAccount(budgetAccount)
@@ -135,10 +142,15 @@ public class BudgetService {
         headerRepo.save(budget);
 
         long nextRev = reviseCount + 1;
+        // Keep the original business code across revisions.
+        String revisedCode = budget.getBudgetCode() != null && !budget.getBudgetCode().isBlank()
+                ? budget.getBudgetCode()
+                : root.getBudgetCode();
         BudgetHeader newHeader = BudgetHeader.builder()
                 .parentBudget(root)
                 .status(BudgetStatus.APPROVED)
                 .budgetName(budget.getBudgetName() + " (Rev " + nextRev + ")")
+                .budgetCode(revisedCode)
                 .fiscalYear(budget.getFiscalYear())
                 .budgetType(budget.getBudgetType())
                 .budgetAccount(budget.getBudgetAccount())
@@ -284,6 +296,7 @@ public class BudgetService {
         return BudgetResponseDTO.builder()
                 .id(h.getId())
                 .budgetName(h.getBudgetName())
+                .budgetCode(h.getBudgetCode())
                 .fiscalYear(h.getFiscalYear())
                 .budgetType(h.getBudgetType())
                 .projectId(h.getProjectId())

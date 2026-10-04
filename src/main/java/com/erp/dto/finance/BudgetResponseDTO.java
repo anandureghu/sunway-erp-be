@@ -17,6 +17,7 @@ import java.util.List;
 public class BudgetResponseDTO {
     private Long id;
     private String budgetName;
+    private String budgetCode;
     private String projectId;
     private String fiscalYear;
     private BudgetType budgetType;

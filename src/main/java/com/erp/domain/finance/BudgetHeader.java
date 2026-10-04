@@ -26,6 +26,10 @@ public class BudgetHeader {
     @Column(nullable = false, length = 150)
     private String budgetName;
 
+    /** Business code: {fiscalYear}-{budgetType}-{####}, e.g. 2026-OPEX-1000. */
+    @Column(name = "budget_code", length = 40)
+    private String budgetCode;
+
     @Column(nullable = false)
     private String fiscalYear;
 
