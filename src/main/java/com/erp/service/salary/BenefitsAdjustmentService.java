@@ -175,6 +175,29 @@ public class BenefitsAdjustmentService {
         return e.getStatus() == null || !e.getStatus().isDepartedOrInactive();
     }
 
+    /**
+     * Employees selected by scope — grade code, department, one employee or all
+     * employees (active, non-archived). Shared with Employee Benefits grants so both
+     * panels select people the same way.
+     */
+    @Transactional(readOnly = true)
+    public List<Employee> resolveScope(BenefitsAdjustmentRequestDTO.Scope scope, String gradeCode,
+                                       Long departmentId, Long employeeId) {
+        Long companyId = authContext.getCurrentCompanyId();
+        if (companyId == null) {
+            throw new AccessDeniedException("No company context for the current user");
+        }
+        if (scope == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select who to apply this to.");
+        }
+        BenefitsAdjustmentRequestDTO req = new BenefitsAdjustmentRequestDTO();
+        req.setScope(scope);
+        req.setGradeCode(gradeCode);
+        req.setDepartmentId(departmentId);
+        req.setEmployeeId(employeeId);
+        return resolveTargets(req, companyId);
+    }
+
     private boolean isEligibleForAdjustment(Employee e) {
         return e != null && !e.isArchived() && isActive(e);
     }

@@ -135,16 +135,19 @@ public class EmployeeTimesheetService {
     private final EmployeeRepository employeeRepository;
     private final EmployeeLeaveRepository leaveRepository;
     private final EmployeeAccessGuard accessGuard;
+    private final com.erp.service.hr.PublicHolidayService publicHolidayService;
 
     public EmployeeTimesheetService(
             EmployeeTimesheetRepository repository,
             EmployeeRepository employeeRepository,
             EmployeeLeaveRepository leaveRepository,
-            EmployeeAccessGuard accessGuard) {
+            EmployeeAccessGuard accessGuard,
+            com.erp.service.hr.PublicHolidayService publicHolidayService) {
         this.repository = repository;
         this.employeeRepository = employeeRepository;
         this.leaveRepository = leaveRepository;
         this.accessGuard = accessGuard;
+        this.publicHolidayService = publicHolidayService;
     }
 
     @Transactional
@@ -156,10 +159,12 @@ public class EmployeeTimesheetService {
         LocalDate today = todayInAttendanceZone(employee);
         // Self-service: an employee punches their own attendance; HR needs CREATE_ALL.
         accessGuard.assertSelfServiceWrite(employee, AppModule.HR_REPORTS, AppAction.CREATE);
-        if (employee.getStatus() != EmployeeStatus.ACTIVE) {
+        // Active employees and new hires still under probation are working and punch in.
+        if (employee.getStatus() != EmployeeStatus.ACTIVE
+                && employee.getStatus() != EmployeeStatus.UNDER_PROBATION) {
             throw new RuntimeException(
-                    "Check-in is only available for active employees (current status: "
-                            + employee.getStatus() + ").");
+                    "Check-in is only available for active employees and employees under probation "
+                            + "(current status: " + employee.getStatus() + ").");
         }
         if (!requireCheckIn(employee)) {
             throw new RuntimeException(
@@ -251,6 +256,11 @@ public class EmployeeTimesheetService {
                     return r;
                 });
         applyShiftPolicy(response, employee);
+        LocalDate today = todayInAttendanceZone(employee);
+        if (!LeaveAttendanceUtil.isWeekend(today)) {
+            publicHolidayService.holidayOn(employee.getCompanyId(), today)
+                    .ifPresent(response::setHolidayName);
+        }
         return response;
     }
 
@@ -267,14 +277,19 @@ public class EmployeeTimesheetService {
         // Companies that don't punch in/out: every working day up to today is present
         // for the standard day (no reliance on timesheet rows), minus any unpaid-leave
         // working days (those are absences that don't count toward worked days).
+        YearMonth ym = YearMonth.of(year, month);
+        LocalDate today = todayInAttendanceZone(employee);
+        LocalDate countEnd = ym.atEndOfMonth().isAfter(today) ? today : ym.atEndOfMonth();
+        java.util.Set<LocalDate> holidays = publicHolidayService.holidayDates(
+                employee.getCompanyId(), ym.atDay(1), ym.atEndOfMonth());
+        List<EmployeeLeave> leaves = leaveRepository.findApprovedLeavesOverlapping(
+                List.of(employeeId), ym.atDay(1), ym.atEndOfMonth());
+        response.setHolidayDays(LeaveAttendanceUtil.countPaidHolidays(leaves, ym.atDay(1), countEnd, holidays));
+
         if (!requireCheckIn(employee)) {
-            int workingDays = countWorkingDaysUpToToday(year, month, employee);
-            YearMonth ym = YearMonth.of(year, month);
-            LocalDate today = todayInAttendanceZone(employee);
-            LocalDate countEnd = ym.atEndOfMonth().isAfter(today) ? today : ym.atEndOfMonth();
-            List<EmployeeLeave> leaves = leaveRepository.findApprovedLeavesOverlapping(
-                    List.of(employeeId), ym.atDay(1), ym.atEndOfMonth());
-            int unpaidDays = LeaveAttendanceUtil.countUnpaidWorkingDays(leaves, ym.atDay(1), countEnd);
+            // Public holidays are paid days off, not worked days.
+            int workingDays = LeaveAttendanceUtil.countWorkingDays(ym.atDay(1), countEnd, holidays);
+            int unpaidDays = LeaveAttendanceUtil.countUnpaidWorkingDays(leaves, ym.atDay(1), countEnd, holidays);
             int daysWorked = Math.max(0, workingDays - unpaidDays);
             response.setDaysRecorded(daysWorked);
             response.setDaysPresent(daysWorked);
@@ -298,24 +313,6 @@ public class EmployeeTimesheetService {
         response.setTotalHours(roundToSingleDecimal(totalMinutes / 60.0));
 
         return response;
-    }
-
-    /** Working days (Sun–Thu) from the 1st of the month through today (or month end if past). */
-    private int countWorkingDaysUpToToday(int year, int month, Employee employee) {
-        YearMonth ym = YearMonth.of(year, month);
-        LocalDate start = ym.atDay(1);
-        LocalDate today = todayInAttendanceZone(employee);
-        LocalDate end = ym.atEndOfMonth().isAfter(today) ? today : ym.atEndOfMonth();
-        if (end.isBefore(start)) return 0;
-        int count = 0;
-        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
-            // Qatar weekend: Friday & Saturday are off.
-            switch (d.getDayOfWeek()) {
-                case FRIDAY, SATURDAY -> { }
-                default -> count++;
-            }
-        }
-        return count;
     }
 
     @Transactional(readOnly = true)

@@ -41,4 +41,10 @@ public class EmployeeMonthlyAttendanceDTO {
     private java.time.LocalDateTime todayCheckOut;
     /** Hours worked today so far (one decimal). */
     private double todayHours;
+
+    /** Paid public-holiday working days in the month so far (not worked, not absent). */
+    private int holidayDays;
+
+    /** Name of today's public holiday when today is one (todayStatus = HOLIDAY). */
+    private String todayHolidayName;
 }

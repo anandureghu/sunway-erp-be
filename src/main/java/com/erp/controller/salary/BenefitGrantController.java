@@ -59,6 +59,50 @@ public class BenefitGrantController {
         return ResponseEntity.ok(benefitGrantService.create(dto, document));
     }
 
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.EDIT})
+    public ResponseEntity<BenefitGrantDTO> update(
+            @PathVariable Long id,
+            @RequestPart("data") BenefitGrantRequestDTO dto,
+            @RequestPart(value = "document", required = false) MultipartFile document) {
+        return ResponseEntity.ok(benefitGrantService.update(id, dto, document));
+    }
+
+    /** Paid benefit closed off by HR — hidden from the benefits page afterwards. */
+    @PutMapping("/{id}/complete")
+    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.EDIT})
+    public ResponseEntity<Void> complete(@PathVariable Long id) {
+        benefitGrantService.complete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Grant one benefit to a group: grade code, department, one employee or all employees. */
+    @PostMapping("/bulk")
+    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.EDIT})
+    public ResponseEntity<com.erp.dto.salary.BenefitGrantBulkResultDTO> createBulk(
+            @RequestBody BenefitGrantRequestDTO dto) {
+        return ResponseEntity.ok(benefitGrantService.createBulk(dto));
+    }
+
+    /**
+     * Opens the supporting document through the API: PDFs / images display inline,
+     * other files (e.g. Word) download with a readable name. Never expires.
+     */
+    @GetMapping("/{id}/document")
+    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
+    public ResponseEntity<byte[]> document(@PathVariable Long id) {
+        com.erp.service.file.FileStorageService.StoredBlob blob = benefitGrantService.downloadDocument(id);
+        String name = benefitGrantService.documentFileName(id);
+        boolean inline = blob.contentType().startsWith("image/") || blob.contentType().equals("application/pdf");
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(blob.contentType()))
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        (inline ? "inline" : "attachment") + "; filename=\"" + name + "\"")
+                .header(org.springframework.http.HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        org.springframework.http.HttpHeaders.CONTENT_DISPOSITION)
+                .body(blob.bytes());
+    }
+
     @DeleteMapping("/{id}")
     @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.EDIT})
     public ResponseEntity<Void> delete(@PathVariable Long id) {

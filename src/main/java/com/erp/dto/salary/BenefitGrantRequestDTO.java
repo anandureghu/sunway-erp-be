@@ -15,4 +15,10 @@ public class BenefitGrantRequestDTO {
     /** Pay month as yyyy-MM (a full date is accepted; only year and month are used). */
     private String payMonth;
     private String description;
+
+    // ── bulk grant (POST /bulk): who receives it, as in Benefits Adjustment ──
+    /** GRADE_CODE, DEPARTMENT, EMPLOYEE or ALL_EMPLOYEES. */
+    private String scope;
+    private String gradeCode;
+    private Long departmentId;
 }

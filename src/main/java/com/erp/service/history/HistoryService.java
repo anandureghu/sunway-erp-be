@@ -90,6 +90,7 @@ public class HistoryService {
     private final TransactionService transactionService;
     private final EmployeeRepository employeeRepo;
     private final EmployeeService employeeService;
+    private final com.erp.repo.EmployeeCurrentJobRepo currentJobRepo;
 
     public HistoryService(
             AuthContext auth,
@@ -116,11 +117,13 @@ public class HistoryService {
             JournalEntryService journalEntryService,
             TransactionService transactionService,
             EmployeeRepository employeeRepo,
-            @org.springframework.context.annotation.Lazy EmployeeService employeeService
+            @org.springframework.context.annotation.Lazy EmployeeService employeeService,
+            com.erp.repo.EmployeeCurrentJobRepo currentJobRepo
     ) {
         this.auth = auth;
         this.employeeRepo = employeeRepo;
         this.employeeService = employeeService;
+        this.currentJobRepo = currentJobRepo;
         this.salesOrderRepo = salesOrderRepo;
         this.picklistRepo = picklistRepo;
         this.purchaseOrderRepo = purchaseOrderRepo;
@@ -509,6 +512,9 @@ public class HistoryService {
         String name = ((e.getFirstName() == null ? "" : e.getFirstName()) + " "
                 + (e.getLastName() == null ? "" : e.getLastName())).trim();
         String dept = e.getDepartment() != null ? e.getDepartment().getDepartmentName() : null;
+        // End of employment = the current job's expected end date (last working day);
+        // last designation = that job's title.
+        var job = currentJobRepo.findByEmployee_Id(e.getId()).orElse(null);
         return HistoryRecordDTO.builder()
                 .id(e.getId())
                 .type(HistoryEntityType.EMPLOYEE)
@@ -517,6 +523,8 @@ public class HistoryService {
                 .partyName(dept != null && !dept.isBlank() ? name + " · " + dept : name)
                 .createdAt(e.getCreatedAt())
                 .archivedAt(e.getArchivedAt())
+                .endDate(job != null ? job.getExpectedEndDate() : null)
+                .designation(job != null && job.getJobCode() != null ? job.getJobCode().getTitle() : null)
                 .build();
     }
 

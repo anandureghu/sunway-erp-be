@@ -85,6 +85,10 @@ public class Payroll {
     @Column(name = "benefits_amount", nullable = false)
     private Double benefitsAmount = 0.0;
 
+    /** Paid public-holiday working days in this run (paid days off, not worked). */
+    @Column(name = "public_holiday_days", nullable = false)
+    private Double publicHolidayDays = 0.0;
+
     @Column(name = "worked_days", nullable = false)
     private Double workedDays = 0.0;
 
@@ -146,6 +150,7 @@ public class Payroll {
         overtimeHours = safe(overtimeHours);
         overtimePay = safe(overtimePay);
         benefitsAmount = safe(benefitsAmount);
+        publicHolidayDays = safe(publicHolidayDays);
         workedDays = safe(workedDays);
         paidLeaveDays = safe(paidLeaveDays);
         unpaidLeaveDays = safe(unpaidLeaveDays);

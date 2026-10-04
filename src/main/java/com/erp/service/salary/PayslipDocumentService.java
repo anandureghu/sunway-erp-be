@@ -115,6 +115,7 @@ public class PayslipDocumentService {
         dto.setOvertimeHours(payroll.getOvertimeHours());
         dto.setPaidLeaveDays(payroll.getPaidLeaveDays());
         dto.setUnpaidLeaveDays(payroll.getUnpaidLeaveDays());
+        dto.setPublicHolidayDays(payroll.getPublicHolidayDays());
         dto.setPayableDays(payroll.getPayableDays());
         dto.setLopDays(payroll.getLopDays());
         dto.setLopAmount(payroll.getLopAmount());
@@ -297,6 +298,7 @@ public class PayslipDocumentService {
         ctx.setVariable("overtimeHours", dto.getOvertimeHours());
         ctx.setVariable("paidLeaveDays", dto.getPaidLeaveDays());
         ctx.setVariable("unpaidLeaveDays", dto.getUnpaidLeaveDays());
+        ctx.setVariable("publicHolidayDays", dto.getPublicHolidayDays());
         ctx.setVariable("payableDays", dto.getPayableDays());
         ctx.setVariable("lopDays", dto.getLopDays());
         ctx.setVariable("lopAmount", dto.getLopAmount());

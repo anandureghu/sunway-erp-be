@@ -63,6 +63,7 @@ public class LeaveService {
     private final FileStorageService fileStorageService;
     private final PermissionCheckService permissionCheckService;
     private final DocumentSequenceService documentSequenceService;
+    private final com.erp.service.hr.PublicHolidayService publicHolidayService;
 
     public List<String> getAvailableLeaveTypes(Long employeeId) {
         Employee emp = getEmployee(employeeId);
@@ -131,7 +132,7 @@ public class LeaveService {
         validateDates(leaveType, startDate, endDate);
 
         Employee employee = getEmployee(employeeId);
-        int totalDays = calculateDays(startDate, endDate, includeWeekends);
+        int totalDays = calculateDays(employee, startDate, endDate, includeWeekends);
 
         CompanyLeavePolicy policy = getPolicy(employee, leaveType);
         validateGender(policy, employee);
@@ -178,7 +179,7 @@ public class LeaveService {
         validateNoOverlappingLeave(employeeId, null, dto.getStartDate(), dto.getEndDate());
 
         boolean includeWeekends = Boolean.TRUE.equals(dto.getIncludeWeekends());
-        int totalDays = calculateDays(dto.getStartDate(), dto.getEndDate(), includeWeekends);
+        int totalDays = calculateDays(employee, dto.getStartDate(), dto.getEndDate(), includeWeekends);
 
         CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
         validateGender(policy, employee);
@@ -526,7 +527,7 @@ public class LeaveService {
         // Actual leave taken runs from the start date through the day before the
         // employee resumed duties — supports both early and delayed returns.
         boolean includeWeekends = Boolean.TRUE.equals(leave.getIncludeWeekends());
-        int actualDays = calculateDays(
+        int actualDays = calculateDays(leave.getEmployee(),
                 leave.getStartDate(), reportedDate.minusDays(1), includeWeekends);
 
         Employee employee = leave.getEmployee();
@@ -617,7 +618,7 @@ public class LeaveService {
 
         Employee employee = leave.getEmployee();
         boolean includeWeekends = Boolean.TRUE.equals(dto.getIncludeWeekends());
-        int newDays = calculateDays(dto.getStartDate(), dto.getEndDate(), includeWeekends);
+        int newDays = calculateDays(employee, dto.getStartDate(), dto.getEndDate(), includeWeekends);
 
         CompanyLeavePolicy policy = getPolicy(employee, dto.getLeaveType());
         validateGender(policy, employee);
@@ -773,14 +774,22 @@ public class LeaveService {
                 && left.getCompany().getId().equals(right.getCompany().getId());
     }
 
-    private int calculateDays(LocalDate start, LocalDate end, boolean includeWeekends) {
+    /**
+     * Leave days charged for [start, end]. A calendar-day leave ("incl. weekends")
+     * counts every day. A working-day leave counts Sun–Thu only and skips the
+     * company's public holidays — a holiday inside a leave is a paid day off, not
+     * a leave day.
+     */
+    private int calculateDays(Employee employee, LocalDate start, LocalDate end, boolean includeWeekends) {
         if (includeWeekends) {
             return (int) ChronoUnit.DAYS.between(start, end) + 1;
         }
 
+        Long companyId = employee != null ? employee.getCompanyId() : null;
+        java.util.Set<LocalDate> holidays = publicHolidayService.holidayDates(companyId, start, end);
         int days = 0;
         for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
-            if (!isWeekend(date)) {
+            if (!isWeekend(date) && !holidays.contains(date)) {
                 days++;
             }
         }

@@ -95,6 +95,8 @@ public class PayrollService {
     private final com.erp.service.notification.EmailService emailService;
     private final com.erp.service.hr.EmployeeSeparationService separationService;
     private final BenefitGrantService benefitGrantService;
+    private final com.erp.service.hr.PublicHolidayService publicHolidayService;
+    private final com.erp.repo.EmployeeLoanRepaymentRepository loanRepaymentRepo;
 
     @Transactional(readOnly = true)
     public PayrollPreviewDTO previewPayroll(Long employeeId, PayrollGenerateRequestDTO dto) {
@@ -211,7 +213,8 @@ public class PayrollService {
                 computation.finalSettlement(),
                 computation.loanDeduction(),
                 dto.getPayPeriodStart(),
-                dto.getPayPeriodEnd());
+                dto.getPayPeriodEnd(),
+                saved);
         postPayrollToAccounting(saved, employee);
         emailPayslip(employee, saved);
 
@@ -257,7 +260,8 @@ public class PayrollService {
                     computation.finalSettlement(),
                     computation.loanDeduction(),
                     dto.getPayPeriodStart(),
-                    dto.getPayPeriodEnd());
+                    dto.getPayPeriodEnd(),
+                    saved);
             postPayrollToAccounting(saved, employee);
             emailPayslip(employee, saved);
             generatedCount++;
@@ -347,6 +351,7 @@ public class PayrollService {
         // and loans are carried in `deductions`, so gross − deductions = net.
         payroll.setGrossPay(round2(computation.totalGross()));
         payroll.setBenefitsAmount(computation.benefitsAmount());
+        payroll.setPublicHolidayDays(computation.publicHolidayDays());
         payroll.setEndOfServiceCompensation(computation.endOfServiceCompensation());
         payroll.setFinalSettlement(computation.finalSettlement());
         payroll.setLoanDeduction(computation.loanDeduction());
@@ -508,10 +513,30 @@ public class PayrollService {
                         periodEnd
                 );
 
+        // Company public holidays in the period. A holiday on a working day is a paid
+        // day off: it is not a leave day, not loss of pay, and work on it is holiday
+        // overtime. A holiday inside UNPAID leave stays unpaid.
+        java.util.Set<LocalDate> holidays = publicHolidayService.holidayDates(
+                employee.getCompanyId(), periodStart, periodEnd);
+        int holidayWorkingDays = 0;   // weekday holidays while employed
+        int paidHolidayDays = 0;      // …of which paid (not inside unpaid leave)
+        if (!employedFrom.isAfter(periodEnd)) {
+            for (LocalDate d = employedFrom; !d.isAfter(periodEnd); d = d.plusDays(1)) {
+                if (isWeekend(d) || !holidays.contains(d)) continue;
+                holidayWorkingDays++;
+                final LocalDate day = d;
+                boolean inUnpaidLeave = approvedLeaves.stream().anyMatch(l ->
+                        !isPaidLeave(employee, l.getLeaveType())
+                                && l.getStartDate() != null && l.getEndDate() != null
+                                && !day.isBefore(l.getStartDate()) && !day.isAfter(l.getEndDate()));
+                if (!inUnpaidLeave) paidHolidayDays++;
+            }
+        }
+
         double paidLeaveDays = 0.0;
         double unpaidLeaveDays = 0.0;
         for (EmployeeLeave leave : approvedLeaves) {
-            double leaveDays = calculateLeaveDaysWithinPeriod(leave, employedFrom, periodEnd);
+            double leaveDays = calculateLeaveDaysWithinPeriod(leave, employedFrom, periodEnd, holidays);
             if (leaveDays <= 0) {
                 continue;
             }
@@ -537,7 +562,7 @@ public class PayrollService {
             // EXCEPT approved unpaid leave. Worked days = employed working days minus all
             // leave; paid leave is added back in payableDays below so only unpaid leave
             // (and days before joining) reduce pay.
-            workedDays = Math.max(employedWorkingDays - paidLeaveDays - unpaidLeaveDays, 0.0);
+            workedDays = Math.max(employedWorkingDays - holidayWorkingDays - paidLeaveDays - unpaidLeaveDays, 0.0);
             workedHours = workedDays * stdHoursPerDay;
         } else {
             // Align exactly with the Attendance History report: worked hours = sum of
@@ -551,7 +576,8 @@ public class PayrollService {
             // working week, so a Friday/Saturday punch is rest-day overtime (below),
             // never a substitute for a missed working day.
             workedDays = timesheets.stream()
-                    .filter(t -> t.getAttendanceDate() != null && !isWeekend(t.getAttendanceDate()))
+                    .filter(t -> t.getAttendanceDate() != null && !isWeekend(t.getAttendanceDate())
+                            && !holidays.contains(t.getAttendanceDate()))
                     .filter(t -> resolveWorkedMinutes(t) >= stdMinutes)
                     .count();
         }
@@ -576,7 +602,8 @@ public class PayrollService {
             long restDayMinutes = 0L;
             for (EmployeeTimesheet t : timesheets) {
                 long minutes = resolveWorkedMinutes(t);
-                if (t.getAttendanceDate() != null && isWeekend(t.getAttendanceDate())) {
+                if (t.getAttendanceDate() != null
+                        && (isWeekend(t.getAttendanceDate()) || holidays.contains(t.getAttendanceDate()))) {
                     restDayMinutes += Math.min(Math.max(minutes, 0L), stdMinutes + otCapMinutes);
                 } else {
                     long over = minutes - stdMinutes;
@@ -599,7 +626,7 @@ public class PayrollService {
         // it (and unpaid leave). Payable days are capped at the days the employee was
         // employed in the period, so a full month of attendance pays in full and loss of
         // pay = unpaid leave + days not worked/employed, at Gross / working days per day.
-        double payableDays = Math.min(workedDays + paidLeaveDays, employedWorkingDays);
+        double payableDays = Math.min(workedDays + paidLeaveDays + paidHolidayDays, employedWorkingDays);
         double lopDays = Math.max(referenceDays - payableDays, 0.0);
         double lopAmount = lopDays * perDaySalary;
         // Gross earnings (computed above) are the FULL package for the period; unpaid
@@ -679,7 +706,8 @@ public class PayrollService {
                 round2(endOfServiceCompensation),
                 finalSettlement,
                 round2(benefitsAmount),
-                benefitGrants
+                benefitGrants,
+                paidHolidayDays
         );
     }
 
@@ -690,7 +718,8 @@ public class PayrollService {
     private double calculateLeaveDaysWithinPeriod(
             EmployeeLeave leave,
             LocalDate periodStart,
-            LocalDate periodEnd
+            LocalDate periodEnd,
+            java.util.Set<LocalDate> holidays
     ) {
         LocalDate effectiveStart = leave.getStartDate().isBefore(periodStart)
                 ? periodStart
@@ -705,8 +734,9 @@ public class PayrollService {
         }
 
         // Payroll pays per WORKING day, so only working days of the leave count here —
-        // even when the leave itself was recorded "including weekends".
-        return countWorkingDays(effectiveStart, effectiveEnd);
+        // even when the leave itself was recorded "including weekends". Public holidays
+        // inside the leave are paid days off, not leave days.
+        return com.erp.service.LeaveAttendanceUtil.countWorkingDays(effectiveStart, effectiveEnd, holidays);
     }
 
     /** Employee's join date, falling back to the current job's start date. */
@@ -811,7 +841,8 @@ public class PayrollService {
             boolean finalSettlement,
             double periodLoanDeduction,
             LocalDate periodStart,
-            LocalDate periodEnd) {
+            LocalDate periodEnd,
+            Payroll payroll) {
         List<EmployeeLoan> activeLoans = loanRepo.findByEmployeeAndStatus(employee, STATUS_ACTIVE);
 
         // For a final settlement, recover exactly the amount deducted on the payslip
@@ -844,6 +875,24 @@ public class PayrollService {
             }
 
             loanRepo.save(loan);
+
+            // Loan payment record: this run's repayment, dated to the pay period's month.
+            double recorded = round2(Math.min(actualRecovery, balance));
+            if (recorded > 0.0) {
+                com.erp.domain.EmployeeLoanRepayment rec = new com.erp.domain.EmployeeLoanRepayment();
+                rec.setLoanId(loan.getId());
+                rec.setEmployeeId(employee.getId());
+                rec.setCompanyId(employee.getCompanyId());
+                rec.setPaymentMonth(periodEnd.withDayOfMonth(1));
+                rec.setPaymentDate(payroll != null && payroll.getPayDate() != null ? payroll.getPayDate() : periodEnd);
+                rec.setAmount(recorded);
+                rec.setSource(finalSettlement
+                        ? com.erp.domain.EmployeeLoanRepayment.SOURCE_SETTLEMENT
+                        : com.erp.domain.EmployeeLoanRepayment.SOURCE_PAYROLL);
+                rec.setPayrollId(payroll != null ? payroll.getId() : null);
+                rec.setReference(payroll != null ? payroll.getPayrollCode() : null);
+                loanRepaymentRepo.save(rec);
+            }
         }
     }
 
@@ -1128,7 +1177,8 @@ public class PayrollService {
                 grossPay,
                 payrollAccount,
                 computation.benefitsAmount(),
-                Math.round(periodMonths * 100.0) / 100.0
+                Math.round(periodMonths * 100.0) / 100.0,
+                computation.publicHolidayDays()
         );
     }
 
@@ -1263,7 +1313,8 @@ public class PayrollService {
             double endOfServiceCompensation,
             boolean finalSettlement,
             double benefitsAmount,
-            List<EmployeeBenefitGrant> benefitGrants
+            List<EmployeeBenefitGrant> benefitGrants,
+            double publicHolidayDays
     ) {
         /** Everything the run pays before deductions: package + EOS + overtime + benefits. */
         public double totalGross() {

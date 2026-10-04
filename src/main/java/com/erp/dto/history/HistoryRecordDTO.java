@@ -22,4 +22,8 @@ public class HistoryRecordDTO {
     private BigDecimal amount;
     private Instant createdAt;
     private Instant archivedAt;
+    /** Employees only: last working day (end of employment). */
+    private java.time.LocalDate endDate;
+    /** Employees only: last designation (job title of the current job). */
+    private String designation;
 }

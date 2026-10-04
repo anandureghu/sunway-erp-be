@@ -167,6 +167,11 @@
       <td><div class="info-label">Unpaid Leave Days</div><div class="info-value mono" th:text="${unpaidLeaveDays != null ? #numbers.formatDecimal(unpaidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
       <td><div class="info-label">Overtime Hours</div><div class="info-value mono" th:text="${overtimeHours != null ? #numbers.formatDecimal(overtimeHours,1,'COMMA',2,'POINT') : '0.00'}">0.00</div></td>
     </tr>
+    <tr th:if="${publicHolidayDays != null and publicHolidayDays > 0}">
+      <td><div class="info-label">Paid Public Holidays</div><div class="info-value mono" th:text="${#numbers.formatDecimal(publicHolidayDays,1,'COMMA',2,'POINT')}">1.00</div></td>
+      <td></td>
+      <td></td>
+    </tr>
   </table>
 </div>
 

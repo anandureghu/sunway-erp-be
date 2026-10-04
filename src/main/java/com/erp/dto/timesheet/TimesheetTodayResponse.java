@@ -120,6 +120,17 @@ public class TimesheetTodayResponse {
         this.maxShiftMinutes = maxShiftMinutes;
     }
 
+    /** Name of today's public holiday — a paid day off — when today is one. */
+    private String holidayName;
+
+    public String getHolidayName() {
+        return holidayName;
+    }
+
+    public void setHolidayName(String holidayName) {
+        this.holidayName = holidayName;
+    }
+
     public Integer getAutoCheckoutAfterHours() {
         return autoCheckoutAfterHours;
     }

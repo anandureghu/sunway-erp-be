@@ -53,6 +53,7 @@ public class AttendanceReportService {
     private final EmployeeCurrentJobRepo currentJobRepo;
     private final AuthContext authContext;
     private final PermissionCheckService permissionCheck;
+    private final com.erp.service.hr.PublicHolidayService publicHolidayService;
 
     public List<EmployeeMonthlyAttendanceDTO> getMonthlySummary(int year, int month) {
         Long companyId = authContext.getCurrentCompanyId();
@@ -169,9 +170,15 @@ public class AttendanceReportService {
         final long minMinutes = Math.round(stdHours * 60.0);
         final long otMaxMinutes = Math.round(otMaxHours * 60.0);
 
+        // Company public holidays in the month. A holiday on a working day is a paid
+        // day off: not worked, not absent. Work on it is holiday overtime.
+        Long companyId = employees.get(0).getCompany() != null ? employees.get(0).getCompany().getId() : null;
+        Map<LocalDate, String> holidayNames = publicHolidayService.holidayNames(companyId, start, end);
+        java.util.Set<LocalDate> holidays = holidayNames.keySet();
+        String todayHoliday = isWeekday(today) ? holidayNames.get(today) : null;
+
         // No-punch companies: every weekday up to today is a full standard day.
         if (!requireCheckIn) {
-            int workingDays = countWorkingDaysUpToToday(year, month);
             // Last day counted toward worked days (clamped to today for the current month).
             LocalDate countEnd = end.isAfter(today) ? today : end;
             boolean todayIsWorkday = ym.equals(YearMonth.from(today)) && isWeekday(today);
@@ -200,17 +207,18 @@ public class AttendanceReportService {
                 // (matches payroll, which prorates the same way).
                 LocalDate empCountStart = e.getJoinDate() != null && e.getJoinDate().isAfter(start)
                         ? e.getJoinDate() : start;
-                int baseDays = (empCountStart.equals(start) && empCountEnd.equals(countEnd))
-                        ? workingDays
-                        : LeaveAttendanceUtil.countWorkingDays(empCountStart, empCountEnd);
+                // Working days exclude public holidays (paid days off, counted separately).
+                int baseDays = LeaveAttendanceUtil.countWorkingDays(empCountStart, empCountEnd, holidays);
 
                 // Unpaid-leave working days are absences: drop them from worked days.
                 List<EmployeeLeave> leaves = leavesByEmployee.getOrDefault(e.getId(), List.of());
-                int unpaidDays = LeaveAttendanceUtil.countUnpaidWorkingDays(leaves, empCountStart, empCountEnd);
+                int unpaidDays = LeaveAttendanceUtil.countUnpaidWorkingDays(leaves, empCountStart, empCountEnd, holidays);
                 int daysWorked = Math.max(0, baseDays - unpaidDays);
+                int holidayDays = LeaveAttendanceUtil.countPaidHolidays(leaves, empCountStart, empCountEnd, holidays);
                 double regularHours = Math.round(daysWorked * stdHours * 10.0) / 10.0;
                 boolean onLeaveToday = todayIsWorkday && LeaveAttendanceUtil.isOnLeave(leaves, today);
                 boolean absentToday = exiting && todayIsWorkday;
+                boolean holidayToday = todayIsWorkday && todayHoliday != null && !absentToday && !onLeaveToday;
 
                 autoRows.add(EmployeeMonthlyAttendanceDTO.builder()
                         .employeeId(e.getId())
@@ -225,11 +233,14 @@ public class AttendanceReportService {
                         .editableOvertime(true) // HR keys overtime manually for no-punch companies
                         .todayStatus(absentToday ? "ABSENT"
                                 : onLeaveToday ? "ON_LEAVE"
+                                : holidayToday ? "HOLIDAY"
                                 : (todayIsWorkday ? "PRESENT" : "NOT_CHECKED_IN"))
                         .todayCheckIn(null)
                         .todayCheckOut(null)
-                        .todayHours(absentToday || onLeaveToday ? 0.0
+                        .todayHours(absentToday || onLeaveToday || holidayToday ? 0.0
                                 : (todayIsWorkday ? Math.round(stdHours * 10.0) / 10.0 : 0.0))
+                        .holidayDays(holidayDays)
+                        .todayHolidayName(holidayToday ? todayHoliday : null)
                         .build());
             }
             autoRows.sort(Comparator.comparing(r -> r.getEmployeeName() == null ? "" : r.getEmployeeName()));
@@ -249,8 +260,10 @@ public class AttendanceReportService {
             int daysRecorded = records.size();
             // Days worked counts Sun–Thu only; a Friday/Saturday punch is rest-day
             // overtime (as in payroll), not a working day.
+            // Public holidays aren't working days either: a punch on one is holiday overtime.
             int daysPresent = (int) records.stream()
-                    .filter(t -> t.getAttendanceDate() != null && isWeekday(t.getAttendanceDate()))
+                    .filter(t -> t.getAttendanceDate() != null && isWeekday(t.getAttendanceDate())
+                            && !holidays.contains(t.getAttendanceDate()))
                     .filter(t -> resolveWorkedMinutes(t) >= minMinutes)
                     .count();
             long totalMinutes = records.stream().mapToLong(this::resolveWorkedMinutes).sum();
@@ -262,7 +275,8 @@ public class AttendanceReportService {
             long overtimeMinutes = records.stream()
                     .mapToLong(t -> {
                         long worked = resolveWorkedMinutes(t);
-                        if (t.getAttendanceDate() != null && !isWeekday(t.getAttendanceDate())) {
+                        if (t.getAttendanceDate() != null
+                                && (!isWeekday(t.getAttendanceDate()) || holidays.contains(t.getAttendanceDate()))) {
                             return Math.min(Math.max(worked, 0L), minMinutes + otMaxMinutes);
                         }
                         long over = worked - minMinutes;
@@ -280,13 +294,22 @@ public class AttendanceReportService {
             boolean exiting = EmployeeSeparationService.EXIT_STATUSES.contains(e.getStatus());
             List<EmployeeLeave> leaves = leavesByEmployee.getOrDefault(e.getId(), List.of());
             boolean onLeaveToday = LeaveAttendanceUtil.isOnLeave(leaves, today);
+            // On a public holiday nobody is "not checked in" — it's a paid day off
+            // (anyone who does punch in shows their punch status).
+            boolean holidayToday = todayHoliday != null && !exiting && !onLeaveToday && todayRec == null;
             String todayStatus = exiting
                     ? "ABSENT"
                     : onLeaveToday
                     ? "ON_LEAVE"
+                    : holidayToday
+                    ? "HOLIDAY"
                     : (todayRec != null && todayRec.getStatus() != null
                         ? todayRec.getStatus().name()
                         : "NOT_CHECKED_IN");
+            // Paid holiday days so far this month (from the join date; not during unpaid leave).
+            LocalDate holFrom = e.getJoinDate() != null && e.getJoinDate().isAfter(start) ? e.getJoinDate() : start;
+            LocalDate holTo = end.isAfter(today) ? today : end;
+            int holidayDays = LeaveAttendanceUtil.countPaidHolidays(leaves, holFrom, holTo, holidays);
             onLeaveToday = onLeaveToday || exiting;
             double todayHours = onLeaveToday
                     ? 0.0
@@ -308,6 +331,8 @@ public class AttendanceReportService {
                     .todayCheckIn(onLeaveToday ? null : (todayRec != null ? todayRec.getCheckInTime() : null))
                     .todayCheckOut(onLeaveToday ? null : (todayRec != null ? todayRec.getCheckOutTime() : null))
                     .todayHours(todayHours)
+                    .holidayDays(holidayDays)
+                    .todayHolidayName(holidayToday ? todayHoliday : null)
                     .build());
         }
 
@@ -338,20 +363,6 @@ public class AttendanceReportService {
     private boolean isWeekday(LocalDate d) {
         // Qatar workweek: Sunday–Thursday (Friday & Saturday are the weekend).
         return d.getDayOfWeek() != DayOfWeek.FRIDAY && d.getDayOfWeek() != DayOfWeek.SATURDAY;
-    }
-
-    /** Working days (Sun–Thu) from the 1st of the month through today (or month end if past). */
-    private int countWorkingDaysUpToToday(int year, int month) {
-        YearMonth ym = YearMonth.of(year, month);
-        LocalDate start = ym.atDay(1);
-        LocalDate today = LocalDate.now();
-        LocalDate end = ym.atEndOfMonth().isAfter(today) ? today : ym.atEndOfMonth();
-        if (end.isBefore(start)) return 0;
-        int count = 0;
-        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
-            if (isWeekday(d)) count++;
-        }
-        return count;
     }
 
     private long resolveWorkedMinutes(EmployeeTimesheet t) {

@@ -6,6 +6,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Shared helpers for reconciling approved leave against attendance/timesheets.
@@ -38,6 +39,74 @@ public final class LeaveAttendanceUtil {
         int count = 0;
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
             if (!isWeekend(d)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Working days (Sun–Thu) in {@code [start, end]} that are NOT public holidays — the
+     * days an employee is actually expected to work.
+     */
+    public static int countWorkingDays(LocalDate start, LocalDate end, Set<LocalDate> holidays) {
+        if (start == null || end == null || end.isBefore(start)) {
+            return 0;
+        }
+        int count = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (!isWeekend(d) && (holidays == null || !holidays.contains(d))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Paid public-holiday days in {@code [start, end]}: holidays on a working day
+     * (Sun–Thu) that are not inside an UNPAID approved leave. A holiday during unpaid
+     * leave stays unpaid; on the weekend it changes nothing.
+     */
+    public static int countPaidHolidays(List<EmployeeLeave> approvedLeaves, LocalDate start, LocalDate end,
+                                        Set<LocalDate> holidays) {
+        if (holidays == null || holidays.isEmpty() || start == null || end == null || end.isBefore(start)) {
+            return 0;
+        }
+        int count = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (isWeekend(d) || !holidays.contains(d)) {
+                continue;
+            }
+            final LocalDate day = d;
+            boolean unpaid = approvedLeaves != null && approvedLeaves.stream()
+                    .anyMatch(l -> isUnpaidLeaveType(l.getLeaveType()) && covers(l, day));
+            if (!unpaid) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Unpaid-leave working days in {@code [start, end]}, public holidays excluded
+     * (a holiday inside unpaid leave is neither worked nor paid).
+     */
+    public static int countUnpaidWorkingDays(List<EmployeeLeave> approvedLeaves, LocalDate start, LocalDate end,
+                                             Set<LocalDate> holidays) {
+        if (holidays == null || holidays.isEmpty()) {
+            return countUnpaidWorkingDays(approvedLeaves, start, end);
+        }
+        if (approvedLeaves == null || approvedLeaves.isEmpty()
+                || start == null || end == null || end.isBefore(start)) {
+            return 0;
+        }
+        int count = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (isWeekend(d) || holidays.contains(d)) {
+                continue;
+            }
+            final LocalDate day = d;
+            if (approvedLeaves.stream().anyMatch(l -> isUnpaidLeaveType(l.getLeaveType()) && covers(l, day))) {
                 count++;
             }
         }
