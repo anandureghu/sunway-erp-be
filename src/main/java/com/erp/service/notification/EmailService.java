@@ -122,14 +122,47 @@ public class EmailService {
             return;
         }
 
+        doSendWithPdfAttachment(tos, subject, body, pdfBytes, filename);
+    }
+
+    /**
+     * Hard send with PDF for invoice/receipt flows: throws if mail is not configured or send fails.
+     */
+    public void sendWithPdfAttachmentRequired(
+            String to,
+            String subject,
+            String body,
+            byte[] pdfBytes,
+            String filename
+    ) {
+        if (to == null || to.isBlank()) {
+            throw new IllegalArgumentException("Recipient email is required");
+        }
+        if (pdfBytes == null || pdfBytes.length == 0) {
+            throw new IllegalArgumentException("PDF attachment is required");
+        }
+        if (!isConfigured()) {
+            throw new IllegalStateException(
+                    "Email is not fully configured. Set MAIL_ENABLED=true with MAIL_USERNAME, "
+                            + "MAIL_PASSWORD, and MAIL_FROM (SMTP app password for Gmail/Microsoft)."
+            );
+        }
+        doSendWithPdfAttachment(List.of(to.trim()), subject, body, pdfBytes, filename);
+    }
+
+    private void doSendWithPdfAttachment(
+            List<String> tos,
+            String subject,
+            String body,
+            byte[] pdfBytes,
+            String filename
+    ) {
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
         if (mailSender == null) {
-            log.warn(
-                    "Mail is not fully configured. Skipping email with attachment to {} subject '{}'",
-                    tos,
-                    subject
+            throw new IllegalStateException(
+                    "Email is not fully configured. Set MAIL_ENABLED=true with MAIL_USERNAME, "
+                            + "MAIL_PASSWORD, and MAIL_FROM (SMTP app password for Gmail/Microsoft)."
             );
-            return;
         }
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -148,8 +181,11 @@ public class EmailService {
                     tos.stream().map(EmailService::maskEmail).toList(),
                     subject
             );
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to send email with attachment: " + enrichMailError(e), e);
+            throw new IllegalStateException(
+                    "Failed to send email with attachment: " + enrichMailError(e), e);
         }
     }
 
