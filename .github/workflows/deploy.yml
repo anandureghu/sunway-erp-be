@@ -87,17 +87,38 @@ jobs:
           RG="${{ secrets.AZURE_RESOURCE_GROUP }}"
           EXPECTED_TAG="${{ steps.meta.outputs.tag }}"
 
+          # Azure's management API sometimes returns transient errors (GatewayTimeout,
+          # 5xx, throttling). Retry each query a few times; if it still fails, return
+          # empty so the poll loop just tries again instead of failing the deploy.
+          azq() {
+            local out
+            for attempt in 1 2 3; do
+              if out=$(az "$@" -o tsv 2>/tmp/az_err); then
+                echo "$out"
+                return 0
+              fi
+              echo "  az query failed (attempt $attempt): $(head -c 300 /tmp/az_err)" >&2
+              sleep 5
+            done
+            echo ""
+          }
+
           # Poll up to ~8 minutes for the revision Azure just created.
           for i in $(seq 1 48); do
-            REV=$(az containerapp show -n "$APP" -g "$RG" --query "properties.latestRevisionName" -o tsv)
-            IMAGE=$(az containerapp revision show -n "$APP" -g "$RG" --revision "$REV" \
-              --query "properties.template.containers[0].image" -o tsv)
-            RUNNING=$(az containerapp revision show -n "$APP" -g "$RG" --revision "$REV" \
-              --query "properties.runningState" -o tsv)
-            HEALTH=$(az containerapp revision show -n "$APP" -g "$RG" --revision "$REV" \
-              --query "properties.healthState" -o tsv)
-            DETAILS=$(az containerapp revision show -n "$APP" -g "$RG" --revision "$REV" \
-              --query "properties.runningStateDetails" -o tsv)
+            REV=$(azq containerapp show -n "$APP" -g "$RG" --query "properties.latestRevisionName")
+            if [ -z "$REV" ]; then
+              echo "[$i] could not read latest revision yet — retrying…"
+              sleep 10
+              continue
+            fi
+            IMAGE=$(azq containerapp revision show -n "$APP" -g "$RG" --revision "$REV" \
+              --query "properties.template.containers[0].image")
+            RUNNING=$(azq containerapp revision show -n "$APP" -g "$RG" --revision "$REV" \
+              --query "properties.runningState")
+            HEALTH=$(azq containerapp revision show -n "$APP" -g "$RG" --revision "$REV" \
+              --query "properties.healthState")
+            DETAILS=$(azq containerapp revision show -n "$APP" -g "$RG" --revision "$REV" \
+              --query "properties.runningStateDetails")
 
             echo "[$i] revision=$REV running=$RUNNING health=$HEALTH image=$IMAGE"
             if [ -n "$DETAILS" ] && [ "$DETAILS" != "None" ]; then
