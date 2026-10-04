@@ -22,12 +22,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Closes attendance sessions an employee forgot to check out of. Any timesheet
- * still {@link TimesheetStatus#CHECKED_IN} on a day that has already ended is
- * auto-checked-out and capped at the company's standard working day (default 6h)
- * from the check-in time, so a missed checkout never inflates worked hours. The
- * row is flagged {@code autoCheckedOut} and annotated so HR can see it wasn't a
- * real punch-out.
+ * Closes attendance sessions an employee forgot to check out of. Caps and
+ * auto-check-out both use the company {@code autoCheckoutAfterHours} policy
+ * (8 / 10 / 12), not standard working hours per day.
  */
 @Slf4j
 @Service
@@ -35,7 +32,6 @@ import java.util.Map;
 public class AutoCheckoutJob {
 
     private static final ZoneId DEFAULT_ATTENDANCE_ZONE = ZoneId.of("Asia/Qatar");
-    private static final double DEFAULT_STD_HOURS = 6.0;
     private static final int DEFAULT_AUTO_CHECKOUT_HOURS = 10;
     private static final String AUTO_NOTE = "Auto-checkout — employee did not check out.";
     private static final String MAX_SHIFT_NOTE =
@@ -84,7 +80,7 @@ public class AutoCheckoutJob {
             return;
         }
 
-        Map<Long, Double> stdHoursByCompany = new HashMap<>();
+        Map<Long, Integer> hoursCache = new HashMap<>();
         Map<Long, ZoneId> zoneByEmployee = new HashMap<>();
         int closed = 0;
 
@@ -97,11 +93,14 @@ public class AutoCheckoutJob {
             if (t.getAttendanceDate().isAfter(companyYesterday)) {
                 continue; // still "today" in company zone
             }
-            double stdHours = resolveStandardHours(t.getEmployeeId(), stdHoursByCompany);
-            long stdMinutes = Math.round(stdHours * 60.0);
+            // Cap forgotten overnight sessions at max-shift policy, not standard day length.
+            long capMinutes = resolveAutoCheckoutHours(t.getEmployeeId(), hoursCache) * 60L;
+            LocalDateTime now = LocalDateTime.now(zone);
+            long elapsed = Math.max(0, Duration.between(t.getCheckInTime(), now).toMinutes());
+            long paidMinutes = Math.min(elapsed, capMinutes);
 
-            t.setCheckOutTime(t.getCheckInTime().plusMinutes(stdMinutes));
-            t.setWorkedMinutes(stdMinutes);
+            t.setCheckOutTime(t.getCheckInTime().plusMinutes(paidMinutes));
+            t.setWorkedMinutes(paidMinutes);
             t.setStatus(TimesheetStatus.CHECKED_OUT);
             t.setAutoCheckedOut(true);
             t.setNote(AUTO_NOTE);
@@ -113,9 +112,8 @@ public class AutoCheckoutJob {
     }
 
     /**
-     * Intraday sweep: auto-check-out anyone still checked in past the company's
-     * fixed auto check-out duration (8, 10, or 12 hours). Worked time is capped
-     * at that duration and the row is flagged auto-checked-out.
+     * Sweep open sessions past the company's max on-clock duration (8 / 10 / 12h),
+     * including overnight shifts whose attendance date is no longer "today".
      */
     @Transactional
     @Scheduled(fixedRate = 60_000) // every minute so windows are timely
@@ -134,10 +132,6 @@ public class AutoCheckoutJob {
                 continue;
             }
             ZoneId zone = resolveZone(t.getEmployeeId(), zoneByEmployee);
-            LocalDate companyToday = LocalDate.now(zone);
-            if (t.getAttendanceDate() != null && !t.getAttendanceDate().equals(companyToday)) {
-                continue;
-            }
             LocalDateTime now = LocalDateTime.now(zone);
             long capMinutes = resolveAutoCheckoutHours(t.getEmployeeId(), hoursCache) * 60L;
             long elapsed = Duration.between(t.getCheckInTime(), now).toMinutes();
@@ -157,24 +151,6 @@ public class AutoCheckoutJob {
         if (closed > 0) {
             log.info("Max-shift auto-checkout: closed {} session(s) at the shift cap.", closed);
         }
-    }
-
-    /** Company standard working hours for the employee, memoised per company. */
-    private double resolveStandardHours(Long employeeId, Map<Long, Double> cache) {
-        Employee employee = employeeRepo.findById(employeeId).orElse(null);
-        if (employee == null || employee.getCompany() == null) {
-            return DEFAULT_STD_HOURS;
-        }
-        Long companyId = employee.getCompany().getId();
-        Double cached = cache.get(companyId);
-        if (cached != null) {
-            return cached;
-        }
-        double hours = employee.getCompany().getStandardWorkingHoursPerDay() != null
-                ? employee.getCompany().getStandardWorkingHoursPerDay().doubleValue()
-                : DEFAULT_STD_HOURS;
-        cache.put(companyId, hours);
-        return hours;
     }
 
     /** Fixed auto check-out hours (8 / 10 / 12), memoised per company. */
