@@ -30,4 +30,6 @@ public class PayrollPreviewDTO {
     private double benefitsAmount;
     /** Calendar months the pay period covers (3.0 for Jun 1 – Aug 31). */
     private double periodMonths;
+    /** Paid public-holiday working days in the period. */
+    private double publicHolidayDays;
 }

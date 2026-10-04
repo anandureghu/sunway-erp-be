@@ -11,6 +11,9 @@ public interface EmployeeBenefitGrantRepository extends JpaRepository<EmployeeBe
 
     List<EmployeeBenefitGrant> findByCompanyIdOrderByPayMonthDescIdDesc(Long companyId);
 
+    /** Open grants (pending / paid) — completed ones are hidden from the benefits page. */
+    List<EmployeeBenefitGrant> findByCompanyIdAndStatusNotOrderByPayMonthDescIdDesc(Long companyId, String status);
+
     /** Grants of one type for an employee within a pay-month window (annual-ticket check). */
     List<EmployeeBenefitGrant> findByEmployee_IdAndBenefitTypeAndPayMonthBetween(
             Long employeeId, BenefitGrantType benefitType, LocalDate from, LocalDate to);

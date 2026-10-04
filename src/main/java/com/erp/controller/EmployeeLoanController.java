@@ -72,6 +72,17 @@ public class EmployeeLoanController {
     }
 
     // ======================================================
+    // PAYMENT RECORD — every repayment (month, paid amount, running total)
+    // ======================================================
+    @RequiresPermission(module = AppModule.LOANS, action = {AppAction.VIEW_OWN, AppAction.VIEW_ALL})
+    @GetMapping("/{loanId}/payments")
+    public ResponseEntity<com.erp.dto.loan.LoanPaymentRecordDTO> getPaymentRecord(
+            @PathVariable("employeeId") Long employeeId,
+            @PathVariable("loanId") Long loanId) {
+        return ResponseEntity.ok(loanService.getPaymentRecord(employeeId, loanId));
+    }
+
+    // ======================================================
     // APPLY FOR LOAN
     // CREATE — applying for a new loan
     // ======================================================

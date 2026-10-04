@@ -23,6 +23,8 @@ public class PayslipDocumentDTO {
     private Double overtimeHours;
     private Double paidLeaveDays;
     private Double unpaidLeaveDays;
+    /** Paid public-holiday working days in the run. */
+    private Double publicHolidayDays;
     private Double payableDays;
     private Double lopDays;
     private Double lopAmount;

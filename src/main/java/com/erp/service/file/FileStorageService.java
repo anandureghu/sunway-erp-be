@@ -312,6 +312,28 @@ public class FileStorageService {
         return container.getBlobContainerUrl() + "/" + blobPath;
     }
 
+    /** Bytes + content type of a stored file (private container first, then public). */
+    public record StoredBlob(byte[] bytes, String contentType) { }
+
+    /**
+     * Reads a stored file so the API can serve it directly — no expiring signed link,
+     * and the caller's app permissions apply. Throws when the file is not found.
+     */
+    public StoredBlob download(String blobPath) {
+        if (blobPath == null || blobPath.isBlank()) {
+            throw new IllegalArgumentException("No document stored");
+        }
+        for (String containerName : new String[]{privateContainer, publicContainer}) {
+            BlobClient blobClient = blobServiceClient.getBlobContainerClient(containerName).getBlobClient(blobPath);
+            if (Boolean.TRUE.equals(blobClient.exists())) {
+                String contentType = blobClient.getProperties().getContentType();
+                return new StoredBlob(blobClient.downloadContent().toBytes(),
+                        contentType != null && !contentType.isBlank() ? contentType : "application/octet-stream");
+            }
+        }
+        throw new com.erp.exception.NotFoundException("Document not found in storage");
+    }
+
     public String getPrivateSasUrl(String blobPath) {
 
         BlobContainerClient container =

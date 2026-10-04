@@ -6,6 +6,16 @@ public class MonthlySummaryResponse {
     private double totalHours;
     private double avgHoursPerDay;
     private int daysRecorded;
+    /** Paid public-holiday working days so far this month. */
+    private int holidayDays;
+
+    public int getHolidayDays() {
+        return holidayDays;
+    }
+
+    public void setHolidayDays(int holidayDays) {
+        this.holidayDays = holidayDays;
+    }
 
     public int getDaysPresent() {
         return daysPresent;

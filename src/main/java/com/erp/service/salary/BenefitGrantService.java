@@ -52,11 +52,13 @@ public class BenefitGrantService {
     private final EmployeeRepository employeeRepo;
     private final FileStorageService fileStorageService;
     private final AuthContext authContext;
+    private final BenefitsAdjustmentService benefitsAdjustmentService;
 
     @Transactional(readOnly = true)
     public List<BenefitGrantDTO> list() {
         Long companyId = requireCompany();
-        return grantRepo.findByCompanyIdOrderByPayMonthDescIdDesc(companyId).stream()
+        return grantRepo.findByCompanyIdAndStatusNotOrderByPayMonthDescIdDesc(
+                        companyId, EmployeeBenefitGrant.STATUS_COMPLETED).stream()
                 .map(this::toDTO)
                 .toList();
     }
@@ -125,11 +127,81 @@ public class BenefitGrantService {
         return toDTO(grant);
     }
 
+    /**
+     * Grants the same benefit to every employee selected by scope (grade code,
+     * department, one employee or all employees — the Benefits Adjustment rules).
+     * Employees who already received the annual ticket that year are skipped and
+     * reported. Reimbursements need each person's own receipt, so they are single-
+     * employee only (use {@link #create}).
+     */
+    @Transactional
+    public com.erp.dto.salary.BenefitGrantBulkResultDTO createBulk(BenefitGrantRequestDTO dto) {
+        if (dto == null) {
+            throw new IllegalArgumentException("Benefit details are required.");
+        }
+        requireCompany();
+        BenefitGrantType type = parseType(dto.getBenefitType());
+        if (type == BenefitGrantType.REIMBURSEMENT) {
+            throw new IllegalArgumentException(
+                    "A reimbursement needs that employee's own receipt — grant it to a single employee.");
+        }
+        LocalDate payMonth = parsePayMonth(dto.getPayMonth());
+        BigDecimal amount = dto.getAmount();
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalArgumentException("Enter an amount greater than zero.");
+        }
+        com.erp.dto.salary.BenefitsAdjustmentRequestDTO.Scope scope;
+        try {
+            scope = com.erp.dto.salary.BenefitsAdjustmentRequestDTO.Scope.valueOf(
+                    dto.getScope() == null ? "" : dto.getScope().trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Select who to grant this to.");
+        }
+
+        List<Employee> targets = benefitsAdjustmentService.resolveScope(
+                scope, dto.getGradeCode(), dto.getDepartmentId(), dto.getEmployeeId());
+
+        int created = 0;
+        List<com.erp.dto.salary.BenefitGrantBulkResultDTO.Skipped> skipped = new java.util.ArrayList<>();
+        Long userId = safeUserId();
+        String description = clean(dto.getDescription());
+        for (Employee employee : targets) {
+            if (type == BenefitGrantType.ANNUAL_TICKET) {
+                Optional<EmployeeBenefitGrant> existing = existingTicketInYear(employee.getId(), payMonth.getYear());
+                if (existing.isPresent()) {
+                    skipped.add(com.erp.dto.salary.BenefitGrantBulkResultDTO.Skipped.builder()
+                            .employeeId(employee.getId())
+                            .employeeName(fullName(employee))
+                            .reason("Already received the annual ticket for " + payMonth.getYear()
+                                    + " (" + existing.get().getPayMonth().format(MONTH_LABEL) + ")")
+                            .build());
+                    continue;
+                }
+            }
+            EmployeeBenefitGrant grant = new EmployeeBenefitGrant();
+            grant.setCompanyId(employee.getCompanyId());
+            grant.setEmployee(employee);
+            grant.setBenefitType(type);
+            grant.setAmount(amount.setScale(2, java.math.RoundingMode.HALF_UP));
+            grant.setPayMonth(payMonth);
+            grant.setDescription(description);
+            grant.setStatus(EmployeeBenefitGrant.STATUS_PENDING);
+            grant.setCreatedBy(userId);
+            grantRepo.save(grant);
+            created++;
+        }
+        return com.erp.dto.salary.BenefitGrantBulkResultDTO.builder()
+                .matched(targets.size())
+                .created(created)
+                .skipped(skipped)
+                .build();
+    }
+
     /** Removes a grant that payroll has not paid yet (and its document). */
     @Transactional
     public void delete(Long id) {
         EmployeeBenefitGrant grant = getCompanyGrant(id);
-        if (EmployeeBenefitGrant.STATUS_PAID.equals(grant.getStatus())) {
+        if (!EmployeeBenefitGrant.STATUS_PENDING.equals(grant.getStatus())) {
             throw new IllegalStateException(
                     "This benefit has already been paid in payroll and cannot be deleted.");
         }
@@ -142,6 +214,118 @@ public class BenefitGrantService {
                 log.warn("Could not delete benefit document {}", documentPath, ex);
             }
         }
+    }
+
+    /**
+     * Edits a grant. While PENDING everything can change (employee, type, amount,
+     * pay month, description, document). Once PAID, payroll has used the amount, so
+     * only the description and the document can change. COMPLETED grants are closed.
+     */
+    @Transactional
+    public BenefitGrantDTO update(Long id, BenefitGrantRequestDTO dto, MultipartFile document) {
+        if (dto == null) {
+            throw new IllegalArgumentException("Benefit details are required.");
+        }
+        EmployeeBenefitGrant grant = getCompanyGrant(id);
+        boolean hasNewDocument = document != null && !document.isEmpty();
+
+        if (EmployeeBenefitGrant.STATUS_COMPLETED.equals(grant.getStatus())) {
+            throw new IllegalStateException("This benefit is completed and can no longer be changed.");
+        }
+
+        if (EmployeeBenefitGrant.STATUS_PAID.equals(grant.getStatus())) {
+            boolean changesPaidFields =
+                    (dto.getEmployeeId() != null && !dto.getEmployeeId().equals(grant.getEmployee().getId()))
+                    || (dto.getBenefitType() != null && parseType(dto.getBenefitType()) != grant.getBenefitType())
+                    || (dto.getAmount() != null && dto.getAmount().compareTo(grant.getAmount()) != 0)
+                    || (dto.getPayMonth() != null && !parsePayMonth(dto.getPayMonth()).equals(grant.getPayMonth()));
+            if (changesPaidFields) {
+                throw new IllegalStateException("This benefit has already been paid in payroll — only the "
+                        + "description and the document can be changed.");
+            }
+            grant.setDescription(clean(dto.getDescription()));
+        } else {
+            Employee employee = getCompanyEmployee(dto.getEmployeeId());
+            BenefitGrantType type = parseType(dto.getBenefitType());
+            LocalDate payMonth = parsePayMonth(dto.getPayMonth());
+            BigDecimal amount = dto.getAmount();
+            if (amount == null || amount.signum() <= 0) {
+                throw new IllegalArgumentException("Enter an amount greater than zero.");
+            }
+            boolean hasDocument = hasNewDocument || grant.getDocumentPath() != null;
+            if (type == BenefitGrantType.REIMBURSEMENT && !hasDocument) {
+                throw new IllegalArgumentException(
+                        "Upload the supporting document (receipt or invoice) for a reimbursement.");
+            }
+            if (type == BenefitGrantType.ANNUAL_TICKET) {
+                existingTicketInYear(employee.getId(), payMonth.getYear(), grant.getId()).ifPresent(existing -> {
+                    throw new ConflictException(fullName(employee)
+                            + " has already received the annual ticket for " + payMonth.getYear()
+                            + " (" + existing.getPayMonth().format(MONTH_LABEL) + "). "
+                            + "The annual ticket can be granted once a year only.");
+                });
+            }
+            grant.setEmployee(employee);
+            grant.setCompanyId(employee.getCompanyId());
+            grant.setBenefitType(type);
+            grant.setAmount(amount.setScale(2, java.math.RoundingMode.HALF_UP));
+            grant.setPayMonth(payMonth);
+            grant.setDescription(clean(dto.getDescription()));
+        }
+        grant = grantRepo.save(grant);
+
+        if (hasNewDocument) {
+            String previous = grant.getDocumentPath();
+            FileUploadResult upload = fileStorageService.upload(
+                    document,
+                    FileCategory.BENEFIT_REIMBURSEMENT_DOCUMENT,
+                    grant.getId().toString(),
+                    false,
+                    grant.getCompanyId());
+            grant.setDocumentPath(upload.getBlobPath());
+            grant = grantRepo.save(grant);
+            if (previous != null && !previous.equals(upload.getBlobPath())) {
+                try {
+                    fileStorageService.deleteByBlobPath(previous);
+                } catch (Exception ex) {
+                    log.warn("Could not delete replaced benefit document {}", previous, ex);
+                }
+            }
+        }
+        return toDTO(grant);
+    }
+
+    /** The grant's supporting document, served through the API (company-checked). */
+    @Transactional(readOnly = true)
+    public FileStorageService.StoredBlob downloadDocument(Long id) {
+        EmployeeBenefitGrant grant = getCompanyGrant(id);
+        if (grant.getDocumentPath() == null) {
+            throw new NotFoundException("This benefit has no document");
+        }
+        return fileStorageService.download(grant.getDocumentPath());
+    }
+
+    /** File name for a downloaded document, e.g. reimbursement-12.docx. */
+    @Transactional(readOnly = true)
+    public String documentFileName(Long id) {
+        EmployeeBenefitGrant grant = getCompanyGrant(id);
+        String path = grant.getDocumentPath() == null ? "" : grant.getDocumentPath();
+        int dot = path.lastIndexOf('.');
+        String ext = dot >= 0 ? path.substring(dot) : "";
+        String type = grant.getBenefitType() != null ? grant.getBenefitType().name().toLowerCase(Locale.ROOT).replace('_', '-') : "benefit";
+        return type + "-" + grant.getId() + ext;
+    }
+
+    /** Closes off a PAID grant — it then disappears from the benefits page (kept for history). */
+    @Transactional
+    public void complete(Long id) {
+        EmployeeBenefitGrant grant = getCompanyGrant(id);
+        if (!EmployeeBenefitGrant.STATUS_PAID.equals(grant.getStatus())) {
+            throw new IllegalStateException(
+                    "Only a benefit that has been paid in payroll can be marked completed.");
+        }
+        grant.setStatus(EmployeeBenefitGrant.STATUS_COMPLETED);
+        grantRepo.save(grant);
     }
 
     // ------------------------------------------------------------------
@@ -184,12 +368,17 @@ public class BenefitGrantService {
     // ------------------------------------------------------------------
 
     private Optional<EmployeeBenefitGrant> existingTicketInYear(Long employeeId, int year) {
+        return existingTicketInYear(employeeId, year, null);
+    }
+
+    private Optional<EmployeeBenefitGrant> existingTicketInYear(Long employeeId, int year, Long excludeId) {
         return grantRepo.findByEmployee_IdAndBenefitTypeAndPayMonthBetween(
                         employeeId,
                         BenefitGrantType.ANNUAL_TICKET,
                         LocalDate.of(year, 1, 1),
                         LocalDate.of(year, 12, 31))
                 .stream()
+                .filter(g -> excludeId == null || !excludeId.equals(g.getId()))
                 .min(Comparator.comparing(EmployeeBenefitGrant::getPayMonth));
     }
 

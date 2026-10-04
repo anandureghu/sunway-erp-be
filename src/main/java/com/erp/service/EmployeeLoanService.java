@@ -35,6 +35,7 @@ public class EmployeeLoanService {
     private final EmployeeCompensationRepository compensationRepo;
     private final EmployeeCurrentJobRepo currentJobRepo;
     private final AuthContext authContext;
+    private final com.erp.repo.EmployeeLoanRepaymentRepository repaymentRepo;
 
     /* ================= GENERATE LOAN CODE ================= */
 
@@ -385,7 +386,78 @@ public class EmployeeLoanService {
 
         loan = loanRepo.save(loan);
 
+        // Payment record: a manual repayment outside payroll.
+        java.time.LocalDate today = java.time.LocalDate.now();
+        com.erp.domain.EmployeeLoanRepayment rec = new com.erp.domain.EmployeeLoanRepayment();
+        rec.setLoanId(loan.getId());
+        rec.setEmployeeId(loan.getEmployee().getId());
+        rec.setCompanyId(loan.getEmployee().getCompanyId());
+        rec.setPaymentMonth(today.withDayOfMonth(1));
+        rec.setPaymentDate(today);
+        rec.setAmount(amount);
+        rec.setSource(com.erp.domain.EmployeeLoanRepayment.SOURCE_MANUAL);
+        repaymentRepo.save(rec);
+
         return toDTO(loan);
+    }
+
+    /* ================= PAYMENT RECORD ================= */
+
+    /**
+     * Every repayment of the loan in date order — Month, Paid amount and the running
+     * Total payment — plus the balance left after each one.
+     */
+    @Transactional(readOnly = true)
+    public com.erp.dto.loan.LoanPaymentRecordDTO getPaymentRecord(Long employeeId, Long loanId) {
+        EmployeeLoan loan = loanRepo.findById(loanId)
+                .orElseThrow(() -> new RuntimeException("Loan not found"));
+        if (loan.getEmployee() == null || !loan.getEmployee().getId().equals(employeeId)) {
+            throw new RuntimeException("Loan does not belong to this employee");
+        }
+        assertSameTenant(loan.getEmployee());
+
+        double loanAmount = loan.getLoanAmount() != null ? loan.getLoanAmount() : 0.0;
+        double running = 0.0;
+        java.util.List<com.erp.dto.loan.LoanPaymentRecordDTO.Row> rows = new java.util.ArrayList<>();
+        for (com.erp.domain.EmployeeLoanRepayment r : repaymentRepo.findByLoanIdOrderByPaymentDateAscIdAsc(loanId)) {
+            double amt = r.getAmount() != null ? r.getAmount() : 0.0;
+            running = round2(running + amt);
+            rows.add(com.erp.dto.loan.LoanPaymentRecordDTO.Row.builder()
+                    .id(r.getId())
+                    .month(r.getPaymentMonth() != null
+                            ? java.time.YearMonth.from(r.getPaymentMonth()).toString() : null)
+                    .paymentDate(r.getPaymentDate())
+                    .amount(round2(amt))
+                    .totalPaid(running)
+                    .balanceAfter(round2(Math.max(loanAmount - running, 0.0)))
+                    .source(r.getSource())
+                    .reference(r.getReference())
+                    .build());
+        }
+        double balance = loan.getBalance() != null ? loan.getBalance() : loanAmount;
+        double repaid = round2(loanAmount - balance);
+        String status = loan.getStatus() != null ? loan.getStatus().toUpperCase() : "";
+        boolean repaying = "ACTIVE".equals(status) || "CLOSED".equals(status);
+
+        Employee employee = loan.getEmployee();
+        String currency = employee.getCompany() != null && employee.getCompany().getCurrency() != null
+                ? employee.getCompany().getCurrency().getCurrencyCode() : null;
+
+        return com.erp.dto.loan.LoanPaymentRecordDTO.builder()
+                .loanId(loan.getId())
+                .loanCode(loan.getLoanCode())
+                .status(loan.getStatus())
+                .loanAmount(round2(loanAmount))
+                .totalPaid(running)
+                .balance(round2(balance))
+                .currencyCode(currency)
+                .incomplete(repaying && Math.abs(repaid - running) > 0.01)
+                .rows(rows)
+                .build();
+    }
+
+    private static double round2(double v) {
+        return Math.round(v * 100.0) / 100.0;
     }
 
     /* ================= TENANT GUARD ================= */

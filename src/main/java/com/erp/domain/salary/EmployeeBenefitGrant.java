@@ -22,6 +22,8 @@ public class EmployeeBenefitGrant {
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_PAID = "PAID";
+    /** Paid and closed off by HR — kept for history, hidden from the benefits page. */
+    public static final String STATUS_COMPLETED = "COMPLETED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

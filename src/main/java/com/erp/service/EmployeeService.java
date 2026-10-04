@@ -290,7 +290,25 @@ public class EmployeeService {
             });
         }
         if (dto.getDateOfBirth()    != null) employee.setDateOfBirth(dto.getDateOfBirth());
-        if (dto.getJoinDate()       != null) employee.setJoinDate(dto.getJoinDate());
+        if (dto.getJoinDate()       != null) {
+            java.time.LocalDate previousJoin = employee.getJoinDate();
+            employee.setJoinDate(dto.getJoinDate());
+            // The Current Job start date follows the profile join date. Effective From
+            // moves with it only when it was still tracking the old join/start date
+            // (a later effective date — e.g. a promotion — is left alone).
+            currentJobRepo.findByEmployee_Id(id).ifPresent(job -> {
+                if (!dto.getJoinDate().equals(job.getStartDate())) {
+                    java.time.LocalDate oldStart = job.getStartDate();
+                    job.setStartDate(dto.getJoinDate());
+                    if (job.getEffectiveFrom() == null
+                            || job.getEffectiveFrom().equals(oldStart)
+                            || job.getEffectiveFrom().equals(previousJoin)) {
+                        job.setEffectiveFrom(dto.getJoinDate());
+                    }
+                    currentJobRepo.save(job);
+                }
+            });
+        }
         if (dto.getMaritalStatus()  != null) employee.setMaritalStatus(dto.getMaritalStatus());
         if (dto.getNotes()          != null) employee.setNotes(dto.getNotes());
         if (dto.getBirthplace()     != null) employee.setBirthplace(dto.getBirthplace());
