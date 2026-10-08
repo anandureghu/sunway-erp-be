@@ -139,12 +139,11 @@ public class DocumentSequenceService {
         String type = budgetType.trim().toUpperCase();
         String sequenceKey = companyId + "_BUDGET_" + fy + "_" + type;
 
-        long startNumber = 1000L;
         CompanyNumberingConfig cfg = numberingConfigRepo
                 .findByCompanyIdAndDocType(companyId, "BUDGET").orElse(null);
-        if (cfg != null && cfg.getStartNumber() != null && cfg.getStartNumber() > 0) {
-            startNumber = cfg.getStartNumber();
-        }
+        final long startNumber = cfg != null && cfg.getStartNumber() != null && cfg.getStartNumber() > 0
+                ? cfg.getStartNumber()
+                : 1000L;
 
         DocumentSequence seq = repo.findForUpdate(sequenceKey)
                 .orElseGet(() -> new DocumentSequence(sequenceKey, startNumber));
