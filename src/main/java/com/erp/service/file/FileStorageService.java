@@ -246,6 +246,35 @@ public class FileStorageService {
                     throw new IllegalArgumentException("File size > 15MB");
                 }
             }
+
+            case KNOWLEDGE_BASE -> {
+                String contentType = Objects.requireNonNullElse(file.getContentType(), "");
+                boolean isVideo = contentType.startsWith("video/");
+                boolean isPdf = Objects.equals(contentType, "application/pdf");
+                boolean isOffice = Objects.equals(contentType, "application/msword")
+                        || Objects.equals(contentType, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        || Objects.equals(contentType, "application/vnd.ms-powerpoint")
+                        || Objects.equals(contentType, "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                        || Objects.equals(contentType, "application/vnd.ms-excel")
+                        || Objects.equals(contentType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                String name = Objects.requireNonNullElse(file.getOriginalFilename(), "").toLowerCase();
+                boolean nameLooksVideo = name.endsWith(".mp4") || name.endsWith(".webm")
+                        || name.endsWith(".mov") || name.endsWith(".mkv");
+                boolean nameLooksDoc = name.endsWith(".pdf") || name.endsWith(".doc") || name.endsWith(".docx")
+                        || name.endsWith(".ppt") || name.endsWith(".pptx")
+                        || name.endsWith(".xls") || name.endsWith(".xlsx");
+
+                if (!isVideo && !isPdf && !isOffice && !nameLooksVideo && !nameLooksDoc) {
+                    throw new IllegalArgumentException(
+                            "Only videos or documents (PDF, Word, PowerPoint, Excel) are allowed");
+                }
+                boolean treatAsVideo = isVideo || nameLooksVideo;
+                long max = treatAsVideo ? 200L * 1024 * 1024 : 25L * 1024 * 1024;
+                if (file.getSize() > max) {
+                    throw new IllegalArgumentException(
+                            treatAsVideo ? "Video size > 200MB" : "Document size > 25MB");
+                }
+            }
         }
     }
 
@@ -295,6 +324,9 @@ public class FileStorageService {
                     + UUID.randomUUID() + "." + extension;
 
             case BENEFIT_REIMBURSEMENT_DOCUMENT -> "benefits/" + entityId + "/reimbursement-"
+                    + UUID.randomUUID() + "." + extension;
+
+            case KNOWLEDGE_BASE -> "knowledge-base/" + entityId + "/"
                     + UUID.randomUUID() + "." + extension;
         };
     }
