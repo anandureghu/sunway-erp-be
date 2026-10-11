@@ -21,6 +21,8 @@ public class PayslipDocumentDTO {
     private Double workedDays;
     private Double workedHours;
     private Double overtimeHours;
+    /** Regular hours worked on rest days / public holidays. */
+    private Double restDayHours;
     private Double paidLeaveDays;
     private Double unpaidLeaveDays;
     /** Paid public-holiday working days in the run. */

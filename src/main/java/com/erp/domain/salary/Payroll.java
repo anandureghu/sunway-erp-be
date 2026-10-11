@@ -81,6 +81,17 @@ public class Payroll {
     @Column(name = "overtime_pay", nullable = false)
     private Double overtimePay = 0.0;
 
+    /**
+     * Regular hours worked on rest days (Fri/Sat) and public holidays — the part of
+     * those shifts up to the standard day. Paid on top of salary as rest-day work.
+     */
+    @Column(name = "rest_day_hours", nullable = false)
+    private Double restDayHours = 0.0;
+
+    /** Pay for {@link #restDayHours}: hours × hourly rate × Friday/holiday multiplier. */
+    @Column(name = "rest_day_pay", nullable = false)
+    private Double restDayPay = 0.0;
+
     /** One-off benefit grants (annual ticket, bonus, reimbursement) paid in this run. */
     @Column(name = "benefits_amount", nullable = false)
     private Double benefitsAmount = 0.0;

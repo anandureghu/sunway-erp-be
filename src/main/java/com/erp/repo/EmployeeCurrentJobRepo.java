@@ -72,4 +72,27 @@ public interface EmployeeCurrentJobRepo extends JpaRepository<EmployeeCurrentJob
     java.util.List<EmployeeCurrentJob> findActiveHoldersExcluding(
             @Param("employeeId") Long employeeId,
             @Param("freedStatuses") Collection<EmployeeStatus> freedStatuses);
+
+    /** Current jobs in a company held by someone still on the roster (job-code occupancy). */
+    @Query("""
+            SELECT cj FROM EmployeeCurrentJob cj
+            JOIN FETCH cj.employee e
+            JOIN FETCH cj.jobCode jc
+            WHERE jc.company.id = :companyId
+              AND e.status NOT IN :freedStatuses
+            """)
+    java.util.List<EmployeeCurrentJob> findActiveHoldersInCompany(
+            @Param("companyId") Long companyId,
+            @Param("freedStatuses") Collection<EmployeeStatus> freedStatuses);
+
+    /** Still-on-the-roster holders of one job code (normally zero or one). */
+    @Query("""
+            SELECT cj FROM EmployeeCurrentJob cj
+            JOIN FETCH cj.employee e
+            WHERE cj.jobCode.id = :jobCodeId
+              AND e.status NOT IN :freedStatuses
+            """)
+    java.util.List<EmployeeCurrentJob> findActiveHoldersOfJobCode(
+            @Param("jobCodeId") Long jobCodeId,
+            @Param("freedStatuses") Collection<EmployeeStatus> freedStatuses);
 }

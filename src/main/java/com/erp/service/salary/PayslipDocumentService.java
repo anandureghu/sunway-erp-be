@@ -113,6 +113,7 @@ public class PayslipDocumentService {
         dto.setWorkedDays(payroll.getWorkedDays());
         dto.setWorkedHours(payroll.getWorkedHours());
         dto.setOvertimeHours(payroll.getOvertimeHours());
+        dto.setRestDayHours(payroll.getRestDayHours());
         dto.setPaidLeaveDays(payroll.getPaidLeaveDays());
         dto.setUnpaidLeaveDays(payroll.getUnpaidLeaveDays());
         dto.setPublicHolidayDays(payroll.getPublicHolidayDays());
@@ -133,6 +134,10 @@ public class PayslipDocumentService {
         // line so the gross reconciles (basic + allowances + overtime + gratuity = gross).
         if (payroll.getOvertimePay() != null && payroll.getOvertimePay() > 0) {
             earnings.add(line("Overtime Pay", payroll.getOvertimePay()));
+        }
+        // Regular hours worked on a rest day / public holiday — paid on top of salary.
+        if (payroll.getRestDayPay() != null && payroll.getRestDayPay() > 0) {
+            earnings.add(line("Rest-day / Holiday Work", payroll.getRestDayPay()));
         }
         if (payroll.getEndOfServiceCompensation() != null && payroll.getEndOfServiceCompensation() > 0) {
             earnings.add(line("End of Service Compensation", payroll.getEndOfServiceCompensation()));
@@ -296,6 +301,7 @@ public class PayslipDocumentService {
         ctx.setVariable("workedDays", dto.getWorkedDays());
         ctx.setVariable("workedHours", dto.getWorkedHours());
         ctx.setVariable("overtimeHours", dto.getOvertimeHours());
+        ctx.setVariable("restDayHours", dto.getRestDayHours());
         ctx.setVariable("paidLeaveDays", dto.getPaidLeaveDays());
         ctx.setVariable("unpaidLeaveDays", dto.getUnpaidLeaveDays());
         ctx.setVariable("publicHolidayDays", dto.getPublicHolidayDays());

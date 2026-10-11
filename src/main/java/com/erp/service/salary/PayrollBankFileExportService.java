@@ -153,7 +153,9 @@ public class PayrollBankFileExportService {
             double housing = comp.getHousingType() == BenefitType.ALLOWANCE ? r2(nz(comp.getHousingAllowance()) * f) : 0d;
             double food = r2(nz(comp.getFoodAllowance()) * f);
             double transport = comp.getTransportationType() == BenefitType.ALLOWANCE ? r2(nz(comp.getTransportationAllowance()) * f) : 0d;
-            double overtime = payroll != null ? nz(payroll.getOvertimePay()) : 0d;
+            // Overtime column carries overtime + rest-day / holiday work (both extra hours).
+            double overtime = payroll != null
+                    ? nz(payroll.getOvertimePay()) + nz(payroll.getRestDayPay()) : 0d;
             double travelAllow = comp.getTravelType() == BenefitType.ALLOWANCE ? r2(nz(comp.getTravelAllowance()) * f) : 0d;
             double otherAllow = r2(nz(comp.getOtherAllowance()) * f);
             // WPS: Net ≈ Basic + Extra Income − Deductions. Extra Income is the aggregate of

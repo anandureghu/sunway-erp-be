@@ -33,6 +33,15 @@ public class JobCodeRequestDTO {
     @NotNull(message = "Status is required")
     private Boolean active;
 
+    /** Position state chosen by HR: VACANT or ON_HOLD (OCCUPIED is automatic). Null keeps it. */
+    private String status;
+
+    /** Reason the position is on hold — required when status is ON_HOLD. */
+    private String holdComment;
+
+    /** PENDING_APPROVAL or RESERVED — required when status is ON_HOLD. */
+    private String holdReason;
+
     // ── Defaults copied onto the current job when this code is assigned ──
     private Long departmentId;
     private Long divisionId;

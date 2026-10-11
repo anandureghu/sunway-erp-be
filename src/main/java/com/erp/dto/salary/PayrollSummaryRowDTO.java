@@ -24,6 +24,12 @@ public class PayrollSummaryRowDTO {
     private double loanDeduction;
     private double lopAmount;
     private double overtimePay;
+    private double overtimeHours;
+    private double restDayHours;
+    private double restDayPay;
+    /** Regular hours (overtime excluded). */
+    private double workedHours;
+    private double workedDays;
     private double endOfServiceCompensation;
     private double netPayable;
 

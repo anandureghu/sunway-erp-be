@@ -28,6 +28,8 @@ public class EmployeeMonthlyAttendanceDTO {
     private double totalHours;
     /** Total overtime hours across the month — hours beyond the standard day, daily-capped. */
     private double overtimeHours;
+    /** Regular hours worked on rest days / public holidays this month (paid extra). */
+    private double restDayHours;
     /**
      * True when this company does not punch in/out, so overtime cannot be derived from
      * timesheets and is instead entered manually per month (editable in the Time Sheets tab).

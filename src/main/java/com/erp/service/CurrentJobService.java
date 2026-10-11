@@ -33,11 +33,12 @@ public class CurrentJobService {
 
     /**
      * Statuses for which an employee no longer occupies their job code, freeing it
-     * to be assigned to someone else. Everyone still on the roster (ACTIVE, ON_LEAVE,
-     * INACTIVE) keeps their job code reserved.
+     * (status back to VACANT) to be assigned to someone else. Everyone still on the
+     * roster (ACTIVE, UNDER_PROBATION, ON_LEAVE) keeps it OCCUPIED.
      */
     public static final Set<EmployeeStatus> JOB_CODE_FREED_STATUSES = EnumSet.of(
-            EmployeeStatus.TERMINATED, EmployeeStatus.RESIGNED, EmployeeStatus.RETIRED);
+            EmployeeStatus.TERMINATED, EmployeeStatus.RESIGNED, EmployeeStatus.RETIRED,
+            EmployeeStatus.INACTIVE);
 
     private final EmployeeCurrentJobRepo currentJobRepo;
     private final EmployeeRepository employeeRepo;
@@ -46,6 +47,7 @@ public class CurrentJobService {
     private final DivisionRepository divisionRepo;
     private final EmployeeAccessGuard employeeAccessGuard;
     private final ContractRepository contractRepository;
+    private final com.erp.service.hrsettings.JobCodeOccupancyService jobCodeOccupancy;
 
     @Transactional(readOnly = true)
     public EmployeeCurrentJobResponseDTO get(Long employeeId) {
@@ -99,6 +101,7 @@ public class CurrentJobService {
 
         EmployeeCurrentJob saved = currentJobRepo.saveAndFlush(job);
         syncContractFromCurrentJob(saved);
+        jobCodeOccupancy.sync(jobCode);
 
         return EmployeeCurrentJobMapper.toDTO(saved);
     }
@@ -121,6 +124,7 @@ public class CurrentJobService {
                 .orElseThrow(() -> new NotFoundException("Department not found"));
         Division division = resolveDivision(dto.getDivisionId(), department);
 
+        JobCode previousCode = job.getJobCode();
         job.setJobCode(jobCode);
         job.setDepartment(department);
         job.setDivision(division);
@@ -130,6 +134,10 @@ public class CurrentJobService {
 
         EmployeeCurrentJob saved = currentJobRepo.saveAndFlush(job);
         syncContractFromCurrentJob(saved);
+        jobCodeOccupancy.sync(jobCode);
+        if (previousCode != null && !previousCode.getId().equals(jobCode.getId())) {
+            jobCodeOccupancy.sync(previousCode);
+        }
 
         return EmployeeCurrentJobMapper.toDTO(saved);
     }
@@ -212,6 +220,14 @@ public class CurrentJobService {
      * (it frees up once that holder is terminated / resigned / retired).
      */
     private void assertJobCodeAvailable(JobCode jobCode, Long employeeId) {
+        boolean alreadyHolds = currentJobRepo.findByEmployee_Id(employeeId)
+                .map(cj -> cj.getJobCode() != null && jobCode.getId().equals(cj.getJobCode().getId()))
+                .orElse(false);
+        if (!alreadyHolds && jobCode.getStatus() == com.erp.domain.enums.JobCodeStatus.ON_HOLD) {
+            throw new IllegalStateException("Job code " + jobCode.getCode() + " is on hold"
+                    + (jobCode.getHoldComment() != null ? " (" + jobCode.getHoldComment() + ")" : "")
+                    + ". Set it back to Vacant in HR Settings → Job Codes before assigning it.");
+        }
         boolean taken = currentJobRepo.isJobCodeHeldByAnotherActiveEmployee(
                 jobCode.getId(), employeeId, JOB_CODE_FREED_STATUSES);
         if (!taken) {
@@ -228,8 +244,8 @@ public class CurrentJobService {
                 .orElse("another active employee");
         throw new IllegalStateException(
                 "Job code " + jobCode.getCode() + " is already assigned to " + holder
-                        + ". A job code can be held by only one active employee — it frees up "
-                        + "once that employee is terminated.");
+                        + ". A job code can be held by only one active employee — it becomes "
+                        + "vacant once that employee leaves or is made inactive.");
     }
 
     private void assertSameCompany(Employee employee, JobCode jobCode) {

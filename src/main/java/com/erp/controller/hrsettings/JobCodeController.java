@@ -112,21 +112,45 @@ public class JobCodeController {
     }
 
     /**
-     * APPROVE a pending job code (HR manager).
+     * Position Approvals queue — holds waiting for approval and the latest decisions.
      */
-    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).EDIT)")
-    @PutMapping("/{id}/approve")
-    public JobCodeResponseDTO approve(@PathVariable("id") Long id) {
-        return service.decide(id, true);
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).APPROVE) or @permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HRS_JOB_CODES, T(com.erp.domain.security.AppAction).APPROVE)")
+    @GetMapping("/holds")
+    public com.erp.dto.hrsettings.JobCodeHoldQueueDTO holdQueue() {
+        return service.holdQueue();
     }
 
     /**
-     * REJECT a pending job code (HR manager).
+     * APPROVE a hold that is pending approval — the position opens (VACANT).
+     */
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).APPROVE) or @permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HRS_JOB_CODES, T(com.erp.domain.security.AppAction).APPROVE)")
+    @PutMapping("/{id}/hold/approve")
+    public JobCodeResponseDTO approveHold(
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) com.erp.dto.hrsettings.JobCodeHoldDecisionDTO body) {
+        return service.approveHold(id, body != null ? body.getNote() : null);
+    }
+
+    /**
+     * REJECT a hold that is pending approval — the code is deactivated (reason required).
+     */
+    @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).APPROVE) or @permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HRS_JOB_CODES, T(com.erp.domain.security.AppAction).APPROVE)")
+    @PutMapping("/{id}/hold/reject")
+    public JobCodeResponseDTO rejectHold(
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) com.erp.dto.hrsettings.JobCodeHoldDecisionDTO body) {
+        return service.rejectHold(id, body != null ? body.getNote() : null);
+    }
+
+    /**
+     * RELEASE a reserved position — back to VACANT.
      */
     @PreAuthorize("@permissionChecker.has(authentication, T(com.erp.domain.security.AppModule).HR_SETTINGS, T(com.erp.domain.security.AppAction).EDIT)")
-    @PutMapping("/{id}/reject")
-    public JobCodeResponseDTO reject(@PathVariable("id") Long id) {
-        return service.decide(id, false);
+    @PutMapping("/{id}/hold/release")
+    public JobCodeResponseDTO releaseHold(
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) com.erp.dto.hrsettings.JobCodeHoldDecisionDTO body) {
+        return service.releaseHold(id, body != null ? body.getNote() : null);
     }
 
     /**

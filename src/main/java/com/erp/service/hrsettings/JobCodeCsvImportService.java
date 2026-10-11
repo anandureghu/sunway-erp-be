@@ -110,7 +110,6 @@ public class JobCodeCsvImportService {
                     if (minSalary != null) existing.setMinSalary(minSalary);
                     if (maxSalary != null) existing.setMaxSalary(maxSalary);
                     existing.setActive(active);
-                    existing.setStatus(JobCodeStatus.PENDING_APPROVAL);
                     if (dept != null) existing.setDepartment(dept);
                     if (div != null) existing.setDivision(div);
                     if (empCat != null) existing.setEmploymentCategory(empCat);
@@ -126,7 +125,7 @@ public class JobCodeCsvImportService {
                 JobCode jc = JobCode.builder()
                         .code(code).title(title).level(level).salaryGrade(grade)
                         .minSalary(minSalary).maxSalary(maxSalary).active(active)
-                        .status(JobCodeStatus.PENDING_APPROVAL)
+                        .status(JobCodeStatus.VACANT)
                         .company(company).department(dept).division(div)
                         .employmentCategory(empCat).employmentType(empType)
                         .workLocation(workLoc).workCity(workCity).workCountry(workCountry)

@@ -81,6 +81,7 @@ public class EmployeeService {
     private final DocumentSequenceService documentSequenceService;
     private final EmployeeAccessGuard employeeAccessGuard;
     private final ContractRepository contractRepository;
+    private final com.erp.service.hrsettings.JobCodeOccupancyService jobCodeOccupancy;
 
     public EmployeeService(
             EmployeeRepository employeeRepository,
@@ -99,7 +100,8 @@ public class EmployeeService {
             PermissionCheckService permissionCheckService,
             DocumentSequenceService documentSequenceService,
             EmployeeAccessGuard employeeAccessGuard,
-            ContractRepository contractRepository
+            ContractRepository contractRepository,
+            com.erp.service.hrsettings.JobCodeOccupancyService jobCodeOccupancy
     ) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
@@ -118,6 +120,7 @@ public class EmployeeService {
         this.documentSequenceService = documentSequenceService;
         this.employeeAccessGuard = employeeAccessGuard;
         this.contractRepository = contractRepository;
+        this.jobCodeOccupancy = jobCodeOccupancy;
     }
     // ======================================================
     // CREATE EMPLOYEE
@@ -267,6 +270,10 @@ public class EmployeeService {
         if (dto.getGender()         != null) employee.setGender(dto.getGender());
         if (dto.getStatus()         != null) {
             EmployeeStatus newStatus = dto.getStatus();
+            if (employee.getStatus() != null && employee.getStatus().isDepartedOrInactive()
+                    && !newStatus.isDepartedOrInactive()) {
+                jobCodeOccupancy.assertCanRetake(employee); // back on the roster
+            }
             employee.setStatus(newStatus);
             // Termination code only lives on a TERMINATED employee — clear it otherwise.
             if (newStatus == EmployeeStatus.TERMINATED) {
@@ -364,7 +371,11 @@ public class EmployeeService {
         }
 
         employee.setUpdatedAt(Instant.now());
-        return toDTO(employeeRepository.save(employee));
+        Employee saved = employeeRepository.save(employee);
+        if (dto.getStatus() != null) {
+            jobCodeOccupancy.syncForEmployee(saved); // occupied ↔ vacant follows the status
+        }
+        return toDTO(saved);
     }
 
     // ======================================================
@@ -785,6 +796,7 @@ public class EmployeeService {
         if (employee.getStatus() != EmployeeStatus.INACTIVE) {
             throw new IllegalStateException("Only inactive employees can be activated.");
         }
+        jobCodeOccupancy.assertCanRetake(employee);
         employee.setStatus(EmployeeStatus.ACTIVE);
         employee.setTerminationCode(null);
         employee.setArchived(false);
@@ -796,7 +808,9 @@ public class EmployeeService {
                 currentJobRepo.save(job);
             }
         });
-        return toDTO(employeeRepository.save(employee));
+        Employee saved = employeeRepository.save(employee);
+        jobCodeOccupancy.syncForEmployee(saved); // their job code is occupied again
+        return toDTO(saved);
     }
 
     private EmployeeResponseDTO toDTO(Employee e) {

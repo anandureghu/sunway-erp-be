@@ -127,7 +127,9 @@ public class AttendanceReportService {
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
-        LocalDate today = LocalDate.now();
+        // "Today" in the company's attendance timezone — the same zone check-in uses to
+        // stamp the attendance date (the server itself runs in UTC).
+        LocalDate today = LocalDate.now(attendanceZone(employees.get(0)));
 
         // Exiting employees are marked absent; their worked days stop at their last
         // working day (the current job's expected end date), when one is recorded.
@@ -159,9 +161,8 @@ public class AttendanceReportService {
                 if (c.getStandardWorkingHoursPerDay() != null) {
                     stdHours = c.getStandardWorkingHoursPerDay().doubleValue();
                 }
-                if (c.getOtMaxHoursPerDay() != null) {
-                    otMaxHours = c.getOtMaxHoursPerDay().doubleValue();
-                }
+                // Overtime cap = auto check-out − standard day (same rule as payroll).
+                otMaxHours = c.overtimeCapHoursPerDay();
                 requireCheckIn = c.isRequireCheckIn();
             }
         } catch (Exception ignored) {
@@ -258,28 +259,27 @@ public class AttendanceReportService {
             List<EmployeeTimesheet> records = byEmployee.getOrDefault(e.getId(), List.of());
 
             int daysRecorded = records.size();
-            // Days worked counts Sun–Thu only; a Friday/Saturday punch is rest-day
-            // overtime (as in payroll), not a working day.
-            // Public holidays aren't working days either: a punch on one is holiday overtime.
+            // Worked days = full shifts on working days (Sun–Thu, not a public holiday).
+            // A rest-day / holiday shift splits the same way (regular + overtime) but is
+            // extra work paid on top — it never stands in for a missed working day.
             int daysPresent = (int) records.stream()
                     .filter(t -> t.getAttendanceDate() != null && isWeekday(t.getAttendanceDate())
                             && !holidays.contains(t.getAttendanceDate()))
                     .filter(t -> resolveWorkedMinutes(t) >= minMinutes)
                     .count();
+            long restDayRegularMinutes = records.stream()
+                    .filter(t -> t.getAttendanceDate() != null
+                            && (!isWeekday(t.getAttendanceDate()) || holidays.contains(t.getAttendanceDate())))
+                    .mapToLong(t -> Math.min(Math.max(resolveWorkedMinutes(t), 0L), minMinutes))
+                    .sum();
             long totalMinutes = records.stream().mapToLong(this::resolveWorkedMinutes).sum();
             double totalHours = Math.round(totalMinutes / 60.0 * 10.0) / 10.0;
 
-            // Overtime is computed per day (hours beyond the standard day, capped at
-            // the company's daily overtime limit) and summed across the month. Every
-            // hour on a rest day is overtime, capped at the maximum working day.
+            // Overtime per day: hours beyond the standard day, capped at auto check-out
+            // − standard day, summed across the month — identical on every day.
             long overtimeMinutes = records.stream()
                     .mapToLong(t -> {
-                        long worked = resolveWorkedMinutes(t);
-                        if (t.getAttendanceDate() != null
-                                && (!isWeekday(t.getAttendanceDate()) || holidays.contains(t.getAttendanceDate()))) {
-                            return Math.min(Math.max(worked, 0L), minMinutes + otMaxMinutes);
-                        }
-                        long over = worked - minMinutes;
+                        long over = resolveWorkedMinutes(t) - minMinutes;
                         return over <= 0 ? 0L : Math.min(over, otMaxMinutes);
                     })
                     .sum();
@@ -327,6 +327,7 @@ public class AttendanceReportService {
                     .daysPresent(daysPresent)
                     .totalHours(totalHours)
                     .overtimeHours(overtimeHours)
+                    .restDayHours(Math.round(restDayRegularMinutes / 60.0 * 10.0) / 10.0)
                     .todayStatus(todayStatus)
                     .todayCheckIn(onLeaveToday ? null : (todayRec != null ? todayRec.getCheckInTime() : null))
                     .todayCheckOut(onLeaveToday ? null : (todayRec != null ? todayRec.getCheckOutTime() : null))
@@ -379,5 +380,20 @@ public class AttendanceReportService {
         String f = e.getFirstName() == null ? "" : e.getFirstName();
         String l = e.getLastName() == null ? "" : e.getLastName();
         return (f + " " + l).trim();
+    }
+
+    /** Company attendance timezone (falls back to Asia/Qatar) — matches EmployeeTimesheetService. */
+    private static java.time.ZoneId attendanceZone(Employee employee) {
+        try {
+            if (employee != null && employee.getCompany() != null) {
+                String tz = employee.getCompany().getTimezone();
+                if (tz != null && !tz.isBlank()) {
+                    return java.time.ZoneId.of(tz.trim());
+                }
+            }
+        } catch (Exception ignored) {
+            // invalid zone id or lazy company — use the default
+        }
+        return java.time.ZoneId.of("Asia/Qatar");
     }
 }

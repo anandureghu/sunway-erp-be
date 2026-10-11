@@ -47,12 +47,43 @@ public class JobCode {
     @Builder.Default
     private Boolean active = true;
 
-    /** Approval state — a code must be APPROVED before it can be assigned. */
+    /**
+     * Position state — VACANT (new codes), OCCUPIED (kept in sync with assignments
+     * by JobCodeOccupancyService) or ON_HOLD (set by HR, with {@link #holdComment}).
+     */
     @Enumerated(jakarta.persistence.EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private com.erp.domain.enums.JobCodeStatus status =
-            com.erp.domain.enums.JobCodeStatus.PENDING_APPROVAL;
+            com.erp.domain.enums.JobCodeStatus.VACANT;
+
+    /** Why the position is on hold (required while ON_HOLD). */
+    @Column(name = "hold_comment", length = 500)
+    private String holdComment;
+
+    /** When the position was put on hold. */
+    @Column(name = "hold_since")
+    private java.time.LocalDate holdSince;
+
+    /** Why it is on hold — PENDING_APPROVAL or RESERVED (only while ON_HOLD). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "hold_reason", length = 30)
+    private com.erp.domain.enums.JobCodeHoldReason holdReason;
+
+    // ── How the last hold was closed (kept after the code goes back to VACANT) ──
+
+    /** APPROVED, REJECTED or RELEASED. */
+    @Column(name = "hold_decision", length = 20)
+    private String holdDecision;
+
+    @Column(name = "hold_decision_note", length = 500)
+    private String holdDecisionNote;
+
+    @Column(name = "hold_decided_by", length = 150)
+    private String holdDecidedBy;
+
+    @Column(name = "hold_decided_at")
+    private java.time.LocalDateTime holdDecidedAt;
 
     // ── Defaults copied onto the current job when this code is assigned ──
 
