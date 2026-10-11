@@ -232,6 +232,11 @@ public class ItemService {
         item.setSellingPrice(dto.getSellingPrice());
         item.setUnitSale(dto.getUnitSale());
         applyListPriceOnUpdate(item, dto.getListPrice(), dto.getSellingPrice());
+        if (dto.getStatus() != null
+                && "discontinued".equalsIgnoreCase(dto.getStatus().trim())
+                && !"discontinued".equalsIgnoreCase(item.getStatus())) {
+            validateNoOpenInventory(item, "discontinue");
+        }
         item.setStatus(dto.getStatus());
         // Preserve existing image on normal updates unless an explicit value is provided.
         if (dto.getImageUrl() != null) {
@@ -868,6 +873,10 @@ public class ItemService {
                 if (item.isArchived()) {
                     throw new IllegalArgumentException("Cannot change status on archived items. Restore first.");
                 }
+                if ("discontinued".equals(status)
+                        && !"discontinued".equalsIgnoreCase(item.getStatus())) {
+                    validateNoOpenInventory(item, "discontinue");
+                }
                 item.setStatus(status);
                 item.setUpdatedBy(user);
                 item.setUpdatedAt(now);
@@ -915,7 +924,7 @@ public class ItemService {
         if (item.isArchived()) {
             throw new IllegalArgumentException("Item is already archived.");
         }
-        validateNoStockForArchive(item);
+        validateNoOpenInventory(item, "archive");
         User user = userRepo.findById(auth.getCurrentUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
         item.setArchived(true);
@@ -962,7 +971,10 @@ public class ItemService {
         itemRepo.delete(item);
     }
 
-    private void validateNoStockForArchive(Item item) {
+    /**
+     * Archive and discontinue both require clear stock: zero on hand, reserved, and on-order.
+     */
+    private void validateNoOpenInventory(Item item, String action) {
         Long companyId = auth.getCurrentCompanyId();
         int onHand = warehouseStockRepo.findByItemId(item.getId()).stream()
                 .mapToInt(row -> row.getQuantityOnHand() == null ? 0 : row.getQuantityOnHand())
@@ -972,16 +984,19 @@ public class ItemService {
                 .sum();
         if (onHand > 0) {
             throw new IllegalArgumentException(
-                    "Cannot archive while quantity on hand is " + onHand + ". Adjust stock to zero first.");
+                    "Cannot " + action + " while quantity on hand is " + onHand
+                            + ". Adjust stock to zero first.");
         }
         if (reserved > 0) {
             throw new IllegalArgumentException(
-                    "Cannot archive while " + reserved + " unit(s) are reserved on sales orders.");
+                    "Cannot " + action + " while " + reserved
+                            + " unit(s) are reserved on sales orders.");
         }
         int onOrder = loadOnOrderByItem(companyId).getOrDefault(item.getId(), 0);
         if (onOrder > 0) {
             throw new IllegalArgumentException(
-                    "Cannot archive while " + onOrder + " unit(s) are on open purchase orders.");
+                    "Cannot " + action + " while " + onOrder
+                            + " unit(s) are on open purchase orders.");
         }
     }
 

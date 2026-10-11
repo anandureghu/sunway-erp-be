@@ -33,6 +33,7 @@ public class EmployeeSeparationService {
     private final EmployeeRepository employeeRepo;
     private final EmployeeExitInterviewRepository interviewRepo;
     private final PayrollRepository payrollRepo;
+    private final com.erp.service.hrsettings.JobCodeOccupancyService jobCodeOccupancy;
 
     public boolean isExitInterviewSubmitted(Employee employee) {
         return employee != null && employee.getId() != null
@@ -57,6 +58,7 @@ public class EmployeeSeparationService {
         if (isExitInterviewSubmitted(employee) && isFinalSettlementProcessed(employee)) {
             employee.setStatus(EmployeeStatus.INACTIVE);
             employeeRepo.save(employee);
+            jobCodeOccupancy.syncForEmployee(employee); // their job code becomes vacant
         }
     }
 }

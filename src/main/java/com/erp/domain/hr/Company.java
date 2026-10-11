@@ -341,4 +341,29 @@ public class Company {
     @Transient
     private Long maxStorageBytes;
 
+    // ── Attendance / overtime rule (single source of truth) ──
+    // A shift splits the same way every day: the first standardWorkingHoursPerDay
+    // hours are regular, anything after that up to the auto check-out limit is
+    // overtime. So the daily overtime cap is auto check-out − standard day
+    // (e.g. 10h − 8h = 2h, 12h − 8h = 4h). Plain method names (no "get") keep these
+    // out of JSON / JPA.
+
+    /** Standard (regular) hours in a working day; 6 when unset. */
+    public double standardHoursPerDay() {
+        return standardWorkingHoursPerDay != null && standardWorkingHoursPerDay.signum() > 0
+                ? standardWorkingHoursPerDay.doubleValue()
+                : 6.0;
+    }
+
+    /** Auto check-out limit in hours (8 / 10 / 12); 10 when unset or invalid. */
+    public int autoCheckoutHours() {
+        Integer h = autoCheckoutAfterHours;
+        return h != null && (h == 8 || h == 10 || h == 12) ? h : 10;
+    }
+
+    /** Overtime hours a single day can earn: auto check-out − standard day (never negative). */
+    public double overtimeCapHoursPerDay() {
+        return Math.max(0.0, autoCheckoutHours() - standardHoursPerDay());
+    }
+
 }

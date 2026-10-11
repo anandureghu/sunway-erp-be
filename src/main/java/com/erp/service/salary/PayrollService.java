@@ -175,6 +175,11 @@ public class PayrollService {
                 .loanDeduction(round2(loans))
                 .lopAmount(round2(lop))
                 .overtimePay(round2(safe(p.getOvertimePay())))
+                .overtimeHours(round2(safe(p.getOvertimeHours())))
+                .restDayHours(round2(safe(p.getRestDayHours())))
+                .restDayPay(round2(safe(p.getRestDayPay())))
+                .workedHours(round2(safe(p.getWorkedHours())))
+                .workedDays(round2(safe(p.getWorkedDays())))
                 .endOfServiceCompensation(round2(safe(p.getEndOfServiceCompensation())))
                 .netPayable(round2(net))
                 .finalSettlement(p.isFinalSettlement())
@@ -361,6 +366,8 @@ public class PayrollService {
         payroll.setWorkedHours(computation.workedHours());
         payroll.setOvertimeHours(computation.overtimeHours());
         payroll.setOvertimePay(computation.overtimePay());
+        payroll.setRestDayHours(computation.restDayHours());
+        payroll.setRestDayPay(computation.restDayPay());
         payroll.setWorkedDays(computation.workedDays());
         payroll.setPaidLeaveDays(computation.paidLeaveDays());
         payroll.setUnpaidLeaveDays(computation.unpaidLeaveDays());
@@ -555,8 +562,9 @@ public class PayrollService {
 
         double stdHoursPerDay = companyStandardHours(employee);
         long stdMinutes = Math.round(stdHoursPerDay * 60.0);
-        double workedHours;
+        double workedHours;   // regular hours on working days (overtime reported separately)
         double workedDays;
+        double restDayHours = 0.0; // regular hours on rest days / public holidays (paid extra)
         if (!requireCheckIn) {
             // Organisation doesn't punch in/out — every employed working day is paid
             // EXCEPT approved unpaid leave. Worked days = employed working days minus all
@@ -565,21 +573,30 @@ public class PayrollService {
             workedDays = Math.max(employedWorkingDays - holidayWorkingDays - paidLeaveDays - unpaidLeaveDays, 0.0);
             workedHours = workedDays * stdHoursPerDay;
         } else {
-            // Align exactly with the Attendance History report: worked hours = sum of
-            // logged time; worked days = days that reached a full standard day (the
-            // report's "Days Worked" / daysPresent), not a fractional hours/standard.
-            long totalMinutes = timesheets.stream()
-                    .mapToLong(this::resolveWorkedMinutes)
-                    .sum();
-            workedHours = totalMinutes / 60.0;
-            // Only Sun–Thu punches count toward worked days: the salary covers the
-            // working week, so a Friday/Saturday punch is rest-day overtime (below),
-            // never a substitute for a missed working day.
-            workedDays = timesheets.stream()
-                    .filter(t -> t.getAttendanceDate() != null && !isWeekend(t.getAttendanceDate())
-                            && !holidays.contains(t.getAttendanceDate()))
-                    .filter(t -> resolveWorkedMinutes(t) >= stdMinutes)
-                    .count();
+            // Every shift splits the same way on the timesheet: the first standard hours
+            // are regular, the rest (up to auto check-out) is overtime — below.
+            // On a working day (Sun–Thu) the regular part is covered by the salary and
+            // counts toward worked days. On a rest day (Fri/Sat) or public holiday it is
+            // extra work: it never replaces a missed working day and is paid on top as
+            // rest-day work at the Friday/holiday rate.
+            long weekdayRegularMinutes = 0L;
+            long restDayRegularMinutes = 0L;
+            int fullWorkingDays = 0;
+            for (EmployeeTimesheet t : timesheets) {
+                long minutes = Math.max(resolveWorkedMinutes(t), 0L);
+                long regular = Math.min(minutes, stdMinutes);
+                if (isRestDay(t.getAttendanceDate(), holidays)) {
+                    restDayRegularMinutes += regular;
+                } else {
+                    weekdayRegularMinutes += regular;
+                    if (minutes >= stdMinutes) {
+                        fullWorkingDays++;
+                    }
+                }
+            }
+            workedHours = weekdayRegularMinutes / 60.0;
+            workedDays = fullWorkingDays;
+            restDayHours = restDayRegularMinutes / 60.0;
         }
 
         // Overtime = hours logged beyond the standard for the whole period. In a
@@ -592,26 +609,24 @@ public class PayrollService {
         if (!requireCheckIn) {
             overtimeHours = sumOvertimeOverrideHours(employee.getId(), periodStart, periodEnd);
         } else {
-            // Per DAY: hours beyond the standard day, capped at the company's daily
-            // overtime limit — exactly how the Time Sheets board computes it. (Netting
-            // total hours against the period's standard let absences cancel out genuine
-            // overtime and ignored the daily cap.) On a rest day (Fri/Sat) every hour
-            // worked is overtime, capped at the maximum working day (standard + OT cap).
+            // Per DAY: hours beyond the standard day, capped at auto check-out − standard
+            // (10h − 8h = 2h, 12h − 8h = 4h) — the same split every day, exactly as the
+            // Time Sheets board shows it. Overtime on a rest day (Fri/Sat) or public
+            // holiday earns the Friday/holiday multiplier.
             long otCapMinutes = Math.round(companyOtMaxHours(employee) * 60.0);
             long weekdayOtMinutes = 0L;
-            long restDayMinutes = 0L;
+            long restDayOtMinutes = 0L;
             for (EmployeeTimesheet t : timesheets) {
-                long minutes = resolveWorkedMinutes(t);
-                if (t.getAttendanceDate() != null
-                        && (isWeekend(t.getAttendanceDate()) || holidays.contains(t.getAttendanceDate()))) {
-                    restDayMinutes += Math.min(Math.max(minutes, 0L), stdMinutes + otCapMinutes);
+                long over = resolveWorkedMinutes(t) - stdMinutes;
+                long ot = over <= 0 ? 0L : Math.min(over, otCapMinutes);
+                if (isRestDay(t.getAttendanceDate(), holidays)) {
+                    restDayOtMinutes += ot;
                 } else {
-                    long over = minutes - stdMinutes;
-                    weekdayOtMinutes += over <= 0 ? 0L : Math.min(over, otCapMinutes);
+                    weekdayOtMinutes += ot;
                 }
             }
-            restDayOvertimeHours = restDayMinutes / 60.0;
-            overtimeHours = (weekdayOtMinutes + restDayMinutes) / 60.0;
+            restDayOvertimeHours = restDayOtMinutes / 60.0;
+            overtimeHours = (weekdayOtMinutes + restDayOtMinutes) / 60.0;
         }
 
         // Overtime is paid ON TOP of the monthly package: hourly rate is the package
@@ -621,6 +636,8 @@ public class PayrollService {
         double hourlyRate = stdHoursPerDay > 0 ? perDaySalary / stdHoursPerDay : 0.0;
         double overtimePay = (overtimeHours - restDayOvertimeHours) * hourlyRate * companyOtMultiplier(employee)
                 + restDayOvertimeHours * hourlyRate * companyRestDayOtMultiplier(employee);
+        // Regular hours worked on rest days / holidays: extra pay at the same rate.
+        double restDayPay = restDayHours * hourlyRate * companyRestDayOtMultiplier(employee);
 
         // Paid leave counts toward payable days; the worked-days figure already excludes
         // it (and unpaid leave). Payable days are capped at the days the employee was
@@ -652,7 +669,7 @@ public class PayrollService {
 
         // Amount the run can pay before loan recovery: full package + EOS + OT + benefits, less LOP.
         double availableBeforeLoan = grossEarnings + endOfServiceCompensation + overtimePay
-                + benefitsAmount - lopAmount;
+                + restDayPay + benefitsAmount - lopAmount;
 
         // How many calendar-month equivalents the period covers (2.0 for two full months,
         // ~2.5 for a 2.5-month window). Used to scale monthly loan installments.
@@ -679,8 +696,8 @@ public class PayrollService {
         }
 
         double totalDeductions = lopAmount + loanDeduction;
-        double netPayable = (grossEarnings + endOfServiceCompensation + overtimePay + benefitsAmount)
-                - totalDeductions;
+        double netPayable = (grossEarnings + endOfServiceCompensation + overtimePay + restDayPay
+                + benefitsAmount) - totalDeductions;
 
         if (netPayable < 0) {
             netPayable = 0.0;
@@ -707,7 +724,9 @@ public class PayrollService {
                 finalSettlement,
                 round2(benefitsAmount),
                 benefitGrants,
-                paidHolidayDays
+                paidHolidayDays,
+                round2(restDayHours),
+                round2(restDayPay)
         );
     }
 
@@ -749,20 +768,21 @@ public class PayrollService {
                 .orElse(null);
     }
 
-    /** Company's maximum overtime hours per day (default 2). */
+    /** Friday/Saturday or a company public holiday — work on it is paid extra. */
+    private boolean isRestDay(LocalDate date, java.util.Set<LocalDate> holidays) {
+        return date != null && (isWeekend(date) || holidays.contains(date));
+    }
+
+    /** Overtime a day can earn: auto check-out − standard day (see Company#overtimeCapHoursPerDay). */
     private double companyOtMaxHours(Employee employee) {
         try {
-            if (employee.getCompany() != null
-                    && employee.getCompany().getOtMaxHoursPerDay() != null) {
-                double v = employee.getCompany().getOtMaxHoursPerDay().doubleValue();
-                if (v >= 0) {
-                    return v;
-                }
+            if (employee.getCompany() != null) {
+                return employee.getCompany().overtimeCapHoursPerDay();
             }
         } catch (Exception ignored) {
             // lazy company not loadable — use default
         }
-        return 2.0;
+        return 4.0; // default 10h auto check-out − 6h standard day
     }
 
     private boolean isPaidLeave(Employee employee, String leaveType) {
@@ -1178,7 +1198,10 @@ public class PayrollService {
                 payrollAccount,
                 computation.benefitsAmount(),
                 Math.round(periodMonths * 100.0) / 100.0,
-                computation.publicHolidayDays()
+                computation.publicHolidayDays(),
+                computation.overtimeHours(),
+                computation.restDayHours(),
+                computation.restDayPay()
         );
     }
 
@@ -1314,11 +1337,13 @@ public class PayrollService {
             boolean finalSettlement,
             double benefitsAmount,
             List<EmployeeBenefitGrant> benefitGrants,
-            double publicHolidayDays
+            double publicHolidayDays,
+            double restDayHours,
+            double restDayPay
     ) {
-        /** Everything the run pays before deductions: package + EOS + overtime + benefits. */
+        /** Everything the run pays before deductions: package + EOS + overtime + rest-day work + benefits. */
         public double totalGross() {
-            return grossEarnings + endOfServiceCompensation + overtimePay + benefitsAmount;
+            return grossEarnings + endOfServiceCompensation + overtimePay + restDayPay + benefitsAmount;
         }
     }
 }

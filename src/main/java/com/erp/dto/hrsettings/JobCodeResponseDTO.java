@@ -19,8 +19,21 @@ public class JobCodeResponseDTO {
     private BigDecimal maxSalary;
     private Boolean active;
     private Long companyId;
-    /** Approval state: PENDING_APPROVAL | APPROVED | REJECTED. */
+    /** Position state: VACANT | OCCUPIED | ON_HOLD. */
     private String status;
+    /** Why the position is on hold (only while ON_HOLD). */
+    private String holdComment;
+    private java.time.LocalDate holdSince;
+    /** PENDING_APPROVAL | RESERVED (only while ON_HOLD). */
+    private String holdReason;
+    /** How the last hold was closed: APPROVED | REJECTED | RELEASED. */
+    private String holdDecision;
+    private String holdDecisionNote;
+    private String holdDecidedBy;
+    private java.time.LocalDateTime holdDecidedAt;
+    /** Who holds the position (only while OCCUPIED). */
+    @Setter
+    private String occupiedBy;
 
     // ── Defaults copied onto the current job when this code is assigned ──
     private Long departmentId;

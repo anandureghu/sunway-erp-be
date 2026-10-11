@@ -34,7 +34,7 @@ public class EmployeeTimesheetService {
 
     // Fallbacks used only when a company has no explicit setting.
     private static final double DEFAULT_STD_HOURS_PER_DAY = 6.0;
-    private static final double DEFAULT_OT_MAX_HOURS = 2.0;
+    private static final double DEFAULT_OT_MAX_HOURS = 4.0; // 10h auto check-out − 6h day
     private static final int DEFAULT_AUTO_CHECKOUT_HOURS = 10;
 
     /** Company's standard full-day length in hours (default 6). */
@@ -50,12 +50,11 @@ public class EmployeeTimesheetService {
         return DEFAULT_STD_HOURS_PER_DAY;
     }
 
-    /** Company's max overtime hours per day (default 2). */
+    /** Overtime a day can earn: auto check-out − standard day (Company#overtimeCapHoursPerDay). */
     private double otMaxHours(Employee employee) {
         try {
-            if (employee.getCompany() != null
-                    && employee.getCompany().getOtMaxHoursPerDay() != null) {
-                return employee.getCompany().getOtMaxHoursPerDay().doubleValue();
+            if (employee.getCompany() != null) {
+                return employee.getCompany().overtimeCapHoursPerDay();
             }
         } catch (Exception ignored) {
             // lazy company not loadable — fall through to default
@@ -301,7 +300,13 @@ public class EmployeeTimesheetService {
         long minMinutes = Math.round(stdHours * 60.0);
 
         int daysRecorded = records.size();
+        // Worked days = full shifts on working days (Sun–Thu, not a public holiday);
+        // a rest-day / holiday shift is extra work paid on top, not a worked day.
         int daysPresent = (int) records.stream()
+                .filter(t -> t.getAttendanceDate() != null
+                        && t.getAttendanceDate().getDayOfWeek() != java.time.DayOfWeek.FRIDAY
+                        && t.getAttendanceDate().getDayOfWeek() != java.time.DayOfWeek.SATURDAY
+                        && !holidays.contains(t.getAttendanceDate()))
                 .filter(t -> resolveWorkedMinutes(t) >= minMinutes)
                 .count();
         long totalMinutes = records.stream()

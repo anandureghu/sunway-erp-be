@@ -1127,13 +1127,14 @@ public class InvoiceService {
         Invoice invoice = repo.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found"));
         assertInvoiceInTenant(invoice);
+        byte[] pdfBytes = generateInvoicePdfBytesForEmail(invoice);
         if (invoice.getType() == InvoiceType.PURCHASE) {
             if (invoice.getOrderId() == null) {
                 throw new RuntimeException("Purchase invoice is not linked to a purchase order");
             }
             PurchaseOrderResponseDTO po = purchaseOrderService.get(invoice.getOrderId());
             customerEmailService.sendPurchaseInvoiceEmailRequired(
-                    po.getSupplierName(), po.getSupplierEmail(), invoice);
+                    po.getSupplierName(), po.getSupplierEmail(), invoice, pdfBytes);
             return;
         }
         if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
@@ -1142,7 +1143,7 @@ public class InvoiceService {
         Customer customer = salesOrderRepo.findById(invoice.getOrderId())
                 .map(so -> so.getCustomer())
                 .orElse(null);
-        customerEmailService.sendInvoiceCreatedEmailRequired(customer, invoice);
+        customerEmailService.sendInvoiceCreatedEmailRequired(customer, invoice, pdfBytes);
     }
 
     public void emailReceipt(Long invoiceId) {
@@ -1152,13 +1153,14 @@ public class InvoiceService {
         if (!"PAID".equalsIgnoreCase(invoice.getStatus())) {
             throw new RuntimeException("Receipt can be sent only for paid invoices");
         }
+        byte[] pdfBytes = generateInvoicePdfBytesForEmail(invoice);
         if (invoice.getType() == InvoiceType.PURCHASE) {
             if (invoice.getOrderId() == null) {
                 throw new RuntimeException("Purchase invoice is not linked to a purchase order");
             }
             PurchaseOrderResponseDTO po = purchaseOrderService.get(invoice.getOrderId());
             customerEmailService.sendPurchaseReceiptEmailRequired(
-                    po.getSupplierName(), po.getSupplierEmail(), invoice);
+                    po.getSupplierName(), po.getSupplierEmail(), invoice, pdfBytes);
             return;
         }
         if (invoice.getType() != InvoiceType.SALES || invoice.getOrderId() == null) {
@@ -1167,7 +1169,24 @@ public class InvoiceService {
         Customer customer = salesOrderRepo.findById(invoice.getOrderId())
                 .map(so -> so.getCustomer())
                 .orElse(null);
-        customerEmailService.sendReceiptEmailRequired(customer, invoice);
+        customerEmailService.sendReceiptEmailRequired(customer, invoice, pdfBytes);
+    }
+
+    /** PDF attachment for outbound invoice/receipt mail; null when generation is not applicable. */
+    private byte[] generateInvoicePdfBytesForEmail(Invoice invoice) {
+        InvoiceDocumentSource src = invoice.getDocumentSource();
+        if (src != null && src != InvoiceDocumentSource.GENERATED) {
+            return null;
+        }
+        try {
+            return pdfService.generateInvoicePdf(invoice);
+        } catch (Exception e) {
+            log.warn(
+                    "Could not generate PDF for invoice email {}: {}",
+                    invoice.getInvoiceId(),
+                    e.getMessage());
+            return null;
+        }
     }
 
     // ============================================================

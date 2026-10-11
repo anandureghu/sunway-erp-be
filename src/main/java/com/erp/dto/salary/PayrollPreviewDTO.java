@@ -32,4 +32,9 @@ public class PayrollPreviewDTO {
     private double periodMonths;
     /** Paid public-holiday working days in the period. */
     private double publicHolidayDays;
+    /** Overtime hours in the period (workedHours are the regular hours). */
+    private double overtimeHours;
+    /** Regular hours worked on rest days / public holidays (paid on top of salary). */
+    private double restDayHours;
+    private double restDayPay;
 }

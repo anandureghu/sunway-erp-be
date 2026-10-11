@@ -42,6 +42,7 @@ public class ContractService {
     private final CodeGeneratorService codeGeneratorService;
     private final FileStorageService fileStorageService;
     private final AuthContext authContext;
+    private final com.erp.service.hrsettings.JobCodeOccupancyService jobCodeOccupancy;
 
     // ================= CREATE =================
 
@@ -255,6 +256,7 @@ public class ContractService {
             employee.setStatus(EmployeeStatus.INACTIVE);
             employee.setTerminationCode(NON_RENEWAL_CODE);
             employeeRepository.save(employee);
+            jobCodeOccupancy.syncForEmployee(employee); // their job code becomes vacant
         }
     }
 

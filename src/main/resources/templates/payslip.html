@@ -158,7 +158,7 @@
       <td><div class="info-label">Present / Worked Days</div><div class="info-value mono" th:text="${workedDays != null ? #numbers.formatDecimal(workedDays,1,'COMMA',2,'POINT') : '0.00'}">20.00</div></td>
     </tr>
     <tr>
-      <td><div class="info-label">Worked Hours</div><div class="info-value mono" th:text="${workedHours != null ? #numbers.formatDecimal(workedHours,1,'COMMA',2,'POINT') : '0.00'}">160.00</div></td>
+      <td><div class="info-label">Regular Hours</div><div class="info-value mono" th:text="${workedHours != null ? #numbers.formatDecimal(workedHours,1,'COMMA',2,'POINT') : '0.00'}">160.00</div></td>
       <td><div class="info-label">Total Leave Taken</div><div class="info-value mono" th:text="${leaveTaken != null ? leaveTaken : 0}">2</div></td>
       <td><div class="info-label">Payable Days</div><div class="info-value mono" th:text="${payableDays != null ? #numbers.formatDecimal(payableDays,1,'COMMA',2,'POINT') : '0.00'}">21.00</div></td>
     </tr>
@@ -167,9 +167,9 @@
       <td><div class="info-label">Unpaid Leave Days</div><div class="info-value mono" th:text="${unpaidLeaveDays != null ? #numbers.formatDecimal(unpaidLeaveDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
       <td><div class="info-label">Overtime Hours</div><div class="info-value mono" th:text="${overtimeHours != null ? #numbers.formatDecimal(overtimeHours,1,'COMMA',2,'POINT') : '0.00'}">0.00</div></td>
     </tr>
-    <tr th:if="${publicHolidayDays != null and publicHolidayDays > 0}">
-      <td><div class="info-label">Paid Public Holidays</div><div class="info-value mono" th:text="${#numbers.formatDecimal(publicHolidayDays,1,'COMMA',2,'POINT')}">1.00</div></td>
-      <td></td>
+    <tr th:if="${(publicHolidayDays != null and publicHolidayDays > 0) or (restDayHours != null and restDayHours > 0)}">
+      <td><div class="info-label">Paid Public Holidays</div><div class="info-value mono" th:text="${publicHolidayDays != null ? #numbers.formatDecimal(publicHolidayDays,1,'COMMA',2,'POINT') : '0.00'}">1.00</div></td>
+      <td><div class="info-label">Rest-day / Holiday Hours</div><div class="info-value mono" th:text="${restDayHours != null ? #numbers.formatDecimal(restDayHours,1,'COMMA',2,'POINT') : '0.00'}">0.00</div></td>
       <td></td>
     </tr>
   </table>

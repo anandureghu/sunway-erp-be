@@ -540,12 +540,10 @@ public class CompanyService {
         if (dto.getOtNightEndTime() != null) {
             company.setOtNightEndTime(dto.getOtNightEndTime());
         }
-        if (dto.getOtMaxHoursPerDay() != null) {
-            BigDecimal cap = dto.getOtMaxHoursPerDay();
-            if (cap.compareTo(BigDecimal.ZERO) < 0) cap = BigDecimal.ZERO;
-            if (cap.compareTo(new BigDecimal("24")) > 0) cap = new BigDecimal("24");
-            company.setOtMaxHoursPerDay(cap);
-        }
+        // Daily overtime cap is no longer typed in: it is always auto check-out −
+        // standard day (Company#overtimeCapHoursPerDay). Keep the stored column in step.
+        company.setOtMaxHoursPerDay(BigDecimal.valueOf(company.overtimeCapHoursPerDay())
+                .setScale(2, java.math.RoundingMode.HALF_UP));
         boolean statutoryChanged = false;
         if (dto.getMinimumMonthlyWage() != null) {
             company.setMinimumMonthlyWage(nonNegative(dto.getMinimumMonthlyWage()));
@@ -641,10 +639,9 @@ public class CompanyService {
                         company.getOtNightEndTime() != null
                                 ? company.getOtNightEndTime()
                                 : QatarLaborLawDefaultsService.OT_NIGHT_END)
-                .otMaxHoursPerDay(
-                        company.getOtMaxHoursPerDay() != null
-                                ? company.getOtMaxHoursPerDay()
-                                : QatarLaborLawDefaultsService.OT_MAX_HOURS_PER_DAY)
+                // Derived: auto check-out − standard day.
+                .otMaxHoursPerDay(BigDecimal.valueOf(company.overtimeCapHoursPerDay())
+                        .setScale(2, java.math.RoundingMode.HALF_UP))
                 .minimumMonthlyWage(
                         company.getMinimumMonthlyWage() != null
                                 ? company.getMinimumMonthlyWage()

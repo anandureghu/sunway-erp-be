@@ -4,10 +4,6 @@ import com.erp.domain.finance.Invoice;
 import com.erp.domain.inventory.Customer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,18 +11,12 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class CustomerEmailService {
 
-    private final ObjectProvider<JavaMailSender> mailSenderProvider;
-
-    @Value("${app.mail.from:no-reply@sunwayerp.local}")
-    private String fromAddress;
-
-    @Value("${app.mail.enabled:false}")
-    private boolean mailEnabled;
+    private final EmailService emailService;
 
     /** Best-effort (used by payment/order flows — never fails the transaction). */
     public void sendInvoiceCreatedEmail(Customer customer, Invoice invoice) {
         try {
-            sendInvoiceCreatedEmailRequired(customer, invoice);
+            sendInvoiceCreatedEmailRequired(customer, invoice, null);
         } catch (Exception e) {
             log.warn("Skipping invoice email: {}", e.getMessage());
         }
@@ -35,13 +25,17 @@ public class CustomerEmailService {
     /** Best-effort (used by payment flows — never fails the transaction). */
     public void sendReceiptEmail(Customer customer, Invoice invoice) {
         try {
-            sendReceiptEmailRequired(customer, invoice);
+            sendReceiptEmailRequired(customer, invoice, null);
         } catch (Exception e) {
             log.warn("Skipping receipt email: {}", e.getMessage());
         }
     }
 
     public void sendInvoiceCreatedEmailRequired(Customer customer, Invoice invoice) {
+        sendInvoiceCreatedEmailRequired(customer, invoice, null);
+    }
+
+    public void sendInvoiceCreatedEmailRequired(Customer customer, Invoice invoice, byte[] pdfBytes) {
         if (customer == null || customer.getEmail() == null || customer.getEmail().isBlank()) {
             throw new IllegalStateException("Customer email is missing on this invoice");
         }
@@ -53,10 +47,19 @@ public class CustomerEmailService {
                 + "Due Date: " + invoice.getDueDate() + "\n\n"
                 + "Please complete payment to proceed with order processing.\n\n"
                 + "Regards,\nSunway ERP";
-        sendMailRequired(customer.getEmail(), subject, body);
+        sendMailRequired(
+                customer.getEmail(),
+                subject,
+                body,
+                pdfBytes,
+                invoice.getInvoiceId() + ".pdf");
     }
 
     public void sendReceiptEmailRequired(Customer customer, Invoice invoice) {
+        sendReceiptEmailRequired(customer, invoice, null);
+    }
+
+    public void sendReceiptEmailRequired(Customer customer, Invoice invoice, byte[] pdfBytes) {
         if (customer == null || customer.getEmail() == null || customer.getEmail().isBlank()) {
             throw new IllegalStateException("Customer email is missing on this invoice");
         }
@@ -67,10 +70,20 @@ public class CustomerEmailService {
                 + "Amount: " + invoice.getAmount() + "\n\n"
                 + "Thank you for your payment.\n\n"
                 + "Regards,\nSunway ERP";
-        sendMailRequired(customer.getEmail(), subject, body);
+        sendMailRequired(
+                customer.getEmail(),
+                subject,
+                body,
+                pdfBytes,
+                invoice.getInvoiceId() + "-receipt.pdf");
     }
 
     public void sendPurchaseInvoiceEmailRequired(String supplierName, String supplierEmail, Invoice invoice) {
+        sendPurchaseInvoiceEmailRequired(supplierName, supplierEmail, invoice, null);
+    }
+
+    public void sendPurchaseInvoiceEmailRequired(
+            String supplierName, String supplierEmail, Invoice invoice, byte[] pdfBytes) {
         if (supplierEmail == null || supplierEmail.isBlank()) {
             throw new IllegalStateException("Supplier email is missing on this purchase order");
         }
@@ -81,10 +94,20 @@ public class CustomerEmailService {
                 + "Amount: " + invoice.getAmount() + "\n"
                 + "Due Date: " + invoice.getDueDate() + "\n\n"
                 + "Regards,\nSunway ERP";
-        sendMailRequired(supplierEmail, subject, body);
+        sendMailRequired(
+                supplierEmail,
+                subject,
+                body,
+                pdfBytes,
+                invoice.getInvoiceId() + ".pdf");
     }
 
     public void sendPurchaseReceiptEmailRequired(String supplierName, String supplierEmail, Invoice invoice) {
+        sendPurchaseReceiptEmailRequired(supplierName, supplierEmail, invoice, null);
+    }
+
+    public void sendPurchaseReceiptEmailRequired(
+            String supplierName, String supplierEmail, Invoice invoice, byte[] pdfBytes) {
         if (supplierEmail == null || supplierEmail.isBlank()) {
             throw new IllegalStateException("Supplier email is missing on this purchase order");
         }
@@ -95,27 +118,24 @@ public class CustomerEmailService {
                 + "Paid Date: " + invoice.getPaidDate() + "\n"
                 + "Amount: " + invoice.getAmount() + "\n\n"
                 + "Regards,\nSunway ERP";
-        sendMailRequired(supplierEmail, subject, body);
+        sendMailRequired(
+                supplierEmail,
+                subject,
+                body,
+                pdfBytes,
+                invoice.getInvoiceId() + "-receipt.pdf");
     }
 
-    private void sendMailRequired(String to, String subject, String text) {
-        if (!mailEnabled) {
-            throw new IllegalStateException(
-                    "Email is disabled. Enable app.mail.enabled and configure SMTP to send invoices.");
-        }
-        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
-        if (mailSender == null) {
-            throw new IllegalStateException(
-                    "Email provider is not configured. Configure spring.mail.* settings to send invoices.");
-        }
-
+    private void sendMailRequired(
+            String to, String subject, String text, byte[] pdfBytes, String filename) {
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromAddress);
-            message.setTo(to);
-            message.setSubject(subject);
-            message.setText(text);
-            mailSender.send(message);
+            if (pdfBytes != null && pdfBytes.length > 0) {
+                emailService.sendWithPdfAttachmentRequired(to, subject, text, pdfBytes, filename);
+            } else {
+                emailService.sendPlainTextRequired(to, subject, text);
+            }
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to send email: " + e.getMessage(), e);
         }

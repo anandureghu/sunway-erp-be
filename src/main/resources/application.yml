@@ -18,10 +18,10 @@ spring:
         default-page-size: 20
   servlet:
     multipart:
-      # Request limit must exceed the file limit to allow multipart envelope overhead,
-      # otherwise a valid ~5MB image is rejected before it reaches the controller.
-      max-file-size: 5MB
-      max-request-size: 12MB
+      # Request limit must exceed the file limit to allow multipart envelope overhead.
+      # Knowledge Base training videos allow up to 200MB.
+      max-file-size: 200MB
+      max-request-size: 210MB
   config:
     import: optional:file:.env[.properties]
 
