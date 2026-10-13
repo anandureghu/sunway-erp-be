@@ -27,6 +27,10 @@ public interface CompanySubscriptionRepository extends JpaRepository<CompanySubs
               AND (:planType IS NULL OR cs.planType = :planType)
               AND (:companyId IS NULL OR cs.companyId = :companyId)
               AND (
+                    :companyCode IS NULL OR :companyCode = ''
+                    OR LOWER(COALESCE(co.companyCode, '')) LIKE LOWER(CONCAT('%', :companyCode, '%'))
+                  )
+              AND (
                     :expiringBefore IS NULL
                     OR (cs.endsAt IS NOT NULL AND cs.endsAt <= :expiringBefore
                         AND cs.status IN (
@@ -48,6 +52,7 @@ public interface CompanySubscriptionRepository extends JpaRepository<CompanySubs
             @Param("status") SubscriptionStatus status,
             @Param("planType") SubscriptionPlanType planType,
             @Param("companyId") Long companyId,
+            @Param("companyCode") String companyCode,
             @Param("expiringBefore") LocalDate expiringBefore,
             @Param("q") String q,
             Pageable pageable

@@ -56,7 +56,7 @@ public class SubscriptionService {
             SubscriptionPaymentStatus paymentStatus,
             Pageable pageable
     ) {
-        return list(status, planType, companyId, expiringWithinDays, paymentStatus, null, pageable);
+        return list(status, planType, companyId, expiringWithinDays, paymentStatus, null, null, pageable);
     }
 
     @Transactional(readOnly = true)
@@ -69,18 +69,33 @@ public class SubscriptionService {
             String search,
             Pageable pageable
     ) {
+        return list(status, planType, companyId, expiringWithinDays, paymentStatus, search, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CompanySubscriptionResponse> list(
+            SubscriptionStatus status,
+            SubscriptionPlanType planType,
+            Long companyId,
+            Integer expiringWithinDays,
+            SubscriptionPaymentStatus paymentStatus,
+            String search,
+            String companyCode,
+            Pageable pageable
+    ) {
         LocalDate expiringBefore = expiringWithinDays != null
                 ? LocalDate.now().plusDays(expiringWithinDays)
                 : null;
         String q = search == null || search.isBlank() ? null : search.trim();
+        String code = companyCode == null || companyCode.isBlank() ? null : companyCode.trim();
 
         if (paymentStatus == null) {
-            return subscriptionRepository.search(status, planType, companyId, expiringBefore, q, pageable)
+            return subscriptionRepository.search(status, planType, companyId, code, expiringBefore, q, pageable)
                     .map(cs -> toListItem(cs, false));
         }
 
         List<CompanySubscriptionResponse> filtered = subscriptionRepository
-                .search(status, planType, companyId, expiringBefore, q, Pageable.unpaged())
+                .search(status, planType, companyId, code, expiringBefore, q, Pageable.unpaged())
                 .stream()
                 .map(cs -> toListItem(cs, false))
                 .filter(r -> r.getPaymentStatus() == paymentStatus)

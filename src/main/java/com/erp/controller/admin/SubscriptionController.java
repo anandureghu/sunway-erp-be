@@ -59,6 +59,7 @@ public class SubscriptionController {
             @RequestParam(required = false) SubscriptionStatus status,
             @RequestParam(required = false) SubscriptionPlanType planType,
             @RequestParam(required = false) Long companyId,
+            @RequestParam(required = false) String companyCode,
             @RequestParam(required = false) Integer expiringWithinDays,
             @RequestParam(required = false) SubscriptionPaymentStatus paymentStatus,
             @RequestParam(required = false) String search,
@@ -66,7 +67,14 @@ public class SubscriptionController {
     ) {
         return PagedResponse.from(
                 subscriptionService.list(
-                        status, planType, companyId, expiringWithinDays, paymentStatus, search, pageable)
+                        status,
+                        planType,
+                        companyId,
+                        expiringWithinDays,
+                        paymentStatus,
+                        search,
+                        companyCode,
+                        pageable)
         );
     }
 
