@@ -782,6 +782,16 @@ public class TransactionService {
                 .collect(Collectors.toList());
     }
 
+    public org.springframework.data.domain.Page<TransactionResponseDTO> listByCompanyPaged(
+            Long companyId, String search, org.springframework.data.domain.Pageable pageable) {
+        Long effectiveCompanyId = isSuperAdmin() ? companyId : auth.getCurrentCompanyId();
+        if (effectiveCompanyId == null) {
+            return org.springframework.data.domain.Page.empty(pageable);
+        }
+        String q = search == null || search.isBlank() ? null : search.trim();
+        return repo.searchActiveByCompanyId(effectiveCompanyId, q, pageable).map(this::toDTO);
+    }
+
     @Transactional
     public TransactionResponseDTO archiveTransaction(Long id) {
         Transaction tx = repo.findById(id)

@@ -2,6 +2,7 @@ package com.erp.controller.inventory;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.inventory.ItemBulkDiscountRequestDTO;
 import com.erp.dto.inventory.ItemBulkDiscountResultDTO;
 import com.erp.dto.inventory.ItemBulkIdsRequestDTO;
@@ -120,10 +121,15 @@ public class ItemController {
 
     @RequiresPermission(module = AppModule.INVENTORY_STOCK, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/stock-catalog")
-    public List<ItemResponseDTO> stockCatalog(
-            @RequestParam(defaultValue = "false") boolean archived
+    public PageResponse<ItemResponseDTO> stockCatalog(
+            @RequestParam(defaultValue = "false") boolean archived,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String stockFilter,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
-        return service.listStockCatalogForCompany(archived);
+        return service.listStockCatalogForCompany(archived, search, status, stockFilter, page, size);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_ITEM, action = {AppAction.EDIT})

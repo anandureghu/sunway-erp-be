@@ -3,6 +3,7 @@ package com.erp.controller.finance;
 import com.erp.domain.InvoiceType;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.finance.InvoicePdfTextPreviewResponse;
 import com.erp.dto.finance.InvoiceRequest;
 import com.erp.dto.finance.InvoiceResponse;
@@ -71,6 +72,19 @@ public class InvoiceController {
             @RequestPart("file") MultipartFile file
     ) {
         return ResponseEntity.ok(pdfTextPreviewService.extractPreview(file));
+    }
+
+    @RequiresPermission(module = AppModule.FINANCE_INVOICE, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping(params = "page")
+    public ResponseEntity<PageResponse<InvoiceResponse>> listInvoicesPaged(
+            @RequestParam(required = false) InvoiceType type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String tab,
+            @RequestParam(required = false) String status
+    ) {
+        return ResponseEntity.ok(invoiceService.listInvoicesPaged(type, page, size, search, tab, status));
     }
 
     @RequiresPermission(module = AppModule.FINANCE_INVOICE, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})

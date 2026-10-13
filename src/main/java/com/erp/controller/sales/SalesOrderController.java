@@ -2,6 +2,7 @@ package com.erp.controller.sales;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.sales.SalesOrderCreateDTO;
 import com.erp.dto.sales.SalesOrderResponseDTO;
 import com.erp.dto.sales.SalesOrderUpdateDTO;
@@ -9,8 +10,10 @@ import com.erp.service.finance.InvoiceService;
 import com.erp.service.sales.SalesOrderService;
 import com.erp.service.security.annotation.RequiresPermission;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -41,6 +44,21 @@ public class SalesOrderController {
     @GetMapping("/{id}")
     public SalesOrderResponseDTO get(@PathVariable("id") Long id) {
         return service.get(id);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping(params = "page")
+    public PageResponse<SalesOrderResponseDTO> listPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String tab,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String paymentStatus,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo
+    ) {
+        return service.listPaged(page, size, search, tab, status, paymentStatus, dateFrom, dateTo);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})

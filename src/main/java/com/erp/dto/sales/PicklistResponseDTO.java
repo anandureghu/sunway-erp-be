@@ -17,6 +17,8 @@ public class PicklistResponseDTO {
     private Long id;
     private String picklistNumber;
     private Long salesOrderId;
+    private String salesOrderNumber;
+    private String customerName;
     private String status;
     private boolean archived;
     private Instant createdAt;

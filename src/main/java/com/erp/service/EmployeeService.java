@@ -498,13 +498,25 @@ public class EmployeeService {
     // ======================================================
 
     public PageResponse<EmployeeResponseDTO> getEmployees(int page, int size) {
+        return getEmployees(page, size, null, null, null);
+    }
+
+    public PageResponse<EmployeeResponseDTO> getEmployees(int page, int size, String search) {
+        return getEmployees(page, size, search, null, null);
+    }
+
+    /**
+     * Paginated directory for the caller's company.
+     * Optional {@code search} filters by employee no / name / email / phone (case-insensitive).
+     * Optional {@code status} and {@code employmentCategory} narrow the result set server-side.
+     */
+    public PageResponse<EmployeeResponseDTO> getEmployees(
+            int page, int size, String search, String status, String employmentCategory) {
 
         User authUser = getAuthUser();
 
-        // ✅ Get authentication for permission check
         var auth = SecurityContextHolder.getContext().getAuthentication();
 
-        // ✅ Check both VIEW_OWN and VIEW_ALL permissions
         boolean canViewAll = permissionCheckService.hasAccess(
                 auth,
                 AppModule.EMPLOYEE_PROFILE,
@@ -518,10 +530,18 @@ public class EmployeeService {
 
         log.debug("👤 getEmployees(paginated): canViewAll={}, canViewOwn={}", canViewAll, canViewOwn);
 
-        // ✅ VIEW OWN ONLY - Return only current user's employee record (single page)
+        String normalizedSearch = blankToNull(search);
+        EmployeeStatus statusFilter = parseEmployeeStatus(status);
+        com.erp.domain.enums.EmploymentCategory categoryFilter =
+                parseEmploymentCategory(employmentCategory);
+
+        // VIEW OWN ONLY — single record, still honour search/status/category filters
         if (!canViewAll && canViewOwn) {
             log.info("✅ User has VIEW_OWN permission - returning own employee only");
             Employee self = resolveCurrentEmployee(authUser);
+            if (!matchesDirectoryFilters(self, normalizedSearch, statusFilter, categoryFilter)) {
+                return PageResponse.of(List.of(), 0, 0, page, size);
+            }
             return PageResponse.of(List.of(toDTO(self)), 1, 1, page, size);
         }
 
@@ -532,19 +552,86 @@ public class EmployeeService {
 
         Long companyId = resolveCurrentCompanyId();
 
-        // VIEW ALL — paginated non-archived directory (includes exit statuses).
         log.info("✅ User has VIEW_ALL permission - loading paginated employees");
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Employee> empPage = employeeRepository.findByCompany_IdAndArchivedFalse(
-                companyId, pageable);
 
-        return PageResponse.of(
-                empPage.getContent().stream().map(this::toDTO).toList(),
-                empPage.getTotalElements(),
-                empPage.getTotalPages(),
-                page,
-                size
-        );
+        Page<Employee> empPage;
+        if (normalizedSearch == null && statusFilter == null && categoryFilter == null) {
+            empPage = employeeRepository.findByCompany_IdAndArchivedFalse(companyId, pageable);
+        } else {
+            empPage = employeeRepository.searchDirectory(
+                    companyId, normalizedSearch, statusFilter, categoryFilter, pageable);
+        }
+
+        return PageResponse.from(empPage, this::toDTO);
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static EmployeeStatus parseEmployeeStatus(String raw) {
+        String normalized = blankToNull(raw);
+        if (normalized == null) return null;
+        String key = normalized.trim().toUpperCase(java.util.Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
+        try {
+            return EmployeeStatus.valueOf(key);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Unknown employee status: " + raw);
+        }
+    }
+
+    private static com.erp.domain.enums.EmploymentCategory parseEmploymentCategory(String raw) {
+        String normalized = blankToNull(raw);
+        if (normalized == null) return null;
+        String key = normalized.trim().toUpperCase(java.util.Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
+        try {
+            return com.erp.domain.enums.EmploymentCategory.valueOf(key);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Unknown employment category: " + raw);
+        }
+    }
+
+    /** In-memory filter used for VIEW_OWN (single row) so search/status still apply. */
+    private boolean matchesDirectoryFilters(
+            Employee e,
+            String search,
+            EmployeeStatus status,
+            com.erp.domain.enums.EmploymentCategory category) {
+        if (e.isArchived()) return false;
+        if (status != null && e.getStatus() != status) return false;
+        if (category != null) {
+            var job = currentJobRepo.findByEmployee_Id(e.getId()).orElse(null);
+            if (job == null || job.getEmploymentCategory() != category) return false;
+        }
+        if (search == null) return true;
+        String q = search.toLowerCase(java.util.Locale.ROOT);
+        String fullName = java.util.stream.Stream
+                .of(e.getFirstName(), e.getMiddleName(), e.getLastName())
+                .filter(s -> s != null && !s.isBlank())
+                .collect(Collectors.joining(" "))
+                .toLowerCase(java.util.Locale.ROOT);
+        String email = e.getEmail() != null ? e.getEmail().toLowerCase(java.util.Locale.ROOT) : "";
+        String phone = e.getPhoneNo() != null ? e.getPhoneNo().toLowerCase(java.util.Locale.ROOT) : "";
+        String altPhone = e.getAltPhone() != null ? e.getAltPhone().toLowerCase(java.util.Locale.ROOT) : "";
+        String code = e.getEmployeeNo() != null ? e.getEmployeeNo().toLowerCase(java.util.Locale.ROOT) : "";
+        String first = e.getFirstName() != null ? e.getFirstName().toLowerCase(java.util.Locale.ROOT) : "";
+        String middle = e.getMiddleName() != null ? e.getMiddleName().toLowerCase(java.util.Locale.ROOT) : "";
+        String last = e.getLastName() != null ? e.getLastName().toLowerCase(java.util.Locale.ROOT) : "";
+        return code.contains(q)
+                || first.contains(q)
+                || middle.contains(q)
+                || last.contains(q)
+                || fullName.contains(q)
+                || email.contains(q)
+                || phone.contains(q)
+                || altPhone.contains(q);
     }
 
     // ======================================================

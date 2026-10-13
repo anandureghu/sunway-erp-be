@@ -35,12 +35,17 @@ public class JournalEntryService {
 
 
     public Page<JournalEntryResponse> getAll(Pageable pageable, Boolean archived) {
+        return getAll(pageable, archived, null);
+    }
+
+    public Page<JournalEntryResponse> getAll(Pageable pageable, Boolean archived, String search) {
 
         Long companyId = authContext.getCurrentCompanyId();
         boolean showArchived = Boolean.TRUE.equals(archived);
+        String q = search == null || search.isBlank() ? null : search.trim();
 
         Page<JournalEntry> page =
-                journalRepo.findAllByCompanyIdAndArchived(companyId, showArchived, pageable);
+                journalRepo.searchByCompanyIdAndArchived(companyId, showArchived, q, pageable);
 
         return page.map(this::map);
     }

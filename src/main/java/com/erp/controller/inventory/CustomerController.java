@@ -2,6 +2,7 @@ package com.erp.controller.inventory;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.inventory.CustomerCreateDTO;
 import com.erp.dto.inventory.CustomerResponseDTO;
 import com.erp.dto.inventory.CustomerUpdateDTO;
@@ -20,6 +21,23 @@ public class CustomerController {
 
     public CustomerController(CustomerService customerService) {
         this.customerService = customerService;
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping(params = "page")
+    public PageResponse<CustomerResponseDTO> listPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String country,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) String customerType,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String code
+    ) {
+        return customerService.listPaged(
+                page, size, search, status, country, city, customerType, phone, code);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})

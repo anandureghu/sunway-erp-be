@@ -3,16 +3,21 @@ package com.erp.controller.finance;
 import com.erp.domain.finance.PaymentDirection;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.finance.ConfirmPaymentDTO;
 import com.erp.dto.finance.CreateOtherPaymentDTO;
 import com.erp.dto.finance.CreatePaymentDTO;
 import com.erp.dto.finance.PaymentResponseDTO;
 import com.erp.service.finance.PaymentService;
 import com.erp.service.security.annotation.RequiresPermission;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/finance/payments")
@@ -78,18 +83,33 @@ public class PaymentController {
     }
 
     // ----------------------------------------------------------
-    // 3️⃣ List all payments for a company
+    // 3️⃣ List payments for a company (paginated + search)
     // ----------------------------------------------------------
     @RequiresPermission(module = AppModule.FINANCE_PAYMENT, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/company/{companyId}")
-    public List<PaymentResponseDTO> getPaymentsForCompany(
+    public PageResponse<PaymentResponseDTO> getPaymentsForCompany(
+            @PathVariable("companyId") Long companyId,
+            @RequestParam(value = "direction", required = false) String direction,
+            @RequestParam(value = "listTab", required = false) String listTab,
+            @RequestParam(value = "search", required = false) String search,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        PaymentDirection dir = null;
+        if (direction != null && !direction.isBlank()) {
+            dir = PaymentDirection.valueOf(direction.trim().toUpperCase());
+        }
+        return paymentService.getPaymentsForCompanyPaged(companyId, dir, listTab, search, pageable);
+    }
+
+    @RequiresPermission(module = AppModule.FINANCE_PAYMENT, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping("/company/{companyId}/tab-counts")
+    public Map<String, Long> getPaymentTabCounts(
             @PathVariable("companyId") Long companyId,
             @RequestParam(value = "direction", required = false) String direction) {
-        if (direction == null || direction.isBlank()) {
-            return paymentService.getPaymentsForCompany(companyId);
+        PaymentDirection dir = null;
+        if (direction != null && !direction.isBlank()) {
+            dir = PaymentDirection.valueOf(direction.trim().toUpperCase());
         }
-        return paymentService.getPaymentsForCompany(
-                companyId, PaymentDirection.valueOf(direction.trim().toUpperCase()));
+        return paymentService.getPaymentTabCounts(companyId, dir);
     }
 
     // ----------------------------------------------------------

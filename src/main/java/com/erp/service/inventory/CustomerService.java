@@ -5,12 +5,19 @@ import com.erp.domain.inventory.Customer;
 import com.erp.dto.inventory.CustomerCreateDTO;
 import com.erp.dto.inventory.CustomerResponseDTO;
 import com.erp.dto.inventory.CustomerUpdateDTO;
+import com.erp.dto.common.PageResponse;
 import com.erp.repo.inventory.CustomerRepository;
 import com.erp.security.context.AuthContext;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @Transactional
@@ -31,6 +38,52 @@ public class CustomerService {
                 .stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<CustomerResponseDTO> listPaged(
+            int page,
+            int size,
+            String search,
+            String status,
+            String country,
+            String city,
+            String customerType,
+            String phone,
+            String code
+    ) {
+        Long companyId = authContext.getCurrentCompanyId();
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String q = StringUtils.hasText(search) ? search.trim() : null;
+        Boolean active = null;
+        Boolean hasEmail = null;
+        if (StringUtils.hasText(status) && !"all".equalsIgnoreCase(status.trim())) {
+            String s = status.trim().toLowerCase(Locale.ROOT);
+            if ("active".equals(s)) {
+                active = true;
+            } else if ("inactive".equals(s)) {
+                active = false;
+            } else if ("with_email".equals(s)) {
+                hasEmail = true;
+            }
+        }
+        String countryKey = blankToNullFilter(country);
+        String cityKey = blankToNullFilter(city);
+        String typeKey = blankToNullFilter(customerType);
+        String phoneKey = StringUtils.hasText(phone) ? phone.trim() : null;
+        String codeKey = StringUtils.hasText(code) ? code.trim().replaceAll("(?i)^cust-?", "") : null;
+        Page<Customer> result = customerRepo.search(
+                companyId, q, active, hasEmail, countryKey, cityKey, typeKey, phoneKey, codeKey, pageable);
+        return PageResponse.from(result, this::toDTO);
+    }
+
+    private static String blankToNullFilter(String value) {
+        if (!StringUtils.hasText(value) || "all".equalsIgnoreCase(value.trim())) {
+            return null;
+        }
+        return value.trim();
     }
 
     // ---------------- GET BY ID ----------------

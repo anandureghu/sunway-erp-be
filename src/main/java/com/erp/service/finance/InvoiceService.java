@@ -1092,6 +1092,51 @@ public class InvoiceService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public com.erp.dto.common.PageResponse<InvoiceResponse> listInvoicesPaged(
+            InvoiceType type,
+            int page,
+            int size,
+            String search,
+            String tab,
+            String status
+    ) {
+        Long companyId = auth.getCurrentCompanyId();
+        if (companyId == null) {
+            return com.erp.dto.common.PageResponse.of(List.of(), 0, 0, page, size);
+        }
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        var pageable = org.springframework.data.domain.PageRequest.of(
+                safePage, safeSize, org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        String q = (search != null && !search.isBlank()) ? search.trim() : null;
+        String tabKey = (tab != null && !tab.isBlank() && !"all".equalsIgnoreCase(tab.trim()))
+                ? tab.trim().toLowerCase(java.util.Locale.ROOT) : null;
+        String statusKey = null;
+        if (status != null && !status.isBlank() && !"all".equalsIgnoreCase(status.trim())) {
+            statusKey = status.trim().toUpperCase(java.util.Locale.ROOT).replace(' ', '_');
+            if ("PARTIALLY_PAID".equals(statusKey) || "PARTIAL".equals(statusKey) || "PARTIALLY".equals(statusKey)) {
+                statusKey = "PARTIALLY_PAID";
+            }
+        }
+        var result = repo.search(companyId, type, q, tabKey, statusKey, pageable);
+        if (type == InvoiceType.PURCHASE) {
+            var visible = result.getContent().stream()
+                    .filter(this::isPurchaseInvoiceVisibleInAccountsPayable)
+                    .map(this::toDTO)
+                    .toList();
+            // Purchase visibility is post-filtered; totals may be slightly high for PO-linked drafts.
+            return com.erp.dto.common.PageResponse.of(
+                    visible,
+                    result.getTotalElements(),
+                    result.getTotalPages(),
+                    result.getNumber(),
+                    result.getSize());
+        }
+        return com.erp.dto.common.PageResponse.from(result, this::toDTO);
+    }
+
     private boolean isPurchaseInvoiceVisibleInAccountsPayable(Invoice invoice) {
         if (invoice.getOrderId() == null) {
             return true;

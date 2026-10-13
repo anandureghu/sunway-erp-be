@@ -2,6 +2,7 @@ package com.erp.controller.purchase;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.purchase.PurchaseRequisitionCreateDTO;
 import com.erp.dto.purchase.PurchaseRequisitionDocumentDTO;
 import com.erp.dto.purchase.PurchaseRequisitionResponseDTO;
@@ -82,6 +83,18 @@ public class PurchaseRequisitionController {
     @PostMapping("/{id}/archive")
     public PurchaseRequisitionResponseDTO archive(@PathVariable("id") Long id) {
         return service.archive(id);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping(params = "page")
+    public PageResponse<PurchaseRequisitionResponseDTO> listPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String tab,
+            @RequestParam(required = false) String status
+    ) {
+        return service.listPaged(page, size, search, tab, status);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})

@@ -89,9 +89,13 @@ public class EmployeeController {
     @GetMapping("/page")
     public ResponseEntity<PageResponse<EmployeeResponseDTO>> getEmployeesPaginated(
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "10") int size) {
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "employmentCategory", required = false) String employmentCategory) {
 
-        return ResponseEntity.ok(employeeService.getEmployees(page, size));
+        return ResponseEntity.ok(
+                employeeService.getEmployees(page, size, search, status, employmentCategory));
     }
 
     // ======================================================

@@ -2,14 +2,16 @@ package com.erp.controller.finance;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.finance.CreateJournalEntryRequest;
 import com.erp.dto.finance.JournalEntryResponse;
 import com.erp.dto.finance.UpdateJournalEntryRequest;
 import com.erp.service.finance.JournalEntryService;
 import com.erp.service.security.annotation.RequiresPermission;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -22,10 +24,11 @@ public class JournalEntryController {
 
     @RequiresPermission(module = AppModule.FINANCE_JOURNAL, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping
-    public Page<JournalEntryResponse> getAll(
-            Pageable pageable,
-            @RequestParam(value = "archived", required = false, defaultValue = "false") boolean archived) {
-        return service.getAll(pageable, archived);
+    public PageResponse<JournalEntryResponse> getAll(
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @RequestParam(value = "archived", required = false, defaultValue = "false") boolean archived,
+            @RequestParam(value = "search", required = false) String search) {
+        return PageResponse.from(service.getAll(pageable, archived, search));
     }
 
     // ============================

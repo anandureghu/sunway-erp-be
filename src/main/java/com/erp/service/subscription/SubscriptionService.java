@@ -56,17 +56,31 @@ public class SubscriptionService {
             SubscriptionPaymentStatus paymentStatus,
             Pageable pageable
     ) {
+        return list(status, planType, companyId, expiringWithinDays, paymentStatus, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CompanySubscriptionResponse> list(
+            SubscriptionStatus status,
+            SubscriptionPlanType planType,
+            Long companyId,
+            Integer expiringWithinDays,
+            SubscriptionPaymentStatus paymentStatus,
+            String search,
+            Pageable pageable
+    ) {
         LocalDate expiringBefore = expiringWithinDays != null
                 ? LocalDate.now().plusDays(expiringWithinDays)
                 : null;
+        String q = search == null || search.isBlank() ? null : search.trim();
 
         if (paymentStatus == null) {
-            return subscriptionRepository.search(status, planType, companyId, expiringBefore, pageable)
+            return subscriptionRepository.search(status, planType, companyId, expiringBefore, q, pageable)
                     .map(cs -> toListItem(cs, false));
         }
 
         List<CompanySubscriptionResponse> filtered = subscriptionRepository
-                .search(status, planType, companyId, expiringBefore, Pageable.unpaged())
+                .search(status, planType, companyId, expiringBefore, q, Pageable.unpaged())
                 .stream()
                 .map(cs -> toListItem(cs, false))
                 .filter(r -> r.getPaymentStatus() == paymentStatus)

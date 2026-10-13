@@ -55,6 +55,15 @@ public class CreditNoteService {
                 .toList();
     }
 
+    public org.springframework.data.domain.Page<CreditNoteResponseDTO> getAllForCompanyPaged(
+            String search, org.springframework.data.domain.Pageable pageable) {
+        Long companyId = auth.getCurrentCompanyId();
+        String q = search == null || search.isBlank() ? null : search.trim();
+        return creditNoteRepository
+                .searchByCompanyId(companyId, q, pageable)
+                .map(this::mapToResponse);
+    }
+
     public List<CreditNoteResponseDTO> getAvailableForCustomer(Long customerId) {
         if (customerId == null) {
             return List.of();

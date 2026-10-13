@@ -471,6 +471,55 @@ public class PaymentService {
                 .toList();
     }
 
+    /**
+     * Paginated company payments with optional direction, list tab (outstanding/completed), and search.
+     */
+    public com.erp.dto.common.PageResponse<PaymentResponseDTO> getPaymentsForCompanyPaged(
+            Long companyId,
+            PaymentDirection direction,
+            String listTab,
+            String search,
+            org.springframework.data.domain.Pageable pageable) {
+        assertTenantCompanyPath(companyId);
+        String tab = normalizeListTab(listTab);
+        java.util.Collection<String> pendingMethods = pendingMethodsFor(direction);
+        String q = search == null || search.isBlank() ? null : search.trim();
+        org.springframework.data.domain.Page<Payment> page = paymentRepo.searchForCompany(
+                companyId, direction, tab, pendingMethods, q, pageable);
+        return com.erp.dto.common.PageResponse.from(page, this::toDTO);
+    }
+
+    public java.util.Map<String, Long> getPaymentTabCounts(Long companyId, PaymentDirection direction) {
+        assertTenantCompanyPath(companyId);
+        java.util.Collection<String> pendingMethods = pendingMethodsFor(direction);
+        long outstanding = paymentRepo.countForCompanyTab(companyId, direction, "outstanding", pendingMethods);
+        long completed = paymentRepo.countForCompanyTab(companyId, direction, "completed", pendingMethods);
+        return java.util.Map.of("outstanding", outstanding, "completed", completed);
+    }
+
+    private static String normalizeListTab(String listTab) {
+        if (listTab == null || listTab.isBlank()) {
+            return null;
+        }
+        String t = listTab.trim().toLowerCase();
+        if ("outstanding".equals(t) || "completed".equals(t) || "archived".equals(t)) {
+            // FE historically used listTab "archived" for the Completed tab
+            return "archived".equals(t) ? "completed" : t;
+        }
+        return null;
+    }
+
+    private static java.util.Collection<String> pendingMethodsFor(PaymentDirection direction) {
+        if (direction == PaymentDirection.VENDOR) {
+            return java.util.List.of("PENDING_VENDOR_PAYMENT");
+        }
+        if (direction == PaymentDirection.OTHER) {
+            return java.util.List.of("PENDING_OTHER_PAYMENT");
+        }
+        // CUSTOMER or null: treat as customer pending
+        return java.util.List.of("PENDING_REQUEST");
+    }
+
     private boolean isVendorPaymentVisibleInAccountsPayable(Payment payment) {
         if (payment.getPurchaseOrderId() == null) {
             return false;

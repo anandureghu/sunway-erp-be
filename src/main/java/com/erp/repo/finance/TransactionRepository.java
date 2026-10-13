@@ -24,6 +24,29 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             """)
     List<Transaction> findActiveByCompanyIdOrderByCreatedAtDesc(@Param("companyId") Long companyId);
 
+    @Query("""
+            SELECT t FROM Transaction t
+            LEFT JOIN t.debitAccount da
+            LEFT JOIN t.creditAccount ca
+            WHERE t.company.id = :companyId
+              AND (t.archived IS NULL OR t.archived = false)
+              AND (
+                   :q IS NULL OR :q = ''
+                   OR LOWER(COALESCE(t.transactionCode, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                   OR LOWER(COALESCE(t.transactionType, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                   OR LOWER(COALESCE(t.transactionDescription, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                   OR LOWER(COALESCE(t.source, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                   OR LOWER(COALESCE(da.accountCode, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                   OR LOWER(COALESCE(da.accountName, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                   OR LOWER(COALESCE(ca.accountCode, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                   OR LOWER(COALESCE(ca.accountName, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+              )
+            """)
+    Page<Transaction> searchActiveByCompanyId(
+            @Param("companyId") Long companyId,
+            @Param("q") String q,
+            Pageable pageable);
+
     Page<Transaction> findByCompany_IdAndArchivedTrueAndTransactionTypeNotOrderByCreatedAtDesc(
             Long companyId, String transactionType, Pageable pageable);
 

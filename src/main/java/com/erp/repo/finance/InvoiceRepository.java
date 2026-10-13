@@ -209,4 +209,35 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     /** Invoices of a type raised within [from, to], for "payment status this month" bucketing. */
     List<Invoice> findByCompany_IdAndTypeAndArchivedFalseAndInvoiceDateBetween(
             Long companyId, InvoiceType type, LocalDate from, LocalDate to);
+
+    @Query("""
+            SELECT i FROM Invoice i
+            WHERE i.company.id = :companyId
+              AND (:type IS NULL OR i.type = :type)
+              AND (
+                :search IS NULL OR :search = ''
+                OR LOWER(COALESCE(i.invoiceId, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(i.toParty, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(i.supplierInvoiceNumber, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(i.status, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR CAST(i.orderId AS string) LIKE CONCAT('%', :search, '%')
+              )
+              AND (
+                :tab IS NULL OR :tab = '' OR :tab = 'all'
+                OR (:tab = 'outstanding' AND UPPER(COALESCE(i.status, '')) NOT IN ('PAID', 'CANCELLED'))
+                OR (:tab = 'archived' AND UPPER(COALESCE(i.status, '')) IN ('PAID', 'CANCELLED') AND i.archived = false)
+              )
+              AND (
+                :status IS NULL OR :status = '' OR :status = 'all'
+                OR UPPER(COALESCE(i.status, '')) = UPPER(:status)
+              )
+            """)
+    Page<Invoice> search(
+            @Param("companyId") Long companyId,
+            @Param("type") InvoiceType type,
+            @Param("search") String search,
+            @Param("tab") String tab,
+            @Param("status") String status,
+            Pageable pageable
+    );
 }

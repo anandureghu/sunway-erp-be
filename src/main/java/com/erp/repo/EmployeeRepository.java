@@ -61,6 +61,49 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     Page<Employee> findByCompany_IdAndArchivedFalse(Long companyId, Pageable pageable);
 
+    /**
+     * Directory page: non-archived employees in a company, optional case-insensitive
+     * search on employee no / name / login email / phone, optional status and
+     * employment-category filters.
+     */
+    @Query("""
+            SELECT e FROM Employee e
+            LEFT JOIN e.user u
+            LEFT JOIN e.contactInfo c
+            WHERE e.company.id = :companyId
+              AND e.archived = false
+              AND (:status IS NULL OR e.status = :status)
+              AND (
+                :employmentCategory IS NULL
+                OR EXISTS (
+                    SELECT 1 FROM EmployeeCurrentJob j
+                    WHERE j.employee = e
+                      AND j.employmentCategory = :employmentCategory
+                )
+              )
+              AND (
+                :search IS NULL OR :search = ''
+                OR LOWER(e.employeeNo) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(e.firstName) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(e.middleName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(e.lastName) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(CONCAT(
+                    COALESCE(e.firstName, ''), ' ',
+                    COALESCE(e.middleName, ''), ' ',
+                    COALESCE(e.lastName, '')
+                )) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(c.phone, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(c.altPhone, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+              )
+            """)
+    Page<Employee> searchDirectory(
+            @Param("companyId") Long companyId,
+            @Param("search") String search,
+            @Param("status") EmployeeStatus status,
+            @Param("employmentCategory") com.erp.domain.enums.EmploymentCategory employmentCategory,
+            Pageable pageable);
+
     List<Employee> findByDepartment_IdAndArchivedFalseOrderByCreatedAtDesc(Long departmentId);
 
     List<Employee> findByCompany_IdAndStatusInAndArchivedFalseOrderByCreatedAtDesc(

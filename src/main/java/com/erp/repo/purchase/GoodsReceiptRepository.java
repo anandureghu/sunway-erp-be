@@ -13,6 +13,37 @@ import java.util.List;
 public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, Long> {
     List<GoodsReceipt> findByPurchaseOrderId(Long purchaseOrderId);
 
+    @Query("""
+            SELECT gr FROM GoodsReceipt gr
+            JOIN gr.purchaseOrder po
+            LEFT JOIN po.supplier s
+            WHERE gr.company.id = :companyId
+              AND (
+                :search IS NULL OR :search = ''
+                OR LOWER(COALESCE(po.orderNumber, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(s.vendorName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR CAST(gr.id AS string) LIKE CONCAT('%', :search, '%')
+              )
+              AND (
+                :tab IS NULL OR :tab = '' OR :tab = 'all'
+                OR (:tab = 'pending' AND gr.status = com.erp.domain.purchase.GoodsReceiptStatus.PENDING_INSPECTION
+                    AND gr.archived = false)
+                OR (:tab = 'inspected' AND gr.status = com.erp.domain.purchase.GoodsReceiptStatus.INSPECTED
+                    AND gr.archived = false)
+              )
+              AND (
+                :statusEnum IS NULL
+                OR gr.status = :statusEnum
+              )
+            """)
+    Page<GoodsReceipt> search(
+            @Param("companyId") Long companyId,
+            @Param("search") String search,
+            @Param("tab") String tab,
+            @Param("statusEnum") GoodsReceiptStatus statusEnum,
+            Pageable pageable
+    );
+
     List<GoodsReceipt> findByCompany_IdOrderByReceivedAtDesc(Long companyId);
 
     List<GoodsReceipt> findByCompany_IdAndArchivedTrueOrderByReceivedAtDesc(Long companyId);

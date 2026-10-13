@@ -2,6 +2,7 @@ package com.erp.controller.sales;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.sales.ShipmentCreateDTO;
 import com.erp.dto.sales.ShipmentDeliverDTO;
 import com.erp.dto.sales.ShipmentResponseDTO;
@@ -95,6 +96,17 @@ public class ShipmentController {
     @GetMapping("/{id}")
     public ShipmentResponseDTO get(@PathVariable("id") Long id) {
         return service.get(id);
+    }
+
+    @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
+    @GetMapping(params = "page")
+    public PageResponse<ShipmentResponseDTO> listPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status
+    ) {
+        return service.listPaged(page, size, search, status);
     }
 
     @RequiresPermission(module = AppModule.INVENTORY_SALES, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})

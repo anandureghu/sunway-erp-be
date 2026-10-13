@@ -2,6 +2,7 @@ package com.erp.controller.finance;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.finance.CreateTransactionDTO;
 import com.erp.dto.finance.TransactionCsvImportResultDTO;
 import com.erp.dto.finance.TransactionCsvPreviewDTO;
@@ -11,10 +12,11 @@ import com.erp.dto.finance.UpdateTransactionSourceDTO;
 import com.erp.service.finance.TransactionCsvImportService;
 import com.erp.service.finance.TransactionService;
 import com.erp.service.security.annotation.RequiresPermission;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/finance/transactions")
@@ -31,8 +33,11 @@ public class TransactionController {
 
     @RequiresPermission(module = AppModule.FINANCE_LEDGER, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/company/{companyId}")
-    public List<TransactionResponseDTO> listByCompany(@PathVariable("companyId") Long companyId) {
-        return txService.listByCompany(companyId);
+    public PageResponse<TransactionResponseDTO> listByCompany(
+            @PathVariable("companyId") Long companyId,
+            @RequestParam(value = "search", required = false) String search,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return PageResponse.from(txService.listByCompanyPaged(companyId, search, pageable));
     }
 
     @RequiresPermission(module = AppModule.FINANCE_LEDGER, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})

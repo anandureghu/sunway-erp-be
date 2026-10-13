@@ -22,6 +22,7 @@ public interface CompanySubscriptionRepository extends JpaRepository<CompanySubs
 
     @Query("""
             SELECT cs FROM CompanySubscription cs
+            LEFT JOIN com.erp.domain.hr.Company co ON co.id = cs.companyId
             WHERE (:status IS NULL OR cs.status = :status)
               AND (:planType IS NULL OR cs.planType = :planType)
               AND (:companyId IS NULL OR cs.companyId = :companyId)
@@ -33,12 +34,22 @@ public interface CompanySubscriptionRepository extends JpaRepository<CompanySubs
                             com.erp.domain.subscription.SubscriptionStatus.EXPIRING
                         ))
                   )
+              AND (
+                    :q IS NULL OR :q = ''
+                    OR LOWER(COALESCE(co.companyName, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(co.companyCode, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(cs.notes, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(CAST(cs.planType AS string)) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(CAST(cs.status AS string)) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR CAST(cs.companyId AS string) LIKE CONCAT('%', :q, '%')
+                  )
             """)
     Page<CompanySubscription> search(
             @Param("status") SubscriptionStatus status,
             @Param("planType") SubscriptionPlanType planType,
             @Param("companyId") Long companyId,
             @Param("expiringBefore") LocalDate expiringBefore,
+            @Param("q") String q,
             Pageable pageable
     );
 

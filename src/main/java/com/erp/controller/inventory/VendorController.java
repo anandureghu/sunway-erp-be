@@ -30,12 +30,22 @@ public class VendorController {
         this.csvImportService = csvImportService;
     }
 
+    /**
+     * Vendor list (Spring {@code Page}).
+     * Name search: prefer query param {@code vendorName} (VendorFilterDTO).
+     * Alias {@code search} is also accepted and mapped to {@code vendorName} when that is blank.
+     */
     @RequiresPermission(module = AppModule.INVENTORY_PURCHASE, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping
     public Page<VendorResponseDTO> getVendors(
             VendorFilterDTO filter,
+            @RequestParam(required = false) String search,
             Pageable pageable
     ) {
+        if ((filter.getVendorName() == null || filter.getVendorName().isBlank())
+                && search != null && !search.isBlank()) {
+            filter.setVendorName(search.trim());
+        }
         return vendorService.getFilteredVendors(filter, pageable);
     }
 

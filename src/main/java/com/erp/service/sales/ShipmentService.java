@@ -26,10 +26,16 @@ import com.erp.repo.sales.ShipmentRepository;
 import com.erp.repo.sales.ShipmentTrackingEventRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
+import com.erp.dto.common.PageResponse;
 import com.erp.service.inventory.StockBatchService;
 import com.erp.exception.ConflictException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -344,6 +350,24 @@ public class ShipmentService {
                 .stream().map(this::toDTO).toList();
     }
 
+    @Transactional(readOnly = true)
+    public PageResponse<ShipmentResponseDTO> listPaged(
+            int page,
+            int size,
+            String search,
+            String statusGroup
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String q = StringUtils.hasText(search) ? search.trim() : null;
+        String group = StringUtils.hasText(statusGroup) && !"all".equalsIgnoreCase(statusGroup.trim())
+                ? statusGroup.trim().toLowerCase(Locale.ROOT)
+                : null;
+        Page<Shipment> result = repo.search(auth.getCurrentCompanyId(), q, group, pageable);
+        return PageResponse.from(result, this::toDTO);
+    }
+
     // --------------------------
     // Helpers
     // --------------------------
@@ -377,11 +401,16 @@ public class ShipmentService {
 
     private ShipmentResponseDTO toDTO(Shipment s) {
         List<ShipmentTrackingEvent> events = trackingEventRepo.findByShipmentIdOrderByEventAtAscIdAsc(s.getId());
+        Picklist picklist = s.getPicklist();
+        SalesOrder salesOrder = picklist != null ? picklist.getSalesOrder() : null;
         return ShipmentResponseDTO.builder()
                 .id(s.getId())
                 .shipmentNumber(s.getShipmentNumber())
-                .picklistId(s.getPicklist().getId())
-                .customerId(s.getCustomer().getId())
+                .picklistId(picklist != null ? picklist.getId() : null)
+                .salesOrderId(salesOrder != null ? salesOrder.getId() : null)
+                .salesOrderNumber(salesOrder != null ? salesOrder.getOrderNumber() : null)
+                .customerId(s.getCustomer() != null ? s.getCustomer().getId() : null)
+                .customerName(s.getCustomer() != null ? s.getCustomer().getCustomerName() : null)
                 .status(s.getStatus())
                 .carrierName(s.getCarrierName())
                 .trackingNumber(s.getTrackingNumber())

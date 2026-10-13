@@ -2,11 +2,15 @@ package com.erp.controller.finance;
 
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.finance.CreateCreditNoteDTO;
 import com.erp.dto.finance.CreditNoteResponseDTO;
 import com.erp.service.finance.CreditNoteService;
 import com.erp.service.security.annotation.RequiresPermission;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,8 +24,10 @@ public class CreditNoteController {
 
     @RequiresPermission(module = AppModule.FINANCE_INVOICE, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping
-    public List<CreditNoteResponseDTO> getAll() {
-        return creditNoteService.getAllForCompany();
+    public PageResponse<CreditNoteResponseDTO> getAll(
+            @RequestParam(value = "search", required = false) String search,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return PageResponse.from(creditNoteService.getAllForCompanyPaged(search, pageable));
     }
 
     /** Standing (unapplied) credit notes for a customer or supplier, usable on a future payment. */

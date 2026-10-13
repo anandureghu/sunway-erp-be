@@ -14,6 +14,37 @@ import java.util.Optional;
 public interface PurchaseRequisitionRepository extends JpaRepository<PurchaseRequisition, Long> {
     List<PurchaseRequisition> findByCompanyIdOrderByCreatedAtDesc(Long companyId);
 
+    @Query("""
+            SELECT pr FROM PurchaseRequisition pr
+            LEFT JOIN pr.requestedBy rb
+            LEFT JOIN pr.department d
+            WHERE pr.company.id = :companyId
+              AND (
+                :search IS NULL OR :search = ''
+                OR LOWER(pr.requisitionNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(rb.fullName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(d.departmentName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+              )
+              AND (
+                :tab IS NULL OR :tab = '' OR :tab = 'all'
+                OR (:tab = 'active' AND pr.status <> com.erp.domain.purchase.PurchaseRequisitionStatus.CONVERTED
+                    AND pr.archived = false)
+                OR (:tab = 'converted' AND pr.status = com.erp.domain.purchase.PurchaseRequisitionStatus.CONVERTED
+                    AND pr.archived = false)
+              )
+              AND (
+                :statusEnum IS NULL
+                OR pr.status = :statusEnum
+              )
+            """)
+    Page<PurchaseRequisition> search(
+            @Param("companyId") Long companyId,
+            @Param("search") String search,
+            @Param("tab") String tab,
+            @Param("statusEnum") PurchaseRequisitionStatus statusEnum,
+            Pageable pageable
+    );
+
     Page<PurchaseRequisition> findByCompanyIdAndArchivedTrueOrderByCreatedAtDesc(Long companyId, Pageable pageable);
 
     List<PurchaseRequisition> findByCompanyIdAndArchivedTrue(Long companyId);

@@ -7,6 +7,8 @@ import com.erp.dto.inventory.ItemWarehouseStockRowDTO;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.ItemWarehouseStockRepository;
 import com.erp.repo.inventory.WarehouseRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -356,13 +358,33 @@ public class ItemWarehouseStockService {
     @Transactional(readOnly = true)
     public List<StockCatalogRow> listStockCatalog(Long companyId, boolean archived) {
         return stockRepo.findAllByCompanyIdAndArchived(companyId, archived).stream()
-                .map(row -> new StockCatalogRow(
-                        row.getItem(),
-                        row.getWarehouse(),
-                        nz(row.getQuantityOnHand()),
-                        nz(row.getReserved()),
-                        row.available()))
+                .map(this::toCatalogRow)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<StockCatalogRow> searchStockCatalog(
+            Long companyId,
+            boolean archived,
+            String search,
+            String status,
+            String stockFilter,
+            Pageable pageable
+    ) {
+        String q = search == null ? "" : search.trim();
+        String statusKey = status == null || status.isBlank() ? "all" : status.trim();
+        String stockKey = stockFilter == null || stockFilter.isBlank() ? "all" : stockFilter.trim();
+        return stockRepo.searchStockCatalog(companyId, archived, q, statusKey, stockKey, pageable)
+                .map(this::toCatalogRow);
+    }
+
+    private StockCatalogRow toCatalogRow(ItemWarehouseStock row) {
+        return new StockCatalogRow(
+                row.getItem(),
+                row.getWarehouse(),
+                nz(row.getQuantityOnHand()),
+                nz(row.getReserved()),
+                row.available());
     }
 
     private Item loadItemForCompany(Long itemId, Long companyId) {

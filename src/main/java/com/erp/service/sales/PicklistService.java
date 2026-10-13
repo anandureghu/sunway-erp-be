@@ -20,11 +20,18 @@ import com.erp.repo.sales.PicklistRepository;
 import com.erp.repo.sales.SalesOrderRepository;
 import com.erp.repo.sales.ShipmentRepository;
 import com.erp.security.context.AuthContext;
+import com.erp.dto.common.PageResponse;
 import com.erp.service.DocumentSequenceService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -210,6 +217,27 @@ public class PicklistService {
                 .stream().map(this::toDTO).toList();
     }
 
+    @Transactional(readOnly = true)
+    public PageResponse<PicklistResponseDTO> listPaged(
+            int page,
+            int size,
+            String search,
+            String status,
+            boolean excludeDispatched
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String q = StringUtils.hasText(search) ? search.trim() : null;
+        String statusKey = null;
+        if (StringUtils.hasText(status) && !"all".equalsIgnoreCase(status.trim())) {
+            statusKey = status.trim().toUpperCase(Locale.ROOT);
+        }
+        Page<Picklist> result = repo.search(
+                auth.getCurrentCompanyId(), q, statusKey, excludeDispatched, pageable);
+        return PageResponse.from(result, this::toDTO);
+    }
+
     // --------------------------
     // Helpers
     // --------------------------
@@ -241,10 +269,15 @@ public class PicklistService {
         Long shipmentId = shipmentOpt.map(Shipment::getId).orElse(null);
         String shipmentStatus = shipmentOpt.map(Shipment::getStatus).orElse(null);
 
+        SalesOrder so = p.getSalesOrder();
+        String customerName = so != null && so.getCustomer() != null
+                ? so.getCustomer().getCustomerName() : null;
         return PicklistResponseDTO.builder()
                 .id(p.getId())
                 .picklistNumber(p.getPicklistNumber())
-                .salesOrderId(p.getSalesOrder().getId())
+                .salesOrderId(so != null ? so.getId() : null)
+                .salesOrderNumber(so != null ? so.getOrderNumber() : null)
+                .customerName(customerName)
                 .status(p.getStatus())
                 .archived(p.isArchived())
                 .createdAt(p.getCreatedAt())

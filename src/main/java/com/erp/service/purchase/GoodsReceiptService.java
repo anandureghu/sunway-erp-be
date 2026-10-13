@@ -13,6 +13,7 @@ import com.erp.domain.purchase.PurchaseOrder;
 import com.erp.domain.purchase.PurchaseOrderItem;
 import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.inventory.StockBatchSourceType;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.purchase.GoodsReceiptCreateDTO;
 import com.erp.dto.purchase.GoodsReceiptItemDTO;
 import com.erp.dto.purchase.GoodsReceiptResponseDTO;
@@ -33,14 +34,18 @@ import com.erp.service.finance.InvoiceService;
 import com.erp.service.inventory.ItemWarehouseStockService;
 import com.erp.service.inventory.StockBatchService;
 import com.erp.service.pdf.GoodsReceiptPdfService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -498,6 +503,42 @@ public class GoodsReceiptService {
                 .stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<GoodsReceiptResponseDTO> listPaged(
+            int page,
+            int size,
+            String search,
+            String tab,
+            String status
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        var pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "receivedAt"));
+        String q = StringUtils.hasText(search) ? search.trim() : null;
+        String tabKey = StringUtils.hasText(tab) ? tab.trim().toLowerCase(Locale.ROOT) : null;
+        GoodsReceiptStatus statusEnum = parseGrStatus(status);
+        var result = repo.search(auth.getCurrentCompanyId(), q, tabKey, statusEnum, pageable);
+        return PageResponse.from(result, this::toDTO);
+    }
+
+    private static GoodsReceiptStatus parseGrStatus(String status) {
+        if (!StringUtils.hasText(status) || "all".equalsIgnoreCase(status.trim())) {
+            return null;
+        }
+        String key = status.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
+        if ("PENDING".equals(key) || "PENDING_INSPECTION".equals(key)) {
+            return GoodsReceiptStatus.PENDING_INSPECTION;
+        }
+        if ("INSPECTED".equals(key)) {
+            return GoodsReceiptStatus.INSPECTED;
+        }
+        try {
+            return GoodsReceiptStatus.valueOf(key);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     private GoodsReceiptResponseDTO toDTO(GoodsReceipt gr) {

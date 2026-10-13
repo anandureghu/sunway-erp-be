@@ -33,13 +33,21 @@ import com.erp.service.inventory.ItemWarehouseStockService;
 import com.erp.service.inventory.StockBatchService;
 import com.erp.service.DocumentSequenceService;
 import com.erp.util.DiscountFloor;
+import com.erp.dto.common.PageResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @Transactional
@@ -240,6 +248,47 @@ public class SalesOrderService {
     public List<SalesOrderResponseDTO> list() {
         return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream().map(this::toDTO).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<SalesOrderResponseDTO> listPaged(
+            int page,
+            int size,
+            String search,
+            String tab,
+            String status,
+            String paymentStatus,
+            LocalDate dateFrom,
+            LocalDate dateTo
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String q = StringUtils.hasText(search) ? search.trim() : null;
+        String tabKey = StringUtils.hasText(tab) ? tab.trim().toLowerCase(Locale.ROOT) : null;
+        String statusKey = normalizeFilter(status);
+        String paymentKey = normalizeFilter(paymentStatus);
+        if ("PARTIALLY_PAID".equals(paymentKey) || "PARTIAL".equals(paymentKey)) {
+            paymentKey = "PARTIALLY_PAID";
+        }
+        Page<SalesOrder> result = repo.search(
+                auth.getCurrentCompanyId(),
+                q,
+                tabKey,
+                statusKey,
+                paymentKey,
+                dateFrom,
+                dateTo,
+                pageable
+        );
+        return PageResponse.from(result, this::toDTO);
+    }
+
+    private static String normalizeFilter(String value) {
+        if (!StringUtils.hasText(value) || "all".equalsIgnoreCase(value.trim())) {
+            return null;
+        }
+        return value.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
     }
 
     // --------------------------

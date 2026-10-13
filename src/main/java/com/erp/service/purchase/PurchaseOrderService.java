@@ -13,6 +13,7 @@ import com.erp.domain.purchase.PurchaseOrderStatus;
 import com.erp.domain.purchase.PurchaseRequisition;
 import com.erp.domain.purchase.PurchaseRequisitionReviewAction;
 import com.erp.domain.purchase.PurchaseRequisitionStatus;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.purchase.PurchaseOrderAssignSupplierDTO;
 import com.erp.dto.purchase.PurchaseOrderCreateDTO;
 import com.erp.dto.purchase.PurchaseOrderItemDTO;
@@ -36,9 +37,12 @@ import com.erp.exception.ConflictException;
 import com.erp.exception.NotFoundException;
 import com.erp.service.DocumentSequenceService;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -46,6 +50,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.StringJoiner;
 
 @Service
@@ -283,6 +288,63 @@ public class PurchaseOrderService {
     public List<PurchaseOrderResponseDTO> list() {
         return repo.findByCompanyIdOrderByCreatedAtDesc(auth.getCurrentCompanyId())
                 .stream().map(this::toDTO).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<PurchaseOrderResponseDTO> listPaged(
+            int page,
+            int size,
+            String search,
+            String tab,
+            String status,
+            String paymentStatus,
+            LocalDate dateFrom,
+            LocalDate dateTo
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        var pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String q = StringUtils.hasText(search) ? search.trim() : null;
+        String tabKey = StringUtils.hasText(tab) ? tab.trim().toLowerCase(Locale.ROOT) : null;
+        PurchaseOrderStatus statusEnum = parsePoStatus(status);
+        String paymentKey = normalizeFilter(paymentStatus);
+        if ("PARTIAL".equals(paymentKey) || "PARTIALLY".equals(paymentKey)) {
+            paymentKey = "PARTIALLY_PAID";
+        }
+        var result = repo.search(
+                auth.getCurrentCompanyId(),
+                q,
+                tabKey,
+                statusEnum,
+                paymentKey,
+                dateFrom,
+                dateTo,
+                pageable
+        );
+        return PageResponse.from(result, this::toDTO);
+    }
+
+    private static PurchaseOrderStatus parsePoStatus(String status) {
+        String key = normalizeFilter(status);
+        if (key == null) {
+            return null;
+        }
+        // FE sometimes uses "ordered" for confirmed
+        if ("ORDERED".equals(key) || "PENDING".equals(key)) {
+            key = "CONFIRMED";
+        }
+        try {
+            return PurchaseOrderStatus.valueOf(key);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private static String normalizeFilter(String value) {
+        if (!StringUtils.hasText(value) || "all".equalsIgnoreCase(value.trim())) {
+            return null;
+        }
+        return value.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
     }
 
     public PurchaseOrderResponseDTO update(Long id, PurchaseOrderUpdateDTO dto) {

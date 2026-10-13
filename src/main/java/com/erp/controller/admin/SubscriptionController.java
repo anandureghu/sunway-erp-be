@@ -61,11 +61,12 @@ public class SubscriptionController {
             @RequestParam(required = false) Long companyId,
             @RequestParam(required = false) Integer expiringWithinDays,
             @RequestParam(required = false) SubscriptionPaymentStatus paymentStatus,
+            @RequestParam(required = false) String search,
             @PageableDefault(size = 20, sort = "endsAt", direction = Sort.Direction.ASC) Pageable pageable
     ) {
         return PagedResponse.from(
                 subscriptionService.list(
-                        status, planType, companyId, expiringWithinDays, paymentStatus, pageable)
+                        status, planType, companyId, expiringWithinDays, paymentStatus, search, pageable)
         );
     }
 

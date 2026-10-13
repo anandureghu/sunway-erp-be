@@ -35,11 +35,16 @@ public class ReconciliationService {
     private final TransactionService transactionService;
     
     public Page<ReconciliationResponse> getAll(Pageable pageable) {
+        return getAll(pageable, null);
+    }
+
+    public Page<ReconciliationResponse> getAll(Pageable pageable, String search) {
 
         Long companyId = authContext.getCurrentCompanyId();
+        String q = search == null || search.isBlank() ? null : search.trim();
 
         Page<Reconciliation> page =
-                reconciliationRepo.findAllByCompanyId(companyId, pageable);
+                reconciliationRepo.searchByCompanyId(companyId, q, pageable);
 
         return page.map(this::map);
     }

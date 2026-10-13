@@ -1,6 +1,8 @@
 package com.erp.repo.sales;
 
 import com.erp.domain.sales.Shipment;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -66,4 +68,35 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
             ORDER BY s.createdAt DESC
             """)
     List<Shipment> findByCompanyIdWithDetails(@Param("companyId") Long companyId);
+
+    @Query("""
+            SELECT s FROM Shipment s
+            LEFT JOIN s.customer c
+            LEFT JOIN s.picklist p
+            LEFT JOIN p.salesOrder so
+            WHERE s.company.id = :companyId
+              AND (p IS NULL OR p.archived = false)
+              AND (
+                :search IS NULL OR :search = ''
+                OR LOWER(s.shipmentNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(s.trackingNumber, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(so.orderNumber, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(c.customerName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(s.status, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+              )
+              AND (
+                :statusGroup IS NULL OR :statusGroup = '' OR :statusGroup = 'all'
+                OR (:statusGroup = 'created' AND UPPER(s.status) = 'CREATED')
+                OR (:statusGroup = 'active' AND UPPER(s.status) NOT IN ('DELIVERED', 'CANCELLED', 'FAILED_DELIVERY'))
+                OR (:statusGroup = 'in_motion' AND UPPER(s.status) IN ('DISPATCHED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'))
+                OR (:statusGroup = 'delivered' AND UPPER(s.status) = 'DELIVERED')
+                OR UPPER(s.status) = UPPER(:statusGroup)
+              )
+            """)
+    Page<Shipment> search(
+            @Param("companyId") Long companyId,
+            @Param("search") String search,
+            @Param("statusGroup") String statusGroup,
+            Pageable pageable
+    );
 }

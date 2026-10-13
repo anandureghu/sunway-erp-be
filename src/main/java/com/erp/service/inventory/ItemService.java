@@ -34,6 +34,9 @@ import com.erp.repo.purchase.PurchaseOrderRepository;
 import com.erp.security.context.AuthContext;
 import com.erp.service.file.FileStorageService;
 import com.erp.util.DiscountFloor;
+import com.erp.dto.common.PageResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -349,21 +352,36 @@ public class ItemService {
     /**
      * One catalog row per item×warehouse stock line (quantities match sales availability checks).
      */
-    public List<ItemResponseDTO> listStockCatalogForCompany(boolean archived) {
+    public PageResponse<ItemResponseDTO> listStockCatalogForCompany(
+            boolean archived,
+            String search,
+            String status,
+            String stockFilter,
+            int page,
+            int size
+    ) {
         Long companyId = auth.getCurrentCompanyId();
+        int resolvedSize = size <= 0 ? 20 : size;
+        int resolvedPage = Math.max(page, 0);
         Map<Long, Integer> onOrderByItem = loadOnOrderByItem(companyId);
-        return itemWarehouseStockService.listStockCatalog(companyId, archived).stream()
-                .map(row -> {
-                    ItemResponseDTO dto = toDTOForWarehouse(
-                            row.item(),
-                            row.warehouse(),
-                            row.quantityOnHand(),
-                            row.reserved(),
-                            row.available());
-                    dto.setQuantityOnOrder(onOrderByItem.getOrDefault(row.item().getId(), 0));
-                    return dto;
-                })
-                .toList();
+        Page<ItemWarehouseStockService.StockCatalogRow> springPage =
+                itemWarehouseStockService.searchStockCatalog(
+                        companyId,
+                        archived,
+                        search,
+                        status,
+                        stockFilter,
+                        PageRequest.of(resolvedPage, resolvedSize));
+        return PageResponse.from(springPage, row -> {
+            ItemResponseDTO dto = toDTOForWarehouse(
+                    row.item(),
+                    row.warehouse(),
+                    row.quantityOnHand(),
+                    row.reserved(),
+                    row.available());
+            dto.setQuantityOnOrder(onOrderByItem.getOrDefault(row.item().getId(), 0));
+            return dto;
+        });
     }
 
     private Map<Long, Integer> loadOnOrderByItem(Long companyId) {

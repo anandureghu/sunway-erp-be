@@ -144,4 +144,118 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             """)
     BigDecimal sumConfirmedAmountByCompanyIdAndInvoiceId(
             @Param("companyId") Long companyId, @Param("invoiceId") String invoiceId);
+
+    /**
+     * Company payment list with optional direction, outstanding/completed tab, and text search.
+     * {@code listTab}: {@code outstanding} (pending confirm) or {@code completed} (settled / void-style).
+     * Vendor rows require a PO in CONFIRMED / PARTIALLY_RECEIVED / RECEIVED.
+     */
+    @Query("""
+            SELECT DISTINCT p FROM Payment p
+            LEFT JOIN PurchaseOrder po ON po.id = p.purchaseOrderId
+            LEFT JOIN po.supplier supplier
+            LEFT JOIN Invoice inv ON inv.company.id = p.company.id AND inv.invoiceId = p.invoiceId
+            LEFT JOIN SalesOrder so ON so.id = inv.orderId AND inv.type = com.erp.domain.InvoiceType.SALES
+            LEFT JOIN so.customer customer
+            WHERE p.company.id = :companyId
+              AND p.archived = false
+              AND (
+                    :direction IS NULL
+                    OR (
+                         :direction = com.erp.domain.finance.PaymentDirection.CUSTOMER
+                         AND (p.paymentDirection IS NULL
+                              OR p.paymentDirection = com.erp.domain.finance.PaymentDirection.CUSTOMER)
+                       )
+                    OR (
+                         :direction = com.erp.domain.finance.PaymentDirection.VENDOR
+                         AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.VENDOR
+                         AND p.purchaseOrderId IS NOT NULL
+                         AND po.status IN (
+                              com.erp.domain.purchase.PurchaseOrderStatus.CONFIRMED,
+                              com.erp.domain.purchase.PurchaseOrderStatus.PARTIALLY_RECEIVED,
+                              com.erp.domain.purchase.PurchaseOrderStatus.RECEIVED
+                         )
+                       )
+                    OR (
+                         :direction = com.erp.domain.finance.PaymentDirection.OTHER
+                         AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.OTHER
+                       )
+                  )
+              AND (
+                    :listTab IS NULL
+                    OR (
+                         :listTab = 'outstanding'
+                         AND UPPER(COALESCE(p.paymentMethod, '')) IN :pendingMethods
+                       )
+                    OR (
+                         :listTab = 'completed'
+                         AND UPPER(COALESCE(p.paymentMethod, '')) NOT IN :pendingMethods
+                       )
+                  )
+              AND (
+                    :q IS NULL OR :q = ''
+                    OR LOWER(COALESCE(p.paymentCode, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(p.invoiceId, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(p.paymentMethod, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(p.expenseCategory, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(p.payee, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(po.orderNumber, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(supplier.vendorName, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(so.orderNumber, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR LOWER(COALESCE(customer.customerName, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+                    OR CAST(p.purchaseOrderId AS string) LIKE CONCAT('%', :q, '%')
+                    OR CAST(p.amount AS string) LIKE CONCAT('%', :q, '%')
+                  )
+            """)
+    Page<Payment> searchForCompany(
+            @Param("companyId") Long companyId,
+            @Param("direction") PaymentDirection direction,
+            @Param("listTab") String listTab,
+            @Param("pendingMethods") java.util.Collection<String> pendingMethods,
+            @Param("q") String q,
+            Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(DISTINCT p) FROM Payment p
+            LEFT JOIN PurchaseOrder po ON po.id = p.purchaseOrderId
+            WHERE p.company.id = :companyId
+              AND p.archived = false
+              AND (
+                    :direction IS NULL
+                    OR (
+                         :direction = com.erp.domain.finance.PaymentDirection.CUSTOMER
+                         AND (p.paymentDirection IS NULL
+                              OR p.paymentDirection = com.erp.domain.finance.PaymentDirection.CUSTOMER)
+                       )
+                    OR (
+                         :direction = com.erp.domain.finance.PaymentDirection.VENDOR
+                         AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.VENDOR
+                         AND p.purchaseOrderId IS NOT NULL
+                         AND po.status IN (
+                              com.erp.domain.purchase.PurchaseOrderStatus.CONFIRMED,
+                              com.erp.domain.purchase.PurchaseOrderStatus.PARTIALLY_RECEIVED,
+                              com.erp.domain.purchase.PurchaseOrderStatus.RECEIVED
+                         )
+                       )
+                    OR (
+                         :direction = com.erp.domain.finance.PaymentDirection.OTHER
+                         AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.OTHER
+                       )
+                  )
+              AND (
+                    (
+                         :listTab = 'outstanding'
+                         AND UPPER(COALESCE(p.paymentMethod, '')) IN :pendingMethods
+                    )
+                    OR (
+                         :listTab = 'completed'
+                         AND UPPER(COALESCE(p.paymentMethod, '')) NOT IN :pendingMethods
+                    )
+                  )
+            """)
+    long countForCompanyTab(
+            @Param("companyId") Long companyId,
+            @Param("direction") PaymentDirection direction,
+            @Param("listTab") String listTab,
+            @Param("pendingMethods") java.util.Collection<String> pendingMethods);
 }

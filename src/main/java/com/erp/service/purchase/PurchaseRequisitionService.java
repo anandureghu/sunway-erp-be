@@ -8,6 +8,7 @@ import com.erp.domain.inventory.Item;
 import com.erp.domain.inventory.Vendor;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.domain.purchase.*;
+import com.erp.dto.common.PageResponse;
 import com.erp.dto.file.FileCategory;
 import com.erp.dto.file.FileUploadResult;
 import com.erp.dto.purchase.PurchaseRequisitionCreateDTO;
@@ -29,8 +30,11 @@ import com.erp.service.file.FileStorageService;
 import com.erp.security.context.AuthContext;
 import com.erp.service.DocumentSequenceService;
 import com.erp.service.finance.CompanyAccountingDefaultsService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
@@ -39,6 +43,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -381,6 +386,36 @@ public class PurchaseRequisitionService {
                 .stream()
                 .map(pr -> toDTO(pr, null))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<PurchaseRequisitionResponseDTO> listPaged(
+            int page,
+            int size,
+            String search,
+            String tab,
+            String status
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        var pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String q = StringUtils.hasText(search) ? search.trim() : null;
+        String tabKey = StringUtils.hasText(tab) ? tab.trim().toLowerCase(Locale.ROOT) : null;
+        PurchaseRequisitionStatus statusEnum = parsePrStatus(status);
+        var result = repo.search(auth.getCurrentCompanyId(), q, tabKey, statusEnum, pageable);
+        return PageResponse.from(result, pr -> toDTO(pr, null));
+    }
+
+    private static PurchaseRequisitionStatus parsePrStatus(String status) {
+        if (!StringUtils.hasText(status) || "all".equalsIgnoreCase(status.trim())) {
+            return null;
+        }
+        String key = status.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
+        try {
+            return PurchaseRequisitionStatus.valueOf(key);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     public PurchaseRequisitionDocumentDTO uploadDocument(Long requisitionId, MultipartFile file) {

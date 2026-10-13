@@ -1,6 +1,9 @@
 package com.erp.dto.common;
 
+import org.springframework.data.domain.Page;
+
 import java.util.List;
+import java.util.function.Function;
 
 public class PageResponse<T> {
     private List<T> content;     // FE expects this exact key
@@ -21,6 +24,26 @@ public class PageResponse<T> {
 
     public static <T> PageResponse<T> of(List<T> content, long totalElements, int totalPages, int page, int size) {
         return new PageResponse<>(content, totalElements, totalPages, page, size);
+    }
+
+    public static <T> PageResponse<T> from(Page<T> springPage) {
+        return of(
+                springPage.getContent(),
+                springPage.getTotalElements(),
+                springPage.getTotalPages(),
+                springPage.getNumber(),
+                springPage.getSize()
+        );
+    }
+
+    public static <S, T> PageResponse<T> from(Page<S> springPage, Function<S, T> mapper) {
+        return of(
+                springPage.getContent().stream().map(mapper).toList(),
+                springPage.getTotalElements(),
+                springPage.getTotalPages(),
+                springPage.getNumber(),
+                springPage.getSize()
+        );
     }
 
     public List<T> getContent() { return content; }

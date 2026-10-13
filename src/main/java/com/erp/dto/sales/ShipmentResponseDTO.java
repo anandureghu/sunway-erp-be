@@ -17,7 +17,10 @@ public class ShipmentResponseDTO {
     private Long id;
     private String shipmentNumber;
     private Long picklistId;
+    private Long salesOrderId;
+    private String salesOrderNumber;
     private Long customerId;
+    private String customerName;
     private String status;
     private String carrierName;
     private String trackingNumber;
