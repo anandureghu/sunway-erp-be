@@ -1,11 +1,13 @@
 package com.erp.service.security;
 
+import com.erp.domain.Employee;
 import com.erp.domain.security.CompanyRolePermission;
 import com.erp.domain.security.EmployeePermission;
 import com.erp.domain.security.EnumRolePermission;
 import com.erp.domain.security.AppAction;
 import com.erp.domain.security.AppModule;
 import com.erp.domain.security.Role;
+import com.erp.repo.EmployeeRepository;
 import com.erp.repo.security.CompanyRolePermissionRepository;
 import com.erp.repo.security.EmployeePermissionRepository;
 import com.erp.repo.security.EnumRolePermissionRepository;
@@ -14,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
 import java.util.Optional;
 
 @Service("permissionChecker")
@@ -24,6 +27,7 @@ public class PermissionCheckService {
     private final EmployeePermissionRepository employeePermissionRepository;
     private final CompanyRolePermissionRepository companyRolePermissionRepository;
     private final EnumRolePermissionRepository enumRolePermissionRepository;
+    private final EmployeeRepository employeeRepository;
 
     // ======================================================
     // ENTRY METHODS
@@ -168,13 +172,16 @@ public class PermissionCheckService {
 
     private Optional<CompanyRolePermission> resolveCompanyRolePermission(CustomUserPrincipal user, AppModule module) {
 
-        if (user.getCompanyRoleId() == null || user.getCompanyRoleId() <= 0) {
+        // Prefer live employee.companyRoleRef over JWT claim — role/permission
+        // grants after login must apply without forcing a re-login.
+        Long companyRoleId = resolveLiveCompanyRoleId(user);
+        if (companyRoleId == null || companyRoleId <= 0) {
             return Optional.empty();
         }
 
         Optional<CompanyRolePermission> permission =
                 companyRolePermissionRepository
-                        .findByCompanyRoleIdAndModule(user.getCompanyRoleId(), module);
+                        .findByCompanyRoleIdAndModule(companyRoleId, module);
 
         if (permission.isEmpty()) {
             return Optional.empty();
@@ -193,8 +200,8 @@ public class PermissionCheckService {
         }
 
         // Tenant guard: the CompanyRole this permission belongs to must
-        // belong to the caller's company. Stops a stale companyRoleId in a
-        // JWT from granting access via another tenant's permission row.
+        // belong to the caller's company. Stops a stale employeeId in a JWT from
+        // granting access via another tenant's permission row.
         Long roleCompanyId = p.getCompanyRole().getCompany() != null
                 ? p.getCompanyRole().getCompany().getId()
                 : null;
@@ -212,6 +219,41 @@ public class PermissionCheckService {
         }
 
         return permission;
+    }
+
+    /**
+     * Resolve the employee's current company-role id from the database when possible.
+     * JWT {@code companyRoleId} is only a fallback for sessions without an employee link.
+     */
+    public Long resolveLiveCompanyRoleId(CustomUserPrincipal user) {
+        if (user == null) {
+            return null;
+        }
+        if (user.getEmployeeId() != null && user.getEmployeeId() > 0) {
+            Optional<Employee> emp = employeeRepository.findById(user.getEmployeeId());
+            if (emp.isPresent()) {
+                Employee e = emp.get();
+                // Tenant guard: only trust the live role when the employee belongs
+                // to the same company as the JWT session.
+                Long empCompanyId = e.getCompany() != null ? e.getCompany().getId() : null;
+                if (empCompanyId != null
+                        && user.getCompanyId() != null
+                        && empCompanyId.equals(user.getCompanyId())) {
+                    Long liveRoleId = e.getCompanyRoleId();
+                    if (liveRoleId != null && liveRoleId > 0) {
+                        if (!Objects.equals(liveRoleId, user.getCompanyRoleId())) {
+                            log.debug(
+                                    "Using live companyRoleId={} (JWT had {}) for employeeId={}",
+                                    liveRoleId, user.getCompanyRoleId(), user.getEmployeeId());
+                        }
+                        return liveRoleId;
+                    }
+                    return null;
+                }
+            }
+        }
+        Long jwtRoleId = user.getCompanyRoleId();
+        return (jwtRoleId != null && jwtRoleId > 0) ? jwtRoleId : null;
     }
 
     private Optional<EnumRolePermission> resolveEnumRolePermission(CustomUserPrincipal user, AppModule module) {
@@ -302,6 +344,12 @@ public class PermissionCheckService {
     public Long getLoggedCompanyRoleId(Authentication auth) {
         CustomUserPrincipal user = extractUser(auth);
         return user != null ? user.getCompanyRoleId() : null;
+    }
+
+    /** Live company-role id (DB) when available; otherwise JWT claim. */
+    public Long getEffectiveCompanyRoleId(Authentication auth) {
+        CustomUserPrincipal user = extractUser(auth);
+        return user != null ? resolveLiveCompanyRoleId(user) : null;
     }
 
     public Role getLoggedRole(Authentication auth) {

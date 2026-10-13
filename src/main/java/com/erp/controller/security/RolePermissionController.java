@@ -24,11 +24,17 @@ public class RolePermissionController {
     @GetMapping("/my-permissions")
     public List<PermissionRecordDTO> getMyPermissions(Authentication authentication) {
         Long employeeId = permissionCheckService.getLoggedEmployeeId(authentication);
-        Long companyRoleId = permissionCheckService.getLoggedCompanyRoleId(authentication);
         Role role = permissionCheckService.getLoggedRole(authentication);
 
         if (role == null) {
             throw new IllegalStateException("Unable to resolve logged-in user role");
+        }
+
+        // Prefer live companyRoleId from the employee record so role/permission
+        // changes apply without requiring a re-login (JWT claim can be stale).
+        Long companyRoleId = permissionCheckService.getEffectiveCompanyRoleId(authentication);
+        if (companyRoleId == null) {
+            companyRoleId = permissionCheckService.getLoggedCompanyRoleId(authentication);
         }
 
         return service.getPermissionsForUser(employeeId, companyRoleId, role);
