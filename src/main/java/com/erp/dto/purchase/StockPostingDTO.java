@@ -27,5 +27,7 @@ public class StockPostingDTO {
         private String lotNo;
         private BigDecimal unitCost;
         private LocalDate expiryDate;
+        /** Optional override; defaults to the PO supplier when omitted. */
+        private Long supplierId;
     }
 }

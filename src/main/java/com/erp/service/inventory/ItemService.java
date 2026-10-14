@@ -513,6 +513,11 @@ public class ItemService {
                 ? parseOptionalDate(dto.getExpiryDate())
                 : item.getExpiryDate();
 
+        Long supplierId = dto.getSupplierId();
+        if (supplierId == null && item.getPreferredVendor() != null) {
+            supplierId = item.getPreferredVendor().getId();
+        }
+
         stockBatchService.receiveIntoBatch(
                 item.getId(),
                 whId,
@@ -522,7 +527,8 @@ public class ItemService {
                 saleByDate,
                 StockBatchSourceType.DIRECT_RECEIVE,
                 null,
-                companyId
+                companyId,
+                supplierId
         );
 
         item = itemRepo.findById(item.getId()).orElseThrow();

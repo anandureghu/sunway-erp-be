@@ -19,6 +19,7 @@ public class GoodsReceiptResponseDTO {
     private Long purchaseOrderId;
     /** Denormalized for list/search UIs that do not join the full PO. */
     private String purchaseOrderNumber;
+    private Long supplierId;
     private String supplierName;
     private String status;
     private boolean archived;

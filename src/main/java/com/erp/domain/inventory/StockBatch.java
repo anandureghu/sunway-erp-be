@@ -39,6 +39,11 @@ public class StockBatch {
     @JoinColumn(name = "warehouse_id")
     private Warehouse warehouse;
 
+    /** Supplier recorded at receive time (PO supplier or freeform selection). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id")
+    private Vendor supplier;
+
     @Column(name = "batch_no", nullable = false, length = 100)
     private String batchNo;
 

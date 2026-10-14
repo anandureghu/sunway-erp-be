@@ -381,6 +381,11 @@ public class GoodsReceiptService {
                     ? line.getExpiryDate()
                     : item.getItem().getExpiryDate();
 
+            Long supplierId = line.getSupplierId();
+            if (supplierId == null && gr.getPurchaseOrder().getSupplier() != null) {
+                supplierId = gr.getPurchaseOrder().getSupplier().getId();
+            }
+
             stockBatchService.receiveIntoBatch(
                     item.getItem().getId(),
                     wh.getId(),
@@ -390,7 +395,8 @@ public class GoodsReceiptService {
                     saleByDate,
                     StockBatchSourceType.GOODS_RECEIPT,
                     gr.getId(),
-                    companyId
+                    companyId,
+                    supplierId
             );
 
             Item catalogItem = item.getItem();
@@ -551,6 +557,7 @@ public class GoodsReceiptService {
                 .id(gr.getId())
                 .purchaseOrderId(po.getId())
                 .purchaseOrderNumber(po.getOrderNumber())
+                .supplierId(po.getSupplier() != null ? po.getSupplier().getId() : null)
                 .supplierName(po.getSupplier() != null ? po.getSupplier().getVendorName() : null)
                 .status(gr.getStatus() != null ? gr.getStatus().name() : null)
                 .archived(gr.isArchived())

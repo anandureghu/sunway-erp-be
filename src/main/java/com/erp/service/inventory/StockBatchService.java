@@ -12,6 +12,7 @@ import com.erp.dto.inventory.StockBatchResponseDTO;
 import com.erp.repo.inventory.ItemRepository;
 import com.erp.repo.inventory.StockBatchMovementRepository;
 import com.erp.repo.inventory.StockBatchRepository;
+import com.erp.repo.inventory.VendorRepository;
 import com.erp.repo.inventory.WarehouseRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class StockBatchService {
     private final StockBatchMovementRepository movementRepo;
     private final ItemRepository itemRepo;
     private final WarehouseRepository warehouseRepo;
+    private final VendorRepository vendorRepo;
     private final ItemWarehouseStockService stockService;
 
     public StockBatchService(
@@ -48,12 +50,14 @@ public class StockBatchService {
             StockBatchMovementRepository movementRepo,
             ItemRepository itemRepo,
             WarehouseRepository warehouseRepo,
+            VendorRepository vendorRepo,
             ItemWarehouseStockService stockService
     ) {
         this.batchRepo = batchRepo;
         this.movementRepo = movementRepo;
         this.itemRepo = itemRepo;
         this.warehouseRepo = warehouseRepo;
+        this.vendorRepo = vendorRepo;
         this.stockService = stockService;
     }
 
@@ -76,6 +80,23 @@ public class StockBatchService {
             Long sourceId,
             Long companyId
     ) {
+        return receiveIntoBatch(
+                itemId, warehouseId, quantity, unitCost, batchNo, expiryDate,
+                sourceType, sourceId, companyId, null);
+    }
+
+    public StockBatch receiveIntoBatch(
+            Long itemId,
+            Long warehouseId,
+            int quantity,
+            BigDecimal unitCost,
+            String batchNo,
+            LocalDate expiryDate,
+            StockBatchSourceType sourceType,
+            Long sourceId,
+            Long companyId,
+            Long supplierId
+    ) {
         if (quantity <= 0) {
             throw new IllegalArgumentException("Receive quantity must be positive");
         }
@@ -84,6 +105,7 @@ public class StockBatchService {
 
         Item item = loadItem(itemId, companyId);
         Warehouse warehouse = loadWarehouse(warehouseId, companyId);
+        Vendor supplier = resolveSupplier(supplierId, companyId);
         // Fall back to the item master sale-by date when the receive payload omits it.
         LocalDate resolvedExpiry = expiryDate != null ? expiryDate : item.getExpiryDate();
 
@@ -94,6 +116,7 @@ public class StockBatchService {
                         .company(Company.builder().id(companyId).build())
                         .item(item)
                         .warehouse(warehouse)
+                        .supplier(supplier)
                         .batchNo(resolvedBatchNo)
                         .quantityOnHand(0)
                         .unitCost(cost)
@@ -108,6 +131,9 @@ public class StockBatchService {
         if (resolvedExpiry != null) {
             batch.setExpiryDate(resolvedExpiry);
         }
+        if (supplier != null) {
+            batch.setSupplier(supplier);
+        }
         StockBatch saved = batchRepo.save(batch);
 
         recordMovement(saved, StockBatchMovementType.RECEIVE, quantity, cost, sourceType.name(), sourceId);
@@ -115,6 +141,15 @@ public class StockBatchService {
         recomputeItemWeightedAverage(itemId);
 
         return saved;
+    }
+
+    private Vendor resolveSupplier(Long supplierId, Long companyId) {
+        if (supplierId == null) {
+            return null;
+        }
+        return vendorRepo.findById(supplierId)
+                .filter(v -> v.getCompany() != null && companyId.equals(v.getCompany().getId()))
+                .orElseThrow(() -> new IllegalArgumentException("Supplier not found: " + supplierId));
     }
 
     public ConsumptionResult consumeFifo(

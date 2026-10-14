@@ -19,6 +19,9 @@ public class ItemStockReceiveDTO {
     /** If set, must match the item's warehouse. */
     private Long warehouseId;
 
+    /** Optional supplier for this receive layer. */
+    private Long supplierId;
+
     private BigDecimal costPrice;
     private BigDecimal unitPrice;
 }
