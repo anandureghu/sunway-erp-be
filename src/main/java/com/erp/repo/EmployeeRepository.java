@@ -63,8 +63,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     /**
      * Directory page: non-archived employees in a company, optional case-insensitive
-     * search on employee no / name / login email / phone, optional status and
-     * employment-category filters.
+     * search on employee no / name / login email / phone, optional status,
+     * employment-category, and department filters.
      */
     @Query("""
             SELECT e FROM Employee e
@@ -73,6 +73,15 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             WHERE e.company.id = :companyId
               AND e.archived = false
               AND (:status IS NULL OR e.status = :status)
+              AND (
+                :departmentId IS NULL
+                OR e.department.id = :departmentId
+                OR EXISTS (
+                    SELECT 1 FROM EmployeeCurrentJob dj
+                    WHERE dj.employee = e
+                      AND dj.department.id = :departmentId
+                )
+              )
               AND (
                 :employmentCategory IS NULL
                 OR EXISTS (
@@ -102,6 +111,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             @Param("search") String search,
             @Param("status") EmployeeStatus status,
             @Param("employmentCategory") com.erp.domain.enums.EmploymentCategory employmentCategory,
+            @Param("departmentId") Long departmentId,
             Pageable pageable);
 
     List<Employee> findByDepartment_IdAndArchivedFalseOrderByCreatedAtDesc(Long departmentId);

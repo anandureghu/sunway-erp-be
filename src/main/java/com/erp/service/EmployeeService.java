@@ -498,20 +498,31 @@ public class EmployeeService {
     // ======================================================
 
     public PageResponse<EmployeeResponseDTO> getEmployees(int page, int size) {
-        return getEmployees(page, size, null, null, null);
+        return getEmployees(page, size, null, null, null, null);
     }
 
     public PageResponse<EmployeeResponseDTO> getEmployees(int page, int size, String search) {
-        return getEmployees(page, size, search, null, null);
+        return getEmployees(page, size, search, null, null, null);
+    }
+
+    public PageResponse<EmployeeResponseDTO> getEmployees(
+            int page, int size, String search, String status, String employmentCategory) {
+        return getEmployees(page, size, search, status, employmentCategory, null);
     }
 
     /**
      * Paginated directory for the caller's company.
      * Optional {@code search} filters by employee no / name / email / phone (case-insensitive).
-     * Optional {@code status} and {@code employmentCategory} narrow the result set server-side.
+     * Optional {@code status}, {@code employmentCategory}, and {@code departmentId}
+     * narrow the result set server-side.
      */
     public PageResponse<EmployeeResponseDTO> getEmployees(
-            int page, int size, String search, String status, String employmentCategory) {
+            int page,
+            int size,
+            String search,
+            String status,
+            String employmentCategory,
+            Long departmentId) {
 
         User authUser = getAuthUser();
 
@@ -535,11 +546,12 @@ public class EmployeeService {
         com.erp.domain.enums.EmploymentCategory categoryFilter =
                 parseEmploymentCategory(employmentCategory);
 
-        // VIEW OWN ONLY — single record, still honour search/status/category filters
+        // VIEW OWN ONLY — single record, still honour search/status/category/department filters
         if (!canViewAll && canViewOwn) {
             log.info("✅ User has VIEW_OWN permission - returning own employee only");
             Employee self = resolveCurrentEmployee(authUser);
-            if (!matchesDirectoryFilters(self, normalizedSearch, statusFilter, categoryFilter)) {
+            if (!matchesDirectoryFilters(
+                    self, normalizedSearch, statusFilter, categoryFilter, departmentId)) {
                 return PageResponse.of(List.of(), 0, 0, page, size);
             }
             return PageResponse.of(List.of(toDTO(self)), 1, 1, page, size);
@@ -556,11 +568,19 @@ public class EmployeeService {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
         Page<Employee> empPage;
-        if (normalizedSearch == null && statusFilter == null && categoryFilter == null) {
+        if (normalizedSearch == null
+                && statusFilter == null
+                && categoryFilter == null
+                && departmentId == null) {
             empPage = employeeRepository.findByCompany_IdAndArchivedFalse(companyId, pageable);
         } else {
             empPage = employeeRepository.searchDirectory(
-                    companyId, normalizedSearch, statusFilter, categoryFilter, pageable);
+                    companyId,
+                    normalizedSearch,
+                    statusFilter,
+                    categoryFilter,
+                    departmentId,
+                    pageable);
         }
 
         return PageResponse.from(empPage, this::toDTO);
@@ -603,9 +623,20 @@ public class EmployeeService {
             Employee e,
             String search,
             EmployeeStatus status,
-            com.erp.domain.enums.EmploymentCategory category) {
+            com.erp.domain.enums.EmploymentCategory category,
+            Long departmentId) {
         if (e.isArchived()) return false;
         if (status != null && e.getStatus() != status) return false;
+        if (departmentId != null) {
+            Long empDeptId = e.getDepartment() != null ? e.getDepartment().getId() : null;
+            if (!departmentId.equals(empDeptId)) {
+                var job = currentJobRepo.findByEmployee_Id(e.getId()).orElse(null);
+                Long jobDeptId = job != null && job.getDepartment() != null
+                        ? job.getDepartment().getId()
+                        : null;
+                if (!departmentId.equals(jobDeptId)) return false;
+            }
+        }
         if (category != null) {
             var job = currentJobRepo.findByEmployee_Id(e.getId()).orElse(null);
             if (job == null || job.getEmploymentCategory() != category) return false;

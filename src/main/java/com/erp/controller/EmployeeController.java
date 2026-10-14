@@ -92,10 +92,12 @@ public class EmployeeController {
             @RequestParam(name = "size", defaultValue = "20") int size,
             @RequestParam(name = "search", required = false) String search,
             @RequestParam(name = "status", required = false) String status,
-            @RequestParam(name = "employmentCategory", required = false) String employmentCategory) {
+            @RequestParam(name = "employmentCategory", required = false) String employmentCategory,
+            @RequestParam(name = "departmentId", required = false) Long departmentId) {
 
         return ResponseEntity.ok(
-                employeeService.getEmployees(page, size, search, status, employmentCategory));
+                employeeService.getEmployees(
+                        page, size, search, status, employmentCategory, departmentId));
     }
 
     // ======================================================
