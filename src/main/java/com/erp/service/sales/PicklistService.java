@@ -3,6 +3,8 @@ package com.erp.service.sales;
 import com.erp.domain.InvoiceType;
 import com.erp.domain.User;
 import com.erp.domain.hr.Company;
+import com.erp.domain.inventory.Item;
+import com.erp.domain.inventory.ItemWarehouseStock;
 import com.erp.domain.inventory.Warehouse;
 import com.erp.domain.sales.Picklist;
 import com.erp.domain.sales.PicklistItem;
@@ -15,6 +17,7 @@ import com.erp.dto.sales.PicklistResponseDTO;
 import com.erp.exception.ConflictException;
 import com.erp.repo.UserRepository;
 import com.erp.repo.hr.CompanyRepository;
+import com.erp.repo.inventory.ItemWarehouseStockRepository;
 import com.erp.repo.inventory.WarehouseRepository;
 import com.erp.repo.sales.PicklistRepository;
 import com.erp.repo.sales.SalesOrderRepository;
@@ -43,6 +46,7 @@ public class PicklistService {
     private final InvoiceRepository invoiceRepo;
     private final ShipmentRepository shipmentRepo;
     private final WarehouseRepository warehouseRepo;
+    private final ItemWarehouseStockRepository itemWarehouseStockRepo;
     private final CompanyRepository companyRepo;
     private final UserRepository userRepo;
     private final AuthContext auth;
@@ -54,6 +58,7 @@ public class PicklistService {
             InvoiceRepository invoiceRepo,
             ShipmentRepository shipmentRepo,
             WarehouseRepository warehouseRepo,
+            ItemWarehouseStockRepository itemWarehouseStockRepo,
             CompanyRepository companyRepo,
             UserRepository userRepo,
             AuthContext auth,
@@ -64,6 +69,7 @@ public class PicklistService {
         this.invoiceRepo = invoiceRepo;
         this.shipmentRepo = shipmentRepo;
         this.warehouseRepo = warehouseRepo;
+        this.itemWarehouseStockRepo = itemWarehouseStockRepo;
         this.companyRepo = companyRepo;
         this.userRepo = userRepo;
         this.auth = auth;
@@ -287,14 +293,43 @@ public class PicklistService {
                 .shipmentStatus(shipmentStatus)
                 .items(
                         p.getItems().stream()
-                                .map(i -> PicklistItemDTO.builder()
-                                        .itemId(i.getItem().getId())
-                                        .itemName(i.getItem().getName())
-                                        .quantity(i.getQuantity())
-                                        .build())
+                                .map(i -> toItemDTO(i, so))
                                 .toList()
                 )
                 .build();
+    }
+
+    private PicklistItemDTO toItemDTO(PicklistItem picklistItem, SalesOrder salesOrder) {
+        Item item = picklistItem.getItem();
+        SalesOrderItem line = findOrderLine(salesOrder, item != null ? item.getId() : null);
+        Long warehouseId = line != null ? resolveLineWarehouseId(line) : null;
+        String warehouseName = line != null ? resolveLineWarehouseName(line) : null;
+        Integer available = null;
+        if (item != null && warehouseId != null) {
+            available = itemWarehouseStockRepo
+                    .findByItemIdAndWarehouseId(item.getId(), warehouseId)
+                    .map(ItemWarehouseStock::available)
+                    .orElse(0);
+        }
+        return PicklistItemDTO.builder()
+                .itemId(item != null ? item.getId() : null)
+                .itemName(item != null ? item.getName() : null)
+                .itemSku(item != null ? item.getSku() : null)
+                .quantity(picklistItem.getQuantity())
+                .warehouseId(warehouseId)
+                .warehouseName(warehouseName)
+                .availableQuantity(available)
+                .build();
+    }
+
+    private SalesOrderItem findOrderLine(SalesOrder salesOrder, Long itemId) {
+        if (salesOrder == null || salesOrder.getItems() == null || itemId == null) {
+            return null;
+        }
+        return salesOrder.getItems().stream()
+                .filter(line -> line.getItem() != null && itemId.equals(line.getItem().getId()))
+                .findFirst()
+                .orElse(null);
     }
 
     private Long resolveLineWarehouseId(SalesOrderItem line) {
