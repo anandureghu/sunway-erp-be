@@ -221,6 +221,12 @@ public class HistoryService {
                     this::toPaymentRecord,
                     normalizedSearch
             );
+            case OTHER_PAYMENT -> mapPage(
+                    paymentRepo.findByCompany_IdAndArchivedTrueAndPaymentDirectionOrderByCreatedAtDesc(
+                            companyId, PaymentDirection.OTHER, pageable),
+                    this::toPaymentRecord,
+                    normalizedSearch
+            );
             case JOURNAL_ENTRY -> mapPage(
                     journalEntryRepo.findAllByCompanyIdAndArchived(companyId, true, pageable),
                     this::toJournalEntryRecord,
@@ -307,7 +313,7 @@ public class HistoryService {
             case PICKLIST -> picklistService.archive(id);
             case INVENTORY_ITEM -> itemService.archive(id);
             case SALES_INVOICE, PURCHASE_INVOICE -> invoiceService.archiveInvoice(id);
-            case CUSTOMER_PAYMENT, VENDOR_PAYMENT -> paymentService.archivePayment(id);
+            case CUSTOMER_PAYMENT, VENDOR_PAYMENT, OTHER_PAYMENT -> paymentService.archivePayment(id);
             case JOURNAL_ENTRY -> journalEntryService.archive(id);
             case TRANSACTION, BUDGET_DISTRIBUTION -> transactionService.archiveTransaction(id);
             case EMPLOYEE -> employeeService.archiveEmployee(id);
@@ -330,6 +336,7 @@ public class HistoryService {
             case PURCHASE_INVOICE -> deleteInvoice(id, companyId, InvoiceType.PURCHASE);
             case CUSTOMER_PAYMENT -> deletePayment(id, companyId, PaymentDirection.CUSTOMER);
             case VENDOR_PAYMENT -> deletePayment(id, companyId, PaymentDirection.VENDOR);
+            case OTHER_PAYMENT -> deletePayment(id, companyId, PaymentDirection.OTHER);
             case JOURNAL_ENTRY -> deleteJournalEntry(id, companyId);
             case TRANSACTION, BUDGET_DISTRIBUTION -> deleteTransaction(id, companyId);
             case EMPLOYEE -> throw new ResponseStatusException(
@@ -448,6 +455,7 @@ public class HistoryService {
             case PURCHASE_INVOICE -> invoiceRepo.findByCompany_IdAndArchivedTrueAndType(companyId, InvoiceType.PURCHASE).stream().map(Invoice::getId).toList();
             case CUSTOMER_PAYMENT -> paymentRepo.findByCompany_IdAndArchivedTrueAndPaymentDirection(companyId, PaymentDirection.CUSTOMER).stream().map(Payment::getId).toList();
             case VENDOR_PAYMENT -> paymentRepo.findByCompany_IdAndArchivedTrueAndPaymentDirection(companyId, PaymentDirection.VENDOR).stream().map(Payment::getId).toList();
+            case OTHER_PAYMENT -> paymentRepo.findByCompany_IdAndArchivedTrueAndPaymentDirection(companyId, PaymentDirection.OTHER).stream().map(Payment::getId).toList();
             case JOURNAL_ENTRY -> journalEntryRepo.findAllByCompanyIdAndArchivedTrue(companyId).stream().map(JournalEntry::getId).toList();
             case TRANSACTION -> transactionRepo.findByCompany_IdAndArchivedTrueAndTransactionTypeNot(
                     companyId, TransactionService.TYPE_BUDGET_DISTRIBUTION).stream().map(Transaction::getId).toList();
@@ -631,15 +639,20 @@ public class HistoryService {
     }
 
     private HistoryRecordDTO toPaymentRecord(Payment payment) {
-        HistoryEntityType type = payment.getPaymentDirection() == PaymentDirection.VENDOR
-                ? HistoryEntityType.VENDOR_PAYMENT
-                : HistoryEntityType.CUSTOMER_PAYMENT;
+        HistoryEntityType type = switch (payment.getPaymentDirection()) {
+            case VENDOR -> HistoryEntityType.VENDOR_PAYMENT;
+            case OTHER -> HistoryEntityType.OTHER_PAYMENT;
+            case CUSTOMER, null -> HistoryEntityType.CUSTOMER_PAYMENT;
+        };
+        String party = payment.getPaymentDirection() == PaymentDirection.OTHER
+                ? payment.getPayee()
+                : payment.getInvoiceId();
         return HistoryRecordDTO.builder()
                 .id(payment.getId())
                 .type(type)
                 .referenceNo(payment.getPaymentCode())
                 .status(payment.getPaymentMethod())
-                .partyName(payment.getInvoiceId())
+                .partyName(party)
                 .amount(payment.getAmount())
                 .createdAt(payment.getCreatedAt())
                 .build();

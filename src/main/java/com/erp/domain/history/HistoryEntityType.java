@@ -15,6 +15,7 @@ public enum HistoryEntityType {
     CUSTOMER_PAYMENT(HistoryModule.FINANCE),
     PURCHASE_INVOICE(HistoryModule.FINANCE),
     VENDOR_PAYMENT(HistoryModule.FINANCE),
+    OTHER_PAYMENT(HistoryModule.FINANCE),
     JOURNAL_ENTRY(HistoryModule.FINANCE),
     TRANSACTION(HistoryModule.FINANCE),
     BUDGET_DISTRIBUTION(HistoryModule.FINANCE),

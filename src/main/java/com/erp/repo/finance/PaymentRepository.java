@@ -75,7 +75,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             WHERE p.company.id = :companyId
               AND p.paymentDirection = :direction
               AND p.archived = false
-              AND UPPER(COALESCE(p.paymentMethod, '')) NOT IN ('PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT')
+              AND UPPER(COALESCE(p.paymentMethod, '')) NOT IN (
+                    'PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT', 'PENDING_OTHER_PAYMENT')
               AND (:from IS NULL OR p.effectiveDate >= :from)
               AND (:to IS NULL OR p.effectiveDate <= :to)
             """)
@@ -95,7 +96,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             WHERE p.company.id = :companyId
               AND p.paymentDirection = :direction
               AND p.archived = false
-              AND UPPER(COALESCE(p.paymentMethod, '')) NOT IN ('PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT')
+              AND UPPER(COALESCE(p.paymentMethod, '')) NOT IN (
+                    'PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT', 'PENDING_OTHER_PAYMENT')
               AND p.effectiveDate IS NOT NULL
               AND (:from IS NULL OR p.effectiveDate >= :from)
               AND (:to IS NULL OR p.effectiveDate <= :to)
@@ -140,7 +142,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             WHERE p.company.id = :companyId
               AND p.invoiceId = :invoiceId
               AND p.archived = false
-              AND UPPER(p.paymentMethod) NOT IN ('PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT')
+              AND UPPER(p.paymentMethod) NOT IN (
+                    'PENDING_REQUEST', 'PENDING_VENDOR_PAYMENT', 'PENDING_OTHER_PAYMENT')
             """)
     BigDecimal sumConfirmedAmountByCompanyIdAndInvoiceId(
             @Param("companyId") Long companyId, @Param("invoiceId") String invoiceId);
@@ -160,14 +163,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             WHERE p.company.id = :companyId
               AND p.archived = false
               AND (
-                    :direction IS NULL
+                    :direction IS NULL OR :direction = ''
                     OR (
-                         :direction = com.erp.domain.finance.PaymentDirection.CUSTOMER
+                         :direction = 'CUSTOMER'
                          AND (p.paymentDirection IS NULL
                               OR p.paymentDirection = com.erp.domain.finance.PaymentDirection.CUSTOMER)
                        )
                     OR (
-                         :direction = com.erp.domain.finance.PaymentDirection.VENDOR
+                         :direction = 'VENDOR'
                          AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.VENDOR
                          AND p.purchaseOrderId IS NOT NULL
                          AND po.status IN (
@@ -177,7 +180,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
                          )
                        )
                     OR (
-                         :direction = com.erp.domain.finance.PaymentDirection.OTHER
+                         :direction = 'OTHER'
                          AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.OTHER
                        )
                   )
@@ -209,26 +212,32 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             """)
     Page<Payment> searchForCompany(
             @Param("companyId") Long companyId,
-            @Param("direction") PaymentDirection direction,
+            /** Enum name ({@code CUSTOMER}/{@code VENDOR}/{@code OTHER}); null/blank = all. */
+            @Param("direction") String direction,
             @Param("listTab") String listTab,
             @Param("pendingMethods") java.util.Collection<String> pendingMethods,
             @Param("q") String q,
             Pageable pageable);
 
+    /**
+     * Tab badge counts. {@code direction} must be the enum name string (not the enum itself) —
+     * Hibernate 6 cannot resolve {@code ValueMapping} when a typed enum param is compared to
+     * enum literals in JPQL ({@code :direction = PaymentDirection.CUSTOMER}).
+     */
     @Query("""
             SELECT COUNT(DISTINCT p) FROM Payment p
             LEFT JOIN PurchaseOrder po ON po.id = p.purchaseOrderId
             WHERE p.company.id = :companyId
               AND p.archived = false
               AND (
-                    :direction IS NULL
+                    :direction IS NULL OR :direction = ''
                     OR (
-                         :direction = com.erp.domain.finance.PaymentDirection.CUSTOMER
+                         :direction = 'CUSTOMER'
                          AND (p.paymentDirection IS NULL
                               OR p.paymentDirection = com.erp.domain.finance.PaymentDirection.CUSTOMER)
                        )
                     OR (
-                         :direction = com.erp.domain.finance.PaymentDirection.VENDOR
+                         :direction = 'VENDOR'
                          AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.VENDOR
                          AND p.purchaseOrderId IS NOT NULL
                          AND po.status IN (
@@ -238,7 +247,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
                          )
                        )
                     OR (
-                         :direction = com.erp.domain.finance.PaymentDirection.OTHER
+                         :direction = 'OTHER'
                          AND p.paymentDirection = com.erp.domain.finance.PaymentDirection.OTHER
                        )
                   )
@@ -255,7 +264,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             """)
     long countForCompanyTab(
             @Param("companyId") Long companyId,
-            @Param("direction") PaymentDirection direction,
+            @Param("direction") String direction,
             @Param("listTab") String listTab,
             @Param("pendingMethods") java.util.Collection<String> pendingMethods);
 }

@@ -484,17 +484,24 @@ public class PaymentService {
         String tab = normalizeListTab(listTab);
         java.util.Collection<String> pendingMethods = pendingMethodsFor(direction);
         String q = search == null || search.isBlank() ? null : search.trim();
+        // Pass enum name as String — JPQL compares :direction to string literals; a typed
+        // PaymentDirection param fails with Hibernate 6 ValueMapping errors.
         org.springframework.data.domain.Page<Payment> page = paymentRepo.searchForCompany(
-                companyId, direction, tab, pendingMethods, q, pageable);
+                companyId, directionName(direction), tab, pendingMethods, q, pageable);
         return com.erp.dto.common.PageResponse.from(page, this::toDTO);
     }
 
     public java.util.Map<String, Long> getPaymentTabCounts(Long companyId, PaymentDirection direction) {
         assertTenantCompanyPath(companyId);
         java.util.Collection<String> pendingMethods = pendingMethodsFor(direction);
-        long outstanding = paymentRepo.countForCompanyTab(companyId, direction, "outstanding", pendingMethods);
-        long completed = paymentRepo.countForCompanyTab(companyId, direction, "completed", pendingMethods);
+        String dir = directionName(direction);
+        long outstanding = paymentRepo.countForCompanyTab(companyId, dir, "outstanding", pendingMethods);
+        long completed = paymentRepo.countForCompanyTab(companyId, dir, "completed", pendingMethods);
         return java.util.Map.of("outstanding", outstanding, "completed", completed);
+    }
+
+    private static String directionName(PaymentDirection direction) {
+        return direction == null ? null : direction.name();
     }
 
     private static String normalizeListTab(String listTab) {
