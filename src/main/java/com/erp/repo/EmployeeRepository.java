@@ -63,13 +63,15 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     /**
      * Directory page: non-archived employees in a company, optional case-insensitive
-     * search on employee no / name / login email / phone, optional status,
-     * employment-category, and department filters.
+     * search on employee no / name / email / phone / designation / job code /
+     * department / division / work location / join date / status / contract type,
+     * plus optional status, employment-category, and department filters.
      */
     @Query("""
             SELECT e FROM Employee e
             LEFT JOIN e.user u
             LEFT JOIN e.contactInfo c
+            LEFT JOIN e.department empDept
             WHERE e.company.id = :companyId
               AND e.archived = false
               AND (:status IS NULL OR e.status = :status)
@@ -104,6 +106,26 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
                 OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
                 OR LOWER(COALESCE(c.phone, '')) LIKE LOWER(CONCAT('%', :search, '%'))
                 OR LOWER(COALESCE(c.altPhone, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(COALESCE(empDept.departmentName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR LOWER(CAST(e.status AS string)) LIKE LOWER(CONCAT('%', :search, '%'))
+                OR CAST(e.joinDate AS string) LIKE CONCAT('%', :search, '%')
+                OR EXISTS (
+                    SELECT 1 FROM EmployeeCurrentJob sj
+                    LEFT JOIN sj.jobCode jc
+                    LEFT JOIN sj.department sjDept
+                    LEFT JOIN sj.division sjDiv
+                    WHERE sj.employee = e
+                      AND (
+                        LOWER(COALESCE(jc.title, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(COALESCE(jc.code, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(COALESCE(sj.workLocation, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(COALESCE(sj.workCity, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(COALESCE(sj.workCountry, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(COALESCE(sjDept.departmentName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(COALESCE(sjDiv.name, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                        OR LOWER(CAST(sj.employmentCategory AS string)) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                )
               )
             """)
     Page<Employee> searchDirectory(
