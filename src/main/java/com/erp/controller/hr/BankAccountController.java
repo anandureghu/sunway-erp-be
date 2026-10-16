@@ -18,20 +18,20 @@ public class BankAccountController {
 
     private final BankAccountService service;
 
-    // HR_SETTINGS — bank accounts are company financial settings, admin-managed.
-    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.CREATE})
+    // FINANCE_COA — bank accounts live under Finance Settings (fiscal setup).
+    @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.CREATE})
     @PostMapping
     public BankAccountResponse create(@RequestBody BankAccountRequest request) {
         return service.create(request);
     }
 
-    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/{id}")
     public BankAccountResponse getById(@PathVariable Long id) {
         return service.getById(id);
     }
 
-    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.VIEW_ALL})
+    @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.VIEW_ALL, AppAction.VIEW_OWN})
     @GetMapping("/company/{companyId}")
     public List<BankAccountResponse> getByCompany(
             @PathVariable("companyId") Long companyId
@@ -39,7 +39,7 @@ public class BankAccountController {
         return service.getByCompany(companyId);
     }
 
-    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.EDIT})
+    @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.EDIT})
     @PutMapping("/{id}")
     public BankAccountResponse update(
             @PathVariable("id") Long id,
@@ -48,7 +48,7 @@ public class BankAccountController {
         return service.update(id, request);
     }
 
-    @RequiresPermission(module = AppModule.HR_SETTINGS, action = {AppAction.DELETE})
+    @RequiresPermission(module = AppModule.FINANCE_COA, action = {AppAction.DELETE})
     @DeleteMapping("/{id}")
     public void delete(@PathVariable("id") Long id) {
         service.delete(id);

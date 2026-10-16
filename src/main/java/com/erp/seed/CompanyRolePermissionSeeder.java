@@ -15,7 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
- * Seeds baseline HR module permissions for company roles on every startup.
+ * Seeds baseline HR + Finance module permissions for company roles on every startup.
  * Covers existing companies and any new companies/roles created at runtime.
  */
 @Component
