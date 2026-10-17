@@ -642,7 +642,8 @@ public class HistoryService {
         HistoryEntityType type = switch (payment.getPaymentDirection()) {
             case VENDOR -> HistoryEntityType.VENDOR_PAYMENT;
             case OTHER -> HistoryEntityType.OTHER_PAYMENT;
-            case CUSTOMER, null -> HistoryEntityType.CUSTOMER_PAYMENT;
+            case CUSTOMER -> HistoryEntityType.CUSTOMER_PAYMENT;
+            case null -> HistoryEntityType.CUSTOMER_PAYMENT;
         };
         String party = payment.getPaymentDirection() == PaymentDirection.OTHER
                 ? payment.getPayee()
